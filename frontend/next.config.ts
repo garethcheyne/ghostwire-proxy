@@ -35,6 +35,8 @@ const nextConfig: NextConfig = {
     ]
   },
   async headers() {
+    const isDev = process.env.NODE_ENV === 'development'
+
     return [
       {
         source: '/(.*)',
@@ -43,14 +45,20 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              // unsafe-inline required for Next.js framework; unsafe-eval only in dev
+              isDev
+                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+                : "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               "connect-src 'self' ws: wss:",
+              "worker-src 'self' blob:",
+              "manifest-src 'self'",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
+              "upgrade-insecure-requests",
             ].join('; '),
           },
           {

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle } from 'lucide-react'
 import api from '@/lib/api'
+import { setSessionActive } from '@/lib/session'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -62,6 +63,7 @@ export default function LoginPage() {
 
         localStorage.setItem('access_token', response.data.access_token)
         localStorage.setItem('refresh_token', response.data.refresh_token)
+        setSessionActive()
         router.push('/dashboard')
       } else {
         // Normal login
@@ -72,6 +74,7 @@ export default function LoginPage() {
 
         localStorage.setItem('access_token', response.data.access_token)
         localStorage.setItem('refresh_token', response.data.refresh_token)
+        setSessionActive()
         router.push('/dashboard')
       }
     } catch (err: any) {

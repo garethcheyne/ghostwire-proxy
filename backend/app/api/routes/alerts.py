@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.alert import PushSubscription, AlertChannel, AlertPreference
 from app.models.audit_log import AuditLog
@@ -119,7 +120,7 @@ async def create_channel(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="alert_channel_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created alert channel: {data.name} ({data.channel_type})",
     ))
@@ -147,7 +148,7 @@ async def update_channel(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="alert_channel_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated alert channel: {channel.name}",
     ))
@@ -171,7 +172,7 @@ async def delete_channel(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="alert_channel_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted alert channel: {channel.name}",
     ))

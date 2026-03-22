@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { clearSession, setSessionActive } from './session'
 
 const api = axios.create({
   baseURL: '',
@@ -45,14 +46,14 @@ api.interceptors.response.use(
           const { access_token, refresh_token } = response.data
           localStorage.setItem('access_token', access_token)
           localStorage.setItem('refresh_token', refresh_token)
+          setSessionActive()
 
           originalRequest.headers.Authorization = `Bearer ${access_token}`
           return api(originalRequest)
         }
       } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+        // Refresh failed, clear session and redirect to login
+        clearSession()
         window.location.href = '/auth/login'
         return Promise.reject(refreshError)
       }

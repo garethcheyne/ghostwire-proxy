@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Activity,
   Users,
@@ -132,19 +132,13 @@ export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [refreshInterval, setRefreshInterval] = useState(30) // seconds
+  const [countdown, setCountdown] = useState(30)
+  const countdownRef = useRef(30)
 
-  useEffect(() => {
-    fetchData()
-  }, [period])
-
-  useEffect(() => {
-    fetchRealtime()
-    const interval = setInterval(fetchRealtime, 30000) // Refresh every 30 seconds
-    return () => clearInterval(interval)
-  }, [])
-
-  const fetchData = async () => {
-    setIsRefreshing(true)
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true)
     try {
       const response = await api.get(`/api/analytics/dashboard?period=${period}`)
       setData(response.data)
@@ -154,16 +148,48 @@ export default function AnalyticsPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [period])
 
-  const fetchRealtime = async () => {
+  const fetchRealtime = useCallback(async () => {
     try {
       const response = await api.get('/api/analytics/realtime')
       setRealtime(response.data)
     } catch (error) {
       console.error('Failed to fetch realtime stats:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  useEffect(() => {
+    fetchRealtime()
+    const interval = setInterval(fetchRealtime, 15000)
+    return () => clearInterval(interval)
+  }, [fetchRealtime])
+
+  // Auto-refresh countdown and data fetch
+  useEffect(() => {
+    if (!autoRefresh) return
+
+    countdownRef.current = refreshInterval
+    setCountdown(refreshInterval)
+
+    const tick = setInterval(() => {
+      countdownRef.current -= 1
+      setCountdown(countdownRef.current)
+
+      if (countdownRef.current <= 0) {
+        fetchData(true)
+        fetchRealtime()
+        countdownRef.current = refreshInterval
+        setCountdown(refreshInterval)
+      }
+    }, 1000)
+
+    return () => clearInterval(tick)
+  }, [autoRefresh, refreshInterval, fetchData, fetchRealtime])
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -240,13 +266,38 @@ export default function AnalyticsPage() {
             ))}
           </div>
           <button
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={isRefreshing}
             className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+          <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2">
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                autoRefresh ? 'text-green-500' : 'text-muted-foreground'
+              }`}
+              title={autoRefresh ? 'Disable auto-refresh' : 'Enable auto-refresh'}
+            >
+              <div className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'}`} />
+              {autoRefresh ? `${countdown}s` : 'Auto'}
+            </button>
+            {autoRefresh && (
+              <select
+                value={refreshInterval}
+                onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                title="Auto-refresh interval"
+                className="bg-transparent text-xs text-muted-foreground border-none outline-none cursor-pointer"
+              >
+                <option value={15}>15s</option>
+                <option value={30}>30s</option>
+                <option value={60}>1m</option>
+                <option value={300}>5m</option>
+              </select>
+            )}
+          </div>
         </div>
       </div>
 

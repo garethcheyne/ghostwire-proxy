@@ -47,6 +47,7 @@ import {
 import Link from 'next/link'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { clearSession } from '@/lib/session'
 
 interface HeaderProps {
   title?: string
@@ -107,8 +108,7 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    clearSession()
     router.push('/auth/login')
   }
 

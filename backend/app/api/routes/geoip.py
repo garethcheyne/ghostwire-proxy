@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.rate_limit import GeoipSettings, GeoipRule
 from app.models.audit_log import AuditLog
@@ -60,7 +61,7 @@ async def update_geoip_settings(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="geoip_settings_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details="Updated GeoIP settings",
     ))
@@ -97,7 +98,7 @@ async def create_geoip_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="geoip_rule_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created GeoIP rule: {data.name}",
     ))
@@ -125,7 +126,7 @@ async def update_geoip_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="geoip_rule_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated GeoIP rule: {rule.name}",
     ))
@@ -149,7 +150,7 @@ async def delete_geoip_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="geoip_rule_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted GeoIP rule: {rule.name}",
     ))

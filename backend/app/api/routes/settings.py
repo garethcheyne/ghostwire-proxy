@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import os
-import socket
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.setting import Setting
 from app.models.audit_log import AuditLog
@@ -104,8 +103,7 @@ async def update_setting(
         user_id=current_user.id,
         email=current_user.email,
         action="setting_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated setting: {key}",
     )
@@ -142,8 +140,7 @@ async def bulk_update_settings(
         user_id=current_user.id,
         email=current_user.email,
         action="settings_bulk_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated settings: {', '.join(settings_data.settings.keys())}",
     )
@@ -157,34 +154,19 @@ async def bulk_update_settings(
 
 
 @router.post("/reload-nginx")
-async def reload_nginx(
+async def reload_nginx_endpoint(
     request: Request,
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Reload nginx configuration via Docker socket SIGHUP"""
-    docker_socket = "/var/run/docker.sock"
-    if not os.path.exists(docker_socket):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Docker socket not available",
-        )
+    from app.services.openresty_service import reload_nginx
 
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(docker_socket)
-        http_request = (
-            "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
-            "Host: localhost\r\n"
-            "Content-Length: 0\r\n\r\n"
-        )
-        sock.sendall(http_request.encode())
-        sock.recv(4096)
-        sock.close()
-    except Exception as e:
+    success, message = reload_nginx()
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reload nginx: {str(e)}",
+            detail=f"Failed to reload nginx: {message}",
         )
 
     # Audit log
@@ -192,8 +174,7 @@ async def reload_nginx(
         user_id=current_user.id,
         email=current_user.email,
         action="nginx_reloaded",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.add(audit_log)
@@ -270,8 +251,7 @@ async def update_default_site(
         user_id=current_user.id,
         email=current_user.email,
         action="default_site_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
     ))

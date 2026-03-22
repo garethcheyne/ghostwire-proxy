@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
@@ -53,7 +54,7 @@ async def create_connector(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="firewall_connector_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created firewall connector: {data.name} ({data.connector_type})",
     ))
@@ -102,7 +103,7 @@ async def update_connector(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="firewall_connector_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated firewall connector: {connector.name}",
     ))
@@ -126,7 +127,7 @@ async def delete_connector(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="firewall_connector_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted firewall connector: {connector.name}",
     ))
@@ -188,7 +189,7 @@ async def test_block(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="firewall_test_block",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Tested block/unblock on {connector.name} with IP {test_ip}",
     ))

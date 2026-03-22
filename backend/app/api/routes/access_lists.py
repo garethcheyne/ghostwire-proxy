@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.access_list import AccessList, AccessListEntry
 from app.models.audit_log import AuditLog
@@ -65,8 +66,7 @@ async def create_access_list(
         user_id=current_user.id,
         email=current_user.email,
         action="access_list_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created access list: {list_data.name}",
     )
@@ -136,8 +136,7 @@ async def update_access_list(
         user_id=current_user.id,
         email=current_user.email,
         action="access_list_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated access list: {access_list.name}",
     )
@@ -170,8 +169,7 @@ async def delete_access_list(
         user_id=current_user.id,
         email=current_user.email,
         action="access_list_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted access list: {access_list.name}",
     )

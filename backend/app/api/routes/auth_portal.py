@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider
 from app.models.audit_log import AuditLog
 from app.services.session_service import SessionService, get_cookie_header, get_clear_cookie_header
@@ -120,8 +121,7 @@ async def local_login(
     )
 
     # Get client info for audit
-    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
-                (request.client.host if request.client else None)
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     if not user:
@@ -266,8 +266,7 @@ async def totp_login(
     del _partial_sessions[totp_data.partial_session_id]
 
     # Get client info
-    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
-                (request.client.host if request.client else None)
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     # Create full session
@@ -431,8 +430,7 @@ async def oauth_callback(
         raise HTTPException(status_code=403, detail="User not authorized")
 
     # Get client info
-    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
-                (request.client.host if request.client else None)
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     # Create session

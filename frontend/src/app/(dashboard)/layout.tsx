@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
+import { clearSession, setSessionActive } from '@/lib/session'
 
 interface SidebarContextType {
   isCollapsed: boolean
@@ -37,8 +38,11 @@ export default function DashboardLayout({
     // Check authentication
     const token = localStorage.getItem('access_token')
     if (!token) {
+      clearSession()
       router.push('/auth/login')
     } else {
+      // Ensure session cookie is set if we have a token
+      setSessionActive()
       setIsLoading(false)
     }
   }, [router])

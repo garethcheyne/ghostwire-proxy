@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.preset_service import (
@@ -61,7 +62,7 @@ async def apply_preset_route(
             db=db,
             user_id=current_user.id,
             proxy_host_id=proxy_host_id,
-            client_ip=request.client.host if request.client else None,
+            client_ip=get_client_ip(request),
         )
         return result
     except ValueError as e:
@@ -81,7 +82,7 @@ async def remove_preset_route(
             preset_id=preset_id,
             db=db,
             user_id=current_user.id,
-            client_ip=request.client.host if request.client else None,
+            client_ip=get_client_ip(request),
         )
         return result
     except ValueError as e:

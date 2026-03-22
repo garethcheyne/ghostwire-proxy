@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.rate_limit import RateLimitRule
 from app.models.audit_log import AuditLog
@@ -42,7 +43,7 @@ async def create_rate_limit(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="rate_limit_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created rate limit rule: {data.name}",
     ))
@@ -83,7 +84,7 @@ async def update_rate_limit(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="rate_limit_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated rate limit rule: {rule.name}",
     ))
@@ -107,7 +108,7 @@ async def delete_rate_limit(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="rate_limit_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted rate limit rule: {rule.name}",
     ))

@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, encrypt_data
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
 from app.models.audit_log import AuditLog
@@ -114,8 +115,7 @@ async def create_auth_wall(
         user_id=current_user.id,
         email=current_user.email,
         action="auth_wall_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created auth wall: {wall_data.name}",
     )
@@ -195,8 +195,7 @@ async def update_auth_wall(
         user_id=current_user.id,
         email=current_user.email,
         action="auth_wall_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated auth wall: {auth_wall.name}",
     )
@@ -228,8 +227,7 @@ async def delete_auth_wall(
         user_id=current_user.id,
         email=current_user.email,
         action="auth_wall_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted auth wall: {auth_wall.name}",
     )
