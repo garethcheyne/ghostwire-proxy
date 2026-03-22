@@ -7,9 +7,13 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.redis import close_redis
+from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
 from app.api import router as api_router
 
 # Configure logging
@@ -177,6 +181,10 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=True,
 )
+
+# Rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.proxy_host import ProxyHost, UpstreamServer, ProxyLocation
 from app.models.audit_log import AuditLog
@@ -15,40 +16,16 @@ from app.schemas.proxy_host import (
 )
 from app.api.deps import get_current_user
 from app.services.openresty_service import generate_all_configs, reload_nginx, remove_config
-import os
-import socket
-import json
 
 router = APIRouter()
 
 
 async def regenerate_and_reload(db: AsyncSession) -> tuple[bool, str]:
-    """Regenerate all nginx configs and reload nginx via docker socket"""
+    """Regenerate all nginx configs and reload nginx."""
     try:
-        # Generate all configs
         await generate_all_configs(db)
-
-        # Reload nginx via Docker socket API (raw socket)
-        docker_socket = "/var/run/docker.sock"
-        if os.path.exists(docker_socket):
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect(docker_socket)
-            # Send HUP signal to nginx container to reload config
-            request = (
-                "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
-                "Host: localhost\r\n"
-                "Content-Length: 0\r\n"
-                "\r\n"
-            )
-            sock.sendall(request.encode())
-            response = sock.recv(4096).decode()
-            sock.close()
-            if "204" in response or "200" in response:
-                return True, "Nginx reloaded successfully"
-            return False, f"Docker API response: {response[:200]}"
-        else:
-            # Fallback: just generate configs, manual reload needed
-            return True, "Configs generated (manual nginx reload needed)"
+        reload_nginx()
+        return True, "Nginx reloaded successfully"
     except Exception as e:
         return False, str(e)
 
@@ -147,8 +124,7 @@ async def create_proxy_host(
         user_id=current_user.id,
         email=current_user.email,
         action="proxy_host_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created proxy host: {', '.join(host_data.domain_names)}",
     )
@@ -232,8 +208,7 @@ async def update_proxy_host(
         user_id=current_user.id,
         email=current_user.email,
         action="proxy_host_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated proxy host: {host_id}",
     )
@@ -269,8 +244,7 @@ async def delete_proxy_host(
         user_id=current_user.id,
         email=current_user.email,
         action="proxy_host_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted proxy host: {host_id}",
     )
@@ -316,8 +290,7 @@ async def enable_proxy_host(
         user_id=current_user.id,
         email=current_user.email,
         action="proxy_host_enabled",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Enabled proxy host: {host_id}",
     )
@@ -361,8 +334,7 @@ async def disable_proxy_host(
         user_id=current_user.id,
         email=current_user.email,
         action="proxy_host_disabled",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Disabled proxy host: {host_id}",
     )
@@ -488,8 +460,7 @@ async def create_location(
         user_id=current_user.id,
         email=current_user.email,
         action="location_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created location '{location_data.path}' for host {host_id}",
     )
@@ -561,8 +532,7 @@ async def update_location(
         user_id=current_user.id,
         email=current_user.email,
         action="location_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated location {location_id} for host {host_id}",
     )
@@ -604,8 +574,7 @@ async def delete_location(
         user_id=current_user.id,
         email=current_user.email,
         action="location_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted location {location_id} for host {host_id}",
     )

@@ -52,6 +52,13 @@ services:
       - ./proxy/lua:/usr/local/openresty/nginx/lua:ro
     networks:
       - ghostwire-proxy-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '2.0'
+        reservations:
+          memory: 64M
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -78,8 +85,15 @@ services:
         condition: service_healthy
     networks:
       - ghostwire-proxy-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,38 +121,54 @@ services:
       - GHOSTWIRE_API_URL=${GHOSTWIRE_API_URL:-}
       - GHOSTWIRE_API_KEY=${GHOSTWIRE_API_KEY:-}
       - REDIS_URL=redis://ghostwire-proxy-redis:6379
+      - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_EMAIL=${VAPID_EMAIL:-mailto:admin@ghostwire.local}
     depends_on:
       ghostwire-proxy-postgres:
         condition: service_healthy
       ghostwire-proxy-redis:
         condition: service_healthy
     volumes:
-      - ./data/sqlite:/data/sqlite
       - ./data/certificates:/data/certificates
       - ./data/nginx-configs:/data/nginx-configs
       - ./data/letsencrypt:/etc/letsencrypt
       - ./data/backups:/data/backups
       - certbot-webroot:/var/www/certbot
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - ghostwire-proxy-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Certbot for Let's Encrypt
+  # Certbot for Let's Encrypt (runs renewal check every 12 hours)
   ghostwire-proxy-certbot:
     build:
       context: ./certbot
       dockerfile: Dockerfile
     container_name: ghostwire-proxy-certbot
+    restart: unless-stopped
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
     volumes:
-      - ./data/certificates:/etc/letsencrypt
+      - ./data/letsencrypt:/etc/letsencrypt
       - certbot-webroot:/var/www/certbot
     networks:
       - ghostwire-proxy-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   # Redis for caching and queues (hardened — no external access)
   ghostwire-proxy-redis:
@@ -180,6 +210,7 @@ services:
       - COMPOSE_PROJECT_DIR=/app/project
       - BACKUP_PATH=/data/backups
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Write access for updates
       - .:/app/project:ro                          # Project source (read-only)

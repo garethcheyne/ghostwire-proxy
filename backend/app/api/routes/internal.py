@@ -1,18 +1,31 @@
 """Internal API endpoints for nginx/Lua and updater integration."""
 
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime, timezone
-import os
-import uuid
 
 from app.core.database import get_db
+from app.core.utils import generate_secure_token
+
+logger = logging.getLogger(__name__)
 
 # Internal auth token for updater service
-INTERNAL_AUTH_TOKEN = os.environ.get("INTERNAL_AUTH_TOKEN", "updater-service")
+# Generate a random token if not provided via environment
+_env_token = os.environ.get("INTERNAL_AUTH_TOKEN", "")
+if not _env_token:
+    _env_token = generate_secure_token(48)
+    logger.warning(
+        "INTERNAL_AUTH_TOKEN not set in environment. Generated random token. "
+        "For production, set INTERNAL_AUTH_TOKEN in your .env file."
+    )
+INTERNAL_AUTH_TOKEN = _env_token
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig

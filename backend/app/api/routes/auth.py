@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.core.security import verify_password, create_access_token, create_refresh_token, decode_token
+from app.core.rate_limiter import limiter, RATE_LIMITS
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshRequest
@@ -15,6 +17,7 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(RATE_LIMITS["auth"])
 async def login(
     login_request: LoginRequest,
     request: Request,
@@ -34,8 +37,7 @@ async def login(
             user_id=user.id if user else None,
             email=login_request.email,
             action="login_failed",
-            ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                       (request.client.host if request.client else None),
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
             details="Invalid credentials",
         )
@@ -67,8 +69,7 @@ async def login(
         user_id=user.id,
         email=user.email,
         action="login_success",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.add(audit_log)
@@ -139,8 +140,7 @@ async def logout(
         user_id=current_user.id,
         email=current_user.email,
         action="logout",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.add(audit_log)

@@ -6,6 +6,7 @@ import string
 
 from app.core.database import get_db
 from app.core.security import get_password_hash
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserCreateResponse
@@ -82,8 +83,7 @@ async def create_user(
         user_id=current_user.id,
         email=current_user.email,
         action="user_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created user: {user_data.email}",
     )
@@ -159,8 +159,7 @@ async def update_user(
         user_id=current_user.id,
         email=current_user.email,
         action="user_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated user: {user.email}",
     )
@@ -199,8 +198,7 @@ async def delete_user(
         user_id=current_user.id,
         email=current_user.email,
         action="user_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted user: {user.email}",
     )

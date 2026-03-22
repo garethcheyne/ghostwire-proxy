@@ -58,6 +58,9 @@ python-dateutil==2.9.0
 aiofiles==24.1.0
 semver==3.0.2
 
+# Rate Limiting
+slowapi==0.1.9
+
 # System Monitoring
 psutil==5.9.8
 docker==7.1.0

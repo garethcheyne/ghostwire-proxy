@@ -12,8 +12,13 @@ from app.schemas.certificate import (
     CertificateUpload, CertificateLetsEncrypt, CertificateResponse
 )
 from app.api.deps import get_current_user
-from app.services.certificate_service import request_letsencrypt_certificate, renew_certificate
-from app.services.openresty_service import generate_all_configs, write_certificate_files
+from app.core.utils import get_client_ip
+from app.services.certificate_service import (
+    request_letsencrypt_certificate,
+    renew_certificate,
+    validate_certificate_pem,
+)
+from app.services.openresty_service import generate_all_configs, write_certificate_files, reload_nginx
 
 router = APIRouter()
 
@@ -39,8 +44,17 @@ async def upload_certificate(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a custom SSL certificate"""
-    # TODO: Validate certificate and extract expiry date
-    # For now, just store it
+    # Validate certificate and key pair
+    is_valid, error_message, expiry_date = validate_certificate_pem(
+        cert_data.certificate,
+        cert_data.certificate_key,
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid certificate: {error_message}",
+        )
 
     cert = Certificate(
         name=cert_data.name,
@@ -50,6 +64,7 @@ async def upload_certificate(
         certificate_chain=cert_data.certificate_chain,
         is_letsencrypt=False,
         status="valid",
+        expires_at=expiry_date,
     )
     db.add(cert)
 
@@ -58,8 +73,7 @@ async def upload_certificate(
         user_id=current_user.id,
         email=current_user.email,
         action="certificate_uploaded",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Uploaded certificate: {cert_data.name}",
     )
@@ -72,7 +86,6 @@ async def upload_certificate(
 
 async def process_letsencrypt_request(cert_id: str):
     """Background task to process Let's Encrypt certificate request"""
-    import asyncio
     from app.core.database import async_session_maker
 
     async with async_session_maker() as db:
@@ -89,24 +102,7 @@ async def process_letsencrypt_request(cert_id: str):
                 await generate_all_configs(db)
 
                 # Reload nginx
-                import socket
-                import os
-                docker_socket = "/var/run/docker.sock"
-                if os.path.exists(docker_socket):
-                    try:
-                        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                        sock.connect(docker_socket)
-                        request_str = (
-                            "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
-                            "Host: localhost\r\n"
-                            "Content-Length: 0\r\n"
-                            "\r\n"
-                        )
-                        sock.sendall(request_str.encode())
-                        sock.recv(4096)
-                        sock.close()
-                    except Exception:
-                        pass
+                reload_nginx()
 
 
 @router.post("/letsencrypt", response_model=CertificateResponse, status_code=status.HTTP_201_CREATED)
@@ -133,8 +129,7 @@ async def request_letsencrypt_cert(
         user_id=current_user.id,
         email=current_user.email,
         action="letsencrypt_requested",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Requested Let's Encrypt certificate for: {', '.join(cert_data.domain_names)}",
     )
@@ -189,8 +184,7 @@ async def delete_certificate(
         user_id=current_user.id,
         email=current_user.email,
         action="certificate_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted certificate: {cert.name}",
     )
@@ -203,8 +197,6 @@ async def delete_certificate(
 async def process_certificate_renewal(cert_id: str):
     """Background task to process certificate renewal"""
     from app.core.database import async_session_maker
-    import socket
-    import os
 
     async with async_session_maker() as db:
         success, message = await renew_certificate(db, cert_id)
@@ -218,22 +210,7 @@ async def process_certificate_renewal(cert_id: str):
                 await generate_all_configs(db)
 
                 # Reload nginx
-                docker_socket = "/var/run/docker.sock"
-                if os.path.exists(docker_socket):
-                    try:
-                        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                        sock.connect(docker_socket)
-                        request_str = (
-                            "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
-                            "Host: localhost\r\n"
-                            "Content-Length: 0\r\n"
-                            "\r\n"
-                        )
-                        sock.sendall(request_str.encode())
-                        sock.recv(4096)
-                        sock.close()
-                    except Exception:
-                        pass
+                reload_nginx()
 
 
 @router.post("/{cert_id}/renew", response_model=CertificateResponse)
@@ -268,8 +245,7 @@ async def renew_cert(
         user_id=current_user.id,
         email=current_user.email,
         action="certificate_renewal_requested",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                   (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Requested certificate renewal: {cert.name}",
     )

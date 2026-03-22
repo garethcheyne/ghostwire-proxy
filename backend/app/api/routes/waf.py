@@ -6,6 +6,7 @@ from sqlalchemy import select, func, and_
 from datetime import datetime, timezone, timedelta
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.audit_log import AuditLog
@@ -45,7 +46,7 @@ async def create_rule_set(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="waf_rule_set_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created WAF rule set: {data.name}",
     ))
@@ -88,7 +89,7 @@ async def create_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="waf_rule_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created WAF rule: {data.name} ({data.category})",
     ))
@@ -129,7 +130,7 @@ async def update_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="waf_rule_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated WAF rule: {rule.name}",
     ))
@@ -153,7 +154,7 @@ async def delete_rule(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="waf_rule_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted WAF rule: {rule.name}",
     ))
@@ -312,7 +313,7 @@ async def update_threat_actor(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_actor_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated threat actor: {ip}",
     ))
@@ -349,7 +350,7 @@ async def block_threat_actor(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_actor_blocked",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Manually blocked IP: {ip}",
     ))
@@ -378,7 +379,7 @@ async def unblock_threat_actor(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_actor_unblocked",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Unblocked IP: {ip}",
     ))
@@ -412,7 +413,7 @@ async def create_threshold(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_threshold_created",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Created threat threshold: {data.name}",
     ))
@@ -440,7 +441,7 @@ async def update_threshold(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_threshold_updated",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Updated threat threshold: {threshold.name}",
     ))
@@ -464,7 +465,7 @@ async def delete_threshold(
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,
         action="threat_threshold_deleted",
-        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else None),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         details=f"Deleted threat threshold: {threshold.name}",
     ))
