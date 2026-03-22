@@ -27,7 +27,7 @@ interface Backup {
   id: string
   filename: string
   file_size: number
-  backup_type: 'manual' | 'scheduled'
+  backup_type: 'manual' | 'scheduled' | 'uploaded'
   includes_database: boolean
   includes_certificates: boolean
   includes_letsencrypt: boolean

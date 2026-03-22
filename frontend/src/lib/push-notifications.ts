@@ -168,7 +168,6 @@ export async function showLocalNotification(
   await registration.showNotification(title, {
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-96x96.png',
-    vibrate: [100, 50, 100],
     ...options,
-  });
+  } as NotificationOptions);
 }
