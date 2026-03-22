@@ -16,6 +16,7 @@ from app.models.rate_limit import RateLimitRule, GeoipSettings, GeoipRule
 from app.models.analytics import AnalyticsHourly, AnalyticsDaily, AnalyticsGeo
 from app.models.system_metrics import SystemMetrics, ContainerMetrics
 from app.models.backup import Backup, BackupSettings
+from app.models.update import UpdateHistory, BaseImageVersion, UpdateSettings
 
 __all__ = [
     "User",
@@ -55,4 +56,7 @@ __all__ = [
     "ContainerMetrics",
     "Backup",
     "BackupSettings",
+    "UpdateHistory",
+    "BaseImageVersion",
+    "UpdateSettings",
 ]

@@ -12,6 +12,7 @@ class WafRuleSet(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
+    preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -29,6 +30,7 @@ class WafRule(Base):
     action = Column(String(20), default="log")  # log, block, blocklist
     enabled = Column(Boolean, default=True, nullable=False)
     is_lua = Column(Boolean, default=True, nullable=False)  # True=Lua, False=ModSecurity
+    preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
@@ -90,4 +92,5 @@ class ThreatThreshold(Base):
     response_action = Column(String(20), nullable=False)  # warn, temp_block, perm_block, firewall_ban
     temp_block_duration_minutes = Column(Integer, nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
+    preset_id = Column(String(100), nullable=True, index=True)
     priority = Column(Integer, default=0)

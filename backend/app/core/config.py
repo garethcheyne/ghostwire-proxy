@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     ghostwire_api_url: str = ""
     ghostwire_api_key: str = ""
 
+    # Web Push (VAPID keys)
+    # Generate with: python -c "from pywebpush import webpush; print(webpush.generate_vapid_keypair())"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_email: str = "mailto:admin@ghostwire.local"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]

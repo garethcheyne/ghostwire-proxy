@@ -1,0 +1,52 @@
+{
+  "id": "threat-response-aggressive",
+  "name": "Aggressive Threat Response (Zero Tolerance)",
+  "description": "Fast escalation for high-security environments. First offence gets a warning, second gets blocked, and persistent attackers are immediately pushed to the firewall. Use when protecting sensitive systems.",
+  "category": "threat_response",
+  "severity": "critical",
+  "tags": ["security", "threat", "strict"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "thresholds": [
+    {
+      "name": "Immediate warning",
+      "events_count": 1,
+      "time_window_minutes": 5,
+      "threat_score": null,
+      "response_action": "warn",
+      "temp_block_duration_minutes": null,
+      "priority": 1,
+      "notes": "First detected threat event triggers a warning."
+    },
+    {
+      "name": "Quick temp block",
+      "events_count": 3,
+      "time_window_minutes": 15,
+      "threat_score": 20,
+      "response_action": "temp_block",
+      "temp_block_duration_minutes": 120,
+      "priority": 2,
+      "notes": "3 events in 15 minutes = 2-hour block."
+    },
+    {
+      "name": "Fast permanent block",
+      "events_count": 8,
+      "time_window_minutes": 60,
+      "threat_score": 75,
+      "response_action": "perm_block",
+      "temp_block_duration_minutes": null,
+      "priority": 3,
+      "notes": "8 events in 1 hour or score 75 = permanent block."
+    },
+    {
+      "name": "Rapid firewall escalation",
+      "events_count": 15,
+      "time_window_minutes": 360,
+      "threat_score": 150,
+      "response_action": "firewall_ban",
+      "temp_block_duration_minutes": null,
+      "priority": 4,
+      "notes": "15 events in 6 hours or score 150 = pushed to firewall immediately."
+    }
+  ]
+}

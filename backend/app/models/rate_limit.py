@@ -17,6 +17,7 @@ class RateLimitRule(Base):
     burst_size = Column(Integer, default=10)
     action = Column(String(20), default="reject")  # reject, delay, log
     enabled = Column(Boolean, default=True, nullable=False)
+    preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -43,5 +44,6 @@ class GeoipRule(Base):
     countries = Column(Text, nullable=False)  # JSON array of country codes
     action = Column(String(20), default="block")  # block, log, challenge
     enabled = Column(Boolean, default=True, nullable=False)
+    preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

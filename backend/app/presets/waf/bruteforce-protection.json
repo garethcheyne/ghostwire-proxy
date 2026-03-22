@@ -1,0 +1,30 @@
+{
+  "id": "waf-bruteforce-protection",
+  "name": "Brute-Force & Credential Stuffing Protection",
+  "description": "Detects and blocks credential brute-forcing, credential stuffing, and authentication abuse patterns. Targets login endpoints, common username/password patterns, and suspicious authentication behavior.",
+  "category": "waf",
+  "severity": "high",
+  "tags": ["security", "waf", "auth", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Default Credential Attempts",
+      "category": "scanner",
+      "pattern": "(?i)(username=(admin|root|administrator|test|guest|user|demo|default|support|operator)&|password=(admin|password|123456|12345678|qwerty|letmein|welcome|monkey|master|dragon|login|abc123|pass|Password1))",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Blocks login attempts using common default credentials."
+    },
+    {
+      "name": "Excessive POST to Auth Endpoints",
+      "category": "scanner",
+      "pattern": "(?i)(POST\\s+.*/?(login|signin|authenticate|auth|token|session|oauth|api-key))",
+      "severity": "low",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs POST requests to authentication endpoints. Combine with rate limiting for full protection."
+    }
+  ]
+}

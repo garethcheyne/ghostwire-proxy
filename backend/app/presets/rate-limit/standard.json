@@ -1,0 +1,22 @@
+{
+  "id": "ratelimit-standard",
+  "name": "Standard Rate Limits",
+  "description": "Balanced rate limiting suitable for most web applications. Allows normal browsing but blocks automated scanning and abuse. Good starting point for any service.",
+  "category": "rate_limit",
+  "severity": "medium",
+  "tags": ["security", "rate-limit", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Standard Global Rate Limit",
+      "requests_per_second": null,
+      "requests_per_minute": 120,
+      "requests_per_hour": null,
+      "burst_size": 20,
+      "action": "reject",
+      "enabled": true,
+      "notes": "120 req/min with burst of 20. Allows fast page loads with multiple assets but blocks sustained rapid requests."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "geoip-high-risk-countries",
+  "name": "Block High-Risk Countries",
+  "description": "Blocks traffic from countries commonly associated with high volumes of cyber attacks, scanning, and credential stuffing. Based on threat intelligence from multiple sources including AbuseIPDB, Spamhaus, and SANS.",
+  "category": "geoip",
+  "severity": "high",
+  "tags": ["security", "geoip", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Block High-Risk Countries",
+      "mode": "blocklist",
+      "countries": ["CN", "RU", "KP", "IR"],
+      "action": "block",
+      "enabled": true,
+      "notes": "China, Russia, North Korea, Iran — top sources of state-sponsored and organized cyber attacks."
+    }
+  ]
+}

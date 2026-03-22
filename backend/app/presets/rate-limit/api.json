@@ -1,0 +1,22 @@
+{
+  "id": "ratelimit-api",
+  "name": "API Rate Limits",
+  "description": "Tighter rate limiting designed for API services. Prevents abuse while allowing legitimate programmatic access. Recommended for JSON/REST API endpoints.",
+  "category": "rate_limit",
+  "severity": "medium",
+  "tags": ["security", "rate-limit", "api"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "API Rate Limit",
+      "requests_per_second": 10,
+      "requests_per_minute": 60,
+      "requests_per_hour": 1000,
+      "burst_size": 15,
+      "action": "reject",
+      "enabled": true,
+      "notes": "10 req/s, 60 req/min, 1000 req/hr. Suitable for API consumers."
+    }
+  ]
+}

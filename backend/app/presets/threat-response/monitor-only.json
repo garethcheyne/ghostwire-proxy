@@ -1,0 +1,22 @@
+{
+  "id": "threat-response-monitor-only",
+  "name": "Monitor Only (No Blocking)",
+  "description": "Logs all threats but takes no blocking action. Use this to observe traffic patterns and tune rules before enabling enforcement. Good for initial deployment.",
+  "category": "threat_response",
+  "severity": "low",
+  "tags": ["monitoring", "threat"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "thresholds": [
+    {
+      "name": "Log and monitor everything",
+      "events_count": 1,
+      "time_window_minutes": 1440,
+      "threat_score": null,
+      "response_action": "warn",
+      "temp_block_duration_minutes": null,
+      "priority": 1,
+      "notes": "Warn only — no blocking. Review threat dashboards to establish baselines before enabling enforcement."
+    }
+  ]
+}

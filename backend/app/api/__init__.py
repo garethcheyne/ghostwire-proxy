@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup
+from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates
 
 router = APIRouter()
 
@@ -30,3 +30,5 @@ router.include_router(rate_limits.router, prefix="/rate-limits", tags=["Rate Lim
 router.include_router(geoip.router, prefix="/geoip", tags=["GeoIP"])
 router.include_router(system.router, prefix="/system", tags=["System Monitor"])
 router.include_router(backup.router, prefix="/backups", tags=["Backups"])
+router.include_router(presets.router, prefix="/presets", tags=["Security Presets"])
+router.include_router(updates.router, prefix="/updates", tags=["Updates"])

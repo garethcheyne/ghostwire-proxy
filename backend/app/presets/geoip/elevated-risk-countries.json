@@ -1,0 +1,20 @@
+{
+  "id": "geoip-elevated-risk-countries",
+  "name": "Block Elevated-Risk Countries",
+  "description": "Extends the high-risk list with additional countries that are frequent sources of brute-force attacks, credential stuffing, and malicious scanning. Apply if your services are region-specific and don't need global access.",
+  "category": "geoip",
+  "severity": "medium",
+  "tags": ["security", "geoip"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Block Elevated-Risk Countries",
+      "mode": "blocklist",
+      "countries": ["CN", "RU", "KP", "IR", "VN", "IN", "BR", "PK", "BD", "ID", "TH", "UA", "NG", "VE", "EG"],
+      "action": "block",
+      "enabled": true,
+      "notes": "Extended list including countries with high volumes of brute-force, scanning, and botnet activity."
+    }
+  ]
+}

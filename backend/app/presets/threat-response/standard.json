@@ -1,0 +1,52 @@
+{
+  "id": "threat-response-standard",
+  "name": "Standard Threat Response",
+  "description": "Balanced threat response thresholds. Gives attackers a few chances before escalating, but quickly blocks persistent threats. Recommended for most deployments.",
+  "category": "threat_response",
+  "severity": "high",
+  "tags": ["security", "threat", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "thresholds": [
+    {
+      "name": "Warn after initial detections",
+      "events_count": 3,
+      "time_window_minutes": 10,
+      "threat_score": null,
+      "response_action": "warn",
+      "temp_block_duration_minutes": null,
+      "priority": 1,
+      "notes": "After 3 threat events in 10 minutes, start returning 429 warnings."
+    },
+    {
+      "name": "Temp block repeat offenders",
+      "events_count": 10,
+      "time_window_minutes": 30,
+      "threat_score": 50,
+      "response_action": "temp_block",
+      "temp_block_duration_minutes": 60,
+      "priority": 2,
+      "notes": "After 10 events in 30 minutes or threat score 50, block for 1 hour."
+    },
+    {
+      "name": "Permanent block persistent threats",
+      "events_count": 25,
+      "time_window_minutes": 1440,
+      "threat_score": 150,
+      "response_action": "perm_block",
+      "temp_block_duration_minutes": null,
+      "priority": 3,
+      "notes": "After 25 events in 24 hours or threat score 150, permanently block."
+    },
+    {
+      "name": "Firewall ban severe threats",
+      "events_count": 50,
+      "time_window_minutes": 1440,
+      "threat_score": 300,
+      "response_action": "firewall_ban",
+      "temp_block_duration_minutes": null,
+      "priority": 4,
+      "notes": "After 50 events or threat score 300, push to external firewall for network-level ban."
+    }
+  ]
+}

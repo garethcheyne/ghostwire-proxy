@@ -1,10 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
+import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
+
+interface SidebarContextType {
+  isCollapsed: boolean
+  setIsCollapsed: (value: boolean) => void
+  isMobileOpen: boolean
+  setIsMobileOpen: (value: boolean) => void
+}
+
+export const SidebarContext = createContext<SidebarContextType>({
+  isCollapsed: false,
+  setIsCollapsed: () => {},
+  isMobileOpen: false,
+  setIsMobileOpen: () => {},
+})
+
+export const useSidebar = () => useContext(SidebarContext)
 
 export default function DashboardLayout({
   children,
@@ -13,6 +30,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -25,29 +43,45 @@ export default function DashboardLayout({
     }
   }, [router])
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileOpen(false)
+  }, [])
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="relative h-12 w-12">
+            <div className="absolute inset-0 animate-ping rounded-full bg-cyan-500/30" />
+            <div className="absolute inset-2 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+            <div className="absolute inset-4 rounded-full bg-cyan-500/50" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Initializing...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Desktop Sidebar - hidden on mobile */}
+        <div className="hidden md:block">
+          <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+        </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/30">
-          {children}
-        </main>
+        {/* Mobile Sidebar - sheet overlay */}
+        <MobileSidebar open={isMobileOpen} onOpenChange={setIsMobileOpen} />
+
+        {/* Main content area */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header onMobileMenuClick={() => setIsMobileOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-muted/30">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarContext.Provider>
   )
 }

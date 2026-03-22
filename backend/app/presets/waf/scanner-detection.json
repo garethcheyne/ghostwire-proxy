@@ -1,0 +1,66 @@
+{
+  "id": "waf-scanner-detection",
+  "name": "Scanner & Bot Detection",
+  "description": "Detects automated vulnerability scanners, penetration testing tools, and malicious bots by their user-agent signatures, URL patterns, and behavioral fingerprints. Catches tools like Nmap, Nikto, SQLMap, Burp Suite, and common scraping bots.",
+  "category": "waf",
+  "severity": "high",
+  "tags": ["security", "waf", "scanner", "bot", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Known Scanner User-Agents",
+      "category": "scanner",
+      "pattern": "(?i)(nikto|nmap|sqlmap|burpsuite|burp\\s*suite|nessus|openvas|qualys|acunetix|w3af|arachni|skipfish|wapiti|vega|zap|zaproxy|masscan|dirbuster|gobuster|ffuf|feroxbuster|nuclei|httpx|subfinder|amass|shodan|censys|zgrab)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Blocks requests from known vulnerability scanners and reconnaissance tools."
+    },
+    {
+      "name": "Script Kiddie User-Agents",
+      "category": "scanner",
+      "pattern": "(?i)(python-requests|python-urllib|curl/|wget/|libwww-perl|go-http-client|java/|httpclient|httplib|php-curl|axios|node-fetch|got/|undici)",
+      "severity": "low",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs requests from common scripting HTTP clients. Set to log-only since legitimate services may use these."
+    },
+    {
+      "name": "WordPress & CMS Probing",
+      "category": "scanner",
+      "pattern": "(?i)(/wp-(admin|login|content|includes|config|cron)|/xmlrpc\\.php|/wp-json/|/administrator/|/phpmyadmin|/pma/|/myadmin|/adminer)",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects probing for WordPress, Joomla, and other CMS admin panels that don't exist on your server."
+    },
+    {
+      "name": "Sensitive File Probing",
+      "category": "scanner",
+      "pattern": "(?i)(/\\.env|/\\.git/|/\\.svn/|/\\.htaccess|/\\.htpasswd|/web\\.config|/config\\.yml|/database\\.yml|/composer\\.json|/package\\.json|/Gemfile|/requirements\\.txt|/Dockerfile|/docker-compose)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects attempts to access sensitive configuration, dependency, and version control files."
+    },
+    {
+      "name": "Backup File Probing",
+      "category": "scanner",
+      "pattern": "(?i)(\\.(bak|backup|old|orig|copy|swp|sav|save|tmp|temp|sql|tar|tar\\.gz|zip|rar)$|\\.\\~|~$|#$)",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects attempts to access backup, temporary, and editor swap files."
+    },
+    {
+      "name": "Admin Panel Enumeration",
+      "category": "scanner",
+      "pattern": "(?i)(/admin/?$|/login/?$|/dashboard/?$|/panel/?$|/console/?$|/manager/?$|/cpanel|/webmail|/portal/?$|/backend/?$)",
+      "severity": "low",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs attempts to find common admin panel URLs. Set to log since these may be legitimate paths."
+    }
+  ]
+}

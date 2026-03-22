@@ -11,9 +11,12 @@ import {
   Server,
   Archive,
   ChevronRight,
+  Globe,
+  Bell,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
+import PushSubscriptionManager from '@/components/notifications/push-subscription'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -44,9 +47,12 @@ export default function SettingsPage() {
   const [isReloading, setIsReloading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [nginxStatus, setNginxStatus] = useState<'running' | 'stopped' | 'error'>('running')
+  const [defaultSite, setDefaultSite] = useState({ behavior: 'congratulations', redirect_url: '' })
+  const [isSavingDefault, setIsSavingDefault] = useState(false)
 
   useEffect(() => {
     fetchSettings()
+    fetchDefaultSite()
   }, [])
 
   const fetchSettings = async () => {
@@ -73,6 +79,28 @@ export default function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save settings' })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const fetchDefaultSite = async () => {
+    try {
+      const { data } = await api.get('/api/settings/default-site')
+      setDefaultSite(data)
+    } catch (error) {
+      console.error('Failed to fetch default site:', error)
+    }
+  }
+
+  const handleSaveDefaultSite = async () => {
+    setIsSavingDefault(true)
+    setMessage(null)
+    try {
+      await api.put('/api/settings/default-site', defaultSite)
+      setMessage({ type: 'success', text: 'Default site updated and applied' })
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update default site' })
+    } finally {
+      setIsSavingDefault(false)
     }
   }
 
@@ -173,6 +201,75 @@ export default function SettingsPage() {
           <div className="rounded-lg border border-border p-4">
             <p className="text-sm text-muted-foreground mb-1">Certificate Path</p>
             <code className="text-sm">{settings.certificate_path}</code>
+          </div>
+        </div>
+      </div>
+
+      {/* Default Site */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+          <Globe className="h-5 w-5" />
+          Default Site
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          What happens when someone visits your server by IP address or uses a hostname that isn&apos;t configured as a proxy host.
+        </p>
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { value: 'congratulations', label: 'Welcome Page', desc: 'Show a Ghostwire Proxy landing page' },
+              { value: 'redirect', label: 'Redirect', desc: 'Redirect to a custom URL' },
+              { value: '404', label: '404 Not Found', desc: 'Return a 404 error page' },
+              { value: '444', label: 'Drop Connection', desc: 'Silently close the connection' },
+            ].map((opt) => (
+              <label
+                key={opt.value}
+                className={`relative flex flex-col rounded-lg border p-4 cursor-pointer transition-colors ${
+                  defaultSite.behavior === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="defaultSite"
+                  value={opt.value}
+                  checked={defaultSite.behavior === opt.value}
+                  onChange={(e) => setDefaultSite({ ...defaultSite, behavior: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="font-medium text-sm">{opt.label}</span>
+                <span className="text-xs text-muted-foreground mt-1">{opt.desc}</span>
+              </label>
+            ))}
+          </div>
+
+          {defaultSite.behavior === 'redirect' && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Redirect URL</label>
+              <input
+                type="url"
+                value={defaultSite.redirect_url}
+                onChange={(e) => setDefaultSite({ ...defaultSite, redirect_url: e.target.value })}
+                placeholder="https://example.com"
+                className="w-full max-w-md px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveDefaultSite}
+              disabled={isSavingDefault}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isSavingDefault ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save & Apply
+            </button>
           </div>
         </div>
       </div>
@@ -338,6 +435,18 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Push Notifications */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+          <Bell className="h-5 w-5" />
+          Push Notifications
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Receive real-time alerts about security threats, system updates, and important events on your devices.
+        </p>
+        <PushSubscriptionManager />
       </div>
     </div>
   )

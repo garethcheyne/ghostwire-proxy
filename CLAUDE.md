@@ -29,4 +29,11 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 ### Domain
 - Production: proxy.ghostwire.err403.com
 
+## Database Safety Rules
+- **NEVER perform destructive database operations** (DROP TABLE, DELETE without WHERE, TRUNCATE, etc.)
+- **NEVER modify production data** without explicit user confirmation
+- Always use parameterized queries to prevent SQL injection
+- Prefer soft deletes over hard deletes when possible
+- Back up data before any bulk operations
+
 IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.

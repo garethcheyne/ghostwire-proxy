@@ -1,0 +1,93 @@
+{
+  "id": "waf-owasp-top10",
+  "name": "OWASP Top 10 Protection",
+  "description": "Core WAF rules covering the OWASP Top 10 web application security risks. Detects SQL injection, cross-site scripting (XSS), path traversal, remote code execution, and server-side request forgery. Recommended as a baseline for all web applications.",
+  "category": "waf",
+  "severity": "critical",
+  "tags": ["security", "waf", "owasp", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "SQL Injection — Union/Select",
+      "category": "sqli",
+      "pattern": "(?i)(union\\s+(all\\s+)?select|select\\s+.*from\\s+|insert\\s+into|update\\s+.*set|delete\\s+from|drop\\s+(table|database)|alter\\s+table)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects common SQL injection patterns including UNION SELECT, INSERT INTO, DROP TABLE."
+    },
+    {
+      "name": "SQL Injection — Boolean/Error Based",
+      "category": "sqli",
+      "pattern": "(?i)(or\\s+1\\s*=\\s*1|and\\s+1\\s*=\\s*1|'\\s*or\\s*'|'\\s*and\\s*'|benchmark\\s*\\(|sleep\\s*\\(|waitfor\\s+delay|having\\s+1\\s*=\\s*1)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects boolean-based and error-based SQL injection techniques."
+    },
+    {
+      "name": "SQL Injection — Comment Evasion",
+      "category": "sqli",
+      "pattern": "(?i)(/\\*.*\\*/|--\\s|#\\s|;\\s*--|%23|%2d%2d)",
+      "severity": "medium",
+      "action": "log",
+      "enabled": true,
+      "description": "Detects SQL comment sequences used to evade filters."
+    },
+    {
+      "name": "XSS — Script Tags",
+      "category": "xss",
+      "pattern": "(?i)(<script[^>]*>|</script>|javascript\\s*:|on(load|error|click|mouseover|focus|blur|submit|change|input)\\s*=)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects script tags and inline JavaScript event handlers."
+    },
+    {
+      "name": "XSS — Encoded Payloads",
+      "category": "xss",
+      "pattern": "(?i)(&#x?[0-9a-f]+;?|%3[cC]script|%3[cC]img|expression\\s*\\(|eval\\s*\\(|document\\.(cookie|domain|write)|window\\.(location|open))",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects HTML entity encoded and URL encoded XSS payloads."
+    },
+    {
+      "name": "Path Traversal",
+      "category": "path_traversal",
+      "pattern": "(?i)(\\.\\./|\\.\\\\|%2e%2e[/\\\\]|%252e%252e|/etc/passwd|/etc/shadow|/proc/self|c:\\\\windows|boot\\.ini)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects directory traversal attempts to access files outside the web root."
+    },
+    {
+      "name": "Remote Code Execution — Command Injection",
+      "category": "rce",
+      "pattern": "(?i)(;\\s*(ls|cat|id|whoami|uname|pwd|wget|curl|nc|bash|sh|python|perl|ruby|php)\\b|\\|\\s*(ls|cat|id|whoami)|`[^`]*`|\\$\\([^)]*\\))",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects OS command injection via semicolons, pipes, backticks, and command substitution."
+    },
+    {
+      "name": "Remote Code Execution — PHP/Java",
+      "category": "rce",
+      "pattern": "(?i)(php://|data://|expect://|phar://|zlib://|java\\.lang\\.Runtime|ProcessBuilder|exec\\s*\\(|system\\s*\\(|passthru|shell_exec)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects PHP stream wrappers and function calls used for remote code execution."
+    },
+    {
+      "name": "SSRF — Internal Network Access",
+      "category": "rce",
+      "pattern": "(?i)(https?://(127\\.0\\.0\\.1|localhost|0\\.0\\.0\\.0|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|169\\.254\\.|\\[::1\\]|metadata\\.google|169\\.254\\.169\\.254))",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects server-side request forgery attempts targeting internal/private networks and cloud metadata."
+    }
+  ]
+}

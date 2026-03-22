@@ -203,14 +203,20 @@ class BackupService:
             )
 
             if result.returncode != 0:
-                logger.warning(f"pg_dump warning: {result.stderr}")
-                # Continue anyway, database might still be exported
+                error_msg = result.stderr or "pg_dump failed with no output"
+                logger.error(f"pg_dump failed: {error_msg}")
+                raise RuntimeError(f"Database backup failed: {error_msg}")
 
+            # Verify dump file was actually created and has content
+            if not os.path.exists(dump_file) or os.path.getsize(dump_file) == 0:
+                raise RuntimeError("Database backup produced empty or missing dump file")
+
+        except FileNotFoundError as e:
+            logger.error(f"pg_dump not found - ensure postgresql-client is installed: {e}")
+            raise RuntimeError(f"pg_dump not available: {e}")
         except Exception as e:
             logger.error(f"Database backup error: {e}")
-            # Write error to file for debugging
-            with open(os.path.join(db_dir, "backup_error.txt"), "w") as f:
-                f.write(str(e))
+            raise
 
     def _backup_certificates(self, temp_dir: str):
         """Backup SSL certificates."""
@@ -302,6 +308,13 @@ class BackupService:
             # Extract backup to temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
                 with tarfile.open(backup.file_path, "r:gz") as tar:
+                    # Protect against path traversal (CVE-2007-4559)
+                    for member in tar.getmembers():
+                        member_path = os.path.join(temp_dir, member.name)
+                        abs_temp = os.path.realpath(temp_dir)
+                        abs_member = os.path.realpath(member_path)
+                        if not abs_member.startswith(abs_temp + os.sep) and abs_member != abs_temp:
+                            raise ValueError(f"Path traversal detected in backup archive: {member.name}")
                     tar.extractall(temp_dir)
 
                 # Read metadata
@@ -408,7 +421,8 @@ class BackupService:
         )
 
         if result.returncode != 0:
-            logger.warning(f"psql restore warning: {result.stderr}")
+            error_msg = result.stderr or "psql failed with no output"
+            raise RuntimeError(f"Database restore failed: {error_msg}")
 
     def _restore_certificates(self, temp_dir: str):
         """Restore SSL certificates."""

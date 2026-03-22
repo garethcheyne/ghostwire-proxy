@@ -1,4 +1,4 @@
-"""Internal API endpoints for nginx/Lua integration."""
+"""Internal API endpoints for nginx/Lua and updater integration."""
 
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,9 +6,13 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
+import os
 import uuid
 
 from app.core.database import get_db
+
+# Internal auth token for updater service
+INTERNAL_AUTH_TOKEN = os.environ.get("INTERNAL_AUTH_TOKEN", "updater-service")
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
@@ -394,3 +398,48 @@ async def update_session_activity(
     session_service = SessionService(db)
     success = await session_service.update_activity(data.session_id)
     return {"updated": success}
+
+
+# ============================================================================
+# Push Notification Endpoint (called by updater sidecar)
+# ============================================================================
+
+class PushNotificationRequest(BaseModel):
+    """Request to send push notification from updater."""
+    title: str
+    body: str
+    notification_type: str = "general"
+    data: Optional[dict] = None
+
+
+@router.post("/push/send")
+async def send_push_notification(
+    data: PushNotificationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send push notification to all users.
+    Called by updater sidecar for update status notifications.
+    """
+    # Verify internal auth token
+    auth_token = request.headers.get("X-Internal-Auth")
+    if auth_token != INTERNAL_AUTH_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal auth token"
+        )
+
+    try:
+        from app.services.push_service import push_service
+
+        result = await push_service.notify_all(
+            title=data.title,
+            body=data.body,
+            notification_type=data.notification_type,
+            data=data.data,
+            db=db,
+        )
+        return {"status": "sent", **result}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

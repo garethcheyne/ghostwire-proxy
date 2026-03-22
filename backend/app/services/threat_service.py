@@ -1,5 +1,6 @@
 """Threat detection and response service."""
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -11,6 +12,18 @@ from app.models.waf import ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.firewall import FirewallBlocklist
 
 logger = logging.getLogger(__name__)
+
+
+def _send_push_notification_background(coro):
+    """Fire and forget a push notification (don't block the main flow)."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(coro)
+        else:
+            loop.run_until_complete(coro)
+    except Exception as e:
+        logger.debug(f"Could not send push notification: {e}")
 
 # Severity score mapping
 SEVERITY_SCORES = {
@@ -86,6 +99,22 @@ async def record_threat_event(
     await evaluate_thresholds(db, actor)
 
     await db.commit()
+
+    # Send push notification for high/critical severity threats
+    if severity in ("high", "critical"):
+        try:
+            from app.services.push_service import push_service
+            _send_push_notification_background(
+                push_service.notify_threat_detected(
+                    ip=client_ip,
+                    threat_type=category,
+                    severity=severity,
+                    threat_id=event.id,
+                )
+            )
+        except Exception as e:
+            logger.debug(f"Push notification skipped: {e}")
+
     return event
 
 
@@ -171,6 +200,28 @@ async def apply_response(
         db.add(blocklist_entry)
 
     logger.info(f"Threat response: {action} applied to {actor.ip_address} (score: {actor.threat_score})")
+
+    # Send push notification for blocks
+    if action in ("temp_block", "perm_block", "firewall_ban"):
+        try:
+            from app.services.push_service import push_service
+
+            if action == "temp_block":
+                duration = f"{temp_block_minutes} minutes" if temp_block_minutes else "1 hour"
+            elif action == "perm_block":
+                duration = "permanent"
+            else:
+                duration = "firewall ban"
+
+            _send_push_notification_background(
+                push_service.notify_ip_blocked(
+                    ip=actor.ip_address,
+                    reason=f"Threat score: {actor.threat_score}",
+                    duration=duration,
+                )
+            )
+        except Exception as e:
+            logger.debug(f"Push notification skipped: {e}")
 
 
 async def check_ip_blocked(db: AsyncSession, ip_address: str) -> tuple[bool, Optional[str]]:

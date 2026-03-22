@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import subprocess
+import os
+import socket
 
 from app.core.database import get_db
 from app.models.user import User
@@ -24,6 +25,8 @@ DEFAULT_SETTINGS = {
     "default_block_exploits": "true",
     "nginx_worker_processes": "auto",
     "nginx_worker_connections": "4096",
+    "default_site_behavior": "congratulations",
+    "default_site_redirect_url": "",
 }
 
 
@@ -159,57 +162,134 @@ async def reload_nginx(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reload nginx configuration"""
+    """Reload nginx configuration via Docker socket SIGHUP"""
+    docker_socket = "/var/run/docker.sock"
+    if not os.path.exists(docker_socket):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Docker socket not available",
+        )
+
     try:
-        # Test configuration first
-        test_result = subprocess.run(
-            ["nginx", "-t"],
-            capture_output=True,
-            text=True,
-            timeout=10
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(docker_socket)
+        http_request = (
+            "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
+            "Host: localhost\r\n"
+            "Content-Length: 0\r\n\r\n"
         )
-
-        if test_result.returncode != 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Nginx configuration test failed: {test_result.stderr}",
-            )
-
-        # Reload nginx
-        reload_result = subprocess.run(
-            ["nginx", "-s", "reload"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if reload_result.returncode != 0:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to reload nginx: {reload_result.stderr}",
-            )
-
-        # Audit log
-        audit_log = AuditLog(
-            user_id=current_user.id,
-            email=current_user.email,
-            action="nginx_reloaded",
-            ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
-                       (request.client.host if request.client else None),
-            user_agent=request.headers.get("user-agent"),
-        )
-        db.add(audit_log)
-        await db.commit()
-
-        return {"message": "Nginx configuration reloaded successfully"}
-
-    except subprocess.TimeoutExpired:
+        sock.sendall(http_request.encode())
+        sock.recv(4096)
+        sock.close()
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Nginx reload timed out",
+            detail=f"Failed to reload nginx: {str(e)}",
         )
-    except FileNotFoundError:
+
+    # Audit log
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        email=current_user.email,
+        action="nginx_reloaded",
+        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
+                   (request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.add(audit_log)
+    await db.commit()
+
+    return {"message": "Nginx configuration reloaded successfully"}
+
+
+@router.get("/default-site")
+async def get_default_site(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current default site behavior settings"""
+    behavior = "congratulations"
+    redirect_url = ""
+
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_behavior"))
+    setting = result.scalar_one_or_none()
+    if setting:
+        behavior = setting.value
+
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_redirect_url"))
+    setting = result.scalar_one_or_none()
+    if setting:
+        redirect_url = setting.value
+
+    return {"behavior": behavior, "redirect_url": redirect_url}
+
+
+@router.put("/default-site")
+async def update_default_site(
+    request: Request,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update default site behavior and regenerate nginx config"""
+    from pydantic import BaseModel, field_validator
+
+    class DefaultSiteUpdate(BaseModel):
+        behavior: str
+        redirect_url: str = ""
+
+        @field_validator("behavior")
+        @classmethod
+        def validate_behavior(cls, v: str) -> str:
+            valid = ("congratulations", "redirect", "404", "444")
+            if v not in valid:
+                raise ValueError(f"Behavior must be one of: {', '.join(valid)}")
+            return v
+
+    body = await request.json()
+    data = DefaultSiteUpdate(**body)
+
+    # Validate redirect URL is provided when behavior is redirect
+    if data.behavior == "redirect" and not data.redirect_url:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Nginx binary not found",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Redirect URL is required when behavior is 'redirect'",
         )
+
+    # Save settings
+    for key, value in [("default_site_behavior", data.behavior), ("default_site_redirect_url", data.redirect_url)]:
+        result = await db.execute(select(Setting).where(Setting.key == key))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = value
+        else:
+            setting = Setting(key=key, value=value)
+            db.add(setting)
+
+    # Audit log
+    db.add(AuditLog(
+        user_id=current_user.id,
+        email=current_user.email,
+        action="default_site_updated",
+        ip_address=request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
+                   (request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
+    ))
+    await db.commit()
+
+    # Regenerate and apply the default site config
+    from app.services.openresty_service import generate_default_site_config, reload_nginx
+    import os
+    from app.core.config import settings as app_settings
+
+    config = await generate_default_site_config(db)
+    config_path = os.path.join(app_settings.nginx_config_path, "_default.conf")
+    with open(config_path, "w") as f:
+        f.write(config)
+
+    # Reload nginx to apply
+    success, message = reload_nginx()
+    if not success:
+        return {"message": "Default site saved but nginx reload failed", "detail": message, "behavior": data.behavior}
+
+    return {"message": "Default site updated and applied", "behavior": data.behavior}

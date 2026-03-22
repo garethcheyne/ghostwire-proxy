@@ -1,0 +1,20 @@
+{
+  "id": "geoip-allow-english-speaking",
+  "name": "Allow English-Speaking Countries Only",
+  "description": "Only allows traffic from primarily English-speaking countries. Use this for apps that only serve users in these regions. All other countries are blocked.",
+  "category": "geoip",
+  "severity": "medium",
+  "tags": ["regional", "geoip"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Allow English-Speaking Countries Only",
+      "mode": "allowlist",
+      "countries": ["US", "GB", "CA", "AU", "NZ", "IE"],
+      "action": "block",
+      "enabled": true,
+      "notes": "USA, UK, Canada, Australia, New Zealand, Ireland."
+    }
+  ]
+}

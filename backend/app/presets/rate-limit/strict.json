@@ -1,0 +1,22 @@
+{
+  "id": "ratelimit-strict",
+  "name": "Strict Rate Limits (Under Attack)",
+  "description": "Aggressive rate limiting for when you're actively being attacked. Significantly reduces request throughput to mitigate DDoS, brute-force, and flooding attacks. Use temporarily during incidents.",
+  "category": "rate_limit",
+  "severity": "critical",
+  "tags": ["security", "rate-limit", "emergency"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Emergency Rate Limit",
+      "requests_per_second": 2,
+      "requests_per_minute": 30,
+      "requests_per_hour": 300,
+      "burst_size": 5,
+      "action": "reject",
+      "enabled": true,
+      "notes": "2 req/s, 30 req/min. Very restrictive — may impact legitimate users. Use only during active attacks."
+    }
+  ]
+}

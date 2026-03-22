@@ -95,13 +95,10 @@ class SystemMonitorService:
 
         # Check Redis
         try:
-            from app.core.redis import redis_pool
-            if redis_pool:
-                async with redis_pool.client() as client:
-                    await client.ping()
-                services["redis"] = {"status": "healthy"}
-            else:
-                services["redis"] = {"status": "unknown", "error": "Redis pool not initialized"}
+            from app.core.redis import get_redis
+            client = await get_redis()
+            await client.ping()
+            services["redis"] = {"status": "healthy"}
         except Exception as e:
             services["redis"] = {"status": "unhealthy", "error": str(e)}
 

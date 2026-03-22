@@ -1,0 +1,20 @@
+{
+  "id": "geoip-allow-europe",
+  "name": "Allow Europe Only (EU + EEA)",
+  "description": "Only allows traffic from EU and EEA member states. Useful for GDPR-compliant services that only serve European users.",
+  "category": "geoip",
+  "severity": "medium",
+  "tags": ["regional", "geoip", "gdpr"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Allow EU/EEA Countries Only",
+      "mode": "allowlist",
+      "countries": ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO", "CH", "GB"],
+      "action": "block",
+      "enabled": true,
+      "notes": "All EU member states plus EEA (Iceland, Liechtenstein, Norway) plus Switzerland and UK."
+    }
+  ]
+}

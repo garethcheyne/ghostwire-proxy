@@ -1,14 +1,19 @@
 """Backup API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
+import tarfile
+import json
+import uuid
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.models.user import User
+from app.models.backup import Backup
 from app.api.deps import get_current_user
-from app.services.backup_service import backup_service
+from app.services.backup_service import backup_service, BACKUP_PATH
 from app.schemas.backup import (
     BackupCreate,
     BackupResponse,
@@ -70,6 +75,90 @@ async def create_backup(
         return BackupResponse.model_validate(backup)
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload", response_model=BackupResponse)
+async def upload_backup(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Upload an existing backup file (.tar.gz) for restore.
+
+    The file must be a valid Ghostwire Proxy backup archive containing a metadata.json.
+    """
+    if not file.filename or not file.filename.endswith(('.tar.gz', '.tgz')):
+        raise HTTPException(status_code=400, detail="File must be a .tar.gz archive")
+
+    # Limit upload size to 500MB
+    max_size = 500 * 1024 * 1024
+    content = await file.read()
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail="File too large (max 500MB)")
+
+    # Save to temp location first, then validate
+    backup_id = str(uuid.uuid4())
+    safe_filename = f"uploaded_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.tar.gz"
+    file_path = os.path.join(BACKUP_PATH, safe_filename)
+
+    try:
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        # Validate it's a valid tar.gz with metadata
+        metadata = None
+        with tarfile.open(file_path, "r:gz") as tar:
+            # Security: check for path traversal
+            for member in tar.getmembers():
+                if member.name.startswith('/') or '..' in member.name:
+                    os.remove(file_path)
+                    raise HTTPException(status_code=400, detail="Invalid archive: path traversal detected")
+
+            # Look for metadata.json
+            try:
+                meta_member = tar.getmember("metadata.json")
+                meta_file = tar.extractfile(meta_member)
+                if meta_file:
+                    metadata = json.loads(meta_file.read().decode('utf-8'))
+            except (KeyError, json.JSONDecodeError):
+                pass
+
+        # Create backup record
+        includes = metadata.get("includes", {}) if metadata else {}
+        backup = Backup(
+            id=backup_id,
+            filename=safe_filename,
+            file_path=file_path,
+            file_size=len(content),
+            backup_type="uploaded",
+            includes_database=includes.get("database", False),
+            includes_certificates=includes.get("certificates", False),
+            includes_letsencrypt=includes.get("letsencrypt", False),
+            includes_configs=includes.get("configs", False),
+            includes_traffic_logs=includes.get("traffic_logs", False),
+            status="completed",
+            created_by=current_user.id,
+            created_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+        )
+
+        db.add(backup)
+        await db.commit()
+        await db.refresh(backup)
+
+        return BackupResponse.model_validate(backup)
+
+    except HTTPException:
+        raise
+    except tarfile.TarError:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=400, detail="Invalid or corrupted tar.gz archive")
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -190,9 +190,11 @@ async def renew_certificate(
 async def check_expiring_certificates(
     db: AsyncSession,
     days_before_expiry: int = 30,
+    send_notifications: bool = True,
 ) -> list[Certificate]:
     """
     Find certificates expiring within the specified number of days.
+    Optionally sends push notifications for expiring certificates.
     """
     from datetime import timedelta
 
@@ -207,7 +209,26 @@ async def check_expiring_certificates(
         )
     )
 
-    return result.scalars().all()
+    expiring_certs = list(result.scalars().all())
+
+    # Send push notifications for expiring certificates
+    if send_notifications and expiring_certs:
+        try:
+            from app.services.push_service import push_service
+
+            for cert in expiring_certs:
+                days_left = (cert.expires_at - datetime.now(timezone.utc)).days
+                if days_left <= 7:  # Only notify for certs expiring within 7 days
+                    domain = cert.domain_names[0] if cert.domain_names else "Unknown"
+                    await push_service.notify_certificate_expiring(
+                        domain=domain,
+                        days=days_left,
+                        db=db,
+                    )
+        except Exception:
+            pass  # Don't fail certificate check if notifications fail
+
+    return expiring_certs
 
 
 def validate_certificate_pem(certificate_pem: str, key_pem: str) -> tuple[bool, Optional[str], Optional[datetime]]:

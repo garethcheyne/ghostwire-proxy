@@ -3,6 +3,7 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  poweredByHeader: false,
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',
@@ -11,7 +12,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://ghostwire-proxy-api:8000'
     return [
-      // Collection endpoints need trailing slashes
+      // Collection endpoints - FastAPI routes defined with "/" need trailing slashes
       { source: '/api/proxy-hosts', destination: `${backendUrl}/api/proxy-hosts/` },
       { source: '/api/certificates', destination: `${backendUrl}/api/certificates/` },
       { source: '/api/access-lists', destination: `${backendUrl}/api/access-lists/` },
@@ -19,18 +20,16 @@ const nextConfig: NextConfig = {
       { source: '/api/dns-providers', destination: `${backendUrl}/api/dns-providers/` },
       { source: '/api/dns-zones', destination: `${backendUrl}/api/dns-zones/` },
       { source: '/api/traffic', destination: `${backendUrl}/api/traffic/` },
-      { source: '/api/waf/rules', destination: `${backendUrl}/api/waf/rules/` },
-      { source: '/api/waf/rules/sets', destination: `${backendUrl}/api/waf/rules/sets/` },
-      { source: '/api/firewall/connectors', destination: `${backendUrl}/api/firewall/connectors/` },
-      { source: '/api/firewalls', destination: `${backendUrl}/api/firewalls/` },
-      { source: '/api/alerts/channels', destination: `${backendUrl}/api/alerts/channels/` },
+      { source: '/api/firewalls', destination: `${backendUrl}/api/firewalls` },
       { source: '/api/users', destination: `${backendUrl}/api/users/` },
-      { source: '/api/system/status', destination: `${backendUrl}/api/system/status/` },
-      { source: '/api/system/metrics', destination: `${backendUrl}/api/system/metrics/` },
-      { source: '/api/system/throughput', destination: `${backendUrl}/api/system/throughput/` },
-      { source: '/api/system/containers', destination: `${backendUrl}/api/system/containers/` },
       { source: '/api/backups', destination: `${backendUrl}/api/backups/` },
-      { source: '/api/backups/settings/current', destination: `${backendUrl}/api/backups/settings/current/` },
+      // WAF and System endpoints don't use trailing slash routes
+      { source: '/api/waf/rules', destination: `${backendUrl}/api/waf/rules` },
+      { source: '/api/waf/rules/sets', destination: `${backendUrl}/api/waf/rules/sets` },
+      { source: '/api/system/status', destination: `${backendUrl}/api/system/status` },
+      { source: '/api/system/metrics', destination: `${backendUrl}/api/system/metrics` },
+      { source: '/api/system/throughput', destination: `${backendUrl}/api/system/throughput` },
+      { source: '/api/system/containers', destination: `${backendUrl}/api/system/containers` },
       // Generic fallback for all other API routes
       { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
     ]
@@ -40,6 +39,20 @@ const nextConfig: NextConfig = {
       {
         source: '/(.*)',
         headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' ws: wss:",
+              "frame-ancestors 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join('; '),
+          },
           {
             key: 'X-Frame-Options',
             value: 'DENY',
@@ -55,6 +68,14 @@ const nextConfig: NextConfig = {
           {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'off',
           },
         ],
       },

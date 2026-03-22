@@ -31,6 +31,8 @@ import {
   Map,
   Gauge,
   Monitor,
+  Sparkles,
+  Download,
 } from 'lucide-react'
 
 interface NavItem {
@@ -69,6 +71,7 @@ const navigation: NavGroup[] = [
       { title: 'Rate Limiting', href: '/dashboard/rate-limits', icon: Gauge },
       { title: 'Access Lists', href: '/dashboard/access-lists', icon: Lock },
       { title: 'Auth Walls', href: '/dashboard/auth-walls', icon: Key },
+      { title: 'Security Presets', href: '/dashboard/presets', icon: Sparkles },
     ],
   },
   {
@@ -84,6 +87,7 @@ const navigation: NavGroup[] = [
     items: [
       { title: 'Users', href: '/dashboard/users', icon: Users },
       { title: 'Settings', href: '/dashboard/settings', icon: Settings },
+      { title: 'Updates', href: '/dashboard/settings/updates', icon: Download },
     ],
   },
 ]

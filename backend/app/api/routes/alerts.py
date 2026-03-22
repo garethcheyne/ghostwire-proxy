@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.alert import PushSubscription, AlertChannel, AlertPreference
@@ -15,8 +16,25 @@ from app.schemas.alert import (
 )
 from app.api.deps import get_current_user
 from app.services.alert_service import dispatch_alert
+from app.services.push_service import push_service
 
 router = APIRouter()
+
+
+# ── VAPID Key ─────────────────────────────────────────────────
+
+@router.get("/push/vapid-key")
+async def get_vapid_public_key():
+    """Get the VAPID public key for push notification subscription."""
+    if not settings.vapid_public_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Push notifications not configured. VAPID keys not set."
+        )
+    return {
+        "public_key": settings.vapid_public_key,
+        "configured": push_service.is_configured(),
+    }
 
 
 # ── Push Subscriptions ─────────────────────────────────────────
@@ -256,6 +274,7 @@ async def send_test_alert(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Send a test alert via all configured channels."""
     result = await dispatch_alert(
         db=db,
         alert_type="threat_detected",
@@ -265,3 +284,46 @@ async def send_test_alert(
         data={"test": True},
     )
     return {"status": "sent", **result}
+
+
+@router.post("/push/test")
+async def send_test_push(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a test push notification directly to all subscriptions."""
+    if not push_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Push notifications not configured. VAPID keys not set."
+        )
+
+    result = await push_service.notify_all(
+        title="Test Notification",
+        body="Push notifications are working correctly!",
+        notification_type="test",
+        data={"test": True},
+        db=db,
+    )
+    return {"status": "sent", **result}
+
+
+@router.get("/push/subscriptions")
+async def list_my_subscriptions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List current user's push subscriptions."""
+    result = await db.execute(
+        select(PushSubscription).where(PushSubscription.user_id == current_user.id)
+    )
+    subs = result.scalars().all()
+    return [
+        {
+            "id": sub.id,
+            "endpoint": sub.endpoint[:50] + "..." if len(sub.endpoint) > 50 else sub.endpoint,
+            "user_agent": sub.user_agent,
+            "created_at": sub.created_at.isoformat() if sub.created_at else None,
+        }
+        for sub in subs
+    ]

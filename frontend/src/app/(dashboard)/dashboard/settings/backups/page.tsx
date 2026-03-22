@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Archive,
   Download,
@@ -79,6 +79,10 @@ export default function BackupsPage() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [editedSettings, setEditedSettings] = useState<BackupSettings | null>(null)
   const [isSavingSettings, setIsSavingSettings] = useState(false)
+
+  // Upload state
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchBackups()
@@ -216,6 +220,39 @@ export default function BackupsPage() {
     }
   }
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.tar.gz') && !file.name.endsWith('.tgz')) {
+      setError('Please select a .tar.gz backup file')
+      return
+    }
+
+    setIsUploading(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      await api.post('/api/backups/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      setSuccess('Backup uploaded successfully')
+      fetchBackups()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to upload backup')
+    } finally {
+      setIsUploading(false)
+      // Reset file input so same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -248,6 +285,21 @@ export default function BackupsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".tar.gz,.tgz"
+            onChange={handleUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {isUploading ? 'Uploading...' : 'Upload Backup'}
+          </button>
           <button
             onClick={() => {
               setEditedSettings(settings)
@@ -367,6 +419,8 @@ export default function BackupsPage() {
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                       backup.backup_type === 'scheduled'
                         ? 'bg-blue-500/10 text-blue-500'
+                        : backup.backup_type === 'uploaded'
+                        ? 'bg-orange-500/10 text-orange-500'
                         : 'bg-purple-500/10 text-purple-500'
                     }`}>
                       {backup.backup_type}

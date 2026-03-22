@@ -8,7 +8,7 @@ const api = axios.create({
   withCredentials: true,
 })
 
-// Request interceptor to add auth token and ensure trailing slashes on collection endpoints
+// Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
     // Get token from localStorage or session
@@ -18,38 +18,6 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`
       }
     }
-
-    // Add trailing slash to collection endpoints (those that end with a resource name, not an ID)
-    // This fixes the 307 redirect issue with FastAPI
-    if (config.url) {
-      const collectionEndpoints = [
-        '/api/proxy-hosts',
-        '/api/certificates',
-        '/api/access-lists',
-        '/api/auth-walls',
-        '/api/waf/rules',
-        '/api/waf/rules/sets',
-        '/api/dns-providers',
-        '/api/dns-zones',
-        '/api/firewall/connectors',
-        '/api/firewalls',
-        '/api/alerts/channels',
-        '/api/system/status',
-        '/api/system/metrics',
-        '/api/system/throughput',
-        '/api/system/containers',
-        '/api/backups',
-        '/api/backups/settings/current',
-      ]
-
-      for (const endpoint of collectionEndpoints) {
-        if (config.url === endpoint) {
-          config.url = `${endpoint}/`
-          break
-        }
-      }
-    }
-
     return config
   },
   (error) => {
