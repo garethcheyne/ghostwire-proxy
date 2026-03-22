@@ -1,0 +1,155 @@
+services:
+  # PostgreSQL Database
+  ghostwire-proxy-postgres:
+    image: postgres:16-alpine
+    container_name: ghostwire-proxy-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ghostwire_proxy}
+      - POSTGRES_USER=${POSTGRES_USER:-ghostwire}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - ghostwire-proxy-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghostwire} -d ${POSTGRES_DB:-ghostwire_proxy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # OpenResty Reverse Proxy (Ports 80, 443)
+  ghostwire-proxy-nginx:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    container_name: ghostwire-proxy-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./data/certificates:/etc/nginx/certs:ro
+      - ./data/nginx-configs:/etc/nginx/conf.d/proxy-hosts:ro
+      - proxy-cache:/var/cache/nginx
+      - certbot-webroot:/var/www/certbot:ro
+      - ./proxy/lua:/usr/local/openresty/nginx/lua:ro
+    networks:
+      - ghostwire-proxy-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Admin UI - Next.js (Port 88)
+  ghostwire-proxy-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ghostwire-proxy-ui
+    restart: unless-stopped
+    ports:
+      - "88:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      - BACKEND_URL=http://ghostwire-proxy-api:8000
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:88}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    depends_on:
+      ghostwire-proxy-api:
+        condition: service_healthy
+    networks:
+      - ghostwire-proxy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API - FastAPI (Port 8089 external, 8000 internal)
+  ghostwire-proxy-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ghostwire-proxy-api
+    restart: unless-stopped
+    ports:
+      - "8089:8000"
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ghostwire}:${POSTGRES_PASSWORD}@ghostwire-proxy-postgres:5432/${POSTGRES_DB:-ghostwire_proxy}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:88,http://localhost:3000}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-}
+      - GHOSTWIRE_API_URL=${GHOSTWIRE_API_URL:-}
+      - GHOSTWIRE_API_KEY=${GHOSTWIRE_API_KEY:-}
+      - REDIS_URL=redis://ghostwire-proxy-redis:6379
+    depends_on:
+      ghostwire-proxy-postgres:
+        condition: service_healthy
+      ghostwire-proxy-redis:
+        condition: service_healthy
+    volumes:
+      - ./data/sqlite:/data/sqlite
+      - ./data/certificates:/data/certificates
+      - ./data/nginx-configs:/data/nginx-configs
+      - ./data/letsencrypt:/etc/letsencrypt
+      - ./data/backups:/data/backups
+      - certbot-webroot:/var/www/certbot
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ghostwire-proxy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Certbot for Let's Encrypt
+  ghostwire-proxy-certbot:
+    build:
+      context: ./certbot
+      dockerfile: Dockerfile
+    container_name: ghostwire-proxy-certbot
+    volumes:
+      - ./data/certificates:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    networks:
+      - ghostwire-proxy-network
+
+  # Redis for caching and queues
+  ghostwire-proxy-redis:
+    image: redis:7-alpine
+    container_name: ghostwire-proxy-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - ghostwire-proxy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  ghostwire-proxy-network:
+    name: ghostwire-proxy-network
+    driver: bridge
+
+volumes:
+  proxy-cache:
+    name: ghostwire-proxy-cache
+  certbot-webroot:
+    name: ghostwire-proxy-certbot-webroot
+  redis-data:
+    name: ghostwire-proxy-redis-data
+  postgres-data:
+    name: ghostwire-proxy-postgres-data
