@@ -55,13 +55,19 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Configurable actions per rule: log, block, or blocklist
 - Per-host WAF enable/disable
 
-### Threat Response & Firewall Integration
-- Tiered response system: warn → temp block → permanent block → firewall ban
+### Threat Response & Automated Firewall Blocking
+- Tiered response system: warn → temp block → permanent block → **firewall ban**
 - IP reputation tracking with cumulative threat scores
-- Push IPs to external firewalls:
-  - **MikroTik RouterOS** (address lists)
-  - **UniFi** (firewall rules)
-  - **pfSense** / **OPNsense** (aliases)
+- Automatic or manual escalation — when a threat score crosses your threshold, the IP gets pushed to your firewall
+- Temporary and permanent bans with configurable expiry
+- Push malicious IPs directly to your network firewall:
+  - **MikroTik RouterOS** — adds IPs to address lists, enforced by your existing firewall rules
+  - **Ubiquiti UniFi** — creates firewall rules via the UniFi Controller API
+  - **pfSense** — adds IPs to firewall aliases via the pfSense API
+  - **OPNsense** — adds IPs to aliases via the OPNsense API
+- Multiple firewall connectors supported simultaneously (e.g. RouterOS + UniFi)
+- Blocklist sync status tracking — see which IPs have been pushed, pending, or expired
+- Blocks at the **network edge**, not just at the proxy — attackers are dropped before they even reach your services
 
 ### GeoIP Blocking
 - Country-level allow/deny lists per proxy host
@@ -92,6 +98,13 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Backup and restore
 - System health monitoring
 - DNS provider management (Cloudflare integration)
+
+### Firewall Connector Management
+- Add and configure multiple firewall connectors from the admin UI
+- Test connectivity before saving
+- View sync status and last push time per connector
+- Manage the blocklist — see all IPs currently blocked at the firewall level
+- Remove or expire individual entries
 
 ### Mobile Ready
 - PWA support — installable on mobile devices
@@ -157,7 +170,7 @@ On first launch, you'll be guided through initial setup to create your admin acc
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   Internet                          │
-│                  :80 / :443                          │
+│                  :80 / :443                         │
 └──────────────────────┬──────────────────────────────┘
                        │
               ┌────────▼────────┐
@@ -166,7 +179,6 @@ On first launch, you'll be guided through initial setup to create your admin acc
               │                 │   Access Control, Logging
               └───────┬─┬───────┘
                       │ │
-          ┌───────────┘ └───────────┐
           ▼                         ▼
   ┌──────────────┐         ┌──────────────┐
   │  Upstream A  │         │  Upstream B  │   Your services
@@ -264,5 +276,5 @@ MIT
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/garethcheyne">Gareth Cheyne</a>
+  Built by <a href="https://github.com/garethcheyne">Gareth Cheyne</a> and <a href="https://claude.ai">Claude</a>
 </p>
