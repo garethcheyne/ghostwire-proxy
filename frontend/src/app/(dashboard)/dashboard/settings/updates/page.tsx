@@ -21,6 +21,7 @@ import {
   ChevronUp,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface AppVersion {
   version: string
@@ -96,6 +97,7 @@ export default function UpdatesPage() {
   const [showAllReleases, setShowAllReleases] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedRelease, setSelectedRelease] = useState<AppVersion | null>(null)
+  const confirm = useConfirm()
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -179,9 +181,7 @@ export default function UpdatesPage() {
 
   // Start app update
   const handleStartAppUpdate = async (version: string) => {
-    if (!confirm(`Update to version ${version}?\n\nA backup will be created automatically before the update.`)) {
-      return
-    }
+    if (!(await confirm({ description: `Update to version ${version}?\n\nA backup will be created automatically before the update.`, variant: 'destructive' }))) return
 
     setIsUpdating(true)
     setError(null)
@@ -201,9 +201,7 @@ export default function UpdatesPage() {
 
   // Start base image update
   const handleStartBaseImageUpdate = async (containerName: string) => {
-    if (!confirm(`Update base image for ${containerName}?\n\nThis will restart the container.`)) {
-      return
-    }
+    if (!(await confirm({ description: `Update base image for ${containerName}?\n\nThis will restart the container.`, variant: 'destructive' }))) return
 
     setIsUpdating(true)
     setError(null)
@@ -223,9 +221,7 @@ export default function UpdatesPage() {
 
   // Rollback
   const handleRollback = async (updateId: string) => {
-    if (!confirm('Rollback this update?\n\nThis will restore the previous version from backup.')) {
-      return
-    }
+    if (!(await confirm({ description: 'Rollback this update?\n\nThis will restore the previous version from backup.', variant: 'destructive' }))) return
 
     setError(null)
 

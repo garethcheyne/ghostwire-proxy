@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete as sa_delete
 from datetime import datetime, timezone, timedelta
 
 from app.core.database import get_db
@@ -186,6 +186,53 @@ async def list_threat_events(
     return result.scalars().all()
 
 
+@router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_threat_event(
+    event_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a single threat event."""
+    result = await db.execute(select(ThreatEvent).where(ThreatEvent.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Threat event not found")
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_event_deleted",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Deleted threat event {event_id} (IP: {event.client_ip})",
+    ))
+    await db.delete(event)
+    await db.commit()
+
+
+@router.delete("/events", status_code=status.HTTP_200_OK)
+async def purge_threat_events(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Purge all threat events."""
+    count_result = await db.execute(select(func.count(ThreatEvent.id)))
+    count = count_result.scalar() or 0
+
+    await db.execute(sa_delete(ThreatEvent))
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_events_purged",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Purged all threat events ({count} records)",
+    ))
+    await db.commit()
+    return {"status": "ok", "deleted": count}
+
+
 @router.get("/stats", response_model=ThreatStatsResponse)
 async def get_threat_stats(
     current_user: User = Depends(get_current_user),
@@ -306,8 +353,12 @@ async def update_threat_actor(
     if not actor:
         raise HTTPException(status_code=404, detail="Threat actor not found")
 
+    import json as _json
     for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(actor, field, value)
+        if field == "tags":
+            setattr(actor, field, _json.dumps(value) if value is not None else None)
+        else:
+            setattr(actor, field, value)
     actor.updated_at = datetime.now(timezone.utc)
 
     db.add(AuditLog(
@@ -320,6 +371,36 @@ async def update_threat_actor(
     await db.commit()
     await db.refresh(actor)
     return actor
+
+
+@router.delete("/actors/{actor_id}")
+async def delete_threat_actor(
+    actor_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ThreatActor).where(ThreatActor.id == actor_id))
+    actor = result.scalar_one_or_none()
+    if not actor:
+        raise HTTPException(status_code=404, detail="Threat actor not found")
+
+    ip = actor.ip_address
+    # Delete associated firewall blocklist entries and threat events
+    from app.models.firewall import FirewallBlocklist
+    await db.execute(sa_delete(FirewallBlocklist).where(FirewallBlocklist.threat_actor_id == actor_id))
+    await db.execute(sa_delete(ThreatEvent).where(ThreatEvent.client_ip == ip))
+    await db.delete(actor)
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_actor_deleted",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Deleted threat actor: {ip}",
+    ))
+    await db.commit()
+    return {"status": "deleted", "ip": ip}
 
 
 @router.post("/actors/{ip}/block")

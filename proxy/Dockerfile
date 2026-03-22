@@ -5,12 +5,14 @@ RUN apk add --no-cache \
     curl \
     openssl \
     libmaxminddb \
+    libmaxminddb-dev \
     perl
 
 # Install OpenResty packages using opm
 RUN opm get ledgetech/lua-resty-http \
     && opm get SkyLothar/lua-resty-jwt \
-    && opm get bungle/lua-resty-session
+    && opm get bungle/lua-resty-session \
+    && opm get anjia0532/lua-resty-maxminddb
 
 # Create directories
 RUN mkdir -p /etc/nginx/conf.d/proxy-hosts \

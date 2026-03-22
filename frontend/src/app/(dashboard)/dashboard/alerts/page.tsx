@@ -17,6 +17,7 @@ import {
   Smartphone,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface AlertChannel {
   id: string
@@ -85,6 +86,7 @@ export default function AlertsPage() {
   const [prefAlertType, setPrefAlertType] = useState('threat_detected')
   const [prefMinSeverity, setPrefMinSeverity] = useState('medium')
   const [prefEnabled, setPrefEnabled] = useState(true)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchData()
@@ -160,7 +162,7 @@ export default function AlertsPage() {
   }
 
   const handleDeleteChannel = async (channel: AlertChannel) => {
-    if (!confirm(`Delete alert channel "${channel.name}"?`)) return
+    if (!(await confirm({ description: `Delete alert channel "${channel.name}"?`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/alerts/channels/${channel.id}`)
       fetchData()
@@ -230,7 +232,7 @@ export default function AlertsPage() {
   }
 
   const handleDeletePref = async (pref: AlertPreference) => {
-    if (!confirm(`Delete this alert preference?`)) return
+    if (!(await confirm({ description: `Delete this alert preference?`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/alerts/preferences/${pref.id}`)
       fetchData()

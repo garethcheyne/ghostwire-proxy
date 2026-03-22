@@ -42,6 +42,7 @@ class TrafficLog(Base):
 
     # Geo info (if available)
     country_code = Column(String(2), nullable=True)
+    country_name = Column(String(100), nullable=True)
 
     # Auth
     auth_user = Column(String(255), nullable=True)  # User from auth wall

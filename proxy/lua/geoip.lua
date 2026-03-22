@@ -11,19 +11,33 @@ function _M.lookup(ip)
         return nil
     end
 
-    local ok, result = pcall(function()
-        return init.geoip_db:lookup(ip)
-    end)
+    local ok, result = pcall(init.geoip_db.lookup, ip)
 
-    if ok and result then
-        return {
-            country_code = result.country and result.country.iso_code,
-            country_name = result.country and result.country.names and result.country.names.en,
-            continent_code = result.continent and result.continent.code,
-        }
+    if not ok or not result then
+        return nil
     end
 
-    return nil
+    local country_code = nil
+    local country_name = nil
+    local continent_code = nil
+
+    if type(result) == "table" then
+        if result.country then
+            country_code = result.country.iso_code
+            if result.country.names then
+                country_name = result.country.names.en
+            end
+        end
+        if result.continent then
+            continent_code = result.continent.code
+        end
+    end
+
+    return {
+        country_code = country_code,
+        country_name = country_name,
+        continent_code = continent_code,
+    }
 end
 
 -- Check if IP's country is in blocklist

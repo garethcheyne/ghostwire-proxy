@@ -12,8 +12,13 @@ import {
   Loader2,
   Search,
   ChevronDown,
+  Trash2,
+  Tag,
+  Globe,
+  X,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface ThreatEvent {
   id: string
@@ -41,6 +46,9 @@ interface ThreatActor {
   temp_block_until: string | null
   perm_blocked_at: string | null
   firewall_banned_at: string | null
+  country_code: string | null
+  country_name: string | null
+  tags: string[]
   notes: string | null
 }
 
@@ -79,6 +87,7 @@ const categoryColors: Record<string, string> = {
 }
 
 export default function ThreatsPage() {
+  const confirm = useConfirm()
   const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'actors'>('overview')
   const [stats, setStats] = useState<ThreatStats | null>(null)
   const [events, setEvents] = useState<ThreatEvent[]>([])
@@ -120,7 +129,7 @@ export default function ThreatsPage() {
   }
 
   const handleBlockIp = async (ip: string) => {
-    if (!confirm(`Block IP ${ip} permanently?`)) return
+    if (!(await confirm({ description: `Block IP ${ip} permanently?`, variant: 'destructive' }))) return
     try {
       await api.post(`/api/waf/actors/${encodeURIComponent(ip)}/block`)
       fetchData()
@@ -130,13 +139,70 @@ export default function ThreatsPage() {
   }
 
   const handleUnblockIp = async (ip: string) => {
-    if (!confirm(`Unblock IP ${ip}?`)) return
+    if (!(await confirm({ description: `Unblock IP ${ip}?` }))) return
     try {
       await api.post(`/api/waf/actors/${encodeURIComponent(ip)}/unblock`)
       fetchData()
     } catch (error) {
       console.error('Failed to unblock IP:', error)
     }
+  }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await api.delete(`/api/waf/events/${eventId}`)
+      setEvents(events.filter(e => e.id !== eventId))
+    } catch (error) {
+      console.error('Failed to delete event:', error)
+    }
+  }
+
+  const handlePurgeEvents = async () => {
+    if (!(await confirm({ description: 'Are you sure you want to purge ALL threat events? This cannot be undone.', variant: 'destructive' }))) return
+    try {
+      await api.delete('/api/waf/events')
+      setEvents([])
+      fetchData()
+    } catch (error) {
+      console.error('Failed to purge events:', error)
+    }
+  }
+
+  const handleDeleteActor = async (actorId: string, ip: string) => {
+    if (!(await confirm({ description: `Delete threat actor ${ip}? This will also remove all their threat events.`, variant: 'destructive' }))) return
+    try {
+      await api.delete(`/api/waf/actors/${actorId}`)
+      setActors(actors.filter(a => a.id !== actorId))
+    } catch (error) {
+      console.error('Failed to delete actor:', error)
+    }
+  }
+
+  const handleAddTag = async (actor: ThreatActor, tag: string) => {
+    if (!tag.trim() || actor.tags.includes(tag.trim())) return
+    const newTags = [...actor.tags, tag.trim()]
+    try {
+      await api.put(`/api/waf/actors/${encodeURIComponent(actor.ip_address)}`, { tags: newTags })
+      setActors(actors.map(a => a.id === actor.id ? { ...a, tags: newTags } : a))
+    } catch (error) {
+      console.error('Failed to add tag:', error)
+    }
+  }
+
+  const handleRemoveTag = async (actor: ThreatActor, tag: string) => {
+    const newTags = actor.tags.filter(t => t !== tag)
+    try {
+      await api.put(`/api/waf/actors/${encodeURIComponent(actor.ip_address)}`, { tags: newTags })
+      setActors(actors.map(a => a.id === actor.id ? { ...a, tags: newTags } : a))
+    } catch (error) {
+      console.error('Failed to remove tag:', error)
+    }
+  }
+
+  const countryFlag = (code: string | null) => {
+    if (!code || code.length !== 2) return null
+    const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
+    return String.fromCodePoint(...codePoints)
   }
 
   const formatDate = (d: string) => {
@@ -310,6 +376,13 @@ export default function ThreatsPage() {
               <option value="rce">RCE</option>
               <option value="scanner">Scanner</option>
             </select>
+            <button
+              onClick={handlePurgeEvents}
+              className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10"
+            >
+              <Trash2 className="h-4 w-4" />
+              Purge All
+            </button>
           </div>
 
           {/* Events List */}
@@ -358,6 +431,13 @@ export default function ThreatsPage() {
                       >
                         <Ban className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={() => handleDeleteEvent(event.id)}
+                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
+                        title="Delete event"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -396,7 +476,15 @@ export default function ThreatsPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {actor.country_code && (
+                          <span className="text-lg" title={actor.country_name || actor.country_code}>
+                            {countryFlag(actor.country_code)}
+                          </span>
+                        )}
                         <code className="text-sm font-mono font-semibold">{actor.ip_address}</code>
+                        {actor.country_name && (
+                          <span className="text-xs text-muted-foreground">{actor.country_name}</span>
+                        )}
                         <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[actor.current_status] || statusColors.monitored}`}>
                           {actor.current_status.replace('_', ' ')}
                         </span>
@@ -408,6 +496,31 @@ export default function ThreatsPage() {
                         <span>{actor.total_events} events</span>
                         <span>First: {formatDate(actor.first_seen)}</span>
                         <span>Last: {formatDate(actor.last_seen)}</span>
+                      </div>
+                      {/* Tags */}
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                        {actor.tags.map((tag) => (
+                          <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            {tag}
+                            <button
+                              onClick={() => handleRemoveTag(actor, tag)}
+                              className="hover:text-red-400"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          placeholder="+ tag"
+                          className="text-xs bg-transparent border-none outline-none w-16 placeholder:text-muted-foreground/50"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddTag(actor, e.currentTarget.value)
+                              e.currentTarget.value = ''
+                            }
+                          }}
+                        />
                       </div>
                       {actor.notes && (
                         <p className="text-sm text-muted-foreground mt-1">{actor.notes}</p>
@@ -431,6 +544,13 @@ export default function ThreatsPage() {
                           Unblock
                         </button>
                       )}
+                      <button
+                        onClick={() => handleDeleteActor(actor.id, actor.ip_address)}
+                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
+                        title="Delete actor"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>

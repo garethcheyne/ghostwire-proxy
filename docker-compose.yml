@@ -50,6 +50,7 @@ services:
       - proxy-cache:/var/cache/nginx
       - certbot-webroot:/var/www/certbot:ro
       - ./proxy/lua:/usr/local/openresty/nginx/lua:ro
+      - ./data/geoip:/data/geoip:ro
     networks:
       - ghostwire-proxy-network
     deploy:

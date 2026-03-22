@@ -218,6 +218,7 @@ export interface TrafficLog {
   user_agent: string | null
   referer: string | null
   country_code: string | null
+  country_name: string | null
   auth_user: string | null
 }
 

@@ -55,8 +55,9 @@ async def lifespan(app: FastAPI):
             # Add preset_id columns if missing (for existing databases)
             from sqlalchemy import text, inspect as sa_inspect
 
-            def _add_preset_id_columns(connection):
+            def _add_missing_columns(connection):
                 inspector = sa_inspect(connection)
+                # Add preset_id columns
                 tables = ["waf_rule_sets", "waf_rules", "rate_limit_rules", "geoip_rules", "threat_thresholds"]
                 for table in tables:
                     if table in inspector.get_table_names():
@@ -64,8 +65,23 @@ async def lifespan(app: FastAPI):
                         if "preset_id" not in columns:
                             connection.execute(text(f'ALTER TABLE {table} ADD COLUMN preset_id VARCHAR(100)'))
                             logger.info(f"Added preset_id column to {table}")
+                # Add tags/country_name to threat_actors
+                if "threat_actors" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("threat_actors")]
+                    if "tags" not in columns:
+                        connection.execute(text('ALTER TABLE threat_actors ADD COLUMN tags TEXT'))
+                        logger.info("Added tags column to threat_actors")
+                    if "country_name" not in columns:
+                        connection.execute(text('ALTER TABLE threat_actors ADD COLUMN country_name VARCHAR(100)'))
+                        logger.info("Added country_name column to threat_actors")
+                # Add country_name to traffic_logs
+                if "traffic_logs" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("traffic_logs")]
+                    if "country_name" not in columns:
+                        connection.execute(text('ALTER TABLE traffic_logs ADD COLUMN country_name VARCHAR(100)'))
+                        logger.info("Added country_name column to traffic_logs")
 
-            await conn.run_sync(_add_preset_id_columns)
+            await conn.run_sync(_add_missing_columns)
 
         logger.info("Database tables verified/created")
     except Exception as e:

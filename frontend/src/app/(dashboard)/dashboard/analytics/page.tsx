@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import {
   Activity,
   Users,
@@ -37,6 +38,8 @@ import {
   Legend,
 } from 'recharts'
 import api from '@/lib/api'
+
+const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), { ssr: false })
 
 interface TimeSeriesPoint {
   timestamp: string
@@ -859,6 +862,12 @@ export default function AnalyticsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Geographic Heatmap */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h3 className="font-semibold mb-4">Traffic Origin Heatmap</h3>
+        <GeoHeatmap days={period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90} />
       </div>
 
       {/* Response Time Chart */}

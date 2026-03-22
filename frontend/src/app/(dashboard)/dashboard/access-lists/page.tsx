@@ -14,6 +14,7 @@ import {
   ShieldX,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 import type { AccessList, AccessListEntry } from '@/types'
 
 export default function AccessListsPage() {
@@ -32,6 +33,7 @@ export default function AccessListsPage() {
   const [formEntries, setFormEntries] = useState<Array<{ ip_or_cidr: string; action: 'allow' | 'deny' }>>([])
   const [newEntryIp, setNewEntryIp] = useState('')
   const [newEntryAction, setNewEntryAction] = useState<'allow' | 'deny'>('allow')
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchAccessLists()
@@ -129,9 +131,7 @@ export default function AccessListsPage() {
   }
 
   const handleDelete = async (list: AccessList) => {
-    if (!confirm(`Are you sure you want to delete "${list.name}"?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete "${list.name}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/access-lists/${list.id}`)

@@ -11,8 +11,10 @@ import {
   Clock,
   Globe,
   ArrowRight,
+  Trash2,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 import type { TrafficLog, ProxyHost } from '@/types'
 
 interface TrafficStats {
@@ -24,6 +26,7 @@ interface TrafficStats {
 }
 
 export default function TrafficPage() {
+  const confirm = useConfirm()
   const [logs, setLogs] = useState<TrafficLog[]>([])
   const [hosts, setHosts] = useState<ProxyHost[]>([])
   const [stats, setStats] = useState<TrafficStats | null>(null)
@@ -88,6 +91,26 @@ export default function TrafficPage() {
     fetchData()
   }
 
+  const handlePurgeLogs = async () => {
+    if (!(await confirm({ description: 'Are you sure you want to purge ALL traffic logs? This cannot be undone.', variant: 'destructive' }))) return
+    try {
+      await api.delete('/api/traffic')
+      setLogs([])
+      fetchData()
+    } catch (error) {
+      console.error('Failed to purge traffic logs:', error)
+    }
+  }
+
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      await api.delete(`/api/traffic/${logId}`)
+      setLogs(logs.filter(l => l.id !== logId))
+    } catch (error) {
+      console.error('Failed to delete log:', error)
+    }
+  }
+
   const getStatusColor = (status: number) => {
     if (status >= 500) return 'text-red-500 bg-red-500/10'
     if (status >= 400) return 'text-yellow-500 bg-yellow-500/10'
@@ -125,14 +148,23 @@ export default function TrafficPage() {
             Monitor requests through your proxy hosts
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePurgeLogs}
+            className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
+          >
+            <Trash2 className="h-4 w-4" />
+            Purge All
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -288,10 +320,26 @@ export default function TrafficPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-mono">
-                      {log.client_ip}
+                      <div className="flex items-center gap-1.5">
+                        {log.country_code && (
+                          <span title={log.country_name || log.country_code}>
+                            {String.fromCodePoint(...log.country_code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)))}
+                          </span>
+                        )}
+                        <span>{log.client_ip}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {log.response_time ? formatResponseTime(log.response_time) : '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteLog(log.id); }}
+                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
+                        title="Delete log"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -352,7 +400,15 @@ export default function TrafficPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Client IP</p>
-                  <p className="font-mono">{selectedLog.client_ip}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono">{selectedLog.client_ip}</p>
+                    {selectedLog.country_code && (
+                      <span className="text-sm">
+                        {String.fromCodePoint(...selectedLog.country_code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)))}{' '}
+                        {selectedLog.country_name || selectedLog.country_code}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Method</p>

@@ -1,0 +1,48 @@
+{
+  "id": "waf-log4shell",
+  "name": "Log4j/Log4Shell Protection",
+  "description": "Detects and blocks Log4j/Log4Shell (CVE-2021-44228) exploitation attempts. Covers JNDI injection patterns, obfuscation techniques, and common bypass methods. Critical for any Java-based backend services.",
+  "category": "waf",
+  "severity": "critical",
+  "tags": ["security", "waf", "log4j", "log4shell", "cve-2021-44228", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Log4Shell — JNDI Injection",
+      "category": "rce",
+      "pattern": "(?i)(\\$\\{jndi:|\\$\\{lower:|\\$\\{upper:|\\$\\{env:|\\$\\{sys:|\\$\\{java:|\\$\\{base64:|\\$\\{date:|\\$\\{::-j\\}|\\$\\{::-n\\}|\\$\\{::-d\\}|\\$\\{::-i\\})",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects JNDI lookup expressions and Log4j variable syntax used in Log4Shell attacks."
+    },
+    {
+      "name": "Log4Shell — LDAP/RMI Protocols",
+      "category": "rce",
+      "pattern": "(?i)(ldap://|ldaps://|rmi://|dns://|iiop://|corba://|nds://|nis://)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects LDAP, RMI, and other protocol URLs commonly used in JNDI injection payloads."
+    },
+    {
+      "name": "Log4Shell — Obfuscated Patterns",
+      "category": "rce",
+      "pattern": "(?i)(\\$\\{[^}]*\\$\\{|%24%7b|%24%7B|\\$%7b|\\$%7B|%2524%257b|j%6e%64%69|jn%64i|jnd%69|%6a%6e%64%69)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects URL-encoded and nested obfuscation techniques used to bypass WAF filters."
+    },
+    {
+      "name": "Log4Shell — Header Injection",
+      "category": "rce",
+      "pattern": "(?i)(\\$\\{[^}]{0,30}(jndi|lower|upper|env|sys|java|ctx|bundle|main|marker)[^}]{0,50}\\})",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Broader pattern to catch Log4j variable lookups in headers like User-Agent, X-Forwarded-For, etc."
+    }
+  ]
+}

@@ -122,6 +122,8 @@ class ThreatActorResponse(BaseModel):
     perm_blocked_at: Optional[datetime]
     firewall_banned_at: Optional[datetime]
     country_code: Optional[str]
+    country_name: Optional[str]
+    tags: Optional[list[str]] = None
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -129,9 +131,23 @@ class ThreatActorResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_validator('tags', mode='before')
+    @classmethod
+    def parse_tags(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v
+
 
 class ThreatActorUpdate(BaseModel):
     current_status: Optional[str] = None
+    tags: Optional[list[str]] = None
     notes: Optional[str] = None
 
     @field_validator('current_status')

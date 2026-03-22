@@ -27,20 +27,25 @@ _M.config = {
 -- ============================================================================
 
 local function init_geoip()
-    local ok, maxminddb = pcall(require, "maxminddb")
+    local ok, geo = pcall(require, "resty.maxminddb")
     if ok then
         local geoip_path = "/data/geoip/GeoLite2-Country.mmdb"
         local file = io.open(geoip_path, "r")
         if file then
             file:close()
-            _M.geoip_db = maxminddb.open(geoip_path)
-            _M.config.geoip_enabled = true
-            ngx.log(ngx.INFO, "GeoIP database loaded: ", geoip_path)
+            local init_ok, err = pcall(geo.init, geoip_path)
+            if init_ok then
+                _M.geoip_db = geo
+                _M.config.geoip_enabled = true
+                ngx.log(ngx.INFO, "GeoIP database loaded: ", geoip_path)
+            else
+                ngx.log(ngx.WARN, "GeoIP init failed: ", err or "unknown error")
+            end
         else
             ngx.log(ngx.WARN, "GeoIP database not found: ", geoip_path)
         end
     else
-        ngx.log(ngx.WARN, "MaxMindDB module not available")
+        ngx.log(ngx.WARN, "MaxMindDB module not available: ", geo)
     end
 end
 
@@ -290,12 +295,40 @@ function _M.load_rate_limit_rules()
     return false
 end
 
+--- Fetch trusted IPs from the backend API and store in shared dict.
+function _M.load_trusted_ips()
+    local http = require "resty.http"
+    local httpc = http.new()
+    httpc:set_timeout(5000)
+
+    local url = _M.config.api_url .. "/api/internal/trusted-ips"
+    local res, err = httpc:request_uri(url, {
+        method = "GET",
+        headers = { ["Content-Type"] = "application/json" },
+    })
+
+    if not res then
+        ngx.log(ngx.ERR, "Failed to fetch trusted IPs: ", err)
+        return false
+    end
+
+    if res.status == 200 then
+        config_cache:set("trusted_ips", res.body, _M.config.rule_reload_interval * 2)
+        local ips = cjson.decode(res.body)
+        ngx.log(ngx.INFO, "Loaded ", ips and #ips or 0, " trusted IPs from database")
+        return true
+    end
+
+    return false
+end
+
 --- Load all rules from the backend API. Called by worker timer.
 function _M.reload_all_rules()
     _M.load_waf_rules()
     _M.load_blocked_ips()
     _M.load_geoip_rules()
     _M.load_rate_limit_rules()
+    _M.load_trusted_ips()
 end
 
 --- Get WAF rules from shared dict (returns parsed table or nil).
@@ -332,6 +365,60 @@ function _M.get_rate_limit_rules()
         return cjson.decode(json)
     end
     return nil
+end
+
+--- Get trusted IPs from shared dict.
+function _M.get_trusted_ips()
+    local json = config_cache and config_cache:get("trusted_ips")
+    if json then
+        return cjson.decode(json)
+    end
+    return nil
+end
+
+--- Check if an IP is in the trusted IPs list.
+--- Supports exact IP match and CIDR notation.
+function _M.is_trusted_ip(ip)
+    local trusted = _M.get_trusted_ips()
+    if not trusted or #trusted == 0 then
+        return false
+    end
+    for _, entry in ipairs(trusted) do
+        if entry == ip then
+            return true
+        end
+        -- CIDR match
+        if string.find(entry, "/", 1, true) then
+            local ok, cidr_match = pcall(function()
+                local cidr_ip, cidr_bits = entry:match("^([%d%.]+)/(%d+)$")
+                if not cidr_ip or not cidr_bits then return false end
+                cidr_bits = tonumber(cidr_bits)
+                local function ip_to_int(addr)
+                    local o1, o2, o3, o4 = addr:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+                    if not o1 then return nil end
+                    return o1 * 16777216 + o2 * 65536 + o3 * 256 + o4
+                end
+                local ip_int = ip_to_int(ip)
+                local cidr_int = ip_to_int(cidr_ip)
+                if not ip_int or not cidr_int then return false end
+                local mask = math.floor(2^32 - 2^(32 - cidr_bits))
+                local function band(a, b)
+                    local result = 0
+                    local bitval = 1
+                    while a > 0 and b > 0 do
+                        if a % 2 == 1 and b % 2 == 1 then result = result + bitval end
+                        bitval = bitval * 2
+                        a = math.floor(a / 2)
+                        b = math.floor(b / 2)
+                    end
+                    return result
+                end
+                return band(ip_int, mask) == band(cidr_int, mask)
+            end)
+            if ok and cidr_match then return true end
+        end
+    end
+    return false
 end
 
 -- ============================================================================

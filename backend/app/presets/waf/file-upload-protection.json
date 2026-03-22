@@ -1,0 +1,66 @@
+{
+  "id": "waf-file-upload",
+  "name": "File Upload Protection",
+  "description": "Protects against malicious file upload attacks. Detects dangerous file extensions, double extensions, null byte injections, and content-type mismatches. Essential for applications accepting file uploads.",
+  "category": "waf",
+  "severity": "high",
+  "tags": ["security", "waf", "upload", "file"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Dangerous Executable Extensions",
+      "category": "file_upload",
+      "pattern": "(?i)\\.(php[345s]?|phtml|phar|asp|aspx|ashx|asmx|jsp|jspx|cfm|cgi|pl|py|rb|sh|bash|exe|dll|bat|cmd|com|msi|vbs|vbe|js|ws[cfh]|hta|scr|pif)($|\\?|\\s|%00|;)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Blocks uploads with dangerous executable file extensions."
+    },
+    {
+      "name": "Double Extension Bypass",
+      "category": "file_upload",
+      "pattern": "(?i)\\.(jpg|jpeg|png|gif|pdf|doc|docx)\\.(php|asp|aspx|jsp|exe|sh|py|pl|cgi)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects double extension tricks like image.jpg.php used to bypass filters."
+    },
+    {
+      "name": "Null Byte Injection",
+      "category": "file_upload",
+      "pattern": "(%00|\\x00|\\0)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects null byte injection used to truncate filenames and bypass extension checks."
+    },
+    {
+      "name": "SVG with Script",
+      "category": "file_upload",
+      "pattern": "(?i)(<script|onload\\s*=|onerror\\s*=|javascript:|xlink:href\\s*=\\s*['\"]?data:)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects JavaScript in SVG files which can lead to stored XSS."
+    },
+    {
+      "name": "Webshell Signatures",
+      "category": "file_upload",
+      "pattern": "(?i)(eval\\s*\\(\\s*\\$_(GET|POST|REQUEST|COOKIE)|base64_decode\\s*\\(\\s*\\$_|assert\\s*\\(\\s*\\$_|preg_replace\\s*\\(['\"]/.*/e|c99shell|r57shell|webshell|b374k|wso\\s*shell)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects common PHP webshell patterns and signatures."
+    },
+    {
+      "name": "Archive with Executable",
+      "category": "file_upload",
+      "pattern": "(?i)content-disposition:[^;]*filename=['\"]?[^'\"]*\\.(zip|tar|gz|rar|7z)[^;]*\\.(php|exe|sh|asp)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects archive files with executable extensions that might be extracted unsafely."
+    }
+  ]
+}

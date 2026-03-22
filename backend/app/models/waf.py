@@ -76,6 +76,8 @@ class ThreatActor(Base):
     perm_blocked_at = Column(DateTime(timezone=True), nullable=True)
     firewall_banned_at = Column(DateTime(timezone=True), nullable=True)
     country_code = Column(String(5), nullable=True)
+    country_name = Column(String(100), nullable=True)
+    tags = Column(Text, nullable=True)  # JSON array of tag strings
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

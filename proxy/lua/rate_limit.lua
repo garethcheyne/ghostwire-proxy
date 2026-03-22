@@ -74,6 +74,11 @@ function _M.access()
     local client_ip = ngx.var.remote_addr
     local host = ngx.var.host or "default"
 
+    -- Skip rate limiting for trusted IPs
+    if init.is_trusted_ip(client_ip) then
+        return
+    end
+
     -- Get limits from database (or defaults)
     local limits = get_limits_for_host(host)
 

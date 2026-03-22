@@ -1,0 +1,84 @@
+{
+  "id": "waf-http-anomalies",
+  "name": "HTTP Protocol Anomalies",
+  "description": "Detects HTTP protocol violations, request smuggling attempts, header injection, and other anomalies that indicate malicious or malformed requests. Helps prevent desync attacks and protocol-level exploits.",
+  "category": "waf",
+  "severity": "high",
+  "tags": ["security", "waf", "http", "protocol", "smuggling"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "HTTP Request Smuggling — CL.TE",
+      "category": "protocol",
+      "pattern": "(?i)(content-length:[^\\r\\n]*\\r\\n[^\\r]*transfer-encoding:|transfer-encoding:[^\\r\\n]*\\r\\n[^\\r]*content-length:)",
+      "severity": "critical",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects requests with both Content-Length and Transfer-Encoding headers (request smuggling)."
+    },
+    {
+      "name": "HTTP Header Injection",
+      "category": "protocol",
+      "pattern": "(%0d%0a|%0d|%0a|\\r\\n|\\r|\\n)(set-cookie:|location:|content-type:|x-)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects CRLF injection attempts to inject HTTP headers."
+    },
+    {
+      "name": "Invalid HTTP Methods",
+      "category": "protocol",
+      "pattern": "^(TRACK|TRACE|DEBUG|PROPFIND|PROPPATCH|MKCOL|COPY|MOVE|LOCK|UNLOCK|SEARCH)\\s",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Blocks uncommon HTTP methods often used in attacks or fingerprinting."
+    },
+    {
+      "name": "HTTP Method Override",
+      "category": "protocol",
+      "pattern": "(?i)(x-http-method-override|x-http-method|x-method-override):\\s*(PUT|DELETE|PATCH|OPTIONS)",
+      "severity": "medium",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs HTTP method override headers which may bypass access controls."
+    },
+    {
+      "name": "Host Header Injection",
+      "category": "protocol",
+      "pattern": "(?i)host:\\s*[^\\r\\n]*(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[|@|%40)",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects Host header manipulation used for cache poisoning or SSRF."
+    },
+    {
+      "name": "Chunked Encoding Anomaly",
+      "category": "protocol",
+      "pattern": "(?i)(transfer-encoding:\\s*[^\\r\\n]*(,|chunked\\s*,|,\\s*chunked|identity))",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects malformed or multiple Transfer-Encoding values used in smuggling."
+    },
+    {
+      "name": "Oversized Headers",
+      "category": "protocol",
+      "pattern": "(?i)(cookie|authorization|x-forwarded-for):\\s*.{4096,}",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects abnormally large header values that may indicate buffer overflow attempts."
+    },
+    {
+      "name": "Unicode Encoding Evasion",
+      "category": "protocol",
+      "pattern": "(%u[0-9a-fA-F]{4}|\\\\u[0-9a-fA-F]{4}|%c0%|%c1%|%fe%|%ff%)",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects Unicode encoding used to evade WAF pattern matching."
+    }
+  ]
+}

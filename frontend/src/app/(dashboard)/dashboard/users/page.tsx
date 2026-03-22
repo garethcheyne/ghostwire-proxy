@@ -14,6 +14,7 @@ import {
   Calendar,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface SystemUser {
   id: string
@@ -39,6 +40,7 @@ export default function UsersPage() {
   const [formEmail, setFormEmail] = useState('')
   const [formPassword, setFormPassword] = useState('')
   const [formRole, setFormRole] = useState<'admin' | 'user' | 'viewer'>('user')
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchUsers()
@@ -116,9 +118,7 @@ export default function UsersPage() {
   }
 
   const handleDelete = async (user: SystemUser) => {
-    if (!confirm(`Are you sure you want to delete "${user.name}"?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete "${user.name}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/users/${user.id}`)

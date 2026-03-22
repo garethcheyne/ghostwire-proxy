@@ -1,0 +1,20 @@
+{
+  "id": "geoip-north-america",
+  "name": "North America Only",
+  "description": "Allows traffic only from the United States and Canada. Blocks all other countries. Ideal for services exclusively targeting the North American market.",
+  "category": "geoip",
+  "severity": "high",
+  "tags": ["security", "geoip", "whitelist", "north-america"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Allow North America Only",
+      "mode": "allow",
+      "countries": ["US", "CA"],
+      "action": "block",
+      "enabled": true,
+      "notes": "Whitelist mode: Only US and Canada allowed, all other countries blocked."
+    }
+  ]
+}

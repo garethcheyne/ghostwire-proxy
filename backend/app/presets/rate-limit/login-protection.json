@@ -1,0 +1,22 @@
+{
+  "id": "ratelimit-login",
+  "name": "Login & Auth Protection",
+  "description": "Very strict rate limiting designed for authentication endpoints. Prevents brute force attacks, credential stuffing, and account enumeration. Apply specifically to /login, /auth, /signin, /register paths.",
+  "category": "rate_limit",
+  "severity": "critical",
+  "tags": ["security", "rate-limit", "auth", "login", "brute-force", "recommended"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Auth Endpoint Rate Limit",
+      "requests_per_second": 1,
+      "requests_per_minute": 5,
+      "requests_per_hour": 30,
+      "burst_size": 3,
+      "action": "reject",
+      "enabled": true,
+      "notes": "1 req/s, 5 req/min, 30 req/hr. Very strict for login endpoints to prevent brute force."
+    }
+  ]
+}

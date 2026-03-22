@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete as sa_delete
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
+from app.models.audit_log import AuditLog
 from app.schemas.traffic import TrafficLogResponse, TrafficStatsResponse
 from app.api.deps import get_current_user
 
@@ -194,6 +196,46 @@ async def get_traffic_stats(
     )
 
 
+@router.get("/geo/heatmap")
+async def get_geo_heatmap(
+    proxy_host_id: Optional[str] = None,
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get traffic count by country for heatmap visualization."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    query = (
+        select(
+            TrafficLog.country_code,
+            TrafficLog.country_name,
+            func.count(TrafficLog.id).label("count"),
+        )
+        .where(
+            TrafficLog.country_code.isnot(None),
+            TrafficLog.timestamp >= since,
+        )
+        .group_by(TrafficLog.country_code, TrafficLog.country_name)
+        .order_by(func.count(TrafficLog.id).desc())
+    )
+
+    if proxy_host_id:
+        query = query.where(TrafficLog.proxy_host_id == proxy_host_id)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "country_code": row[0],
+            "country_name": row[1] or row[0],
+            "count": row[2],
+        }
+        for row in rows
+    ]
+
+
 @router.get("/{log_id}", response_model=TrafficLogResponse)
 async def get_traffic_log(
     log_id: str,
@@ -211,3 +253,50 @@ async def get_traffic_log(
         )
 
     return log
+
+
+@router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_traffic_log(
+    log_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a single traffic log entry."""
+    result = await db.execute(select(TrafficLog).where(TrafficLog.id == log_id))
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=404, detail="Traffic log not found")
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="traffic_log_deleted",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Deleted traffic log {log_id}",
+    ))
+    await db.delete(log)
+    await db.commit()
+
+
+@router.delete("", status_code=status.HTTP_200_OK)
+async def purge_traffic_logs(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Purge all traffic logs."""
+    count_result = await db.execute(select(func.count(TrafficLog.id)))
+    count = count_result.scalar() or 0
+
+    await db.execute(sa_delete(TrafficLog))
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="traffic_logs_purged",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Purged all traffic logs ({count} records)",
+    ))
+    await db.commit()
+    return {"status": "ok", "deleted": count}

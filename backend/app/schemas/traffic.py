@@ -30,6 +30,7 @@ class TrafficLogResponse(BaseModel):
     referer: Optional[str]
 
     country_code: Optional[str]
+    country_name: Optional[str] = None
     auth_user: Optional[str]
 
     class Config:

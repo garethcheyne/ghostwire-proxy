@@ -15,6 +15,7 @@ import {
   Timer,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface RateLimitRule {
   id: string
@@ -53,6 +54,7 @@ export default function RateLimitsPage() {
   const [formBurst, setFormBurst] = useState('10')
   const [formAction, setFormAction] = useState('reject')
   const [formEnabled, setFormEnabled] = useState(true)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchRules()
@@ -137,7 +139,7 @@ export default function RateLimitsPage() {
   }
 
   const handleDelete = async (rule: RateLimitRule) => {
-    if (!confirm(`Delete rule "${rule.name}"?`)) return
+    if (!(await confirm({ description: `Delete rule "${rule.name}"?`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/rate-limits/${rule.id}`)
       fetchRules()

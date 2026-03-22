@@ -1,0 +1,34 @@
+{
+  "id": "geoip-allow-apac",
+  "name": "Allow Asia-Pacific Region",
+  "description": "Allows traffic only from major Asia-Pacific countries. Blocks all other regions. Ideal for services targeting the APAC market.",
+  "category": "geoip",
+  "severity": "high",
+  "tags": ["security", "geoip", "whitelist", "apac", "asia"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Allow APAC Region",
+      "mode": "allow",
+      "countries": [
+        "AU",
+        "NZ",
+        "JP",
+        "KR",
+        "SG",
+        "HK",
+        "TW",
+        "MY",
+        "TH",
+        "IN",
+        "ID",
+        "PH",
+        "VN"
+      ],
+      "action": "block",
+      "enabled": true,
+      "notes": "Allows Australia, NZ, Japan, South Korea, Singapore, Hong Kong, Taiwan, Malaysia, Thailand, India, Indonesia, Philippines, Vietnam."
+    }
+  ]
+}

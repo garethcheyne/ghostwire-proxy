@@ -13,6 +13,39 @@ from app.models.firewall import FirewallBlocklist
 
 logger = logging.getLogger(__name__)
 
+# GeoIP lookup helper
+_geoip_reader = None
+
+def _get_geoip_reader():
+    global _geoip_reader
+    if _geoip_reader is not None:
+        return _geoip_reader
+    try:
+        import geoip2.database
+        import os
+        db_path = os.environ.get("GEOIP_DB_PATH", "/data/geoip/GeoLite2-Country.mmdb")
+        if os.path.exists(db_path):
+            _geoip_reader = geoip2.database.Reader(db_path)
+            logger.info(f"GeoIP database loaded: {db_path}")
+        else:
+            _geoip_reader = False  # Mark as unavailable
+            logger.warning(f"GeoIP database not found: {db_path}")
+    except Exception as e:
+        _geoip_reader = False
+        logger.warning(f"GeoIP init failed: {e}")
+    return _geoip_reader
+
+def lookup_country(ip: str) -> tuple[Optional[str], Optional[str]]:
+    """Return (country_code, country_name) for an IP, or (None, None)."""
+    reader = _get_geoip_reader()
+    if not reader:
+        return None, None
+    try:
+        resp = reader.country(ip)
+        return resp.country.iso_code, resp.country.name
+    except Exception:
+        return None, None
+
 
 def _send_push_notification_background(coro):
     """Fire and forget a push notification (don't block the main flow)."""
@@ -49,6 +82,8 @@ async def record_threat_event(
     proxy_host_id: Optional[str] = None,
     rule_id: Optional[str] = None,
     rule_name: Optional[str] = None,
+    country_code: Optional[str] = None,
+    country_name: Optional[str] = None,
 ) -> ThreatEvent:
     """Record a threat event and update the threat actor profile."""
     # Create event
@@ -69,6 +104,12 @@ async def record_threat_event(
     )
     db.add(event)
 
+    # Skip score escalation for blocked_ip events to prevent feedback loop:
+    # blocked → log event → score up → re-block → more blocked events
+    if category == "blocked_ip":
+        await db.commit()
+        return event
+
     # Update or create threat actor
     result = await db.execute(
         select(ThreatActor).where(ThreatActor.ip_address == client_ip)
@@ -78,11 +119,19 @@ async def record_threat_event(
     now = datetime.now(timezone.utc)
     score_delta = SEVERITY_SCORES.get(severity, 25)
 
+    # Resolve country: prefer passed-in values from Lua GeoIP, fall back to local lookup
+    cc, cn = country_code, country_name
+    if not cc and (not actor or not actor.country_code):
+        cc, cn = lookup_country(client_ip)
+
     if actor:
         actor.total_events = (actor.total_events or 0) + 1
         actor.threat_score = (actor.threat_score or 0) + score_delta
         actor.last_seen = now
         actor.updated_at = now
+        if cc and not actor.country_code:
+            actor.country_code = cc
+            actor.country_name = cn
     else:
         actor = ThreatActor(
             ip_address=client_ip,
@@ -90,6 +139,8 @@ async def record_threat_event(
             threat_score=score_delta,
             first_seen=now,
             last_seen=now,
+            country_code=cc,
+            country_name=cn,
         )
         db.add(actor)
 

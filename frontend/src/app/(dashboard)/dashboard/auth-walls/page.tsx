@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 import type { AuthWall, LocalAuthUser, AuthProvider } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -116,6 +117,7 @@ export default function AuthWallPage() {
   } | null>(null)
   const [totpCode, setTotpCode] = useState('')
   const [selectedUser, setSelectedUser] = useState<LocalAuthUser | null>(null)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchAuthWalls()
@@ -193,7 +195,7 @@ export default function AuthWallPage() {
   }
 
   const handleDeleteWall = async (wall: AuthWall) => {
-    if (!confirm(`Are you sure you want to delete "${wall.name}"?`)) return
+    if (!(await confirm({ description: `Are you sure you want to delete "${wall.name}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/auth-walls/${wall.id}`)
@@ -296,7 +298,7 @@ export default function AuthWallPage() {
   }
 
   const handleDeleteUser = async (wallId: string, userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return
+    if (!(await confirm({ description: 'Are you sure you want to delete this user?', variant: 'destructive' }))) return
     try {
       await api.delete(`/api/auth-walls/${wallId}/users/${userId}`)
       fetchAuthWalls()
@@ -335,7 +337,7 @@ export default function AuthWallPage() {
 
   const handleRevokeAllSessions = async () => {
     if (!selectedWall) return
-    if (!confirm('Revoke all active sessions? Users will need to log in again.')) return
+    if (!(await confirm({ description: 'Revoke all active sessions? Users will need to log in again.', variant: 'destructive' }))) return
     try {
       await api.post(`/api/auth-walls/${selectedWall.id}/sessions/revoke-all`)
       fetchSessions(selectedWall.id)
@@ -382,7 +384,7 @@ export default function AuthWallPage() {
   }
 
   const handleDisableTotp = async (wallId: string, userId: string) => {
-    if (!confirm('Disable two-factor authentication for this user?')) return
+    if (!(await confirm({ description: 'Disable two-factor authentication for this user?', variant: 'destructive' }))) return
     try {
       await api.delete(`/api/auth-walls/${wallId}/users/${userId}/totp`)
       fetchAuthWalls()

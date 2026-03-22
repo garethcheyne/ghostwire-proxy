@@ -50,9 +50,9 @@ const nextConfig: NextConfig = {
                 ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
                 : "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob:",
+              "img-src 'self' data: blob: https://*.basemaps.cartocdn.com",
               "font-src 'self' data:",
-              "connect-src 'self' ws: wss:",
+              "connect-src 'self' ws: wss: https://*.basemaps.cartocdn.com",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
               "frame-ancestors 'none'",

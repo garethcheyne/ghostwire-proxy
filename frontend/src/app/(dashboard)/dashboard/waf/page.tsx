@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface WafRule {
   id: string
@@ -78,6 +79,7 @@ export default function WafPage() {
   const [formSeverity, setFormSeverity] = useState('medium')
   const [formAction, setFormAction] = useState('log')
   const [formEnabled, setFormEnabled] = useState(true)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchData()
@@ -161,7 +163,7 @@ export default function WafPage() {
   }
 
   const handleDelete = async (rule: WafRule) => {
-    if (!confirm(`Are you sure you want to delete "${rule.name}"?`)) return
+    if (!(await confirm({ description: `Are you sure you want to delete "${rule.name}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/waf/rules/${rule.id}`)

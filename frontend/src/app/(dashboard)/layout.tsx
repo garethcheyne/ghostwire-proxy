@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
+import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { clearSession, setSessionActive } from '@/lib/session'
 
@@ -69,6 +70,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
+      <ConfirmDialogProvider>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden md:block">
@@ -86,6 +88,7 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      </ConfirmDialogProvider>
     </SidebarContext.Provider>
   )
 }

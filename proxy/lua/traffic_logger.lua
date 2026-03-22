@@ -20,7 +20,22 @@ if string.sub(ngx.var.uri, 1, 28) == "/.well-known/acme-challenge/" then
     return
 end
 
+-- Skip traffic logging for trusted IPs
+local function get_raw_client_ip()
+    local xff = ngx.var.http_x_forwarded_for
+    if xff then
+        local first_ip = xff:match("^([^,]+)")
+        if first_ip then return first_ip:gsub("^%s*(.-)%s*$", "%1") end
+    end
+    return ngx.var.http_x_real_ip or ngx.var.remote_addr
+end
+
+if init.is_trusted_ip(get_raw_client_ip()) then
+    return
+end
+
 local http = require "resty.http"
+local geoip = require "geoip"
 
 -- Get real client IP (check X-Forwarded-For, X-Real-IP, then fall back to remote_addr)
 local function get_client_ip()
@@ -65,10 +80,14 @@ local log_data = {
     -- SSL info
     ssl_protocol = ngx.var.ssl_protocol,
     ssl_cipher = ngx.var.ssl_cipher,
-
-    -- GeoIP (if available)
-    country_code = ngx.var.geoip_country_code
 }
+
+-- GeoIP lookup using Lua module
+local geo = geoip.lookup(log_data.client_ip)
+if geo then
+    log_data.country_code = geo.country_code
+    log_data.country_name = geo.country_name
+end
 
 -- Non-blocking POST to API
 ngx.timer.at(0, function(premature)

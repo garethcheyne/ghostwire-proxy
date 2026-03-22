@@ -1,0 +1,32 @@
+{
+  "id": "geoip-block-apac",
+  "name": "Block Asia-Pacific Region",
+  "description": "Blocks traffic from Asia-Pacific countries that are common sources of automated attacks and spam. Includes China, Russia, North Korea, and other high-risk APAC nations. Use with caution if you have legitimate APAC users.",
+  "category": "geoip",
+  "severity": "medium",
+  "tags": ["security", "geoip", "apac", "asia"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "Block High-Risk APAC",
+      "mode": "block",
+      "countries": [
+        "CN",
+        "RU",
+        "KP",
+        "VN",
+        "ID",
+        "PH",
+        "BD",
+        "PK",
+        "MM",
+        "KH",
+        "LA"
+      ],
+      "action": "block",
+      "enabled": true,
+      "notes": "Blocks China, Russia, North Korea, Vietnam, Indonesia, Philippines, Bangladesh, Pakistan, Myanmar, Cambodia, Laos."
+    }
+  ]
+}

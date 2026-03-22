@@ -61,6 +61,7 @@ class TrafficLogRequest(BaseModel):
     ssl_protocol: Optional[str] = None
     ssl_cipher: Optional[str] = None
     country_code: Optional[str] = None
+    country_name: Optional[str] = None
 
 
 @router.post("/traffic/log")
@@ -114,6 +115,7 @@ async def log_traffic(
         user_agent=data.user_agent,
         referer=data.referer,
         country_code=data.country_code,
+        country_name=data.country_name,
     )
 
     db.add(log)
@@ -135,6 +137,8 @@ class ThreatLogRequest(BaseModel):
     user_agent: Optional[str] = None
     host: Optional[str] = None
     timestamp: Optional[int] = None
+    country_code: Optional[str] = None
+    country_name: Optional[str] = None
 
 
 @router.post("/threats/log")
@@ -174,6 +178,8 @@ async def log_threat(
         host=data.host,
         proxy_host_id=proxy_host_id,
         rule_name=data.pattern,
+        country_code=data.country_code,
+        country_name=data.country_name,
     )
 
     return {"status": "logged"}
@@ -232,6 +238,28 @@ async def get_geoip_rules(
         }
         for r in rules
     ]
+
+
+@router.get("/trusted-ips")
+async def get_trusted_ips(
+    db: AsyncSession = Depends(get_db),
+):
+    """Return trusted IPs list for Lua to cache. These IPs bypass WAF, rate limiting, and traffic logging."""
+    import json as _json
+    from app.models.setting import Setting
+
+    result = await db.execute(
+        select(Setting).where(Setting.key == "trusted_ips")
+    )
+    setting = result.scalar_one_or_none()
+
+    if not setting or not setting.value:
+        return []
+
+    try:
+        return _json.loads(setting.value)
+    except (ValueError, TypeError):
+        return []
 
 
 @router.get("/blocked-ips")

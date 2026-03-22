@@ -128,6 +128,11 @@ function _M.check_request()
     local user_agent = ngx.var.http_user_agent or ""
     local client_ip = ngx.var.remote_addr
 
+    -- Skip all checks for trusted IPs
+    if init.is_trusted_ip(client_ip) then
+        return true, nil
+    end
+
     -- Check blocked IPs first
     if is_ip_blocked(client_ip) then
         return false, {
@@ -158,9 +163,13 @@ end
 function _M.log_threat(threat_info)
     local http = require "resty.http"
     local httpc = http.new()
+    local geoip = require "geoip"
+
+    local client_ip = ngx.var.remote_addr
+    local geo = geoip.lookup(client_ip)
 
     local body = cjson.encode({
-        client_ip = ngx.var.remote_addr,
+        client_ip = client_ip,
         category = threat_info.category,
         severity = threat_info.severity,
         pattern = threat_info.rule_name or threat_info.pattern,
@@ -171,6 +180,8 @@ function _M.log_threat(threat_info)
         user_agent = ngx.var.http_user_agent,
         host = ngx.var.host,
         timestamp = ngx.time(),
+        country_code = geo and geo.country_code or nil,
+        country_name = geo and geo.country_name or nil,
     })
 
     -- Non-blocking log to API

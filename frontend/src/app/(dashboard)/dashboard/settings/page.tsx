@@ -13,6 +13,9 @@ import {
   ChevronRight,
   Globe,
   Bell,
+  ShieldCheck,
+  Plus,
+  X,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -49,10 +52,14 @@ export default function SettingsPage() {
   const [nginxStatus, setNginxStatus] = useState<'running' | 'stopped' | 'error'>('running')
   const [defaultSite, setDefaultSite] = useState({ behavior: 'congratulations', redirect_url: '' })
   const [isSavingDefault, setIsSavingDefault] = useState(false)
+  const [trustedIps, setTrustedIps] = useState<string[]>([])
+  const [newTrustedIp, setNewTrustedIp] = useState('')
+  const [isSavingTrusted, setIsSavingTrusted] = useState(false)
 
   useEffect(() => {
     fetchSettings()
     fetchDefaultSite()
+    fetchTrustedIps()
   }, [])
 
   const fetchSettings = async () => {
@@ -116,6 +123,52 @@ export default function SettingsPage() {
     } finally {
       setIsReloading(false)
     }
+  }
+
+  const fetchTrustedIps = async () => {
+    try {
+      const { data } = await api.get('/api/settings/trusted_ips')
+      const parsed = JSON.parse(data.value || '[]')
+      setTrustedIps(Array.isArray(parsed) ? parsed : [])
+    } catch {
+      setTrustedIps([])
+    }
+  }
+
+  const saveTrustedIps = async (ips: string[]) => {
+    setIsSavingTrusted(true)
+    setMessage(null)
+    try {
+      await api.put('/api/settings/trusted_ips', { value: JSON.stringify(ips) })
+      setTrustedIps(ips)
+      setMessage({ type: 'success', text: 'Trusted IPs saved. Changes will take effect within 5 minutes.' })
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to save trusted IPs' })
+    } finally {
+      setIsSavingTrusted(false)
+    }
+  }
+
+  const addTrustedIp = () => {
+    const ip = newTrustedIp.trim()
+    if (!ip) return
+    // Basic validation: IPv4, IPv4/CIDR
+    const ipv4 = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
+    if (!ipv4.test(ip)) {
+      setMessage({ type: 'error', text: 'Invalid IP address or CIDR format (e.g. 192.168.1.1 or 10.0.0.0/24)' })
+      return
+    }
+    if (trustedIps.includes(ip)) {
+      setMessage({ type: 'error', text: 'This IP is already in the trusted list' })
+      return
+    }
+    const updated = [...trustedIps, ip]
+    setNewTrustedIp('')
+    saveTrustedIps(updated)
+  }
+
+  const removeTrustedIp = (ip: string) => {
+    saveTrustedIps(trustedIps.filter(i => i !== ip))
   }
 
   if (isLoading) {
@@ -447,6 +500,64 @@ export default function SettingsPage() {
           Receive real-time alerts about security threats, system updates, and important events on your devices.
         </p>
         <PushSubscriptionManager />
+      </div>
+
+      {/* Trusted IPs */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5" />
+          Trusted IPs
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          IPs in this list bypass WAF, rate limiting, and are excluded from traffic logging.
+          Use this to whitelist your own IP so your traffic isn&apos;t blocked or recorded.
+          Supports individual IPs and CIDR notation (e.g. 10.0.0.0/24).
+        </p>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newTrustedIp}
+              onChange={(e) => setNewTrustedIp(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addTrustedIp()}
+              placeholder="e.g. 203.86.201.144 or 10.0.0.0/8"
+              className="flex-1 max-w-sm px-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              onClick={addTrustedIp}
+              disabled={isSavingTrusted || !newTrustedIp.trim()}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isSavingTrusted ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Add
+            </button>
+          </div>
+          {trustedIps.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No trusted IPs configured</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {trustedIps.map((ip) => (
+                <div
+                  key={ip}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm font-mono"
+                >
+                  <span>{ip}</span>
+                  <button
+                    onClick={() => removeTrustedIp(ip)}
+                    disabled={isSavingTrusted}
+                    className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

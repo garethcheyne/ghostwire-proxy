@@ -20,6 +20,7 @@ import {
   Layers,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 
 type TabType = 'details' | 'locations' | 'advanced'
@@ -117,6 +118,7 @@ const defaultLocationData: LocationFormData = {
 }
 
 export default function ProxyHostsPage() {
+  const confirm = useConfirm()
   const [hosts, setHosts] = useState<ProxyHost[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [accessLists, setAccessLists] = useState<AccessList[]>([])
@@ -274,9 +276,7 @@ export default function ProxyHostsPage() {
   }
 
   const handleDelete = async (host: ProxyHost) => {
-    if (!confirm(`Are you sure you want to delete ${host.domain_names[0]}?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete ${host.domain_names[0]}?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/proxy-hosts/${host.id}`)
@@ -342,7 +342,7 @@ export default function ProxyHostsPage() {
 
   const handleDeleteLocation = async (location: ProxyLocation) => {
     if (!editingHost) return
-    if (!confirm(`Delete location ${location.path}?`)) return
+    if (!(await confirm({ description: `Delete location ${location.path}?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/proxy-hosts/${editingHost.id}/locations/${location.id}`)

@@ -17,6 +17,7 @@ import {
   Settings,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface DnsProvider {
   id: string
@@ -45,6 +46,7 @@ interface DnsRecord {
 }
 
 export default function DnsPage() {
+  const confirm = useConfirm()
   const [providers, setProviders] = useState<DnsProvider[]>([])
   const [selectedProvider, setSelectedProvider] = useState<DnsProvider | null>(null)
   const [selectedZone, setSelectedZone] = useState<DnsZone | null>(null)
@@ -212,9 +214,7 @@ export default function DnsPage() {
 
   const handleDeleteRecord = async (record: DnsRecord) => {
     if (!selectedZone) return
-    if (!confirm(`Are you sure you want to delete this ${record.type} record?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete this ${record.type} record?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/dns/zones/${selectedZone.zone_id}/records/${record.id}`)

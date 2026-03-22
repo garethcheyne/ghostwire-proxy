@@ -1,0 +1,75 @@
+{
+  "id": "waf-api-security",
+  "name": "API Security Protection",
+  "description": "Security rules tailored for REST and GraphQL APIs. Detects JSON injection, mass assignment attempts, GraphQL introspection abuse, and API-specific attack patterns. Recommended for API backends.",
+  "category": "waf",
+  "severity": "high",
+  "tags": ["security", "waf", "api", "json", "graphql", "rest"],
+  "version": "1.0.0",
+  "author": "Ghostwire Proxy",
+  "rules": [
+    {
+      "name": "JSON Injection — Prototype Pollution",
+      "category": "injection",
+      "pattern": "(?i)(\"__proto__\"|'__proto__'|\"constructor\"|\"prototype\"|__proto__|\\[\"__proto__\"\\]|\\['__proto__'\\])",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects JavaScript prototype pollution attacks via JSON payloads."
+    },
+    {
+      "name": "JSON Injection — NoSQL Operators",
+      "category": "injection",
+      "pattern": "(?i)(\"\\$gt\"|\"\\$lt\"|\"\\$ne\"|\"\\$eq\"|\"\\$regex\"|\"\\$where\"|\"\\$or\"|\"\\$and\"|\"\\$nin\"|\"\\$in\"|\"\\$exists\"|\"\\$type\")",
+      "severity": "high",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects MongoDB/NoSQL injection via query operators in JSON."
+    },
+    {
+      "name": "Mass Assignment — Sensitive Fields",
+      "category": "injection",
+      "pattern": "(?i)(\"(is_?admin|is_?superuser|is_?staff|role|roles|permissions?|admin|privilege|access_?level|user_?type|account_?type)\"\\s*:)",
+      "severity": "medium",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs attempts to set privileged fields that may indicate mass assignment attacks."
+    },
+    {
+      "name": "GraphQL — Introspection Query",
+      "category": "recon",
+      "pattern": "(?i)(__schema|__type|__typename|introspectionquery|__directive|__enumvalue|__field|__inputvalue)",
+      "severity": "low",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs GraphQL introspection queries. Consider blocking in production."
+    },
+    {
+      "name": "GraphQL — Batching Attack",
+      "category": "dos",
+      "pattern": "(?i)(\\[\\s*\\{\\s*\"query\".*\\{\\s*\"query\".*\\{\\s*\"query\")",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects GraphQL query batching that could be used for DoS or bypassing rate limits."
+    },
+    {
+      "name": "GraphQL — Deep Nesting",
+      "category": "dos",
+      "pattern": "(?i)(\\{[^}]*\\{[^}]*\\{[^}]*\\{[^}]*\\{[^}]*\\{[^}]*\\{)",
+      "severity": "medium",
+      "action": "block",
+      "enabled": true,
+      "description": "Detects deeply nested GraphQL queries (7+ levels) that could cause performance issues."
+    },
+    {
+      "name": "JWT Token in URL",
+      "category": "sensitive_data",
+      "pattern": "(?i)(\\?|&)(token|jwt|access_token|auth|bearer|api_?key)=ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+      "severity": "medium",
+      "action": "log",
+      "enabled": true,
+      "description": "Logs JWT tokens passed in URL query parameters, which is a security risk."
+    }
+  ]
+}

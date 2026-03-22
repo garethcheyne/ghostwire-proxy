@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     "nginx_worker_connections": "4096",
     "default_site_behavior": "congratulations",
     "default_site_redirect_url": "",
+    "trusted_ips": "[]",
 }
 
 

@@ -17,6 +17,7 @@ import {
   ShieldBan,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface FirewallConnector {
   id: string
@@ -58,6 +59,7 @@ const typeColors: Record<string, string> = {
 }
 
 export default function FirewallsPage() {
+  const confirm = useConfirm()
   const [activeTab, setActiveTab] = useState<'connectors' | 'blocklist'>('connectors')
   const [connectors, setConnectors] = useState<FirewallConnector[]>([])
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([])
@@ -175,7 +177,7 @@ export default function FirewallsPage() {
   }
 
   const handleDelete = async (connector: FirewallConnector) => {
-    if (!confirm(`Delete connector "${connector.name}"?`)) return
+    if (!(await confirm({ description: `Delete connector "${connector.name}"?`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/firewalls/${connector.id}`)
       fetchData()

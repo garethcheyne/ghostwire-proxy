@@ -14,6 +14,7 @@ import {
   Globe,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface GeoipRule {
   id: string
@@ -98,6 +99,7 @@ export default function GeoIPPage() {
   const [lookupIp, setLookupIp] = useState('')
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchData()
@@ -184,7 +186,7 @@ export default function GeoIPPage() {
   }
 
   const handleDelete = async (rule: GeoipRule) => {
-    if (!confirm(`Delete rule "${rule.name}"?`)) return
+    if (!(await confirm({ description: `Delete rule "${rule.name}"?`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/geoip/rules/${rule.id}`)
       fetchData()

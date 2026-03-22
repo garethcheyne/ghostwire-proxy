@@ -15,9 +15,11 @@ import {
   Clock,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 import type { Certificate } from '@/types'
 
 export default function CertificatesPage() {
+  const confirm = useConfirm()
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -141,9 +143,7 @@ export default function CertificatesPage() {
   }
 
   const handleDelete = async (cert: Certificate) => {
-    if (!confirm(`Are you sure you want to delete "${cert.name}"?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete "${cert.name}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/certificates/${cert.id}`)

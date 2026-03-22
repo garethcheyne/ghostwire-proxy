@@ -22,6 +22,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { useConfirm } from '@/components/confirm-dialog'
 
 interface Backup {
   id: string
@@ -83,6 +84,7 @@ export default function BackupsPage() {
   // Upload state
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchBackups()
@@ -164,9 +166,7 @@ export default function BackupsPage() {
   }
 
   const handleDelete = async (backup: Backup) => {
-    if (!confirm(`Are you sure you want to delete backup "${backup.filename}"?`)) {
-      return
-    }
+    if (!(await confirm({ description: `Are you sure you want to delete backup "${backup.filename}"?`, variant: 'destructive' }))) return
 
     try {
       await api.delete(`/api/backups/${backup.id}`)
@@ -180,9 +180,7 @@ export default function BackupsPage() {
   const handleRestore = async () => {
     if (!restoreBackupId) return
 
-    if (!confirm('WARNING: This will overwrite existing data. Are you sure you want to restore from this backup?')) {
-      return
-    }
+    if (!(await confirm({ description: 'WARNING: This will overwrite existing data. Are you sure you want to restore from this backup?', variant: 'destructive' }))) return
 
     setIsRestoring(true)
     setError(null)
