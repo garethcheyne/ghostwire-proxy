@@ -5,34 +5,45 @@ __pycache__/
 .venv/
 venv/
 
-# Environment
+# Environment & Secrets
 .env
 .env.local
 .env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Build outputs
 .next/
 dist/
 build/
+*.tsbuildinfo
 
-# IDE
+# Vite compiled outputs
+frontend-authwall/default/vite.config.js
+frontend-authwall/default/vite.config.d.ts
+
+# Docker/container-generated
+proxy/auth-portal/default/assets/
+proxy/conf.d/*.tmp.*
+
+# IDE & local tool config
 .vscode/
 .idea/
+.claude/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Data & runtime
-data/sqlite/
-data/certificates/
-data/letsencrypt/accounts/
-data/letsencrypt/archive/
-data/letsencrypt/live/
-data/letsencrypt/renewal/
-data/letsencrypt/renewal-hooks/
-data/backups/
-data/nginx-configs/
+# Data & runtime (Docker volumes)
+data/
 
 # Logs
 *.log
+
+# Database
+*.db
+*.sqlite
