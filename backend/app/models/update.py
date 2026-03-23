@@ -85,6 +85,6 @@ class UpdateSettings(Base):
     update_channel = Column(String(20), default="stable")  # stable, beta, edge
 
     # GitHub repository (for custom forks)
-    github_repo = Column(String(200), default="ghostwire/ghostwire-proxy")
+    github_repo = Column(String(200), default="garethcheyne/ghostwire-proxy")
 
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

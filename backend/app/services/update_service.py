@@ -33,7 +33,7 @@ except ImportError:
 
 # Update server configuration
 GITHUB_API_URL = "https://api.github.com"
-DEFAULT_GITHUB_REPO = "ghostwire/ghostwire-proxy"
+DEFAULT_GITHUB_REPO = "garethcheyne/ghostwire-proxy"
 
 # Base images to track
 BASE_IMAGES = {
