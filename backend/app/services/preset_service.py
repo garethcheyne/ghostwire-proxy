@@ -189,6 +189,32 @@ async def apply_preset(
     }
 
 
+async def reapply_preset(
+    preset_id: str,
+    db: AsyncSession,
+    user_id: str,
+    proxy_host_id: Optional[str] = None,
+    client_ip: Optional[str] = None,
+) -> dict:
+    """Re-apply a preset — removes existing rules then re-creates from the latest JSON."""
+    preset = get_preset(preset_id)
+    if not preset:
+        raise ValueError(f"Preset not found: {preset_id}")
+
+    already_applied = await is_preset_applied(preset_id, db)
+    if already_applied:
+        await remove_preset(preset_id=preset_id, db=db, user_id=user_id, client_ip=client_ip)
+
+    # Now apply fresh from the JSON file
+    return await apply_preset(
+        preset_id=preset_id,
+        db=db,
+        user_id=user_id,
+        proxy_host_id=proxy_host_id,
+        client_ip=client_ip,
+    )
+
+
 async def _apply_waf_preset(preset: dict, db: AsyncSession, preset_id: str) -> list[dict]:
     """Apply WAF rule preset — creates a rule set and rules."""
     import uuid

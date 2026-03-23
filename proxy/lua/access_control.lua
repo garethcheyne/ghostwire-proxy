@@ -121,13 +121,8 @@ function _M.access()
     local allowed = _M.check_access(host)
 
     if not allowed then
-        ngx.status = 403
-        ngx.header["Content-Type"] = "application/json"
-        ngx.say(cjson.encode({
-            error = "Forbidden",
-            message = "Access denied by access control list",
-        }))
-        return ngx.exit(403)
+        local block_page = require "block_page"
+        return block_page.access_denied()
     end
 end
 

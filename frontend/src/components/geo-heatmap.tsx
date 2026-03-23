@@ -49,7 +49,7 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   ZW:[-20,30],XK:[42.6,21],HK:[22.3,114.2],MO:[22.2,113.5],PS:[32,35.2],
 }
 
-function MapContent({ data }: { data: GeoData[] }) {
+function MapContent({ data, threatData }: { data: GeoData[]; threatData: GeoData[] }) {
   const [L, setL] = useState<typeof import('leaflet') | null>(null)
   const [RL, setRL] = useState<typeof import('react-leaflet') | null>(null)
 
@@ -74,6 +74,7 @@ function MapContent({ data }: { data: GeoData[] }) {
 
   const { MapContainer, TileLayer, CircleMarker, Tooltip } = RL
   const maxCount = Math.max(...data.map(d => d.count), 1)
+  const maxThreatCount = Math.max(...threatData.map(d => d.count), 1)
 
   return (
     <MapContainer
@@ -88,6 +89,7 @@ function MapContent({ data }: { data: GeoData[] }) {
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
+      {/* Traffic circles (cyan) */}
       {data.map((item) => {
         const coords = COUNTRY_COORDS[item.country_code]
         if (!coords) return null
@@ -95,7 +97,7 @@ function MapContent({ data }: { data: GeoData[] }) {
         const radius = Math.max(6, Math.min(35, 6 + intensity * 29))
         return (
           <CircleMarker
-            key={item.country_code}
+            key={`traffic-${item.country_code}`}
             center={coords}
             radius={radius}
             pathOptions={{
@@ -116,6 +118,37 @@ function MapContent({ data }: { data: GeoData[] }) {
           </CircleMarker>
         )
       })}
+      {/* Threat circles (red) */}
+      {threatData.map((item) => {
+        const coords = COUNTRY_COORDS[item.country_code]
+        if (!coords) return null
+        const intensity = item.count / maxThreatCount
+        const radius = Math.max(5, Math.min(30, 5 + intensity * 25))
+        // Offset slightly so both circles are visible
+        const offsetCoords: [number, number] = [coords[0] + 1.5, coords[1] + 1.5]
+        return (
+          <CircleMarker
+            key={`threat-${item.country_code}`}
+            center={offsetCoords}
+            radius={radius}
+            pathOptions={{
+              fillColor: `rgba(239, 68, 68, ${0.4 + intensity * 0.5})`,
+              color: 'rgb(239, 68, 68)',
+              weight: 1.5,
+              fillOpacity: 0.4 + intensity * 0.5,
+            }}
+          >
+            <Tooltip sticky>
+              <div className="text-sm font-medium">
+                {countryFlag(item.country_code)} {item.country_name}
+              </div>
+              <div className="text-xs" style={{ color: 'rgb(239, 68, 68)' }}>
+                {item.count.toLocaleString()} threats
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        )
+      })}
     </MapContainer>
   )
 }
@@ -129,11 +162,14 @@ function countryFlag(code: string): string {
 export default function GeoHeatmap({
   proxyHostId,
   days = 30,
+  showThreats = false,
 }: {
   proxyHostId?: string
   days?: number
+  showThreats?: boolean
 }) {
   const [data, setData] = useState<GeoData[]>([])
+  const [threatData, setThreatData] = useState<GeoData[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -141,11 +177,22 @@ export default function GeoHeatmap({
     params.set('days', String(days))
     if (proxyHostId) params.set('proxy_host_id', proxyHostId)
 
-    api.get(`/api/traffic/geo/heatmap?${params}`)
-      .then(res => setData(res.data))
-      .catch(err => console.error('Failed to load geo data:', err))
-      .finally(() => setIsLoading(false))
-  }, [proxyHostId, days])
+    const fetches: Promise<void>[] = [
+      api.get(`/api/traffic/geo/heatmap?${params}`)
+        .then(res => setData(res.data))
+        .catch(err => console.error('Failed to load geo data:', err)),
+    ]
+
+    if (showThreats) {
+      fetches.push(
+        api.get(`/api/waf/threats/geo?days=${days}`)
+          .then(res => setThreatData(res.data))
+          .catch(err => console.error('Failed to load threat geo data:', err))
+      )
+    }
+
+    Promise.all(fetches).finally(() => setIsLoading(false))
+  }, [proxyHostId, days, showThreats])
 
   if (isLoading) {
     return (
@@ -155,7 +202,7 @@ export default function GeoHeatmap({
     )
   }
 
-  if (data.length === 0) {
+  if (data.length === 0 && threatData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
         <Globe className="h-12 w-12 mb-3 opacity-30" />
@@ -167,8 +214,21 @@ export default function GeoHeatmap({
 
   return (
     <div className="space-y-4">
-      <div className="h-[400px] rounded-xl overflow-hidden border border-border">
-        <MapContent data={data} />
+      <div className="h-[400px] rounded-xl overflow-hidden border border-border relative">
+        <MapContent data={data} threatData={threatData} />
+        {/* Legend */}
+        {threatData.length > 0 && (
+          <div className="absolute bottom-3 left-3 z-[1000] flex gap-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-2 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(6, 182, 212)' }} />
+              Traffic
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(239, 68, 68)' }} />
+              Threats
+            </div>
+          </div>
+        )}
       </div>
       {/* Top countries list */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -180,11 +240,31 @@ export default function GeoHeatmap({
             <span className="text-lg">{countryFlag(item.country_code)}</span>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium truncate">{item.country_name}</p>
-              <p className="text-xs text-muted-foreground">{item.count.toLocaleString()}</p>
+              <p className="text-xs text-cyan-400">{item.count.toLocaleString()} requests</p>
             </div>
           </div>
         ))}
       </div>
+      {/* Threat countries list */}
+      {threatData.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-red-400 mb-2">Threat Origins</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {threatData.slice(0, 12).map((item) => (
+              <div
+                key={item.country_code}
+                className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2"
+              >
+                <span className="text-lg">{countryFlag(item.country_code)}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{item.country_name}</p>
+                  <p className="text-xs text-red-400">{item.count.toLocaleString()} threats</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

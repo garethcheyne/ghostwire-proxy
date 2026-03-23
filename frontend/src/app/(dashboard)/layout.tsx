@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
+import { UpdateBanner } from '@/components/layout/update-banner'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { clearSession, setSessionActive } from '@/lib/session'
@@ -83,6 +84,7 @@ export default function DashboardLayout({
         {/* Main content area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header onMobileMenuClick={() => setIsMobileOpen(true)} />
+          <UpdateBanner />
           <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-muted/30">
             {children}
           </main>

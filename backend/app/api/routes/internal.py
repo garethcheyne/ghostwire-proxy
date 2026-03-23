@@ -139,6 +139,7 @@ class ThreatLogRequest(BaseModel):
     timestamp: Optional[int] = None
     country_code: Optional[str] = None
     country_name: Optional[str] = None
+    rule_id: Optional[str] = None
 
 
 @router.post("/threats/log")
@@ -177,6 +178,7 @@ async def log_threat(
         user_agent=data.user_agent,
         host=data.host,
         proxy_host_id=proxy_host_id,
+        rule_id=data.rule_id,
         rule_name=data.pattern,
         country_code=data.country_code,
         country_name=data.country_name,

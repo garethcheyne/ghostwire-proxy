@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Activity,
   Server,
@@ -17,6 +18,7 @@ import {
   Container,
   Gauge,
   ArrowUpDown,
+  ArrowUpCircle,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -33,6 +35,7 @@ import {
   Legend,
 } from 'recharts'
 import api from '@/lib/api'
+import { UpdatesTab } from '@/components/system/updates-tab'
 
 interface ServiceHealth {
   status: 'healthy' | 'unhealthy' | 'unknown'
@@ -97,6 +100,10 @@ interface ThroughputPoint {
 }
 
 export default function SystemMonitorPage() {
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState<'monitor' | 'updates'>(
+    searchParams.get('tab') === 'updates' ? 'updates' : 'monitor'
+  )
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [metrics, setMetrics] = useState<MetricsPoint[]>([])
   const [throughput, setThroughput] = useState<ThroughputPoint[]>([])
@@ -245,36 +252,74 @@ export default function SystemMonitorPage() {
         <div>
           <h1 className="text-2xl font-bold">System Monitor</h1>
           <p className="text-muted-foreground">
-            Real-time system health and resource monitoring
+            {activeTab === 'monitor'
+              ? 'Real-time system health and resource monitoring'
+              : 'Application and container security updates'}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Tab Switcher */}
           <div className="flex rounded-lg border border-input overflow-hidden">
-            {(['1h', '6h', '24h', '7d'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  period === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+            <button
+              onClick={() => setActiveTab('monitor')}
+              className={`px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'monitor'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+              }`}
+            >
+              <Activity className="h-4 w-4" />
+              Monitor
+            </button>
+            <button
+              onClick={() => setActiveTab('updates')}
+              className={`px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'updates'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+              }`}
+            >
+              <ArrowUpCircle className="h-4 w-4" />
+              Updates
+            </button>
           </div>
-          <button
-            onClick={fetchAllData}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+
+          {activeTab === 'monitor' && (
+            <>
+              <div className="flex rounded-lg border border-input overflow-hidden">
+                {(['1h', '6h', '24h', '7d'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      period === p
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={fetchAllData}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* Updates Tab */}
+      {activeTab === 'updates' && <UpdatesTab />}
+
+      {/* Monitor Tab */}
+      {activeTab === 'monitor' && (
+      <>
       {/* Service Health Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {status && Object.entries(status.services).map(([name, service]) => (
@@ -673,6 +718,8 @@ export default function SystemMonitorPage() {
             Collect Metrics Now
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   )

@@ -1,5 +1,7 @@
 """Update management API endpoints."""
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
@@ -7,6 +9,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.redis import get_redis
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.update_service import update_service
@@ -279,3 +282,96 @@ async def update_settings(
         **settings_update.model_dump(exclude_none=True)
     )
     return UpdateSettingsResponse.model_validate(settings)
+
+
+@router.get("/available")
+async def get_available_updates(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lightweight endpoint for the frontend to poll.
+
+    Reads cached update check results from Redis — no external API calls.
+    Designed to be called frequently (e.g. on every page load).
+    """
+    try:
+        redis = await get_redis()
+        data = await redis.hgetall("ghostwire:update_check")
+    except Exception:
+        data = {}
+
+    if not data:
+        return {
+            "checked": False,
+            "app_update_available": False,
+            "app_latest_version": None,
+            "app_current_version": None,
+            "base_image_updates": 0,
+            "base_image_details": [],
+            "checked_at": None,
+        }
+
+    return {
+        "checked": True,
+        "app_update_available": data.get("app_update_available") == "True",
+        "app_latest_version": data.get("app_latest_version") or None,
+        "app_current_version": data.get("app_current_version") or None,
+        "base_image_updates": int(data.get("base_image_updates", "0")),
+        "base_image_details": json.loads(data.get("base_image_details", "[]")),
+        "checked_at": data.get("checked_at"),
+    }
+
+
+@router.post("/check-now")
+async def check_now(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Force an immediate update check (app + base images).
+
+    Calls GitHub and Docker Hub APIs, caches results in Redis.
+    """
+    from datetime import timezone
+    from app.main import APP_VERSION
+
+    app_result = await update_service.check_for_app_updates(db)
+    base_results = await update_service.check_for_base_image_updates(db)
+    base_updates = [r for r in base_results if r.get("update_available")]
+
+    now = datetime.now(timezone.utc)
+
+    # Cache in Redis
+    try:
+        redis = await get_redis()
+        cache = {
+            "checked_at": now.isoformat(),
+            "app_update_available": str(app_result.get("update_available", False)),
+            "app_latest_version": app_result.get("latest_version") or "",
+            "app_current_version": app_result.get("current_version", APP_VERSION),
+            "base_image_updates": str(len(base_updates)),
+            "base_image_details": json.dumps([
+                {"container": r["container"], "image": r["image"]}
+                for r in base_updates
+            ]),
+        }
+        await redis.hset("ghostwire:update_check", mapping=cache)
+
+        update_settings = await update_service.get_settings(db)
+        await redis.expire(
+            "ghostwire:update_check",
+            update_settings.check_interval_hours * 7200
+        )
+    except Exception:
+        pass
+
+    # Update last_check
+    update_settings = await update_service.get_settings(db)
+    update_settings.last_check = now
+    await db.commit()
+
+    return {
+        "app": app_result,
+        "base_images": base_results,
+        "base_image_updates_count": len(base_updates),
+    }

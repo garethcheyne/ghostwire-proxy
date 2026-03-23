@@ -1,5 +1,7 @@
 """WAF rules and threat management API routes."""
 
+import httpx
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, delete as sa_delete
@@ -19,7 +21,20 @@ from app.schemas.waf import (
 )
 from app.api.deps import get_current_user
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+NGINX_RELOAD_URL = "http://ghostwire-proxy-nginx/reload-rules"
+
+
+async def _notify_nginx_reload():
+    """Tell nginx to reload its rules cache immediately."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.get(NGINX_RELOAD_URL, headers={"Host": "localhost"})
+    except Exception as e:
+        logger.warning("Could not notify nginx to reload rules: %s", e)
 
 
 # ── WAF Rule Sets ──────────────────────────────────────────────
@@ -233,6 +248,73 @@ async def purge_threat_events(
     return {"status": "ok", "deleted": count}
 
 
+@router.get("/threats/geo")
+async def get_threat_geo_data(
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get threat events grouped by country for map visualization."""
+    result = await db.execute(
+        select(
+            ThreatActor.country_code,
+            ThreatActor.country_name,
+            func.sum(ThreatActor.total_events).label("count"),
+        )
+        .where(ThreatActor.country_code.isnot(None))
+        .group_by(ThreatActor.country_code, ThreatActor.country_name)
+        .order_by(func.sum(ThreatActor.total_events).desc())
+    )
+    return [
+        {"country_code": row[0], "country_name": row[1] or row[0], "count": row[2]}
+        for row in result.all()
+    ]
+
+
+@router.get("/threats/by-host")
+async def get_threats_by_host(
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get threat events grouped by host with category breakdown."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # Threats per host
+    host_result = await db.execute(
+        select(
+            ThreatEvent.host,
+            func.count(ThreatEvent.id).label("count"),
+        )
+        .where(and_(ThreatEvent.host.isnot(None), ThreatEvent.timestamp >= since))
+        .group_by(ThreatEvent.host)
+        .order_by(func.count(ThreatEvent.id).desc())
+        .limit(15)
+    )
+    hosts = host_result.all()
+
+    result = []
+    for host, count in hosts:
+        # Category breakdown per host
+        cat_result = await db.execute(
+            select(
+                ThreatEvent.category,
+                func.count(ThreatEvent.id).label("count"),
+            )
+            .where(and_(ThreatEvent.host == host, ThreatEvent.timestamp >= since))
+            .group_by(ThreatEvent.category)
+            .order_by(func.count(ThreatEvent.id).desc())
+        )
+        categories = {row[0]: row[1] for row in cat_result.all()}
+        result.append({
+            "host": host,
+            "total": count,
+            "categories": categories,
+        })
+
+    return result
+
+
 @router.get("/stats", response_model=ThreatStatsResponse)
 async def get_threat_stats(
     current_user: User = Depends(get_current_user),
@@ -400,6 +482,7 @@ async def delete_threat_actor(
         details=f"Deleted threat actor: {ip}",
     ))
     await db.commit()
+    await _notify_nginx_reload()
     return {"status": "deleted", "ip": ip}
 
 
@@ -436,6 +519,7 @@ async def block_threat_actor(
         details=f"Manually blocked IP: {ip}",
     ))
     await db.commit()
+    await _notify_nginx_reload()
     return {"status": "blocked", "ip": ip}
 
 
@@ -465,6 +549,7 @@ async def unblock_threat_actor(
         details=f"Unblocked IP: {ip}",
     ))
     await db.commit()
+    await _notify_nginx_reload()
     return {"status": "unblocked", "ip": ip}
 
 

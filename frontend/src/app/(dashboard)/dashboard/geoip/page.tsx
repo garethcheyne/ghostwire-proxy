@@ -12,6 +12,9 @@ import {
   ToggleRight,
   Search,
   Globe,
+  Database,
+  RefreshCw,
+  CheckCircle,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -87,6 +90,8 @@ export default function GeoIPPage() {
   const [error, setError] = useState('')
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'rules' | 'lookup'>('rules')
+  const [dbInfo, setDbInfo] = useState<{ installed: boolean; size_bytes: number; last_modified: string | null } | null>(null)
+  const [isUpdatingDb, setIsUpdatingDb] = useState(false)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -107,12 +112,14 @@ export default function GeoIPPage() {
 
   const fetchData = async () => {
     try {
-      const [rulesRes, settingsRes] = await Promise.all([
+      const [rulesRes, settingsRes, dbRes] = await Promise.all([
         api.get('/api/geoip/rules'),
         api.get('/api/geoip/settings').catch(() => ({ data: null })),
+        api.get('/api/geoip/database/status').catch(() => ({ data: null })),
       ])
       setRules(rulesRes.data)
       setSettings(settingsRes.data)
+      if (dbRes.data) setDbInfo(dbRes.data)
     } catch (error) {
       console.error('Failed to fetch GeoIP data:', error)
     } finally {
@@ -263,26 +270,72 @@ export default function GeoIPPage() {
         )}
       </div>
 
-      {/* GeoIP Status */}
-      {settings && (
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
-          <Globe className="h-5 w-5 text-muted-foreground" />
-          <div className="text-sm">
-            <span className="font-medium">Provider:</span>{' '}
-            <span className="capitalize">{settings.provider}</span>
-            {settings.enabled ? (
-              <span className="ml-3 text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500">Active</span>
-            ) : (
-              <span className="ml-3 text-xs px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400">Disabled</span>
-            )}
-            {settings.last_updated_at && (
-              <span className="ml-3 text-muted-foreground">
-                DB updated: {new Date(settings.last_updated_at).toLocaleDateString()}
-              </span>
-            )}
+      {/* GeoIP Database Status */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Database className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold">GeoIP Database</h3>
+              <p className="text-sm text-muted-foreground">
+                DB-IP Country Lite — free database updated monthly
+              </p>
+            </div>
           </div>
+          <button
+            onClick={async () => {
+              setIsUpdatingDb(true)
+              try {
+                await api.post('/api/geoip/database/update')
+                const res = await api.get('/api/geoip/database/status')
+                setDbInfo(res.data)
+              } catch (err: any) {
+                setError(err.response?.data?.detail || 'Failed to update GeoIP database')
+              } finally {
+                setIsUpdatingDb(false)
+              }
+            }}
+            disabled={isUpdatingDb}
+            className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {isUpdatingDb ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {isUpdatingDb ? 'Updating...' : 'Update Now'}
+          </button>
         </div>
-      )}
+        {dbInfo && (
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                {dbInfo.installed ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-medium text-green-500">Installed</span>
+                  </>
+                ) : (
+                  <span className="text-sm font-medium text-red-500">Not Installed</span>
+                )}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Size</p>
+              <p className="text-sm font-medium mt-1">
+                {dbInfo.size_bytes ? `${(dbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">Last Updated</p>
+              <p className="text-sm font-medium mt-1">
+                {dbInfo.last_modified ? new Date(dbInfo.last_modified).toLocaleDateString() : '-'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg bg-muted p-1">

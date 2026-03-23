@@ -1,56 +1,25 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   AlertTriangle,
   Shield,
   ShieldBan,
   ShieldCheck,
   Eye,
-  Ban,
-  Unlock,
   Loader2,
   Search,
-  ChevronDown,
   Trash2,
-  Tag,
   Globe,
   X,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { DataTable } from '@/components/data-table'
+import { createEventColumns, type ThreatEvent } from '@/components/threats/event-columns'
+import { createActorColumns, type ThreatActor } from '@/components/threats/actor-columns'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
-
-interface ThreatEvent {
-  id: string
-  proxy_host_id: string | null
-  client_ip: string
-  rule_id: string | null
-  rule_name: string | null
-  category: string
-  severity: string
-  action_taken: string
-  request_method: string | null
-  request_uri: string | null
-  matched_payload: string | null
-  timestamp: string
-}
-
-interface ThreatActor {
-  id: string
-  ip_address: string
-  total_events: number
-  threat_score: number
-  first_seen: string
-  last_seen: string
-  current_status: string
-  temp_block_until: string | null
-  perm_blocked_at: string | null
-  firewall_banned_at: string | null
-  country_code: string | null
-  country_name: string | null
-  tags: string[]
-  notes: string | null
-}
 
 interface ThreatStats {
   total_events: number
@@ -93,14 +62,24 @@ export default function ThreatsPage() {
   const [events, setEvents] = useState<ThreatEvent[]>([])
   const [actors, setActors] = useState<ThreatActor[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [filterSeverity, setFilterSeverity] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterIp, setFilterIp] = useState('')
+
+  // Event filters
+  const [evFilterIp, setEvFilterIp] = useState('')
+  const [evFilterSeverity, setEvFilterSeverity] = useState('')
+  const [evFilterCategory, setEvFilterCategory] = useState('')
+
+  // Actor filters
+  const [actorFilterIp, setActorFilterIp] = useState('')
+  const [actorFilterStatus, setActorFilterStatus] = useState('')
+
+  // Actor expanded events
+  const [expandedActorIp, setExpandedActorIp] = useState<string | null>(null)
+  const [actorEvents, setActorEvents] = useState<ThreatEvent[]>([])
+  const [loadingActorEvents, setLoadingActorEvents] = useState(false)
 
   useEffect(() => {
     fetchData()
-  }, [activeTab, filterSeverity, filterCategory, filterStatus, filterIp])
+  }, [activeTab])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -109,16 +88,10 @@ export default function ThreatsPage() {
         const res = await api.get('/api/waf/stats')
         setStats(res.data)
       } else if (activeTab === 'events') {
-        const params = new URLSearchParams()
-        if (filterSeverity) params.set('severity', filterSeverity)
-        if (filterCategory) params.set('category', filterCategory)
-        if (filterIp) params.set('client_ip', filterIp)
-        const res = await api.get(`/api/waf/events?${params}`)
+        const res = await api.get('/api/waf/events?limit=200')
         setEvents(res.data)
       } else if (activeTab === 'actors') {
-        const params = new URLSearchParams()
-        if (filterStatus) params.set('status', filterStatus)
-        const res = await api.get(`/api/waf/actors?${params}`)
+        const res = await api.get('/api/waf/actors?limit=200')
         setActors(res.data)
       }
     } catch (error) {
@@ -127,6 +100,8 @@ export default function ThreatsPage() {
       setIsLoading(false)
     }
   }
+
+  // ── Actions ──────────────────────────────────────────────────
 
   const handleBlockIp = async (ip: string) => {
     if (!(await confirm({ description: `Block IP ${ip} permanently?`, variant: 'destructive' }))) return
@@ -151,14 +126,14 @@ export default function ThreatsPage() {
   const handleDeleteEvent = async (eventId: string) => {
     try {
       await api.delete(`/api/waf/events/${eventId}`)
-      setEvents(events.filter(e => e.id !== eventId))
+      setEvents(prev => prev.filter(e => e.id !== eventId))
     } catch (error) {
       console.error('Failed to delete event:', error)
     }
   }
 
   const handlePurgeEvents = async () => {
-    if (!(await confirm({ description: 'Are you sure you want to purge ALL threat events? This cannot be undone.', variant: 'destructive' }))) return
+    if (!(await confirm({ description: 'Purge ALL threat events? This cannot be undone.', variant: 'destructive' }))) return
     try {
       await api.delete('/api/waf/events')
       setEvents([])
@@ -169,49 +144,76 @@ export default function ThreatsPage() {
   }
 
   const handleDeleteActor = async (actorId: string, ip: string) => {
-    if (!(await confirm({ description: `Delete threat actor ${ip}? This will also remove all their threat events.`, variant: 'destructive' }))) return
+    if (!(await confirm({ description: `Delete threat actor ${ip}? This also removes their events.`, variant: 'destructive' }))) return
     try {
       await api.delete(`/api/waf/actors/${actorId}`)
-      setActors(actors.filter(a => a.id !== actorId))
+      setActors(prev => prev.filter(a => a.id !== actorId))
     } catch (error) {
       console.error('Failed to delete actor:', error)
     }
   }
 
-  const handleAddTag = async (actor: ThreatActor, tag: string) => {
-    if (!tag.trim() || actor.tags.includes(tag.trim())) return
-    const newTags = [...actor.tags, tag.trim()]
+  const toggleActorEvents = async (ip: string) => {
+    if (expandedActorIp === ip) {
+      setExpandedActorIp(null)
+      setActorEvents([])
+      return
+    }
+    setExpandedActorIp(ip)
+    setLoadingActorEvents(true)
     try {
-      await api.put(`/api/waf/actors/${encodeURIComponent(actor.ip_address)}`, { tags: newTags })
-      setActors(actors.map(a => a.id === actor.id ? { ...a, tags: newTags } : a))
+      const res = await api.get(`/api/waf/events?client_ip=${encodeURIComponent(ip)}&limit=200`)
+      setActorEvents(res.data)
     } catch (error) {
-      console.error('Failed to add tag:', error)
+      console.error('Failed to fetch actor events:', error)
+      setActorEvents([])
+    } finally {
+      setLoadingActorEvents(false)
     }
   }
 
-  const handleRemoveTag = async (actor: ThreatActor, tag: string) => {
-    const newTags = actor.tags.filter(t => t !== tag)
-    try {
-      await api.put(`/api/waf/actors/${encodeURIComponent(actor.ip_address)}`, { tags: newTags })
-      setActors(actors.map(a => a.id === actor.id ? { ...a, tags: newTags } : a))
-    } catch (error) {
-      console.error('Failed to remove tag:', error)
-    }
-  }
+  // ── Filtered data (client-side) ──────────────────────────────
 
-  const countryFlag = (code: string | null) => {
-    if (!code || code.length !== 2) return null
-    const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
-    return String.fromCodePoint(...codePoints)
-  }
+  const filteredEvents = useMemo(() => {
+    let result = events
+    if (evFilterIp) result = result.filter(e => e.client_ip.includes(evFilterIp))
+    if (evFilterSeverity) result = result.filter(e => e.severity === evFilterSeverity)
+    if (evFilterCategory) result = result.filter(e => e.category === evFilterCategory)
+    return result
+  }, [events, evFilterIp, evFilterSeverity, evFilterCategory])
+
+  const filteredActors = useMemo(() => {
+    let result = actors
+    if (actorFilterIp) result = result.filter(a => a.ip_address.includes(actorFilterIp))
+    if (actorFilterStatus) result = result.filter(a => a.current_status === actorFilterStatus)
+    return result
+  }, [actors, actorFilterIp, actorFilterStatus])
+
+  // ── Column defs (memoized) ───────────────────────────────────
+
+  const eventColumns = useMemo(
+    () => createEventColumns({ onBlock: handleBlockIp, onDelete: handleDeleteEvent }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  const actorColumns = useMemo(
+    () => createActorColumns({
+      onBlock: handleBlockIp,
+      onUnblock: handleUnblockIp,
+      onDelete: handleDeleteActor,
+      onToggleExpand: toggleActorEvents,
+      expandedIp: expandedActorIp,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expandedActorIp]
+  )
 
   const formatDate = (d: string) => {
-    try {
-      return new Date(d).toLocaleString()
-    } catch {
-      return d
-    }
+    try { return new Date(d).toLocaleString() } catch { return d }
   }
+
+  // ── Render ───────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -339,225 +341,192 @@ export default function ThreatsPage() {
             )}
           </div>
         </div>
+
       ) : activeTab === 'events' ? (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={filterIp}
-                onChange={(e) => setFilterIp(e.target.value)}
-                placeholder="Filter by IP..."
-                className="w-48 pl-9 pr-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <select
-              value={filterSeverity}
-              onChange={(e) => setFilterSeverity(e.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">All Categories</option>
-              <option value="sqli">SQL Injection</option>
-              <option value="xss">XSS</option>
-              <option value="path_traversal">Path Traversal</option>
-              <option value="rce">RCE</option>
-              <option value="scanner">Scanner</option>
-            </select>
-            <button
-              onClick={handlePurgeEvents}
-              className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10"
-            >
-              <Trash2 className="h-4 w-4" />
-              Purge All
-            </button>
-          </div>
-
-          {/* Events List */}
-          {events.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-12 text-center">
-              <ShieldCheck className="mx-auto h-12 w-12 mb-4 text-green-500 opacity-50" />
-              <p className="text-muted-foreground">No threat events found</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {events.map((event) => (
-                <div key={event.id} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <code className="text-sm font-mono font-semibold">{event.client_ip}</code>
-                        <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${categoryColors[event.category] || 'bg-muted'}`}>
-                          {event.category.replace('_', ' ')}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${severityColors[event.severity] || severityColors.medium}`}>
-                          {event.severity}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          event.action_taken === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-slate-400'
-                        }`}>
-                          {event.action_taken}
-                        </span>
-                      </div>
-                      {event.request_uri && (
-                        <p className="text-sm text-muted-foreground mt-1 truncate">
-                          {event.request_method} {event.request_uri}
-                        </p>
-                      )}
-                      {event.matched_payload && (
-                        <code className="text-xs text-muted-foreground mt-1 block truncate">
-                          Match: {event.matched_payload}
-                        </code>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
-                      <button
-                        onClick={() => handleBlockIp(event.client_ip)}
-                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
-                        title="Block IP"
-                      >
-                        <Ban className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteEvent(event.id)}
-                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
-                        title="Delete event"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+        <DataTable
+          columns={eventColumns}
+          data={filteredEvents}
+          pageSize={25}
+          emptyMessage="No threat events found"
+          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-500 opacity-50" />}
+          toolbar={
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={evFilterIp}
+                    onChange={(e) => setEvFilterIp(e.target.value)}
+                    placeholder="Filter by IP..."
+                    className="w-44 pl-8 h-9 text-sm"
+                  />
                 </div>
-              ))}
+                <select
+                  value={evFilterSeverity}
+                  onChange={(e) => setEvFilterSeverity(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">All Severities</option>
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+                <select
+                  value={evFilterCategory}
+                  onChange={(e) => setEvFilterCategory(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">All Categories</option>
+                  <option value="sqli">SQL Injection</option>
+                  <option value="xss">XSS</option>
+                  <option value="path_traversal">Path Traversal</option>
+                  <option value="rce">RCE</option>
+                  <option value="scanner">Scanner</option>
+                  <option value="injection">Injection</option>
+                  <option value="sensitive_data">Sensitive Data</option>
+                  <option value="recon">Recon</option>
+                  <option value="dos">DoS</option>
+                  <option value="blocked_ip">Blocked IP</option>
+                </select>
+                {(evFilterIp || evFilterSeverity || evFilterCategory) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-xs"
+                    onClick={() => { setEvFilterIp(''); setEvFilterSeverity(''); setEvFilterCategory('') }}
+                  >
+                    <X className="h-3 w-3 mr-1" /> Clear
+                  </Button>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
+                onClick={handlePurgeEvents}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Purge All
+              </Button>
             </div>
-          )}
-        </div>
+          }
+        />
+
       ) : activeTab === 'actors' ? (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex gap-3">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">All Statuses</option>
-              <option value="monitored">Monitored</option>
-              <option value="warned">Warned</option>
-              <option value="temp_blocked">Temp Blocked</option>
-              <option value="perm_blocked">Perm Blocked</option>
-              <option value="firewall_banned">Firewall Banned</option>
-            </select>
-          </div>
-
-          {/* Actors List */}
-          {actors.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-12 text-center">
-              <ShieldCheck className="mx-auto h-12 w-12 mb-4 text-green-500 opacity-50" />
-              <p className="text-muted-foreground">No threat actors tracked</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {actors.map((actor) => (
-                <div key={actor.id} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {actor.country_code && (
-                          <span className="text-lg" title={actor.country_name || actor.country_code}>
-                            {countryFlag(actor.country_code)}
-                          </span>
-                        )}
-                        <code className="text-sm font-mono font-semibold">{actor.ip_address}</code>
-                        {actor.country_name && (
-                          <span className="text-xs text-muted-foreground">{actor.country_name}</span>
-                        )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[actor.current_status] || statusColors.monitored}`}>
-                          {actor.current_status.replace('_', ' ')}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Score: <strong>{actor.threat_score}</strong>
-                        </span>
-                      </div>
-                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                        <span>{actor.total_events} events</span>
-                        <span>First: {formatDate(actor.first_seen)}</span>
-                        <span>Last: {formatDate(actor.last_seen)}</span>
-                      </div>
-                      {/* Tags */}
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                        {actor.tags.map((tag) => (
-                          <span key={tag} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                            {tag}
-                            <button
-                              onClick={() => handleRemoveTag(actor, tag)}
-                              className="hover:text-red-400"
+        <DataTable
+          columns={actorColumns}
+          data={filteredActors}
+          pageSize={25}
+          emptyMessage="No threat actors tracked"
+          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-500 opacity-50" />}
+          expandedRowId={expandedActorIp}
+          getRowExpansionId={(actor) => actor.ip_address}
+          renderSubRow={(actor) => {
+            if (actor.ip_address !== expandedActorIp) return null
+            return (
+              <div className="p-4 bg-muted/30 border-t border-border">
+                {loadingActorEvents ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading events...
+                  </div>
+                ) : actorEvents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No events found for this actor</p>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Events for {actor.ip_address} ({actorEvents.length})
+                    </p>
+                    <div className="max-h-72 overflow-y-auto space-y-1">
+                      {actorEvents.map((event) => (
+                        <div key={event.id} className="flex items-center justify-between gap-3 rounded-lg bg-background px-3 py-2 text-xs border border-border/50">
+                          <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                            <span className="text-muted-foreground shrink-0">
+                              {formatDate(event.timestamp)}
+                            </span>
+                            {event.host && (
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
+                                <Globe className="h-3 w-3" />
+                                {event.host}
+                              </span>
+                            )}
+                            <span className={`px-1.5 py-0.5 rounded capitalize shrink-0 ${
+                              categoryColors[event.category] || 'bg-muted'
+                            }`}>
+                              {event.category.replace(/_/g, ' ')}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded border capitalize shrink-0 ${
+                              severityColors[event.severity] || severityColors.medium
+                            }`}>
+                              {event.severity}
+                            </span>
+                            {event.rule_name && (
+                              <span className="text-muted-foreground truncate" title={event.rule_name}>
+                                {event.rule_name}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {event.request_uri && (
+                              <code className="text-muted-foreground truncate max-w-48 hidden lg:block" title={`${event.request_method} ${event.request_uri}`}>
+                                {event.request_method} {event.request_uri}
+                              </code>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                              onClick={() => handleDeleteEvent(event.id)}
+                              title="Delete event"
                             >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                        <input
-                          type="text"
-                          placeholder="+ tag"
-                          className="text-xs bg-transparent border-none outline-none w-16 placeholder:text-muted-foreground/50"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleAddTag(actor, e.currentTarget.value)
-                              e.currentTarget.value = ''
-                            }
-                          }}
-                        />
-                      </div>
-                      {actor.notes && (
-                        <p className="text-sm text-muted-foreground mt-1">{actor.notes}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {actor.current_status === 'monitored' || actor.current_status === 'warned' ? (
-                        <button
-                          onClick={() => handleBlockIp(actor.ip_address)}
-                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                        >
-                          <Ban className="h-3.5 w-3.5" />
-                          Block
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleUnblockIp(actor.ip_address)}
-                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm bg-green-500/10 text-green-500 hover:bg-green-500/20"
-                        >
-                          <Unlock className="h-3.5 w-3.5" />
-                          Unblock
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteActor(actor.id, actor.ip_address)}
-                        className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
-                        title="Delete actor"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
+                )}
+              </div>
+            )
+          }}
+          toolbar={
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={actorFilterIp}
+                  onChange={(e) => setActorFilterIp(e.target.value)}
+                  placeholder="Filter by IP..."
+                  className="w-44 pl-8 h-9 text-sm"
+                />
+              </div>
+              <select
+                value={actorFilterStatus}
+                onChange={(e) => setActorFilterStatus(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">All Statuses</option>
+                <option value="monitored">Monitored</option>
+                <option value="warned">Warned</option>
+                <option value="temp_blocked">Temp Blocked</option>
+                <option value="perm_blocked">Perm Blocked</option>
+                <option value="firewall_banned">Firewall Banned</option>
+              </select>
+              {(actorFilterIp || actorFilterStatus) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-xs"
+                  onClick={() => { setActorFilterIp(''); setActorFilterStatus('') }}
+                >
+                  <X className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              )}
             </div>
-          )}
-        </div>
+          }
+        />
       ) : null}
     </div>
   )

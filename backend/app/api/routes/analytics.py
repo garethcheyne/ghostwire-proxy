@@ -371,7 +371,9 @@ async def get_analytics_dashboard(
     top_ips_query = (
         select(
             TrafficLog.client_ip,
-            func.count(TrafficLog.id).label('requests')
+            func.count(TrafficLog.id).label('requests'),
+            func.max(TrafficLog.country_code).label('country_code'),
+            func.max(TrafficLog.country_name).label('country_name'),
         )
         .where(and_(*base_filter))
         .group_by(TrafficLog.client_ip)
@@ -379,7 +381,7 @@ async def get_analytics_dashboard(
         .limit(10)
     )
     top_ips_result = await db.execute(top_ips_query)
-    top_ips = [{"ip": row[0], "requests": row[1]} for row in top_ips_result.all()]
+    top_ips = [{"ip": row[0], "requests": row[1], "country_code": row[2], "country_name": row[3]} for row in top_ips_result.all()]
 
     # === Hourly Distribution ===
 

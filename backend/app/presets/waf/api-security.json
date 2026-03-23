@@ -65,11 +65,11 @@
     {
       "name": "JWT Token in URL",
       "category": "sensitive_data",
-      "pattern": "(?i)(\\?|&)(token|jwt|access_token|auth|bearer|api_?key)=ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+      "pattern": "(?i)^(?!.*/(?:notifications|signalr)/hub\\b).*[?&](?:token|jwt|access_token|auth|bearer|api_?key)=ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
       "severity": "medium",
       "action": "log",
       "enabled": true,
-      "description": "Logs JWT tokens passed in URL query parameters, which is a security risk."
+      "description": "Logs JWT tokens passed in URL query parameters, which is a security risk. Excludes SignalR/notification hub paths which require token in URL."
     }
   ]
 }

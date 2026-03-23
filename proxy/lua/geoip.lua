@@ -145,14 +145,8 @@ function _M.block_response(geo, action)
         return
     end
 
-    ngx.status = 403
-    ngx.header["Content-Type"] = "application/json"
-    ngx.say(cjson.encode({
-        error = "Forbidden",
-        message = "Access from your country is not allowed",
-        country = geo.country_code,
-    }))
-    return ngx.exit(403)
+    local block_page = require "block_page"
+    return block_page.geo_block(geo.country_code)
 end
 
 return _M

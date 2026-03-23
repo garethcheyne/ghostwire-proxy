@@ -186,3 +186,40 @@ async def lookup_ip(
         }
     except Exception as e:
         return {"ip": ip, "error": str(e)}
+
+
+# ── GeoIP Database Management ─────────────────────────────────
+
+@router.get("/database/status")
+async def get_geoip_database_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current GeoIP database status."""
+    from app.services.geoip_service import get_db_info
+    return get_db_info()
+
+
+@router.post("/database/update")
+async def update_geoip_database(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download and install the latest GeoIP database."""
+    from app.services.geoip_service import update_database
+
+    result = await update_database()
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="geoip_database_updated",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"GeoIP database update: {result['status']} - {result['message']}",
+    ))
+    await db.commit()
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["message"])
+
+    return result

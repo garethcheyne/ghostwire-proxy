@@ -29,7 +29,7 @@
     {
       "name": "SQL Injection — Comment Evasion",
       "category": "sqli",
-      "pattern": "(?i)(/\\*.*\\*/|--\\s|#\\s|;\\s*--|%23|%2d%2d)",
+      "pattern": "(?i)(/\\*.*\\*/|--\\s|#\\s|;\\s*--|%23(%20|\\+|\\s)|%2d%2d)",
       "severity": "medium",
       "action": "log",
       "enabled": true,
@@ -47,11 +47,11 @@
     {
       "name": "XSS — Encoded Payloads",
       "category": "xss",
-      "pattern": "(?i)(&#x?[0-9a-f]+;?|%3[cC]script|%3[cC]img|expression\\s*\\(|eval\\s*\\(|document\\.(cookie|domain|write)|window\\.(location|open))",
+      "pattern": "(?i)(&#0*60;?|&#x0*3[cC];?|&#0*62;?|&#x0*3[eE];?|%3[cC]script|%3[cC]img|expression\\s*\\(|eval\\s*\\(|document\\.(cookie|domain|write)|window\\.(location|open))",
       "severity": "high",
       "action": "block",
       "enabled": true,
-      "description": "Detects HTML entity encoded and URL encoded XSS payloads."
+      "description": "Detects HTML entity encoded angle brackets and URL encoded XSS payloads."
     },
     {
       "name": "Path Traversal",

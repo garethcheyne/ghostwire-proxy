@@ -19,7 +19,7 @@ _M.config = {
     rate_limit_enabled = true,
     geoip_enabled = false,
     traffic_logging_enabled = true,
-    rule_reload_interval = 300,  -- seconds between rule reloads from DB
+    rule_reload_interval = 60,  -- seconds between rule reloads from DB
 }
 
 -- ============================================================================
@@ -88,7 +88,7 @@ _M.default_waf_rules = {
     },
     {
         id = "default-sqli-9", name = "SQLi - Hex encoding", category = "sqli",
-        pattern = "0x[0-9a-fA-F]+", severity = "medium", action = "log",
+        pattern = "0x[0-9a-fA-F]{8,}", severity = "medium", action = "log",
     },
     {
         id = "default-sqli-10", name = "SQLi - CHAR function", category = "sqli",
@@ -104,7 +104,7 @@ _M.default_waf_rules = {
     },
     {
         id = "default-xss-3", name = "XSS - Event handler", category = "xss",
-        pattern = "on\\w+\\s*=", severity = "high", action = "block",
+        pattern = "\\bon(load|error|click|mouseover|focus|blur|submit|change|input|keyup|keydown|mouseout|mouseenter|mouseleave|contextmenu|dblclick|unload|beforeunload|resize|scroll|abort|copy|cut|paste|drag|drop)\\s*=", severity = "high", action = "block",
     },
     {
         id = "default-xss-4", name = "XSS - iframe", category = "xss",

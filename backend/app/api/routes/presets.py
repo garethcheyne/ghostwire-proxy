@@ -10,7 +10,7 @@ from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.preset_service import (
     list_presets, get_preset, apply_preset,
-    get_applied_presets, remove_preset,
+    get_applied_presets, remove_preset, reapply_preset,
 )
 
 router = APIRouter()
@@ -82,6 +82,28 @@ async def remove_preset_route(
             preset_id=preset_id,
             db=db,
             user_id=current_user.id,
+            client_ip=get_client_ip(request),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{preset_id}/reapply")
+async def reapply_preset_route(
+    preset_id: str,
+    request: Request,
+    proxy_host_id: Optional[str] = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-apply a preset — removes existing rules then re-creates from the latest JSON file."""
+    try:
+        result = await reapply_preset(
+            preset_id=preset_id,
+            db=db,
+            user_id=current_user.id,
+            proxy_host_id=proxy_host_id,
             client_ip=get_client_ip(request),
         )
         return result

@@ -151,6 +151,47 @@ async def test_connector(
     return test_result
 
 
+@router.post("/{connector_id}/ensure-rule")
+async def ensure_firewall_rule(
+    connector_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ensure the firewall rule exists that enforces blocking for the IP group.
+
+    For UniFi: Creates a WAN_IN drop rule using the ghostwire-blocked IP group.
+    This makes the blocklist actually block traffic at the router level.
+    """
+    result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
+    connector = result.scalar_one_or_none()
+    if not connector:
+        raise HTTPException(status_code=404, detail="Firewall connector not found")
+
+    instance = get_firewall_connector(connector)
+
+    # Check if this connector type supports ensure_firewall_rule
+    if not hasattr(instance, 'ensure_firewall_rule'):
+        return {
+            "success": False,
+            "error": f"Connector type '{connector.connector_type}' does not support automatic rule creation"
+        }
+
+    rule_result = await instance.ensure_firewall_rule()
+
+    if rule_result.get("success"):
+        db.add(AuditLog(
+            user_id=current_user.id, email=current_user.email,
+            action="firewall_rule_ensured",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Ensured firewall rule for {connector.name}: {rule_result.get('message', '')}",
+        ))
+        await db.commit()
+
+    return rule_result
+
+
 @router.post("/{connector_id}/test-block")
 async def test_block(
     connector_id: str,
@@ -213,6 +254,14 @@ async def sync_blocklist(
     if not connector:
         raise HTTPException(status_code=404, detail="Firewall connector not found")
 
+    instance = get_firewall_connector(connector)
+
+    # Ensure firewall rule exists before syncing (for connectors that support it)
+    rule_status = None
+    if hasattr(instance, 'ensure_firewall_rule'):
+        rule_result = await instance.ensure_firewall_rule()
+        rule_status = "created" if rule_result.get("success") else f"failed: {rule_result.get('error', 'unknown')}"
+
     # Get pending blocklist entries for this connector (or unassigned)
     bl_result = await db.execute(
         select(FirewallBlocklist).where(
@@ -222,7 +271,6 @@ async def sync_blocklist(
     )
     entries = bl_result.scalars().all()
 
-    instance = get_firewall_connector(connector)
     pushed = 0
     errors = 0
 
@@ -241,7 +289,12 @@ async def sync_blocklist(
     connector.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
 
-    return {"pushed": pushed, "errors": errors, "total": len(entries)}
+    return {
+        "pushed": pushed,
+        "errors": errors,
+        "total": len(entries),
+        "firewall_rule": rule_status,
+    }
 
 
 @router.get("/blocklist/all", response_model=list[FirewallBlocklistResponse])

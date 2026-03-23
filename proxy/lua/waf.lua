@@ -4,6 +4,7 @@
 local _M = {}
 local cjson = require "cjson.safe"
 local init = require "init"
+local block_page = require "block_page"
 
 -- Check if an IP is currently blocked
 local function is_ip_blocked(client_ip)
@@ -182,6 +183,7 @@ function _M.log_threat(threat_info)
         timestamp = ngx.time(),
         country_code = geo and geo.country_code or nil,
         country_name = geo and geo.country_name or nil,
+        rule_id = threat_info.rule_id or nil,
     })
 
     -- Non-blocking log to API
@@ -214,15 +216,8 @@ function _M.access()
             return
         end
 
-        -- Block the request
-        ngx.status = 403
-        ngx.header["Content-Type"] = "application/json"
-        ngx.say(cjson.encode({
-            error = "Forbidden",
-            message = "Request blocked by WAF",
-            category = threat_info.category,
-        }))
-        return ngx.exit(403)
+        -- Block the request with branded page
+        return block_page.waf_block(threat_info)
     end
 end
 

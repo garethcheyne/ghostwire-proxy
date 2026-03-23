@@ -109,7 +109,18 @@ class SystemMonitorService:
         return services
 
     async def _check_nginx_health(self) -> dict:
-        """Check Nginx health status."""
+        """Check Nginx health status via HTTP health endpoint."""
+        # Primary: HTTP health check against the nginx container
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get("http://ghostwire-proxy-nginx:80/health")
+                if resp.status_code == 200:
+                    return {"status": "healthy", "container_status": "running"}
+        except Exception as e:
+            logger.debug(f"Nginx HTTP health check failed: {e}")
+
+        # Fallback: Docker API
         if self.docker_client:
             try:
                 containers = self.docker_client.containers.list(

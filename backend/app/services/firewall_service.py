@@ -122,7 +122,7 @@ class RouterOSConnector(BaseFirewallConnector):
 
 
 class UniFiConnector(BaseFirewallConnector):
-    """Ubiquiti UniFi Network Application API connector (API Key auth)."""
+    """Ubiquiti UniFi Network Application API connector (v1 Integration API with zones)."""
 
     def _get_base_url(self) -> str:
         port = self.port or 443
@@ -137,25 +137,54 @@ class UniFiConnector(BaseFirewallConnector):
             "Content-Type": "application/json",
         }
 
+    def _get_list_name(self) -> str:
+        """Get the traffic matching list name for blocked IPs."""
+        return self.connector.address_list_name or "Ghostwire - Blocked"
+
+    def _get_policy_name(self) -> str:
+        """Get the firewall policy name."""
+        return "Ghostwire - Autoblock"
+
+    async def _get_site_uuid(self, client: httpx.AsyncClient) -> str | None:
+        """Get the site UUID from site name/id. New API requires UUID."""
+        site_ref = self.connector.site_id or "default"
+
+        resp = await client.get(
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites",
+            headers=self._get_headers(),
+        )
+        if resp.status_code != 200:
+            logger.error(f"UniFi: failed to list sites: HTTP {resp.status_code}")
+            return None
+
+        data = resp.json()
+        sites = data.get("data", [])
+
+        for site in sites:
+            # Match by internalReference (old name like "default") or by name or by id
+            if site.get("internalReference") == site_ref or site.get("name") == site_ref or site.get("id") == site_ref:
+                return site.get("id")
+
+        # If only one site, use it
+        if len(sites) == 1:
+            return sites[0].get("id")
+
+        logger.error(f"UniFi: could not find site '{site_ref}'")
+        return None
+
     async def test_connection(self) -> dict:
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                # Use the new integration API to list sites
                 resp = await client.get(
                     f"{self._get_base_url()}/proxy/network/integration/v1/sites",
                     headers=self._get_headers(),
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Handle paginated response format
-                    if isinstance(data, dict) and "data" in data:
-                        sites = data.get("data", [])
-                        site_count = data.get("totalCount", len(sites))
-                        site_names = [s.get("name", "Unknown") for s in sites[:3]]
-                        return {"success": True, "info": f"Connected to UniFi ({site_count} site(s): {', '.join(site_names)})"}
-                    elif isinstance(data, list):
-                        return {"success": True, "info": f"Connected to UniFi ({len(data)} site(s))"}
-                    return {"success": True, "info": "Connected to UniFi"}
+                    sites = data.get("data", [])
+                    site_count = data.get("totalCount", len(sites))
+                    site_names = [s.get("name", "Unknown") for s in sites[:3]]
+                    return {"success": True, "info": f"Connected to UniFi v1 API ({site_count} site(s): {', '.join(site_names)})"}
                 elif resp.status_code == 401:
                     return {"success": False, "error": "Invalid API key"}
                 elif resp.status_code == 403:
@@ -164,102 +193,233 @@ class UniFiConnector(BaseFirewallConnector):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _get_site_name(self) -> str:
-        """Get the site name for the old-style API (default: 'default')."""
-        return self.connector.site_id or "default"
+    async def _get_or_create_traffic_matching_list(self, client: httpx.AsyncClient, site_uuid: str) -> str | None:
+        """Get or create the Traffic Matching List for blocked IPs."""
+        list_name = self._get_list_name()
 
-    def _get_group_name(self) -> str:
-        """Get the firewall group name to use for blocked IPs."""
-        return self.connector.address_list_name or "Ghostwire Blocked"
-
-    async def _get_or_create_firewall_group(self, client: httpx.AsyncClient) -> str | None:
-        """Get the firewall group ID, creating it if it doesn't exist."""
-        site = self._get_site_name()
-        group_name = self._get_group_name()
-
-        # List existing groups
+        # List existing traffic matching lists
         resp = await client.get(
-            f"{self._get_base_url()}/proxy/network/api/s/{site}/rest/firewallgroup",
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/traffic-matching-lists",
             headers=self._get_headers(),
         )
         if resp.status_code != 200:
-            logger.error(f"UniFi: failed to list firewall groups: HTTP {resp.status_code}")
+            logger.error(f"UniFi: failed to list traffic matching lists: HTTP {resp.status_code} - {resp.text}")
             return None
 
         data = resp.json()
-        groups = data.get("data", [])
+        lists = data.get("data", [])
 
-        # Find existing group
-        for group in groups:
-            if group.get("name") == group_name and group.get("group_type") == "address-group":
-                return group.get("_id")
+        # Find existing list
+        for lst in lists:
+            if lst.get("name") == list_name and lst.get("type") == "IPV4_ADDRESSES":
+                logger.info(f"UniFi: found existing traffic matching list '{list_name}'")
+                return lst.get("id")
 
-        # Create new group if not found
+        # Create new list with a placeholder IP (required - can't be empty)
         resp = await client.post(
-            f"{self._get_base_url()}/proxy/network/api/s/{site}/rest/firewallgroup",
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/traffic-matching-lists",
             headers=self._get_headers(),
             json={
-                "name": group_name,
-                "group_type": "address-group",
-                "group_members": [],
+                "type": "IPV4_ADDRESSES",
+                "name": list_name,
+                "items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}],  # TEST-NET-1 placeholder
             },
         )
         if resp.status_code in (200, 201):
             data = resp.json()
-            if data.get("meta", {}).get("rc") == "ok":
-                new_groups = data.get("data", [])
-                if new_groups:
-                    logger.info(f"UniFi: created firewall group '{group_name}'")
-                    return new_groups[0].get("_id")
-        logger.error(f"UniFi: failed to create firewall group: {resp.text}")
+            list_id = data.get("id")
+            if list_id:
+                logger.info(f"UniFi: created traffic matching list '{list_name}' (ID: {list_id})")
+                return list_id
+
+        logger.error(f"UniFi: failed to create traffic matching list: {resp.status_code} - {resp.text}")
         return None
 
-    async def _get_firewall_group(self, client: httpx.AsyncClient, group_id: str) -> dict | None:
-        """Get firewall group details by ID."""
-        site = self._get_site_name()
+    async def _get_traffic_matching_list(self, client: httpx.AsyncClient, site_uuid: str, list_id: str) -> dict | None:
+        """Get traffic matching list details by ID."""
         resp = await client.get(
-            f"{self._get_base_url()}/proxy/network/api/s/{site}/rest/firewallgroup/{group_id}",
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/traffic-matching-lists/{list_id}",
             headers=self._get_headers(),
         )
         if resp.status_code == 200:
-            data = resp.json()
-            groups = data.get("data", [])
-            if groups:
-                return groups[0]
+            return resp.json()
         return None
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
-        """Add IP to UniFi firewall group (address-group)."""
+    async def _get_firewall_zones(self, client: httpx.AsyncClient, site_uuid: str) -> dict:
+        """Get firewall zones - returns dict with 'external' and 'internal' zone IDs."""
+        resp = await client.get(
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/firewall/zones",
+            headers=self._get_headers(),
+        )
+        if resp.status_code != 200:
+            logger.error(f"UniFi: failed to list firewall zones: HTTP {resp.status_code}")
+            return {}
+
+        data = resp.json()
+        zones = data.get("data", [])
+
+        result = {}
+        for zone in zones:
+            name = zone.get("name", "").lower()
+            zone_id = zone.get("id")
+            # Look for External/WAN zone and Internal/LAN zone
+            if "external" in name or "wan" in name or "internet" in name:
+                result["external"] = zone_id
+            elif "internal" in name or "lan" in name or "default" in name:
+                result["internal"] = zone_id
+
+        # If we didn't find named zones, use first two
+        if not result and len(zones) >= 2:
+            result["external"] = zones[0].get("id")
+            result["internal"] = zones[1].get("id")
+
+        return result
+
+    async def _get_or_create_firewall_policy(self, client: httpx.AsyncClient, site_uuid: str, list_id: str) -> str | None:
+        """Ensure a firewall policy exists that blocks traffic from the IP list."""
+        policy_name = self._get_policy_name()
+
+        # List existing firewall policies
+        resp = await client.get(
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/firewall/policies",
+            headers=self._get_headers(),
+        )
+        if resp.status_code != 200:
+            logger.error(f"UniFi: failed to list firewall policies: HTTP {resp.status_code}")
+            return None
+
+        data = resp.json()
+        policies = data.get("data", [])
+
+        # Check if policy already exists
+        for policy in policies:
+            if policy.get("name") == policy_name:
+                logger.info(f"UniFi: firewall policy '{policy_name}' already exists")
+                return policy.get("id")
+
+        # Get firewall zones
+        zones = await self._get_firewall_zones(client, site_uuid)
+        if not zones.get("external"):
+            logger.error("UniFi: could not find External/WAN firewall zone")
+            return None
+
+        # Create new firewall policy - block traffic from our IP list coming from external zone
+        policy_payload = {
+            "enabled": True,
+            "name": policy_name,
+            "description": "Automatically block threat IPs detected by Ghostwire Proxy",
+            "action": {"type": "BLOCK"},
+            "source": {
+                "zoneId": zones["external"],
+                "trafficFilter": {
+                    "type": "IP_ADDRESS",
+                    "ipAddressFilter": {
+                        "type": "TRAFFIC_MATCHING_LIST",
+                        "matchOpposite": False,
+                        "trafficMatchingListId": list_id,
+                    },
+                },
+            },
+            "destination": {
+                "zoneId": zones.get("internal", zones["external"]),  # Fallback to external if no internal
+            },
+            "ipProtocolScope": {"ipVersion": "IPV4"},
+            "loggingEnabled": True,
+        }
+
+        logger.info(f"UniFi: creating firewall policy: {policy_payload}")
+
+        resp = await client.post(
+            f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/firewall/policies",
+            headers=self._get_headers(),
+            json=policy_payload,
+        )
+
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            policy_id = data.get("id")
+            if policy_id:
+                logger.info(f"UniFi: created firewall policy '{policy_name}' (ID: {policy_id})")
+                return policy_id
+
+        logger.error(f"UniFi: failed to create firewall policy: {resp.status_code} - {resp.text}")
+        return None
+
+    async def ensure_firewall_rule(self) -> dict:
+        """Public method to ensure the firewall policy exists. Returns status dict."""
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                site = self._get_site_name()
-                group_id = await self._get_or_create_firewall_group(client)
-                if not group_id:
-                    logger.error("UniFi: could not get or create firewall group")
+            async with httpx.AsyncClient(verify=False, timeout=20) as client:
+                site_uuid = await self._get_site_uuid(client)
+                if not site_uuid:
+                    return {"success": False, "error": "Could not get site UUID"}
+
+                list_id = await self._get_or_create_traffic_matching_list(client, site_uuid)
+                if not list_id:
+                    return {"success": False, "error": "Could not get or create traffic matching list"}
+
+                policy_id = await self._get_or_create_firewall_policy(client, site_uuid, list_id)
+                if not policy_id:
+                    return {"success": False, "error": "Could not get or create firewall policy"}
+
+                return {
+                    "success": True,
+                    "list_id": list_id,
+                    "policy_id": policy_id,
+                    "message": f"Firewall policy '{self._get_policy_name()}' is active"
+                }
+        except Exception as e:
+            logger.error(f"UniFi ensure_firewall_rule failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+        """Add IP to UniFi traffic matching list and ensure blocking policy exists."""
+        try:
+            async with httpx.AsyncClient(verify=False, timeout=20) as client:
+                site_uuid = await self._get_site_uuid(client)
+                if not site_uuid:
+                    logger.error("UniFi: could not get site UUID")
                     return False
 
-                # Get current group members
-                group = await self._get_firewall_group(client, group_id)
-                if not group:
-                    logger.error("UniFi: could not fetch firewall group")
+                list_id = await self._get_or_create_traffic_matching_list(client, site_uuid)
+                if not list_id:
+                    logger.error("UniFi: could not get or create traffic matching list")
                     return False
 
-                members = group.get("group_members", [])
-                if ip in members:
+                # Ensure firewall policy exists
+                policy_id = await self._get_or_create_firewall_policy(client, site_uuid, list_id)
+                if not policy_id:
+                    logger.warning("UniFi: could not ensure firewall policy exists - IPs added but may not be blocked")
+
+                # Get current list items
+                current_list = await self._get_traffic_matching_list(client, site_uuid, list_id)
+                if not current_list:
+                    logger.error("UniFi: could not fetch traffic matching list")
+                    return False
+
+                items = current_list.get("items", [])
+                existing_ips = [item.get("value") for item in items if item.get("type") == "IP_ADDRESS"]
+
+                if ip in existing_ips:
                     logger.info(f"UniFi: IP {ip} already in blocklist")
                     return True
 
-                # Add IP to group
-                members.append(ip)
+                # Add new IP to items
+                items.append({"type": "IP_ADDRESS", "value": ip})
+
+                # Update the list
                 resp = await client.put(
-                    f"{self._get_base_url()}/proxy/network/api/s/{site}/rest/firewallgroup/{group_id}",
+                    f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/traffic-matching-lists/{list_id}",
                     headers=self._get_headers(),
-                    json={"group_members": members},
+                    json={
+                        "type": "IPV4_ADDRESSES",
+                        "name": self._get_list_name(),
+                        "items": items,
+                    },
                 )
                 if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("meta", {}).get("rc") == "ok":
-                        return True
+                    logger.info(f"UniFi: added IP {ip} to blocklist")
+                    return True
+
                 logger.error(f"UniFi add_to_blocklist: HTTP {resp.status_code} - {resp.text}")
                 return False
         except Exception as e:
@@ -267,35 +427,47 @@ class UniFiConnector(BaseFirewallConnector):
             return False
 
     async def remove_from_blocklist(self, ip: str) -> bool:
-        """Remove IP from UniFi firewall group."""
+        """Remove IP from UniFi traffic matching list."""
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                site = self._get_site_name()
-                group_id = await self._get_or_create_firewall_group(client)
-                if not group_id:
+            async with httpx.AsyncClient(verify=False, timeout=15) as client:
+                site_uuid = await self._get_site_uuid(client)
+                if not site_uuid:
                     return False
 
-                # Get current group members
-                group = await self._get_firewall_group(client, group_id)
-                if not group:
+                list_id = await self._get_or_create_traffic_matching_list(client, site_uuid)
+                if not list_id:
                     return False
 
-                members = group.get("group_members", [])
-                if ip not in members:
+                # Get current list items
+                current_list = await self._get_traffic_matching_list(client, site_uuid, list_id)
+                if not current_list:
+                    return False
+
+                items = current_list.get("items", [])
+                new_items = [item for item in items if item.get("value") != ip]
+
+                if len(new_items) == len(items):
                     logger.warning(f"UniFi: IP {ip} not in blocklist")
-                    return True  # Already not there
+                    return True
 
-                # Remove IP from group
-                members.remove(ip)
+                # Ensure at least one item (can't be empty)
+                if not new_items:
+                    new_items = [{"type": "IP_ADDRESS", "value": "192.0.2.1"}]  # TEST-NET-1 placeholder
+
+                # Update the list
                 resp = await client.put(
-                    f"{self._get_base_url()}/proxy/network/api/s/{site}/rest/firewallgroup/{group_id}",
+                    f"{self._get_base_url()}/proxy/network/integration/v1/sites/{site_uuid}/traffic-matching-lists/{list_id}",
                     headers=self._get_headers(),
-                    json={"group_members": members},
+                    json={
+                        "type": "IPV4_ADDRESSES",
+                        "name": self._get_list_name(),
+                        "items": new_items,
+                    },
                 )
                 if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("meta", {}).get("rc") == "ok":
-                        return True
+                    logger.info(f"UniFi: removed IP {ip} from blocklist")
+                    return True
+
                 logger.error(f"UniFi remove_from_blocklist: HTTP {resp.status_code} - {resp.text}")
                 return False
         except Exception as e:
@@ -303,16 +475,21 @@ class UniFiConnector(BaseFirewallConnector):
             return False
 
     async def get_blocklist(self) -> list[str]:
-        """Get list of blocked IPs from firewall group."""
+        """Get list of blocked IPs from traffic matching list."""
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                group_id = await self._get_or_create_firewall_group(client)
-                if not group_id:
+                site_uuid = await self._get_site_uuid(client)
+                if not site_uuid:
                     return []
 
-                group = await self._get_firewall_group(client, group_id)
-                if group:
-                    return group.get("group_members", [])
+                list_id = await self._get_or_create_traffic_matching_list(client, site_uuid)
+                if not list_id:
+                    return []
+
+                current_list = await self._get_traffic_matching_list(client, site_uuid, list_id)
+                if current_list:
+                    items = current_list.get("items", [])
+                    return [item.get("value") for item in items if item.get("type") == "IP_ADDRESS" and item.get("value") != "192.0.2.1"]
                 return []
         except Exception as e:
             logger.error(f"UniFi get_blocklist failed: {e}")

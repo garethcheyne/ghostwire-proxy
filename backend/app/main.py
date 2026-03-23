@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import json
 import logging
 import os
 import asyncio
@@ -170,17 +171,160 @@ async def lifespan(app: FastAPI):
     backup_task = asyncio.create_task(scheduled_backup_loop())
     logger.info("Started scheduled backup task")
 
+    # GeoIP database auto-update (checks monthly)
+    async def geoip_update_loop():
+        """Check and update GeoIP database on the 2nd of each month."""
+        from app.services.geoip_service import get_db_info, update_database
+        while True:
+            try:
+                # Check every 24 hours
+                await asyncio.sleep(86400)
+                now = datetime.now(timezone.utc)
+                # Update on the 2nd of each month (DB-IP publishes on the 1st)
+                info = get_db_info()
+                if not info["installed"]:
+                    logger.info("GeoIP database not found, downloading...")
+                    result = await update_database()
+                    logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
+                elif info["last_modified"]:
+                    last_mod = datetime.fromisoformat(info["last_modified"])
+                    # If DB is older than 35 days, update it
+                    if (now - last_mod).days > 35:
+                        logger.info("GeoIP database is outdated, updating...")
+                        result = await update_database()
+                        logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
+            except asyncio.CancelledError:
+                logger.info("GeoIP update task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in GeoIP updater: {e}")
+
+    geoip_task = asyncio.create_task(geoip_update_loop())
+    logger.info("Started GeoIP auto-update task")
+
+    # Update check loop — checks GitHub releases + Docker Hub digests
+    from app.services.update_service import update_service
+    from app.core.redis import get_redis as _get_redis
+
+    async def update_check_loop():
+        """Periodically check for app and base image updates."""
+        # Wait 2 minutes on startup before first check
+        await asyncio.sleep(120)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    update_settings = await update_service.get_settings(session)
+                    if not update_settings.auto_check_enabled:
+                        await asyncio.sleep(3600)
+                        continue
+
+                    # Check if enough time has elapsed since last check
+                    now = datetime.now(timezone.utc)
+                    if (update_settings.last_check and
+                            (now - update_settings.last_check).total_seconds() <
+                            update_settings.check_interval_hours * 3600):
+                        await asyncio.sleep(600)  # Re-check eligibility in 10 min
+                        continue
+
+                    logger.info("Running scheduled update check...")
+
+                    # Check app updates
+                    app_result = await update_service.check_for_app_updates(session)
+
+                    # Check base image updates
+                    base_results = await update_service.check_for_base_image_updates(session)
+                    base_updates = [r for r in base_results if r.get("update_available")]
+
+                    # Cache results in Redis for fast frontend polling
+                    try:
+                        redis = await _get_redis()
+                        cache = {
+                            "checked_at": now.isoformat(),
+                            "app_update_available": str(app_result.get("update_available", False)),
+                            "app_latest_version": app_result.get("latest_version") or "",
+                            "app_current_version": app_result.get("current_version", APP_VERSION),
+                            "base_image_updates": str(len(base_updates)),
+                            "base_image_details": json.dumps([
+                                {"container": r["container"], "image": r["image"]}
+                                for r in base_updates
+                            ]),
+                        }
+                        await redis.hset("ghostwire:update_check", mapping=cache)
+                        # Expire after 2x check interval
+                        await redis.expire(
+                            "ghostwire:update_check",
+                            update_settings.check_interval_hours * 7200
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to cache update check results: {e}")
+
+                    # Update last_check timestamp
+                    update_settings.last_check = now
+                    await session.commit()
+
+                    # Auto-update base images if enabled and updates found
+                    if update_settings.auto_update_security and base_updates:
+                        logger.info(
+                            f"Auto-updating {len(base_updates)} base image(s): "
+                            f"{', '.join(r['container'] for r in base_updates)}"
+                        )
+                        for img in base_updates:
+                            try:
+                                await update_service.request_base_image_update(
+                                    db=session,
+                                    container_name=img["container"],
+                                    user_id="system-auto-update",
+                                )
+                                # Wait for each update to complete before next
+                                await asyncio.sleep(120)
+                            except ValueError as e:
+                                logger.warning(f"Auto-update skipped for {img['container']}: {e}")
+
+                    if app_result.get("update_available"):
+                        logger.info(
+                            f"App update available: "
+                            f"v{APP_VERSION} → v{app_result['latest_version']}"
+                        )
+                    if base_updates:
+                        logger.info(
+                            f"Base image updates available: "
+                            f"{', '.join(r['container'] for r in base_updates)}"
+                        )
+
+                # Sleep for the configured interval
+                await asyncio.sleep(update_settings.check_interval_hours * 3600)
+
+            except asyncio.CancelledError:
+                logger.info("Update check task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in update checker: {e}")
+                await asyncio.sleep(3600)  # Retry in 1 hour on error
+
+    update_check_task = asyncio.create_task(update_check_loop())
+    logger.info("Started update check task")
+
     yield
 
     # Cancel background tasks
     metrics_task.cancel()
     backup_task.cancel()
+    geoip_task.cancel()
+    update_check_task.cancel()
     try:
         await metrics_task
     except asyncio.CancelledError:
         pass
     try:
         await backup_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await geoip_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await update_check_task
     except asyncio.CancelledError:
         pass
 

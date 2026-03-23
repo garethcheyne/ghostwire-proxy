@@ -3,6 +3,7 @@
 
 local _M = {}
 local init = require "init"
+local block_page = require "block_page"
 
 local rate_limit_dict = ngx.shared.rate_limit
 
@@ -98,11 +99,7 @@ function _M.access()
             return
         end
 
-        ngx.status = 429
-        ngx.header["Content-Type"] = "application/json"
-        ngx.header["Retry-After"] = reset
-        ngx.say('{"error":"Too Many Requests","message":"Rate limit exceeded","retry_after":' .. reset .. '}')
-        return ngx.exit(429)
+        return block_page.rate_limit_block(reset)
     end
 end
 
