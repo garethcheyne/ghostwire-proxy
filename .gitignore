@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 venv/
 
+# Docker dev overrides (not for production)
+docker-compose.override.yml
+
 # Environment & Secrets
 .env
 .env.local

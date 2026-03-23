@@ -511,7 +511,9 @@ class UpdateService:
 
     async def get_settings(self, db: AsyncSession) -> UpdateSettings:
         """Get update settings, creating default if not exists."""
-        result = await db.execute(select(UpdateSettings))
+        result = await db.execute(
+            select(UpdateSettings).order_by(UpdateSettings.updated_at.desc()).limit(1)
+        )
         settings = result.scalar_one_or_none()
 
         if not settings:
