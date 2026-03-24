@@ -71,8 +71,9 @@ jobs:
           JWT_SECRET: test-jwt-secret-ci
           ENCRYPTION_KEY: test-encryption-key-32-chars-min!!
           INTERNAL_AUTH_TOKEN: test-internal-token
+          BACKUP_PATH: /tmp/ghostwire-backups
         run: |
-          python -m pytest tests/ -v --tb=short -q 2>&1 || true
+          python -m pytest tests/ -v --tb=short -q
 
   # ─────────────────────────────────────────────
   # Frontend: lint + build
