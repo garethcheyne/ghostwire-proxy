@@ -37,8 +37,11 @@ class BackupService:
     """Service for managing backups."""
 
     def __init__(self):
-        # Ensure backup directory exists
-        os.makedirs(BACKUP_PATH, exist_ok=True)
+        # Ensure backup directory exists (may fail in CI/test environments)
+        try:
+            os.makedirs(BACKUP_PATH, exist_ok=True)
+        except PermissionError:
+            pass
 
     async def create_backup(
         self,
