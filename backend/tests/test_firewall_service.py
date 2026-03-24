@@ -233,43 +233,55 @@ class TestUniFiConnector:
         assert "Invalid API key" in result.get("error", "")
 
     @pytest.mark.asyncio
-    async def test_add_to_blocklist_creates_group(self, mock_unifi_connector):
-        """Test add to blocklist creates group if not exists."""
+    async def test_add_to_blocklist_creates_list(self, mock_unifi_connector):
+        """Test add to blocklist creates traffic matching list if not exists."""
         connector = UniFiConnector(mock_unifi_connector)
 
-        # First call - list groups (empty)
-        list_response = MagicMock()
-        list_response.status_code = 200
-        list_response.json.return_value = {"data": []}
-
-        # Second call - create group
-        create_response = MagicMock()
-        create_response.status_code = 200
-        create_response.json.return_value = {
-            "meta": {"rc": "ok"},
-            "data": [{"_id": "new-group-id", "group_members": []}]
+        # GET #1 - sites
+        sites_response = MagicMock()
+        sites_response.status_code = 200
+        sites_response.json.return_value = {
+            "data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]
         }
 
-        # Third call - get group
-        get_response = MagicMock()
-        get_response.status_code = 200
-        get_response.json.return_value = {
-            "data": [{"_id": "new-group-id", "group_members": []}]
+        # GET #2 - traffic-matching-lists (empty, triggers create)
+        empty_lists_response = MagicMock()
+        empty_lists_response.status_code = 200
+        empty_lists_response.json.return_value = {"data": []}
+
+        # GET #3 - firewall/policies (existing policy found)
+        policies_response = MagicMock()
+        policies_response.status_code = 200
+        policies_response.json.return_value = {
+            "data": [{"id": "policy-id", "name": "Ghostwire - Autoblock"}]
         }
 
-        # Fourth call - update group
+        # GET #4 - traffic-matching-lists/{id} (get current items)
+        list_detail_response = MagicMock()
+        list_detail_response.status_code = 200
+        list_detail_response.json.return_value = {
+            "items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}]
+        }
+
+        # POST - create traffic matching list
+        create_list_response = MagicMock()
+        create_list_response.status_code = 200
+        create_list_response.json.return_value = {"id": "new-list-id"}
+
+        # PUT - update traffic matching list with new IP
         update_response = MagicMock()
         update_response.status_code = 200
-        update_response.json.return_value = {"meta": {"rc": "ok"}}
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[list_response, get_response])
-            client_mock.post = AsyncMock(return_value=create_response)
+            client_mock.get = AsyncMock(side_effect=[
+                sites_response, empty_lists_response, policies_response, list_detail_response
+            ])
+            client_mock.post = AsyncMock(return_value=create_list_response)
             client_mock.put = AsyncMock(return_value=update_response)
 
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
-                result = await connector.add_to_blocklist("192.0.2.1", "Test")
+                result = await connector.add_to_blocklist("10.0.0.1", "Test")
 
         assert result is True
 
@@ -278,28 +290,36 @@ class TestUniFiConnector:
         """Test successful remove from blocklist."""
         connector = UniFiConnector(mock_unifi_connector)
 
-        # List groups
-        list_response = MagicMock()
-        list_response.status_code = 200
-        list_response.json.return_value = {
-            "data": [{"_id": "group-id", "name": "Ghostwire Blocked", "group_type": "address-group", "group_members": ["192.0.2.1"]}]
+        # GET #1 - sites
+        sites_response = MagicMock()
+        sites_response.status_code = 200
+        sites_response.json.return_value = {
+            "data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]
         }
 
-        # Get group
-        get_response = MagicMock()
-        get_response.status_code = 200
-        get_response.json.return_value = {
-            "data": [{"_id": "group-id", "group_members": ["192.0.2.1"]}]
+        # GET #2 - traffic-matching-lists (finds existing list)
+        lists_response = MagicMock()
+        lists_response.status_code = 200
+        lists_response.json.return_value = {
+            "data": [{"id": "list-id", "name": "Ghostwire Blocked", "type": "IPV4_ADDRESSES"}]
         }
 
-        # Update group
+        # GET #3 - traffic-matching-lists/{id} (get current items)
+        list_detail_response = MagicMock()
+        list_detail_response.status_code = 200
+        list_detail_response.json.return_value = {
+            "items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}, {"type": "IP_ADDRESS", "value": "10.0.0.5"}]
+        }
+
+        # PUT - update traffic matching list without the removed IP
         update_response = MagicMock()
         update_response.status_code = 200
-        update_response.json.return_value = {"meta": {"rc": "ok"}}
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[list_response, get_response])
+            client_mock.get = AsyncMock(side_effect=[
+                sites_response, lists_response, list_detail_response
+            ])
             client_mock.put = AsyncMock(return_value=update_response)
 
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):

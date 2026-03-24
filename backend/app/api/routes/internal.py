@@ -71,6 +71,10 @@ async def log_traffic(
     db: AsyncSession = Depends(get_db),
 ):
     """Receive traffic log from nginx Lua script."""
+    auth_token = request.headers.get("X-Internal-Auth")
+    if auth_token != INTERNAL_AUTH_TOKEN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal auth token")
+
     # Find proxy host by domain
     result = await db.execute(select(ProxyHost))
     hosts = result.scalars().all()
@@ -149,6 +153,10 @@ async def log_threat(
     db: AsyncSession = Depends(get_db),
 ):
     """Receive threat event from nginx WAF Lua script."""
+    auth_token = request.headers.get("X-Internal-Auth")
+    if auth_token != INTERNAL_AUTH_TOKEN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal auth token")
+
     import json
 
     from app.services.threat_service import record_threat_event
@@ -206,6 +214,7 @@ async def get_waf_rules(
     return [
         {
             "id": r.id,
+            "proxy_host_id": r.proxy_host_id,
             "name": r.name,
             "category": r.category,
             "pattern": r.pattern,
@@ -294,6 +303,142 @@ async def get_blocked_ips(
         })
 
     return blocked
+
+
+# ============================================================================
+# Honeypot Internal Endpoints (called by Lua)
+# ============================================================================
+
+@router.get("/honeypot/traps")
+async def get_honeypot_traps(
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all enabled honeypot traps for Lua to cache."""
+    from app.models.honeypot import HoneypotTrap
+
+    result = await db.execute(
+        select(HoneypotTrap).where(HoneypotTrap.enabled == True)
+    )
+    traps = result.scalars().all()
+
+    return [
+        {
+            "id": t.id,
+            "path": t.path,
+            "name": t.name,
+            "trap_type": t.trap_type,
+            "response_code": t.response_code,
+            "response_body": t.response_body,
+            "severity": t.severity,
+            "auto_block": t.auto_block,
+            "proxy_host_id": t.proxy_host_id,
+        }
+        for t in traps
+    ]
+
+
+class HoneypotHitRequest(BaseModel):
+    """Honeypot hit data from nginx Lua script."""
+    trap_id: str
+    trap_path: str
+    client_ip: str
+    request_method: Optional[str] = None
+    request_uri: Optional[str] = None
+    request_headers: Optional[dict] = None
+    request_body: Optional[str] = None
+    user_agent: Optional[str] = None
+    host: Optional[str] = None
+    referer: Optional[str] = None
+    country_code: Optional[str] = None
+    country_name: Optional[str] = None
+    auto_block: bool = True
+    severity: str = "high"
+
+
+@router.post("/honeypot/hit")
+async def log_honeypot_hit(
+    data: HoneypotHitRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive a honeypot trap hit from nginx Lua and process it."""
+    import json as _json
+    from app.models.honeypot import HoneypotTrap, HoneypotHit
+    from app.services.threat_service import record_threat_event
+
+    action = "logged"
+
+    # Record the hit
+    hit = HoneypotHit(
+        trap_id=data.trap_id,
+        trap_path=data.trap_path,
+        client_ip=data.client_ip,
+        request_method=data.request_method,
+        request_uri=data.request_uri,
+        request_headers=_json.dumps(data.request_headers) if data.request_headers else None,
+        request_body=data.request_body[:2000] if data.request_body else None,
+        user_agent=data.user_agent,
+        host=data.host,
+        referer=data.referer,
+        country_code=data.country_code,
+        country_name=data.country_name,
+        action_taken=action,
+    )
+    db.add(hit)
+
+    # Increment trap hit count
+    result = await db.execute(
+        select(HoneypotTrap).where(HoneypotTrap.id == data.trap_id)
+    )
+    trap = result.scalar_one_or_none()
+    if trap:
+        trap.hit_count = (trap.hit_count or 0) + 1
+
+    # Record as threat event (feeds into threat scoring + auto-escalation)
+    headers_json = _json.dumps(data.request_headers) if data.request_headers else None
+    await record_threat_event(
+        db=db,
+        client_ip=data.client_ip,
+        category="honeypot",
+        severity=data.severity,
+        action_taken="blocked" if data.auto_block else "logged",
+        request_method=data.request_method,
+        request_uri=data.request_uri,
+        request_headers=headers_json,
+        matched_payload=f"Honeypot trap: {data.trap_path}",
+        user_agent=data.user_agent,
+        host=data.host,
+        rule_id=data.trap_id,
+        rule_name=f"Honeypot: {data.trap_path}",
+        country_code=data.country_code,
+        country_name=data.country_name,
+    )
+
+    # Auto-enrich the IP in the background
+    try:
+        from app.services.enrichment_service import enrich_ip
+        from app.models.setting import Setting
+
+        abuseipdb_key = None
+        setting_result = await db.execute(
+            select(Setting).where(Setting.key == "abuseipdb_api_key")
+        )
+        setting = setting_result.scalar_one_or_none()
+        if setting and setting.value:
+            abuseipdb_key = setting.value
+
+        await enrich_ip(db, data.client_ip, abuseipdb_key=abuseipdb_key)
+    except Exception as e:
+        logger.warning("IP enrichment failed for %s: %s", data.client_ip, e)
+
+    # Update hit action
+    if data.auto_block:
+        hit.action_taken = "blocked"
+        action = "blocked"
+
+    await db.commit()
+
+    return {"status": action, "ip": data.client_ip}
 
 
 @router.get("/rate-limits")

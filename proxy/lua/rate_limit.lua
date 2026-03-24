@@ -22,22 +22,27 @@ local function get_limits_for_host(host)
         return default_limits
     end
 
-    -- Look for host-specific rule first, then global
+    local host_id = ngx.var.proxy_host_id
+
+    -- Look for host-specific rule first, then fall back to global
     local global_rule = nil
+    local host_rule = nil
     for _, rule in ipairs(db_rules) do
         if rule.proxy_host_id == nil then
             global_rule = rule
+        elseif host_id and rule.proxy_host_id == host_id then
+            host_rule = rule
         end
-        -- Host matching would require proxy_host_id lookup;
-        -- for now use global rules
     end
 
-    if global_rule then
+    -- Prefer host-specific rule over global
+    local matched = host_rule or global_rule
+    if matched then
         return {
-            requests_per_second = global_rule.requests_per_second or default_limits.requests_per_second,
-            requests_per_minute = global_rule.requests_per_minute or default_limits.requests_per_minute,
-            burst_size = global_rule.burst_size or default_limits.burst_size,
-            action = global_rule.action or default_limits.action,
+            requests_per_second = matched.requests_per_second or default_limits.requests_per_second,
+            requests_per_minute = matched.requests_per_minute or default_limits.requests_per_minute,
+            burst_size = matched.burst_size or default_limits.burst_size,
+            action = matched.action or default_limits.action,
         }
     end
 
@@ -50,24 +55,24 @@ function _M.check(key, limits)
     limits = limits or default_limits
 
     local now = ngx.time()
-    local window_key = key .. ":" .. math.floor(now / 60)
-
-    -- Get current count
-    local count = rate_limit_dict:get(window_key) or 0
+    local window_start = math.floor(now / 60)
+    local window_key = key .. ":" .. window_start
 
     local rpm = limits.requests_per_minute or default_limits.requests_per_minute
-    if count >= rpm then
-        return false, 0, 60 - (now % 60)
-    end
+    local reset = (window_start + 1) * 60 - now
 
-    -- Increment counter
+    -- Atomic increment (creates key with init_val=0 if missing, TTL=120s)
     local new_count, err = rate_limit_dict:incr(window_key, 1, 0, 120)
     if err then
         ngx.log(ngx.ERR, "Rate limit incr error: ", err)
-        return true, rpm, 60
+        return false, 0, reset  -- Fail closed: block on error
     end
 
-    return true, rpm - new_count, 60 - (now % 60)
+    if new_count > rpm then
+        return false, 0, reset
+    end
+
+    return true, rpm - new_count, reset
 end
 
 -- Access handler

@@ -4,11 +4,22 @@ import { useEffect, useState } from 'react'
 import { Globe } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import api from '@/lib/api'
+import { CountryBadge } from '@/components/ip-address'
 
 interface GeoData {
   country_code: string
   country_name: string
   count: number
+}
+
+interface CityGeoData {
+  city: string
+  country_code: string
+  country_name: string
+  lat: number
+  lon: number
+  count: number
+  unique_ips: number
 }
 
 // Country centroids (lat, lng) for the most common countries
@@ -49,7 +60,7 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   ZW:[-20,30],XK:[42.6,21],HK:[22.3,114.2],MO:[22.2,113.5],PS:[32,35.2],
 }
 
-function MapContent({ data, threatData }: { data: GeoData[]; threatData: GeoData[] }) {
+function MapContent({ data, threatData, cityData }: { data: GeoData[]; threatData: GeoData[]; cityData: CityGeoData[] }) {
   const [L, setL] = useState<typeof import('leaflet') | null>(null)
   const [RL, setRL] = useState<typeof import('react-leaflet') | null>(null)
 
@@ -81,7 +92,7 @@ function MapContent({ data, threatData }: { data: GeoData[]; threatData: GeoData
       center={[20, 0]}
       zoom={2}
       minZoom={2}
-      maxZoom={6}
+      maxZoom={12}
       style={{ height: '100%', width: '100%', borderRadius: '0.75rem' }}
       scrollWheelZoom={true}
       attributionControl={false}
@@ -109,7 +120,7 @@ function MapContent({ data, threatData }: { data: GeoData[]; threatData: GeoData
           >
             <Tooltip sticky>
               <div className="text-sm font-medium">
-                {countryFlag(item.country_code)} {item.country_name}
+                <CountryBadge code={item.country_code} name={item.country_name} /> {item.country_name}
               </div>
               <div className="text-xs text-muted-foreground">
                 {item.count.toLocaleString()} requests
@@ -140,23 +151,50 @@ function MapContent({ data, threatData }: { data: GeoData[]; threatData: GeoData
           >
             <Tooltip sticky>
               <div className="text-sm font-medium">
-                {countryFlag(item.country_code)} {item.country_name}
+                <CountryBadge code={item.country_code} name={item.country_name} /> {item.country_name}
               </div>
-              <div className="text-xs" style={{ color: 'rgb(239, 68, 68)' }}>
+              <div className="text-xs text-red-500">
                 {item.count.toLocaleString()} threats
               </div>
             </Tooltip>
           </CircleMarker>
         )
       })}
+      {/* City-level pins (yellow/amber — precise lat/lon from enrichment) */}
+      {cityData.length > 0 && (() => {
+        const maxCityCount = Math.max(...cityData.map(d => d.count), 1)
+        return cityData.map((item, idx) => {
+          const intensity = item.count / maxCityCount
+          const radius = Math.max(4, Math.min(18, 4 + intensity * 14))
+          return (
+            <CircleMarker
+              key={`city-${idx}`}
+              center={[item.lat, item.lon]}
+              radius={radius}
+              pathOptions={{
+                fillColor: `rgba(251, 191, 36, ${0.5 + intensity * 0.4})`,
+                color: 'rgb(245, 158, 11)',
+                weight: 1.5,
+                fillOpacity: 0.5 + intensity * 0.4,
+              }}
+            >
+              <Tooltip sticky>
+                <div className="text-sm font-medium">
+                  <CountryBadge code={item.country_code} name={item.country_name} /> {item.city}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {item.country_name}
+                </div>
+                <div className="text-xs text-amber-500">
+                  {item.count.toLocaleString()} requests &middot; {item.unique_ips} IPs
+                </div>
+              </Tooltip>
+            </CircleMarker>
+          )
+        })
+      })()}
     </MapContainer>
   )
-}
-
-function countryFlag(code: string): string {
-  if (!code || code.length !== 2) return ''
-  const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
-  return String.fromCodePoint(...codePoints)
 }
 
 export default function GeoHeatmap({
@@ -170,6 +208,7 @@ export default function GeoHeatmap({
 }) {
   const [data, setData] = useState<GeoData[]>([])
   const [threatData, setThreatData] = useState<GeoData[]>([])
+  const [cityData, setCityData] = useState<CityGeoData[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -181,6 +220,9 @@ export default function GeoHeatmap({
       api.get(`/api/traffic/geo/heatmap?${params}`)
         .then(res => setData(res.data))
         .catch(err => console.error('Failed to load geo data:', err)),
+      api.get(`/api/traffic/geo/city-heatmap?${params}`)
+        .then(res => setCityData(res.data))
+        .catch(err => console.error('Failed to load city geo data:', err)),
     ]
 
     if (showThreats) {
@@ -215,20 +257,26 @@ export default function GeoHeatmap({
   return (
     <div className="space-y-4">
       <div className="h-[400px] rounded-xl overflow-hidden border border-border relative">
-        <MapContent data={data} threatData={threatData} />
+        <MapContent data={data} threatData={threatData} cityData={cityData} />
         {/* Legend */}
-        {threatData.length > 0 && (
-          <div className="absolute bottom-3 left-3 z-[1000] flex gap-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-2 text-xs">
+        <div className="absolute bottom-3 left-3 z-[1000] flex gap-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded-full bg-cyan-500" />
+            Country
+          </div>
+          {cityData.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(6, 182, 212)' }} />
-              Traffic
+              <span className="inline-block h-3 w-3 rounded-full bg-amber-400" />
+              City
             </div>
+          )}
+          {threatData.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(239, 68, 68)' }} />
+              <span className="inline-block h-3 w-3 rounded-full bg-red-500" />
               Threats
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {/* Top countries list */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -237,7 +285,7 @@ export default function GeoHeatmap({
             key={item.country_code}
             className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2"
           >
-            <span className="text-lg">{countryFlag(item.country_code)}</span>
+            <span className="text-lg"><CountryBadge code={item.country_code} name={item.country_name} /></span>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium truncate">{item.country_name}</p>
               <p className="text-xs text-cyan-400">{item.count.toLocaleString()} requests</p>
@@ -255,10 +303,30 @@ export default function GeoHeatmap({
                 key={item.country_code}
                 className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2"
               >
-                <span className="text-lg">{countryFlag(item.country_code)}</span>
+                <span className="text-lg"><CountryBadge code={item.country_code} name={item.country_name} /></span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{item.country_name}</p>
                   <p className="text-xs text-red-400">{item.count.toLocaleString()} threats</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* City breakdown */}
+      {cityData.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-amber-400 mb-2">Top Cities</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {cityData.slice(0, 12).map((item, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2"
+              >
+                <CountryBadge code={item.country_code} name={item.country_name} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{item.city}</p>
+                  <p className="text-xs text-amber-400">{item.count.toLocaleString()} req &middot; {item.unique_ips} IPs</p>
                 </div>
               </div>
             ))}

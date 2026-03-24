@@ -81,6 +81,50 @@ async def lifespan(app: FastAPI):
                     if "country_name" not in columns:
                         connection.execute(text('ALTER TABLE traffic_logs ADD COLUMN country_name VARCHAR(100)'))
                         logger.info("Added country_name column to traffic_logs")
+                # Add honeypot_enabled to proxy_hosts
+                if "proxy_hosts" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("proxy_hosts")]
+                    if "honeypot_enabled" not in columns:
+                        connection.execute(text('ALTER TABLE proxy_hosts ADD COLUMN honeypot_enabled BOOLEAN DEFAULT false'))
+                        logger.info("Added honeypot_enabled column to proxy_hosts")
+                # Add proxy_host_id to honeypot_traps
+                if "honeypot_traps" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("honeypot_traps")]
+                    if "proxy_host_id" not in columns:
+                        connection.execute(text('ALTER TABLE honeypot_traps ADD COLUMN proxy_host_id VARCHAR(36) REFERENCES proxy_hosts(id) ON DELETE CASCADE'))
+                        logger.info("Added proxy_host_id column to honeypot_traps")
+                    # Remove unique constraint on path (now unique per host)
+                    try:
+                        connection.execute(text('ALTER TABLE honeypot_traps DROP CONSTRAINT IF EXISTS honeypot_traps_path_key'))
+                    except Exception:
+                        pass  # Constraint may not exist
+                # Add proxy_host_id to waf_rules
+                if "waf_rules" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("waf_rules")]
+                    if "proxy_host_id" not in columns:
+                        connection.execute(text('ALTER TABLE waf_rules ADD COLUMN proxy_host_id VARCHAR(36) REFERENCES proxy_hosts(id) ON DELETE CASCADE'))
+                        logger.info("Added proxy_host_id column to waf_rules")
+
+                # Add FK constraints on rate_limit_rules.proxy_host_id and geoip_rules.proxy_host_id
+                for table in ["rate_limit_rules", "geoip_rules"]:
+                    if table in inspector.get_table_names():
+                        fks = inspector.get_foreign_keys(table)
+                        has_host_fk = any(
+                            fk.get("referred_table") == "proxy_hosts" and "proxy_host_id" in fk.get("constrained_columns", [])
+                            for fk in fks
+                        )
+                        if not has_host_fk:
+                            # Clean orphan rows referencing deleted proxy hosts
+                            connection.execute(text(
+                                f'DELETE FROM {table} WHERE proxy_host_id IS NOT NULL '
+                                f'AND proxy_host_id NOT IN (SELECT id FROM proxy_hosts)'
+                            ))
+                            fk_name = f"fk_{table}_proxy_host_id"
+                            connection.execute(text(
+                                f'ALTER TABLE {table} ADD CONSTRAINT {fk_name} '
+                                f'FOREIGN KEY (proxy_host_id) REFERENCES proxy_hosts(id) ON DELETE CASCADE'
+                            ))
+                            logger.info(f"Added FK constraint on {table}.proxy_host_id")
 
             await conn.run_sync(_add_missing_columns)
 
@@ -304,6 +348,47 @@ async def lifespan(app: FastAPI):
     update_check_task = asyncio.create_task(update_check_loop())
     logger.info("Started update check task")
 
+    # IP enrichment backfill — enrich traffic IPs that haven't been looked up yet
+    from app.services.enrichment_service import backfill_enrichment, cleanup_stale_enrichments
+
+    async def enrichment_backfill_loop():
+        """Periodically backfill IP enrichment for traffic log IPs."""
+        # Wait 30 seconds on startup before first batch
+        await asyncio.sleep(30)
+        cleanup_counter = 0
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    result = await backfill_enrichment(session)
+                    if result["enriched"] > 0:
+                        logger.info(
+                            "IP enrichment backfill: enriched %d IPs, %d remaining",
+                            result["enriched"], result["remaining"],
+                        )
+
+                    # Run stale record cleanup every ~6 hours (72 iterations * 300s)
+                    cleanup_counter += 1
+                    if cleanup_counter >= 72:
+                        cleanup_counter = 0
+                        async with AsyncSessionLocal() as cleanup_session:
+                            await cleanup_stale_enrichments(cleanup_session)
+
+                    if result["status"] == "complete":
+                        # All caught up — check again in 5 minutes
+                        await asyncio.sleep(300)
+                    else:
+                        # More to do — short pause then next batch
+                        await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                logger.info("IP enrichment backfill task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in enrichment backfill: %s", e)
+                await asyncio.sleep(60)
+
+    enrichment_backfill_task = asyncio.create_task(enrichment_backfill_loop())
+    logger.info("Started IP enrichment backfill task")
+
     yield
 
     # Cancel background tasks
@@ -311,6 +396,7 @@ async def lifespan(app: FastAPI):
     backup_task.cancel()
     geoip_task.cancel()
     update_check_task.cancel()
+    enrichment_backfill_task.cancel()
     try:
         await metrics_task
     except asyncio.CancelledError:
@@ -325,6 +411,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await update_check_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await enrichment_backfill_task
     except asyncio.CancelledError:
         pass
 

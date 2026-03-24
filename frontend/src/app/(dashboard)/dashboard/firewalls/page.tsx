@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { IpAddress } from '@/components/ip-address'
 
 interface FirewallConnector {
   id: string
@@ -47,8 +48,8 @@ interface BlocklistEntry {
 const typeLabels: Record<string, string> = {
   routeros: 'MikroTik RouterOS',
   unifi: 'Ubiquiti UniFi',
-  pfsense: 'pfSense',
-  opnsense: 'OPNsense',
+  pfsense: 'pfSense (untested)',
+  opnsense: 'OPNsense (untested)',
 }
 
 const typeColors: Record<string, string> = {
@@ -72,10 +73,11 @@ export default function FirewallsPage() {
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [blockTestResults, setBlockTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
-  const [formType, setFormType] = useState('routeros')
+  const [formType, setFormType] = useState('unifi')
   const [formHost, setFormHost] = useState('')
   const [formPort, setFormPort] = useState('')
   const [formUsername, setFormUsername] = useState('')
@@ -108,7 +110,7 @@ export default function FirewallsPage() {
 
   const resetForm = () => {
     setFormName('')
-    setFormType('routeros')
+    setFormType('unifi')
     setFormHost('')
     setFormPort('')
     setFormUsername('')
@@ -224,6 +226,21 @@ export default function FirewallsPage() {
     }
   }
 
+  const handleDeduplicate = async () => {
+    try {
+      const res = await api.post('/api/firewalls/blocklist/deduplicate')
+      const { removed, duplicate_ips } = res.data
+      if (removed > 0) {
+        setNotification({ type: 'success', message: `Removed ${removed} duplicate entries across ${duplicate_ips} IPs` })
+        fetchData()
+      } else {
+        setNotification({ type: 'success', message: 'No duplicates found' })
+      }
+    } catch (error) {
+      setNotification({ type: 'error', message: 'Failed to deduplicate' })
+    }
+  }
+
   const formatDate = (d: string | null) => {
     if (!d) return 'Never'
     try { return new Date(d).toLocaleString() } catch { return d }
@@ -231,6 +248,14 @@ export default function FirewallsPage() {
 
   return (
     <div className="space-y-6">
+      {notification && (
+        <div className={`rounded-lg px-4 py-3 text-sm flex items-center justify-between ${
+          notification.type === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+        }`}>
+          {notification.message}
+          <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">&times;</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Firewall Integration</h1>
@@ -245,6 +270,15 @@ export default function FirewallsPage() {
           >
             <Plus className="h-4 w-4" />
             Add Connector
+          </button>
+        )}
+        {activeTab === 'blocklist' && blocklist.length > 0 && (
+          <button
+            onClick={handleDeduplicate}
+            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            <Trash2 className="h-4 w-4" />
+            Remove Duplicates
           </button>
         )}
       </div>
@@ -277,7 +311,7 @@ export default function FirewallsPage() {
               <Flame className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
               <p className="text-muted-foreground">No firewall connectors configured</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Add your RouterOS, UniFi, pfSense, or OPNsense firewall
+                Add your UniFi firewall to get started
               </p>
             </div>
           ) : (
@@ -386,7 +420,7 @@ export default function FirewallsPage() {
             blocklist.map((entry) => (
               <div key={entry.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
                 <div>
-                  <code className="text-sm font-mono font-semibold">{entry.ip_address}</code>
+                  <IpAddress ip={entry.ip_address} />
                   <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                     entry.status === 'pushed' ? 'bg-green-500/10 text-green-500' :
                     entry.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
@@ -435,10 +469,10 @@ export default function FirewallsPage() {
                   onChange={(e) => setFormType(e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="routeros">MikroTik RouterOS</option>
                   <option value="unifi">Ubiquiti UniFi</option>
-                  <option value="pfsense">pfSense</option>
-                  <option value="opnsense">OPNsense</option>
+                  <option value="routeros">MikroTik RouterOS (untested)</option>
+                  <option value="pfsense">pfSense (untested)</option>
+                  <option value="opnsense">OPNsense (untested)</option>
                 </select>
               </div>
 

@@ -670,6 +670,17 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
                     entry.connector_id = connector.id
                     connector.last_sync_at = now
                     synced += 1
+
+                    # Push notification: IP blocked on firewall
+                    try:
+                        from app.services.push_service import push_service
+                        await push_service.notify_ip_blocked(
+                            ip=entry.ip_address,
+                            reason=f"Blocked on {connector.name} ({connector.connector_type})",
+                            duration="firewall ban",
+                        )
+                    except Exception as push_err:
+                        logger.debug(f"Push notification skipped: {push_err}")
                 else:
                     entry.status = "pending"
                     entry.error_message = f"Failed to push to {connector.name}"

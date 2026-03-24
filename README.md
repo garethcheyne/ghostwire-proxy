@@ -44,8 +44,6 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 ### Authentication Wall
 - Protect any proxied service with a login gate
 - **Local auth** — username/password per auth wall
-- **OAuth2 / SSO** — Google, GitHub, Azure AD, generic OIDC
-- **LDAP** — bind to Active Directory or OpenLDAP
 - **TOTP** — time-based one-time password (2FA)
 - Customizable auth portal UI (Vite + React)
 
@@ -61,11 +59,9 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Automatic or manual escalation — when a threat score crosses your threshold, the IP gets pushed to your firewall
 - Temporary and permanent bans with configurable expiry
 - Push malicious IPs directly to your network firewall:
-  - **MikroTik RouterOS** — adds IPs to address lists, enforced by your existing firewall rules
-  - **Ubiquiti UniFi** — creates firewall rules via the UniFi Controller API
-  - **pfSense** — adds IPs to firewall aliases via the pfSense API
-  - **OPNsense** — adds IPs to aliases via the OPNsense API
-- Multiple firewall connectors supported simultaneously (e.g. RouterOS + UniFi)
+  - **Ubiquiti UniFi** — creates firewall rules via the UniFi Controller API _(tested)_
+  - **MikroTik RouterOS** — adds IPs to address lists _(implemented, untested)_
+  - **pfSense / OPNsense** — _(planned)_
 - Blocklist sync status tracking — see which IPs have been pushed, pending, or expired
 - Blocks at the **network edge**, not just at the proxy — attackers are dropped before they even reach your services
 
@@ -121,7 +117,7 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 | **Frontend** | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
 | **Backend API** | Python 3.12, FastAPI, SQLAlchemy |
 | **Database** | PostgreSQL 16 (via asyncpg) |
-| **Auth** | JWT, OAuth2, LDAP, TOTP |
+| **Auth** | JWT, TOTP |
 | **Containers** | Docker Compose |
 
 ---
@@ -206,10 +202,10 @@ Ghostwire Proxy is under active development. Here's what's done and what's in pr
 ### ✅ Complete
 - Core proxy host management (CRUD, config generation, hot-reload)
 - SSL certificate management (Let's Encrypt + manual upload)
-- Authentication wall (local, OAuth2, LDAP, TOTP)
+- Authentication wall (local, TOTP)
 - Auth portal UI (Vite + React)
 - WAF with Lua-based detection rules
-- Firewall integration (RouterOS, UniFi, pfSense, OPNsense)
+- Firewall integration (UniFi tested, RouterOS untested)
 - GeoIP blocking
 - Rate limiting
 - Access lists (IP allow/deny)

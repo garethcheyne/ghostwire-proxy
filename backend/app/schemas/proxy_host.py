@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional
+import re
 
 
 class UpstreamServerCreate(BaseModel):
@@ -230,7 +231,19 @@ class ProxyHostBase(BaseModel):
     custom_error_pages: Optional[dict[str, str]] = None
 
     traffic_logging_enabled: bool = False
+    honeypot_enabled: bool = False
     enabled: bool = True
+
+    @field_validator('domain_names')
+    @classmethod
+    def validate_domain_names(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError('At least one domain name is required')
+        domain_re = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$')
+        for d in v:
+            if not domain_re.match(d):
+                raise ValueError(f'Invalid domain name: {d}')
+        return v
 
     @field_validator('forward_port')
     @classmethod
@@ -291,6 +304,7 @@ class ProxyHostUpdate(BaseModel):
     custom_error_pages: Optional[dict[str, str]] = None
 
     traffic_logging_enabled: Optional[bool] = None
+    honeypot_enabled: Optional[bool] = None
     enabled: Optional[bool] = None
 
 
@@ -334,6 +348,7 @@ class ProxyHostResponse(BaseModel):
     custom_error_pages: Optional[dict[str, str]]
 
     traffic_logging_enabled: bool
+    honeypot_enabled: bool
     enabled: bool
 
     upstream_servers: list[UpstreamServerResponse] = []

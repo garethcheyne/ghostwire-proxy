@@ -11,8 +11,10 @@ from app.models.user import User
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
 from app.models.audit_log import AuditLog
+from app.models.honeypot import IpEnrichment
 from app.schemas.traffic import TrafficLogResponse, TrafficStatsResponse
 from app.api.deps import get_current_user
+from app.services.enrichment_service import backfill_enrichment
 
 router = APIRouter()
 
@@ -31,7 +33,11 @@ async def list_traffic_logs(
     db: AsyncSession = Depends(get_db),
 ):
     """List traffic logs with filtering"""
-    query = select(TrafficLog).options(selectinload(TrafficLog.proxy_host))
+    query = (
+        select(TrafficLog, IpEnrichment.city)
+        .outerjoin(IpEnrichment, TrafficLog.client_ip == IpEnrichment.ip_address)
+        .options(selectinload(TrafficLog.proxy_host))
+    )
 
     # Apply filters
     if proxy_host_id:
@@ -54,11 +60,13 @@ async def list_traffic_logs(
 
     query = query.order_by(TrafficLog.timestamp.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
-    logs = result.scalars().all()
+    rows = result.all()
 
-    # Build response with host_name
+    # Build response with host_name and city from enrichment
     response = []
-    for log in logs:
+    for row in rows:
+        log = row[0]
+        city = row[1]
         log_dict = {
             "id": log.id,
             "proxy_host_id": log.proxy_host_id,
@@ -79,6 +87,7 @@ async def list_traffic_logs(
             "user_agent": log.user_agent,
             "referer": log.referer,
             "country_code": log.country_code,
+            "city": city,
             "auth_user": log.auth_user,
         }
         response.append(TrafficLogResponse(**log_dict))
@@ -234,6 +243,100 @@ async def get_geo_heatmap(
         }
         for row in rows
     ]
+
+
+@router.get("/geo/city-heatmap")
+async def get_city_heatmap(
+    proxy_host_id: Optional[str] = None,
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get traffic aggregated by city with lat/lon from IP enrichment data."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    base_filter = [
+        TrafficLog.timestamp >= since,
+        IpEnrichment.latitude.isnot(None),
+        IpEnrichment.longitude.isnot(None),
+    ]
+    if proxy_host_id:
+        base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
+
+    query = (
+        select(
+            IpEnrichment.city,
+            IpEnrichment.country_code,
+            IpEnrichment.country_name,
+            IpEnrichment.latitude,
+            IpEnrichment.longitude,
+            func.count(TrafficLog.id).label("count"),
+            func.count(func.distinct(TrafficLog.client_ip)).label("unique_ips"),
+        )
+        .join(IpEnrichment, TrafficLog.client_ip == IpEnrichment.ip_address)
+        .where(and_(*base_filter))
+        .group_by(
+            IpEnrichment.city,
+            IpEnrichment.country_code,
+            IpEnrichment.country_name,
+            IpEnrichment.latitude,
+            IpEnrichment.longitude,
+        )
+        .order_by(func.count(TrafficLog.id).desc())
+        .limit(200)
+    )
+
+    result = await db.execute(query)
+    return [
+        {
+            "city": row[0] or "Unknown",
+            "country_code": row[1],
+            "country_name": row[2],
+            "lat": float(row[3]),
+            "lon": float(row[4]),
+            "count": row[5],
+            "unique_ips": row[6],
+        }
+        for row in result.all()
+    ]
+
+
+@router.get("/enrichment/status")
+async def get_enrichment_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the status of IP enrichment backfill — how many IPs still need enrichment."""
+    subq = select(IpEnrichment.ip_address)
+    total_unique = await db.execute(
+        select(func.count(func.distinct(TrafficLog.client_ip)))
+        .where(TrafficLog.client_ip.isnot(None))
+    )
+    enriched_count = await db.execute(
+        select(func.count(func.distinct(TrafficLog.client_ip)))
+        .where(
+            TrafficLog.client_ip.isnot(None),
+            TrafficLog.client_ip.in_(subq),
+        )
+    )
+    total = total_unique.scalar() or 0
+    enriched = enriched_count.scalar() or 0
+    return {
+        "total_unique_ips": total,
+        "enriched": enriched,
+        "remaining": total - enriched,
+        "percent": round((enriched / total * 100) if total > 0 else 100, 1),
+    }
+
+
+@router.post("/enrichment/backfill")
+async def trigger_enrichment_backfill(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger one batch of IP enrichment backfill."""
+    result = await backfill_enrichment(db, batch_size=40)
+    return result
 
 
 @router.get("/{log_id}", response_model=TrafficLogResponse)

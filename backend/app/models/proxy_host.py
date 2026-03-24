@@ -61,6 +61,9 @@ class ProxyHost(Base):
     # Custom error pages
     custom_error_pages = Column(JSON, nullable=True)  # {"404": "/custom_404.html", "500": "/error.html"}
 
+    # Honeypot traps
+    honeypot_enabled = Column(Boolean, default=False, nullable=False)
+
     # Traffic logging
     traffic_logging_enabled = Column(Boolean, default=False, nullable=False)
 

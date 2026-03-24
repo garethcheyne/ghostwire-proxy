@@ -12,6 +12,8 @@ import {
   Trash2,
   Globe,
   X,
+  Crosshair,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +22,7 @@ import { createEventColumns, type ThreatEvent } from '@/components/threats/event
 import { createActorColumns, type ThreatActor } from '@/components/threats/actor-columns'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { IpAddress } from '@/components/ip-address'
 
 interface ThreatStats {
   total_events: number
@@ -65,21 +68,40 @@ export default function ThreatsPage() {
 
   // Event filters
   const [evFilterIp, setEvFilterIp] = useState('')
-  const [evFilterSeverity, setEvFilterSeverity] = useState('')
-  const [evFilterCategory, setEvFilterCategory] = useState('')
+  const [evFilterSeverity, setEvFilterSeverity] = useState<string[]>([])
+  const [evFilterCategory, setEvFilterCategory] = useState<string[]>([])
 
   // Actor filters
   const [actorFilterIp, setActorFilterIp] = useState('')
-  const [actorFilterStatus, setActorFilterStatus] = useState('')
+  const [actorFilterStatus, setActorFilterStatus] = useState<string[]>([])
+
+  // Multi-select dropdown open state
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
   // Actor expanded events
   const [expandedActorIp, setExpandedActorIp] = useState<string | null>(null)
   const [actorEvents, setActorEvents] = useState<ThreatEvent[]>([])
   const [loadingActorEvents, setLoadingActorEvents] = useState(false)
 
+  // IP Intel panel
+  const [intelIp, setIntelIp] = useState<string | null>(null)
+  const [intelData, setIntelData] = useState<any | null>(null)
+  const [loadingIntel, setLoadingIntel] = useState(false)
+
   useEffect(() => {
     fetchData()
   }, [activeTab])
+
+  // Close multi-select dropdowns on outside click
+  useEffect(() => {
+    if (!openDropdown) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-dropdown]')) setOpenDropdown(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [openDropdown])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -146,7 +168,7 @@ export default function ThreatsPage() {
   const handleDeleteActor = async (actorId: string, ip: string) => {
     if (!(await confirm({ description: `Delete threat actor ${ip}? This also removes their events.`, variant: 'destructive' }))) return
     try {
-      await api.delete(`/api/waf/actors/${actorId}`)
+      await api.delete(`/api/waf/actors/${encodeURIComponent(ip)}`)
       setActors(prev => prev.filter(a => a.id !== actorId))
     } catch (error) {
       console.error('Failed to delete actor:', error)
@@ -172,27 +194,45 @@ export default function ThreatsPage() {
     }
   }
 
+  const handleInvestigateIp = async (ip: string) => {
+    setIntelIp(ip)
+    setLoadingIntel(true)
+    setIntelData(null)
+    try {
+      const res = await api.get(`/api/honeypot/enrich/${encodeURIComponent(ip)}`)
+      setIntelData(res.data)
+    } catch (error) {
+      console.error('Failed to enrich IP:', error)
+    } finally {
+      setLoadingIntel(false)
+    }
+  }
+
   // ── Filtered data (client-side) ──────────────────────────────
 
   const filteredEvents = useMemo(() => {
     let result = events
     if (evFilterIp) result = result.filter(e => e.client_ip.includes(evFilterIp))
-    if (evFilterSeverity) result = result.filter(e => e.severity === evFilterSeverity)
-    if (evFilterCategory) result = result.filter(e => e.category === evFilterCategory)
+    if (evFilterSeverity.length > 0) result = result.filter(e => evFilterSeverity.includes(e.severity))
+    if (evFilterCategory.length > 0) result = result.filter(e => evFilterCategory.includes(e.category))
     return result
   }, [events, evFilterIp, evFilterSeverity, evFilterCategory])
 
   const filteredActors = useMemo(() => {
     let result = actors
     if (actorFilterIp) result = result.filter(a => a.ip_address.includes(actorFilterIp))
-    if (actorFilterStatus) result = result.filter(a => a.current_status === actorFilterStatus)
+    if (actorFilterStatus.length > 0) result = result.filter(a => actorFilterStatus.includes(a.current_status))
     return result
   }, [actors, actorFilterIp, actorFilterStatus])
+
+  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
+    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])
+  }
 
   // ── Column defs (memoized) ───────────────────────────────────
 
   const eventColumns = useMemo(
-    () => createEventColumns({ onBlock: handleBlockIp, onDelete: handleDeleteEvent }),
+    () => createEventColumns({ onBlock: handleBlockIp, onDelete: handleDeleteEvent, onInvestigate: handleInvestigateIp }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   )
@@ -203,6 +243,7 @@ export default function ThreatsPage() {
       onUnblock: handleUnblockIp,
       onDelete: handleDeleteActor,
       onToggleExpand: toggleActorEvents,
+      onInvestigate: handleInvestigateIp,
       expandedIp: expandedActorIp,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,7 +367,7 @@ export default function ThreatsPage() {
                 {stats.top_actors.map((actor) => (
                   <div key={actor.ip} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div className="flex items-center gap-3">
-                      <code className="text-sm font-mono">{actor.ip}</code>
+                      <IpAddress ip={actor.ip} />
                       <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[actor.status] || statusColors.monitored}`}>
                         {actor.status.replace('_', ' ')}
                       </span>
@@ -361,40 +402,52 @@ export default function ThreatsPage() {
                     className="w-44 pl-8 h-9 text-sm"
                   />
                 </div>
-                <select
-                  value={evFilterSeverity}
-                  onChange={(e) => setEvFilterSeverity(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">All Severities</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-                <select
-                  value={evFilterCategory}
-                  onChange={(e) => setEvFilterCategory(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">All Categories</option>
-                  <option value="sqli">SQL Injection</option>
-                  <option value="xss">XSS</option>
-                  <option value="path_traversal">Path Traversal</option>
-                  <option value="rce">RCE</option>
-                  <option value="scanner">Scanner</option>
-                  <option value="injection">Injection</option>
-                  <option value="sensitive_data">Sensitive Data</option>
-                  <option value="recon">Recon</option>
-                  <option value="dos">DoS</option>
-                  <option value="blocked_ip">Blocked IP</option>
-                </select>
-                {(evFilterIp || evFilterSeverity || evFilterCategory) && (
+                <div className="relative" data-dropdown>
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown(openDropdown === 'severity' ? null : 'severity')}
+                    className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${evFilterSeverity.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+                    title="Filter by severity"
+                  >
+                    {evFilterSeverity.length === 0 ? 'All Severities' : `${evFilterSeverity.length} selected`}
+                  </button>
+                  {openDropdown === 'severity' && (
+                    <div className="absolute top-full left-0 z-20 mt-1 w-44 rounded-lg border border-border bg-card shadow-lg p-1">
+                      {[{v:'critical',l:'Critical'},{v:'high',l:'High'},{v:'medium',l:'Medium'},{v:'low',l:'Low'}].map(o => (
+                        <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
+                          <input type="checkbox" checked={evFilterSeverity.includes(o.v)} onChange={() => toggleFilter(setEvFilterSeverity, o.v)} className="h-3.5 w-3.5" />
+                          {o.l}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="relative" data-dropdown>
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown(openDropdown === 'category' ? null : 'category')}
+                    className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${evFilterCategory.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+                    title="Filter by category"
+                  >
+                    {evFilterCategory.length === 0 ? 'All Categories' : `${evFilterCategory.length} selected`}
+                  </button>
+                  {openDropdown === 'category' && (
+                    <div className="absolute top-full left-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg p-1 max-h-64 overflow-y-auto">
+                      {[{v:'sqli',l:'SQL Injection'},{v:'xss',l:'XSS'},{v:'path_traversal',l:'Path Traversal'},{v:'rce',l:'RCE'},{v:'scanner',l:'Scanner'},{v:'injection',l:'Injection'},{v:'sensitive_data',l:'Sensitive Data'},{v:'recon',l:'Recon'},{v:'dos',l:'DoS'},{v:'blocked_ip',l:'Blocked IP'}].map(o => (
+                        <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
+                          <input type="checkbox" checked={evFilterCategory.includes(o.v)} onChange={() => toggleFilter(setEvFilterCategory, o.v)} className="h-3.5 w-3.5" />
+                          {o.l}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {(evFilterIp || evFilterSeverity.length > 0 || evFilterCategory.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-9 text-xs"
-                    onClick={() => { setEvFilterIp(''); setEvFilterSeverity(''); setEvFilterCategory('') }}
+                    onClick={() => { setEvFilterIp(''); setEvFilterSeverity([]); setEvFilterCategory([]); setOpenDropdown(null) }}
                   >
                     <X className="h-3 w-3 mr-1" /> Clear
                   </Button>
@@ -502,24 +555,32 @@ export default function ThreatsPage() {
                   className="w-44 pl-8 h-9 text-sm"
                 />
               </div>
-              <select
-                value={actorFilterStatus}
-                onChange={(e) => setActorFilterStatus(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">All Statuses</option>
-                <option value="monitored">Monitored</option>
-                <option value="warned">Warned</option>
-                <option value="temp_blocked">Temp Blocked</option>
-                <option value="perm_blocked">Perm Blocked</option>
-                <option value="firewall_banned">Firewall Banned</option>
-              </select>
-              {(actorFilterIp || actorFilterStatus) && (
+              <div className="relative" data-dropdown>
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                  className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${actorFilterStatus.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+                  title="Filter by status"
+                >
+                  {actorFilterStatus.length === 0 ? 'All Statuses' : `${actorFilterStatus.length} selected`}
+                </button>
+                {openDropdown === 'status' && (
+                  <div className="absolute top-full left-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg p-1">
+                    {[{v:'monitored',l:'Monitored'},{v:'warned',l:'Warned'},{v:'temp_blocked',l:'Temp Blocked'},{v:'perm_blocked',l:'Perm Blocked'},{v:'firewall_banned',l:'Firewall Banned'}].map(o => (
+                      <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
+                        <input type="checkbox" checked={actorFilterStatus.includes(o.v)} onChange={() => toggleFilter(setActorFilterStatus, o.v)} className="h-3.5 w-3.5" />
+                        {o.l}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {(actorFilterIp || actorFilterStatus.length > 0) && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-9 text-xs"
-                  onClick={() => { setActorFilterIp(''); setActorFilterStatus('') }}
+                    onClick={() => { setActorFilterIp(''); setActorFilterStatus([]); setOpenDropdown(null) }}
                 >
                   <X className="h-3 w-3 mr-1" /> Clear
                 </Button>
@@ -528,6 +589,142 @@ export default function ThreatsPage() {
           }
         />
       ) : null}
+
+      {/* ── IP Intel Slide-out Panel ── */}
+      {intelIp && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-2xl overflow-y-auto">
+          <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between z-10">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Crosshair className="h-4 w-4 text-blue-500" />
+              IP Intelligence: <code className="text-sm">{intelIp}</code>
+            </h3>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleInvestigateIp(intelIp)} title="Refresh">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setIntelIp(null); setIntelData(null) }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {loadingIntel ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Enriching IP data...</span>
+              </div>
+            ) : intelData ? (
+              <>
+                {/* Location */}
+                <div className="bg-card border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Globe className="h-3.5 w-3.5 text-blue-500" /> Location
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <IntelRow label="Country" value={intelData.country_name ? `${intelData.country_name} (${intelData.country_code})` : null} />
+                    <IntelRow label="Region" value={intelData.region} />
+                    <IntelRow label="City" value={intelData.city} />
+                    <IntelRow label="Timezone" value={intelData.timezone} />
+                    <IntelRow label="Coordinates" value={
+                      intelData.latitude && intelData.longitude
+                        ? `${intelData.latitude}, ${intelData.longitude}`
+                        : null
+                    } />
+                  </div>
+                </div>
+
+                {/* Network */}
+                <div className="bg-card border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Shield className="h-3.5 w-3.5 text-purple-500" /> Network
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <IntelRow label="ISP" value={intelData.isp} />
+                    <IntelRow label="Organization" value={intelData.org} />
+                    <IntelRow label="ASN" value={intelData.asn} mono />
+                    <IntelRow label="AS Name" value={intelData.as_name} />
+                    <IntelRow label="Reverse DNS" value={intelData.reverse_dns} mono />
+                  </div>
+                </div>
+
+                {/* Reputation */}
+                <div className="bg-card border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Reputation
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {intelData.abuse_score !== null && intelData.abuse_score !== undefined ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Abuse Score</span>
+                          <span className={`font-bold ${
+                            intelData.abuse_score > 75 ? 'text-red-500' :
+                            intelData.abuse_score > 50 ? 'text-orange-500' :
+                            intelData.abuse_score > 25 ? 'text-yellow-500' : 'text-green-500'
+                          }`}>
+                            {intelData.abuse_score}%
+                          </span>
+                        </div>
+                        <IntelRow label="Reports" value={String(intelData.abuse_reports ?? 0)} />
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">AbuseIPDB unavailable (set API key in Settings)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Indicators */}
+                <div className="bg-card border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Crosshair className="h-3.5 w-3.5 text-red-500" /> Indicators
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    <IntelFlag label="Tor" value={intelData.is_tor} />
+                    <IntelFlag label="Proxy" value={intelData.is_proxy} />
+                    <IntelFlag label="VPN" value={intelData.is_vpn} />
+                    <IntelFlag label="Datacenter" value={intelData.is_datacenter} />
+                    <IntelFlag label="Crawler" value={intelData.is_crawler} />
+                  </div>
+                  {intelData.enriched_at && (
+                    <p className="text-xs text-muted-foreground mt-3">Enriched: {formatDate(intelData.enriched_at)}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-10">Failed to load intelligence data</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// ── Helper Components ───────────────────────────────────────
+
+function IntelRow({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className={`text-right truncate ${mono ? 'font-mono text-xs' : ''} ${value ? '' : 'text-muted-foreground/50 italic'}`}>
+        {value || 'Unknown'}
+      </span>
+    </div>
+  )
+}
+
+function IntelFlag({ label, value }: { label: string; value: boolean | null }) {
+  if (value === null || value === undefined) {
+    return <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{label}: ?</span>
+  }
+  return (
+    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+      value
+        ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+        : 'bg-green-500/10 text-green-500 border border-green-500/20'
+    }`}>
+      {label}: {value ? 'Yes' : 'No'}
+    </span>
   )
 }

@@ -15,6 +15,7 @@ local threat_cache = ngx.shared.threat_cache
 -- Configuration
 _M.config = {
     api_url = os.getenv("API_URL") or "http://ghostwire-proxy-api:8000",
+    internal_auth_token = os.getenv("INTERNAL_AUTH_TOKEN") or "",
     waf_enabled = true,
     rate_limit_enabled = true,
     geoip_enabled = false,
@@ -197,9 +198,9 @@ function _M.load_waf_rules()
         return false
     end
 
-    local rules = cjson.decode(res.body)
-    if not rules then
-        ngx.log(ngx.ERR, "Failed to decode WAF rules JSON")
+    local ok, rules = pcall(cjson.decode, res.body)
+    if not ok or not rules then
+        ngx.log(ngx.ERR, "Failed to decode WAF rules JSON: ", tostring(rules))
         return false
     end
 
@@ -322,6 +323,33 @@ function _M.load_trusted_ips()
     return false
 end
 
+--- Fetch honeypot traps from the backend API and store in shared dict.
+function _M.load_honeypot_traps()
+    local http = require "resty.http"
+    local httpc = http.new()
+    httpc:set_timeout(5000)
+
+    local url = _M.config.api_url .. "/api/internal/honeypot/traps"
+    local res, err = httpc:request_uri(url, {
+        method = "GET",
+        headers = { ["Content-Type"] = "application/json" },
+    })
+
+    if not res then
+        ngx.log(ngx.ERR, "Failed to fetch honeypot traps: ", err)
+        return false
+    end
+
+    if res.status == 200 then
+        config_cache:set("honeypot_traps", res.body, _M.config.rule_reload_interval * 2)
+        local traps = cjson.decode(res.body)
+        ngx.log(ngx.INFO, "Loaded ", traps and #traps or 0, " honeypot traps from database")
+        return true
+    end
+
+    return false
+end
+
 --- Load all rules from the backend API. Called by worker timer.
 function _M.reload_all_rules()
     _M.load_waf_rules()
@@ -329,13 +357,16 @@ function _M.reload_all_rules()
     _M.load_geoip_rules()
     _M.load_rate_limit_rules()
     _M.load_trusted_ips()
+    _M.load_honeypot_traps()
 end
 
 --- Get WAF rules from shared dict (returns parsed table or nil).
 function _M.get_waf_rules()
     local json = waf_cache and waf_cache:get("waf_rules")
     if json then
-        return cjson.decode(json)
+        local ok, rules = pcall(cjson.decode, json)
+        if ok then return rules end
+        ngx.log(ngx.ERR, "Failed to decode cached WAF rules JSON")
     end
     return nil
 end
@@ -344,7 +375,9 @@ end
 function _M.get_blocked_ips()
     local json = threat_cache and threat_cache:get("blocked_ips")
     if json then
-        return cjson.decode(json)
+        local ok, ips = pcall(cjson.decode, json)
+        if ok then return ips end
+        ngx.log(ngx.ERR, "Failed to decode cached blocked IPs JSON")
     end
     return nil
 end
@@ -353,7 +386,9 @@ end
 function _M.get_geoip_rules()
     local json = config_cache and config_cache:get("geoip_rules")
     if json then
-        return cjson.decode(json)
+        local ok, rules = pcall(cjson.decode, json)
+        if ok then return rules end
+        ngx.log(ngx.ERR, "Failed to decode cached GeoIP rules JSON")
     end
     return nil
 end
@@ -362,7 +397,9 @@ end
 function _M.get_rate_limit_rules()
     local json = config_cache and config_cache:get("rate_limit_rules")
     if json then
-        return cjson.decode(json)
+        local ok, rules = pcall(cjson.decode, json)
+        if ok then return rules end
+        ngx.log(ngx.ERR, "Failed to decode cached rate limit rules JSON")
     end
     return nil
 end
@@ -371,7 +408,20 @@ end
 function _M.get_trusted_ips()
     local json = config_cache and config_cache:get("trusted_ips")
     if json then
-        return cjson.decode(json)
+        local ok, ips = pcall(cjson.decode, json)
+        if ok then return ips end
+        ngx.log(ngx.ERR, "Failed to decode cached trusted IPs JSON")
+    end
+    return nil
+end
+
+--- Get honeypot traps from shared dict.
+function _M.get_honeypot_traps()
+    local json = config_cache and config_cache:get("honeypot_traps")
+    if json then
+        local ok, traps = pcall(cjson.decode, json)
+        if ok then return traps end
+        ngx.log(ngx.ERR, "Failed to decode cached honeypot traps JSON")
     end
     return nil
 end

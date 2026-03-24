@@ -187,14 +187,17 @@ class TestNginxOperations:
         assert success is False
 
     def test_reload_nginx_success(self):
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "signal sent"
+        mock_sock = MagicMock()
+        mock_sock.recv.return_value = b"HTTP/1.1 204 No Content\r\n"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("app.services.openresty_service.os.path.exists", return_value=True), \
+             patch("app.services.openresty_service.socket.socket", return_value=mock_sock):
             success, output = reload_nginx()
 
         assert success is True
+        mock_sock.connect.assert_called_once_with("/var/run/docker.sock")
+        mock_sock.sendall.assert_called_once()
+        mock_sock.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_remove_config_file_exists(self):

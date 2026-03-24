@@ -31,6 +31,7 @@ class TrafficLogResponse(BaseModel):
 
     country_code: Optional[str]
     country_name: Optional[str] = None
+    city: Optional[str] = None
     auth_user: Optional[str]
 
     class Config:

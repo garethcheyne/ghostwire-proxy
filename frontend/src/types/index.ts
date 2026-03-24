@@ -90,6 +90,7 @@ export interface ProxyHost {
   // Custom error pages
   custom_error_pages: Record<string, string> | null
   traffic_logging_enabled: boolean
+  honeypot_enabled: boolean
   enabled: boolean
   upstream_servers: UpstreamServer[]
   locations: ProxyLocation[]
@@ -219,6 +220,7 @@ export interface TrafficLog {
   referer: string | null
   country_code: string | null
   country_name: string | null
+  city: string | null
   auth_user: string | null
 }
 

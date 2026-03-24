@@ -39,6 +39,7 @@ interface FormData {
   hsts_subdomains: boolean
   websockets_support: boolean
   block_exploits: boolean
+  honeypot_enabled: boolean
   advanced_config?: string
   server_advanced_config?: string
   client_max_body_size: string
@@ -87,6 +88,7 @@ const defaultFormData: FormData = {
   hsts_subdomains: false,
   websockets_support: true,
   block_exploits: true,
+  honeypot_enabled: false,
   client_max_body_size: '100m',
   proxy_buffering: true,
   proxy_buffer_size: '4k',
@@ -193,6 +195,7 @@ export default function ProxyHostsPage() {
       hsts_subdomains: host.hsts_subdomains,
       websockets_support: host.websockets_support,
       block_exploits: host.block_exploits,
+      honeypot_enabled: host.honeypot_enabled,
       advanced_config: host.advanced_config || undefined,
       server_advanced_config: host.server_advanced_config || undefined,
       client_max_body_size: host.client_max_body_size,
@@ -815,6 +818,17 @@ export default function ProxyHostsPage() {
                           className="h-4 w-4 rounded border-input"
                         />
                         <span className="text-sm">Block Common Exploits</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.honeypot_enabled}
+                          onChange={(e) =>
+                            setFormData({ ...formData, honeypot_enabled: e.target.checked })
+                          }
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <span className="text-sm">Honeypot Traps</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input

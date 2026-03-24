@@ -3,6 +3,7 @@ Auth Portal API routes.
 Handles login, logout, OAuth callbacks, and TOTP verification for auth walls.
 These endpoints are accessed via /__auth/* paths through nginx.
 """
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -14,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.redis import get_redis
 from app.core.utils import get_client_ip
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider
 from app.models.audit_log import AuditLog
@@ -32,19 +34,59 @@ from app.schemas.auth_wall_session import (
 
 router = APIRouter()
 
-# In-memory storage for OAuth state and partial sessions
-# In production, use Redis for multi-instance support
-_oauth_states: dict[str, dict] = {}  # state -> {auth_wall_id, provider_id, redirect_url, expires_at}
-_partial_sessions: dict[str, dict] = {}  # partial_id -> {user, auth_wall_id, expires_at}
+# Redis key prefixes for OAuth state and partial sessions
+_OAUTH_STATE_PREFIX = "oauth_state:"
+_PARTIAL_SESSION_PREFIX = "partial_session:"
 
 
-def _cleanup_expired():
-    """Clean up expired state/sessions."""
-    now = datetime.now(timezone.utc)
-    for states in [_oauth_states, _partial_sessions]:
-        expired = [k for k, v in states.items() if v.get("expires_at", now) < now]
-        for k in expired:
-            del states[k]
+async def _set_oauth_state(state: str, data: dict, ttl_seconds: int = 600):
+    """Store OAuth state in Redis with TTL."""
+    r = await get_redis()
+    data_copy = {k: v.isoformat() if isinstance(v, datetime) else v for k, v in data.items()}
+    await r.setex(f"{_OAUTH_STATE_PREFIX}{state}", ttl_seconds, json.dumps(data_copy))
+
+
+async def _get_oauth_state(state: str) -> Optional[dict]:
+    """Get OAuth state from Redis."""
+    r = await get_redis()
+    raw = await r.get(f"{_OAUTH_STATE_PREFIX}{state}")
+    if not raw:
+        return None
+    data = json.loads(raw)
+    if "expires_at" in data:
+        data["expires_at"] = datetime.fromisoformat(data["expires_at"])
+    return data
+
+
+async def _del_oauth_state(state: str):
+    """Delete OAuth state from Redis."""
+    r = await get_redis()
+    await r.delete(f"{_OAUTH_STATE_PREFIX}{state}")
+
+
+async def _set_partial_session(partial_id: str, data: dict, ttl_seconds: int = 300):
+    """Store partial session in Redis with TTL."""
+    r = await get_redis()
+    data_copy = {k: v.isoformat() if isinstance(v, datetime) else v for k, v in data.items()}
+    await r.setex(f"{_PARTIAL_SESSION_PREFIX}{partial_id}", ttl_seconds, json.dumps(data_copy))
+
+
+async def _get_partial_session(partial_id: str) -> Optional[dict]:
+    """Get partial session from Redis."""
+    r = await get_redis()
+    raw = await r.get(f"{_PARTIAL_SESSION_PREFIX}{partial_id}")
+    if not raw:
+        return None
+    data = json.loads(raw)
+    if "expires_at" in data:
+        data["expires_at"] = datetime.fromisoformat(data["expires_at"])
+    return data
+
+
+async def _del_partial_session(partial_id: str):
+    """Delete partial session from Redis."""
+    r = await get_redis()
+    await r.delete(f"{_PARTIAL_SESSION_PREFIX}{partial_id}")
 
 
 @router.get("/{auth_wall_id}/config", response_model=AuthWallConfigResponse)
@@ -163,14 +205,14 @@ async def local_login(
     if local_provider.requires_totp(user):
         # Create partial session for TOTP verification
         partial_id = secrets.token_hex(32)
-        _partial_sessions[partial_id] = {
+        await _set_partial_session(partial_id, {
             "user_id": user.id,
             "auth_wall_id": auth_wall_id,
             "username": user.username,
             "email": user.email,
             "display_name": user.display_name,
             "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
-        }
+        })
         return LocalLoginResponse(
             success=True,
             requires_totp=True,
@@ -231,15 +273,13 @@ async def totp_login(
     db: AsyncSession = Depends(get_db),
 ):
     """Complete login with TOTP code."""
-    _cleanup_expired()
-
-    # Get partial session
-    partial = _partial_sessions.get(totp_data.partial_session_id)
+    # Get partial session from Redis
+    partial = await _get_partial_session(totp_data.partial_session_id)
     if not partial or partial["auth_wall_id"] != auth_wall_id:
         return LocalLoginResponse(success=False, message="Invalid or expired session")
 
     if partial["expires_at"] < datetime.now(timezone.utc):
-        del _partial_sessions[totp_data.partial_session_id]
+        await _del_partial_session(totp_data.partial_session_id)
         return LocalLoginResponse(success=False, message="Session expired")
 
     # Get auth wall and user
@@ -263,7 +303,7 @@ async def totp_login(
         return LocalLoginResponse(success=False, message="Invalid TOTP code")
 
     # Remove partial session
-    del _partial_sessions[totp_data.partial_session_id]
+    await _del_partial_session(totp_data.partial_session_id)
 
     # Get client info
     client_ip = get_client_ip(request)
@@ -320,8 +360,6 @@ async def start_oauth(
     db: AsyncSession = Depends(get_db),
 ):
     """Start OAuth flow - redirect to provider."""
-    _cleanup_expired()
-
     # Get provider
     result = await db.execute(
         select(AuthProvider).where(
@@ -335,14 +373,14 @@ async def start_oauth(
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    # Generate state
+    # Generate state and store in Redis with 10-minute TTL
     state = secrets.token_hex(32)
-    _oauth_states[state] = {
+    await _set_oauth_state(state, {
         "auth_wall_id": auth_wall_id,
         "provider_id": provider_id,
         "redirect_url": redirect_url,
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
-    }
+    })
 
     # Get OAuth provider
     oauth_provider = ProviderFactory.get_oauth_provider(provider, db)
@@ -374,10 +412,8 @@ async def oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Handle OAuth callback."""
-    _cleanup_expired()
-
-    # Validate state
-    state_data = _oauth_states.get(state)
+    # Validate state from Redis
+    state_data = await _get_oauth_state(state)
     if not state_data:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -385,13 +421,13 @@ async def oauth_callback(
         raise HTTPException(status_code=400, detail="State mismatch")
 
     if state_data["expires_at"] < datetime.now(timezone.utc):
-        del _oauth_states[state]
+        await _del_oauth_state(state)
         raise HTTPException(status_code=400, detail="State expired")
 
-    # Remove used state
+    # Remove used state (one-time use)
     redirect_url = state_data["redirect_url"]
     provider_id = state_data["provider_id"]
-    del _oauth_states[state]
+    await _del_oauth_state(state)
 
     # Get provider
     result = await db.execute(

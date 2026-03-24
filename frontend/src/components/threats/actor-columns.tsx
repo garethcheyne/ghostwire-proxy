@@ -1,8 +1,9 @@
 'use client'
 
 import { ColumnDef } from '@tanstack/react-table'
-import { ArrowUpDown, Ban, Unlock, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowUpDown, Ban, Unlock, Trash2, ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { IpAddress } from '@/components/ip-address'
 
 export interface ThreatActor {
   id: string
@@ -29,12 +30,6 @@ const statusColors: Record<string, string> = {
   firewall_banned: 'bg-purple-500/10 text-purple-500',
 }
 
-function countryFlag(code: string | null): string {
-  if (!code || code.length !== 2) return ''
-  const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
-  return String.fromCodePoint(...codePoints)
-}
-
 function formatDate(d: string): string {
   try {
     return new Date(d).toLocaleString(undefined, {
@@ -48,6 +43,7 @@ export function createActorColumns(actions: {
   onUnblock: (ip: string) => void
   onDelete: (id: string, ip: string) => void
   onToggleExpand: (ip: string) => void
+  onInvestigate?: (ip: string) => void
   expandedIp: string | null
 }): ColumnDef<ThreatActor>[] {
   return [
@@ -57,14 +53,7 @@ export function createActorColumns(actions: {
       cell: ({ row }) => {
         const actor = row.original
         return (
-          <div className="flex items-center gap-2">
-            {actor.country_code && (
-              <span className="text-base" title={actor.country_name || actor.country_code}>
-                {countryFlag(actor.country_code)}
-              </span>
-            )}
-            <code className="text-xs font-mono font-semibold">{actor.ip_address}</code>
-          </div>
+          <IpAddress ip={actor.ip_address} countryCode={actor.country_code} countryName={actor.country_name} />
         )
       },
       filterFn: 'includesString',
@@ -178,6 +167,18 @@ export function createActorColumns(actions: {
         const isBlocked = actor.current_status === 'perm_blocked' || actor.current_status === 'temp_blocked' || actor.current_status === 'firewall_banned'
         return (
           <div className="flex items-center gap-1">
+            {actions.onInvestigate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                onClick={() => actions.onInvestigate!(actor.ip_address)}
+                title="Investigate IP"
+              >
+                <Search className="h-3.5 w-3.5 mr-1" />
+                <span className="hidden sm:inline">Intel</span>
+              </Button>
+            )}
             {isBlocked ? (
               <Button
                 variant="ghost"

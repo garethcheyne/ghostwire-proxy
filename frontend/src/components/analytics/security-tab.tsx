@@ -26,6 +26,7 @@ import {
   Pie,
 } from 'recharts'
 import api from '@/lib/api'
+import { IpAddress } from '@/components/ip-address'
 
 const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), { ssr: false })
 
@@ -404,7 +405,9 @@ export function SecurityTab({ period }: SecurityTabProps) {
                     const pct = (item.count / maxCount) * 100
                     return (
                       <div key={idx} className="flex items-center gap-3">
-                        <code className="text-xs font-mono w-32 truncate">{item.ip}</code>
+                        <div className="w-32 truncate">
+                          <IpAddress ip={item.ip} />
+                        </div>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div className="h-full rounded-full bg-red-500 transition-all" style={{ width: `${pct}%` }} />
                         </div>
@@ -433,7 +436,9 @@ export function SecurityTab({ period }: SecurityTabProps) {
               {stats.top_actors.slice(0, 8).map((actor, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
-                  <code className="text-xs font-mono flex-1 truncate">{actor.ip}</code>
+                  <div className="flex-1 min-w-0 truncate">
+                    <IpAddress ip={actor.ip} />
+                  </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusColors[actor.status] || 'bg-slate-500/10 text-slate-400'}`}>
                     {actor.status.replace(/_/g, ' ')}
                   </span>
@@ -489,7 +494,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                       })}
                     </td>
                     <td className="px-3 py-2">
-                      <code className="text-xs font-mono">{event.client_ip}</code>
+                      <IpAddress ip={event.client_ip} />
                     </td>
                     <td className="px-3 py-2">
                       <span className="text-xs px-1.5 py-0.5 rounded" style={{

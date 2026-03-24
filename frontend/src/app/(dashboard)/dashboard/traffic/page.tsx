@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { IpAddress } from '@/components/ip-address'
 import type { TrafficLog, ProxyHost } from '@/types'
 
 interface TrafficStats {
@@ -321,12 +322,12 @@ export default function TrafficPage() {
                     </td>
                     <td className="px-4 py-3 text-sm font-mono">
                       <div className="flex items-center gap-1.5">
-                        {log.country_code && (
-                          <span title={log.country_name || log.country_code}>
-                            {String.fromCodePoint(...log.country_code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)))}
+                        <IpAddress ip={log.client_ip} countryCode={log.country_code} countryName={log.country_name} />
+                        {log.city && (
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[100px]" title={log.city}>
+                            {log.city}
                           </span>
                         )}
-                        <span>{log.client_ip}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -401,13 +402,10 @@ export default function TrafficPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Client IP</p>
                   <div className="flex items-center gap-2">
-                    <p className="font-mono">{selectedLog.client_ip}</p>
-                    {selectedLog.country_code && (
-                      <span className="text-sm">
-                        {String.fromCodePoint(...selectedLog.country_code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0)))}{' '}
-                        {selectedLog.country_name || selectedLog.country_code}
-                      </span>
-                    )}
+                    <IpAddress ip={selectedLog.client_ip} countryCode={selectedLog.country_code} countryName={selectedLog.country_name} />
+                    <span className="text-sm text-muted-foreground">
+                      {[selectedLog.city, selectedLog.country_name].filter(Boolean).join(', ')}
+                    </span>
                   </div>
                 </div>
                 <div>

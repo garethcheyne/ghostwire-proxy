@@ -33,7 +33,13 @@ import {
   Monitor,
   Sparkles,
   Download,
+  Bug,
+  Info,
+  FileText,
+  Bell,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import api from '@/lib/api'
 
 interface NavItem {
   title: string
@@ -66,6 +72,7 @@ const navigation: NavGroup[] = [
     items: [
       { title: 'WAF Rules', href: '/dashboard/waf', icon: ShieldAlert },
       { title: 'Threats', href: '/dashboard/threats', icon: AlertTriangle },
+      { title: 'Honeypots', href: '/dashboard/honeypot', icon: Bug },
       { title: 'Firewalls', href: '/dashboard/firewalls', icon: Flame },
       { title: 'GeoIP Blocking', href: '/dashboard/geoip', icon: Map },
       { title: 'Rate Limiting', href: '/dashboard/rate-limits', icon: Gauge },
@@ -79,6 +86,7 @@ const navigation: NavGroup[] = [
     items: [
       { title: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
       { title: 'Traffic', href: '/dashboard/traffic', icon: Activity },
+      { title: 'Notifications', href: '/dashboard/notifications', icon: Bell },
       { title: 'System', href: '/dashboard/system', icon: Monitor },
     ],
   },
@@ -86,8 +94,11 @@ const navigation: NavGroup[] = [
     title: 'Administration',
     items: [
       { title: 'Users', href: '/dashboard/users', icon: Users },
+      { title: 'Alerts', href: '/dashboard/alerts', icon: AlertTriangle },
       { title: 'Settings', href: '/dashboard/settings', icon: Settings },
       { title: 'Updates', href: '/dashboard/settings/updates', icon: Download },
+      { title: 'About', href: '/dashboard/about', icon: Info },
+      { title: 'License', href: '/dashboard/license', icon: FileText },
     ],
   },
 ]
@@ -99,6 +110,11 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get('/version').then(res => setVersion(res.data.version)).catch(() => {})
+  }, [])
 
   return (
     <TooltipProvider delayDuration={0} key={isCollapsed ? 'collapsed' : 'expanded'}>
@@ -197,6 +213,35 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             ))}
           </nav>
         </ScrollArea>
+
+        {/* Version Footer */}
+        {version && (
+          <div className="border-t border-slate-700/50 px-4 py-3">
+            {isCollapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/dashboard/about" className="block text-center">
+                    <span className="text-[10px] font-mono text-slate-500 hover:text-cyan-400 transition-colors">
+                      v{version.split('.').pop()}
+                    </span>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={10}>
+                  Ghostwire Proxy v{version}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/dashboard/about" className="group block">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">Version</span>
+                  <span className="text-[10px] font-mono text-slate-400 group-hover:text-cyan-400 transition-colors">
+                    {version}
+                  </span>
+                </div>
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Collapse Toggle */}
         <Button

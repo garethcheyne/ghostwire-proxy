@@ -12,14 +12,12 @@ import {
   Archive,
   ChevronRight,
   Globe,
-  Bell,
   ShieldCheck,
   Plus,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
-import PushSubscriptionManager from '@/components/notifications/push-subscription'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -183,9 +181,9 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
+          <h1 className="text-2xl font-bold">System Settings</h1>
           <p className="text-muted-foreground">
-            Configure system-wide settings for your proxy
+            Configure system-wide settings for your proxy (admin only)
           </p>
         </div>
         <div className="flex gap-2">
@@ -490,17 +488,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Push Notifications */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-          <Bell className="h-5 w-5" />
-          Push Notifications
-        </h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Receive real-time alerts about security threats, system updates, and important events on your devices.
-        </p>
-        <PushSubscriptionManager />
-      </div>
 
       {/* Trusted IPs */}
       <div className="rounded-xl border border-border bg-card p-6">

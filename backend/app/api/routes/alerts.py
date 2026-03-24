@@ -141,6 +141,8 @@ async def update_channel(
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Alert channel not found")
+    if channel.user_id and channel.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to modify this channel")
 
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(channel, field, value)
@@ -168,6 +170,8 @@ async def delete_channel(
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Alert channel not found")
+    if channel.user_id and channel.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete this channel")
 
     db.add(AuditLog(
         user_id=current_user.id, email=current_user.email,

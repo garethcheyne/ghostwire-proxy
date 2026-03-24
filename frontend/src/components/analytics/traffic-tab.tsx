@@ -15,6 +15,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { IpAddress } from '@/components/ip-address'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -217,12 +218,7 @@ export function TrafficTab({ data, formatNumber, formatBytes, formatResponseTime
                 <div key={idx} className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
                   <div className="flex items-center gap-1.5 w-40">
-                    {item.country_code && (
-                      <span title={item.country_name || item.country_code}>
-                        {String.fromCodePoint(...item.country_code.toUpperCase().split('').map((c: string) => 127397 + c.charCodeAt(0)))}
-                      </span>
-                    )}
-                    <code className="text-xs font-mono">{item.ip}</code>
+                    <IpAddress ip={item.ip} countryCode={item.country_code} countryName={item.country_name} />
                   </div>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${percentage}%` }} />

@@ -37,8 +37,14 @@ const actionColors: Record<string, string> = {
   log: 'bg-slate-500/10 text-slate-400',
 }
 
+interface ProxyHostBasic {
+  id: string
+  domain_names: string[]
+}
+
 export default function RateLimitsPage() {
   const [rules, setRules] = useState<RateLimitRule[]>([])
+  const [hosts, setHosts] = useState<ProxyHostBasic[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingRule, setEditingRule] = useState<RateLimitRule | null>(null)
@@ -54,11 +60,24 @@ export default function RateLimitsPage() {
   const [formBurst, setFormBurst] = useState('10')
   const [formAction, setFormAction] = useState('reject')
   const [formEnabled, setFormEnabled] = useState(true)
+  const [formHostIds, setFormHostIds] = useState<string[]>([])
+  const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
   useEffect(() => {
     fetchRules()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!hostDropdownOpen) return
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-host-dropdown]')) setHostDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [hostDropdownOpen])
 
   const fetchRules = async () => {
     try {
@@ -79,6 +98,8 @@ export default function RateLimitsPage() {
     setFormBurst('10')
     setFormAction('reject')
     setFormEnabled(true)
+    setFormHostIds([])
+    setHostDropdownOpen(false)
     setError('')
   }
 
@@ -96,6 +117,7 @@ export default function RateLimitsPage() {
     setFormBurst(rule.burst_size.toString())
     setFormAction(rule.action)
     setFormEnabled(rule.enabled)
+    setFormHostIds(rule.proxy_host_id ? [rule.proxy_host_id] : [])
     setEditingRule(rule)
     setShowCreateDialog(true)
     setActiveDropdown(null)
@@ -113,7 +135,7 @@ export default function RateLimitsPage() {
     setIsSubmitting(true)
 
     try {
-      const data = {
+      const baseData = {
         name: formName,
         requests_per_second: formRps ? parseInt(formRps) : null,
         requests_per_minute: formRpm ? parseInt(formRpm) : null,
@@ -124,9 +146,19 @@ export default function RateLimitsPage() {
       }
 
       if (editingRule) {
-        await api.put(`/api/rate-limits/${editingRule.id}`, data)
+        await api.put(`/api/rate-limits/${editingRule.id}`, { ...baseData, proxy_host_id: formHostIds[0] || null })
+      } else if (formHostIds.length <= 1) {
+        await api.post('/api/rate-limits', { ...baseData, proxy_host_id: formHostIds[0] || null })
       } else {
-        await api.post('/api/rate-limits', data)
+        const results = await Promise.allSettled(
+          formHostIds.map(hostId => api.post('/api/rate-limits', { ...baseData, proxy_host_id: hostId }))
+        )
+        const failures = results.filter(r => r.status === 'rejected')
+        if (failures.length > 0 && failures.length < formHostIds.length) {
+          setError(`Created for ${formHostIds.length - failures.length} hosts, failed for ${failures.length}`)
+        } else if (failures.length === formHostIds.length) {
+          throw (failures[0] as PromiseRejectedResult).reason
+        }
       }
 
       setShowCreateDialog(false)
@@ -221,7 +253,12 @@ export default function RateLimitsPage() {
                       </span>
                       {!rule.proxy_host_id && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                          Global
+                          All hosts
+                        </span>
+                      )}
+                      {rule.proxy_host_id && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                          {hosts.find(h => h.id === rule.proxy_host_id)?.domain_names[0] || 'Specific host'}
                         </span>
                       )}
                     </div>
@@ -379,6 +416,52 @@ export default function RateLimitsPage() {
                   className="h-4 w-4"
                 />
                 <label htmlFor="enabled" className="text-sm">Enabled</label>
+              </div>
+
+              <div className="relative" data-host-dropdown>
+                <label className="block text-sm font-medium mb-2">Apply to Host</label>
+                <button
+                  type="button"
+                  onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <span className="truncate">
+                    {formHostIds.length === 0
+                      ? 'All Hosts (global)'
+                      : formHostIds.length === 1
+                        ? hosts.find(h => h.id === formHostIds[0])?.domain_names[0] || '1 host'
+                        : `${formHostIds.length} hosts selected`}
+                  </span>
+                  <svg className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${hostDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {hostDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    <label className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer border-b">
+                      <input
+                        type="checkbox"
+                        checked={formHostIds.length === 0}
+                        onChange={() => { setFormHostIds([]); setHostDropdownOpen(false) }}
+                        className="rounded"
+                      />
+                      <span className="text-sm">All Hosts (global)</span>
+                    </label>
+                    {hosts.map(h => (
+                      <label key={h.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formHostIds.includes(h.id)}
+                          onChange={() => {
+                            setFormHostIds(prev =>
+                              prev.includes(h.id) ? prev.filter(id => id !== h.id) : [...prev, h.id]
+                            )
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm truncate">{h.domain_names[0]}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {error && (

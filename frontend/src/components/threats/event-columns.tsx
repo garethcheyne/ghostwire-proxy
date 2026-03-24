@@ -1,8 +1,9 @@
 'use client'
 
 import { ColumnDef } from '@tanstack/react-table'
-import { ArrowUpDown, Ban, Globe, Trash2 } from 'lucide-react'
+import { ArrowUpDown, Ban, Globe, Trash2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { IpAddress } from '@/components/ip-address'
 
 export interface ThreatEvent {
   id: string
@@ -44,6 +45,7 @@ const categoryColors: Record<string, string> = {
 export function createEventColumns(actions: {
   onBlock: (ip: string) => void
   onDelete: (id: string) => void
+  onInvestigate?: (ip: string) => void
 }): ColumnDef<ThreatEvent>[] {
   return [
     {
@@ -71,7 +73,7 @@ export function createEventColumns(actions: {
       accessorKey: 'client_ip',
       header: 'IP Address',
       cell: ({ row }) => (
-        <code className="text-xs font-mono font-semibold">{row.getValue('client_ip')}</code>
+        <IpAddress ip={row.getValue('client_ip')} />
       ),
       filterFn: 'includesString',
     },
@@ -172,6 +174,17 @@ export function createEventColumns(actions: {
       header: '',
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
+          {actions.onInvestigate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-blue-500"
+              onClick={() => actions.onInvestigate!(row.original.client_ip)}
+              title="Investigate IP"
+            >
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"

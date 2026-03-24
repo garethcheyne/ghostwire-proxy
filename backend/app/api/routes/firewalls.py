@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.utils import get_client_ip
@@ -305,9 +305,58 @@ async def list_blocklist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(FirewallBlocklist).order_by(FirewallBlocklist.pushed_at.desc())
+    # Deduplicate: for each ip_address, keep only the most recent entry
+    # Subquery to find the max id (newest) per IP
+    subq = (
+        select(func.max(FirewallBlocklist.id).label("keep_id"))
+        .group_by(FirewallBlocklist.ip_address)
+    )
     if status_filter:
-        query = query.where(FirewallBlocklist.status == status_filter)
-    query = query.offset(skip).limit(limit)
+        subq = subq.where(FirewallBlocklist.status == status_filter)
+    subq = subq.subquery()
+
+    query = (
+        select(FirewallBlocklist)
+        .where(FirewallBlocklist.id.in_(select(subq.c.keep_id)))
+        .order_by(FirewallBlocklist.pushed_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.post("/blocklist/deduplicate")
+async def deduplicate_blocklist(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove duplicate IP entries from the blocklist, keeping the newest entry per IP."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    # Find IPs with more than one entry
+    dup_query = (
+        select(FirewallBlocklist.ip_address, func.count(FirewallBlocklist.id).label("cnt"))
+        .group_by(FirewallBlocklist.ip_address)
+        .having(func.count(FirewallBlocklist.id) > 1)
+    )
+    dup_result = await db.execute(dup_query)
+    dup_ips = [row.ip_address for row in dup_result.all()]
+
+    removed = 0
+    for ip in dup_ips:
+        # Get all entries for this IP, ordered newest first
+        entries_result = await db.execute(
+            select(FirewallBlocklist)
+            .where(FirewallBlocklist.ip_address == ip)
+            .order_by(FirewallBlocklist.pushed_at.desc().nullslast(), FirewallBlocklist.id.desc())
+        )
+        entries = entries_result.scalars().all()
+        # Keep the first (newest), delete the rest
+        for entry in entries[1:]:
+            await db.delete(entry)
+            removed += 1
+
+    await db.commit()
+    return {"removed": removed, "duplicate_ips": len(dup_ips)}

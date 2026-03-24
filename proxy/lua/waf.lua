@@ -29,43 +29,49 @@ local function check_db_rules(uri, args, user_agent)
         return true, nil  -- No DB rules loaded
     end
 
+    local host_id = ngx.var.proxy_host_id
     local request_data = uri .. "?" .. args
 
     for _, rule in ipairs(db_rules) do
-        local target
-        if rule.category == "scanner" then
-            -- Scanner rules match against User-Agent (plain string)
-            local ua_lower = string.lower(user_agent)
-            if string.find(ua_lower, string.lower(rule.pattern), 1, true) then
-                return false, {
-                    rule_id = rule.id,
-                    rule_name = rule.name,
-                    category = rule.category,
-                    severity = rule.severity,
-                    action = rule.action,
-                    pattern = rule.pattern,
-                    matched = user_agent,
-                }
+        -- Only apply global rules (no host) or rules matching this host
+        if rule.proxy_host_id == nil or rule.proxy_host_id == host_id then
+            local target
+            if rule.category == "scanner" then
+                -- Scanner rules match against User-Agent (plain string)
+                local ua_lower = string.lower(user_agent)
+                if string.find(ua_lower, string.lower(rule.pattern), 1, true) then
+                    return false, {
+                        rule_id = rule.id,
+                        rule_name = rule.name,
+                        category = rule.category,
+                        severity = rule.severity,
+                        action = rule.action,
+                        pattern = rule.pattern,
+                        matched = user_agent,
+                    }
+                end
+            elseif rule.category == "path_traversal" then
+                target = uri
+            else
+                target = request_data
             end
-        elseif rule.category == "path_traversal" then
-            target = uri
-        else
-            target = request_data
-        end
 
-        -- Regex match for non-scanner rules
-        if target then
-            local match = ngx.re.match(target, rule.pattern, "ijo")
-            if match then
-                return false, {
-                    rule_id = rule.id,
-                    rule_name = rule.name,
-                    category = rule.category,
-                    severity = rule.severity,
-                    action = rule.action,
-                    pattern = rule.pattern,
-                    matched = target,
-                }
+            -- Regex match for non-scanner rules
+            if target then
+                local ok, match = pcall(ngx.re.match, target, rule.pattern, "ijo")
+                if not ok then
+                    ngx.log(ngx.ERR, "Invalid WAF rule regex [" .. rule.name .. "]: " .. tostring(match))
+                elseif match then
+                    return false, {
+                        rule_id = rule.id,
+                        rule_name = rule.name,
+                        category = rule.category,
+                        severity = rule.severity,
+                        action = rule.action,
+                        pattern = rule.pattern,
+                        matched = target,
+                    }
+                end
             end
         end
     end
@@ -86,7 +92,10 @@ local function check_default_rules(uri, args, user_agent)
             target = request_data
         end
 
-        if ngx.re.match(target, rule.pattern, "ijo") then
+        local ok, match = pcall(ngx.re.match, target, rule.pattern, "ijo")
+        if not ok then
+            ngx.log(ngx.ERR, "Invalid default WAF rule regex [" .. (rule.name or "?") .. "]: " .. tostring(match))
+        elseif match then
             return false, {
                 rule_id = rule.id,
                 rule_name = rule.name,
@@ -193,6 +202,7 @@ function _M.log_threat(threat_info)
             body = body,
             headers = {
                 ["Content-Type"] = "application/json",
+                ["X-Internal-Auth"] = init.config.internal_auth_token,
             },
         })
         if not res then
@@ -203,6 +213,21 @@ end
 
 -- Main access handler
 function _M.access()
+    local client_ip = ngx.var.remote_addr
+
+    -- Check honeypot traps FIRST (before WAF rules)
+    -- Only if honeypot is enabled for this virtual host
+    local honeypot_enabled = ngx.var.honeypot_enabled
+    if honeypot_enabled == "1" then
+        local honeypot_ok, honeypot = pcall(require, "honeypot")
+        if honeypot_ok and honeypot then
+            local trapped = honeypot.check(client_ip)
+            if trapped then
+                return  -- honeypot already sent response
+            end
+        end
+    end
+
     local allowed, threat_info = _M.check_request()
 
     if not allowed then

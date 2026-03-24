@@ -132,7 +132,7 @@ def parse_user_agent(user_agent: str | None) -> str:
 
 @router.get("/dashboard", response_model=AnalyticsDashboard)
 async def get_analytics_dashboard(
-    period: str = Query("7d", regex="^(24h|7d|30d|90d)$"),
+    period: str = Query("7d", pattern="^(24h|7d|30d|90d)$"),
     proxy_host_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -565,7 +565,7 @@ async def get_realtime_stats(
 
 @router.get("/auth-errors")
 async def get_auth_errors(
-    period: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    period: str = Query("24h", pattern="^(1h|24h|7d|30d)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

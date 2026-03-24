@@ -242,13 +242,20 @@ async def apply_response(
         actor.firewall_banned_at = now
         actor.updated_at = now
 
-        # Add to firewall blocklist
-        blocklist_entry = FirewallBlocklist(
-            threat_actor_id=actor.id,
-            ip_address=actor.ip_address,
-            status="pending",
+        # Add to firewall blocklist only if not already present
+        existing = await db.execute(
+            select(FirewallBlocklist).where(
+                FirewallBlocklist.ip_address == actor.ip_address,
+                FirewallBlocklist.status.in_(["pending", "pushed"]),
+            )
         )
-        db.add(blocklist_entry)
+        if not existing.scalars().first():
+            blocklist_entry = FirewallBlocklist(
+                threat_actor_id=actor.id,
+                ip_address=actor.ip_address,
+                status="pending",
+            )
+            db.add(blocklist_entry)
 
     logger.info(f"Threat response: {action} applied to {actor.ip_address} (score: {actor.threat_score})")
 

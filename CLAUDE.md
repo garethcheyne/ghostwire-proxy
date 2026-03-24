@@ -1,5 +1,7 @@
 # Claude Context - Ghostwire Proxy
 
+@AGENTS.md
+
 ## Project Overview
 Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy management system with built-in authentication wall.
 
@@ -18,7 +20,7 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 | Frontend | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend | Python 3.12, FastAPI |
 | Database | SQLite (aiosqlite) |
-| Auth | JWT, OAuth2, LDAP |
+| Auth | JWT, TOTP |
 
 ### Ports
 - Proxy HTTP: 80

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { IpAddress } from '@/components/ip-address'
 import type { AuthWall, LocalAuthUser, AuthProvider } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,7 +88,7 @@ export default function AuthWallPage() {
 
   // Wall form state
   const [wallName, setWallName] = useState('')
-  const [wallAuthType, setWallAuthType] = useState<'basic' | 'oauth' | 'ldap' | 'multi'>('multi')
+  const [wallAuthType, setWallAuthType] = useState<'basic' | 'oauth' | 'ldap' | 'multi'>('basic')
   const [wallTimeout, setWallTimeout] = useState(3600)
   const [wallTheme, setWallTheme] = useState('default')
 
@@ -148,7 +149,7 @@ export default function AuthWallPage() {
 
   const handleCreateWall = () => {
     setWallName('')
-    setWallAuthType('multi')
+    setWallAuthType('basic')
     setWallTimeout(3600)
     setWallTheme('default')
     setError('')
@@ -441,7 +442,7 @@ export default function AuthWallPage() {
         <div>
           <h1 className="text-2xl font-bold">Authentication Walls</h1>
           <p className="text-muted-foreground">
-            Protect your proxy hosts with OAuth, local auth, or LDAP
+            Protect your proxy hosts with a login gate
           </p>
         </div>
         <Button onClick={handleCreateWall}>
@@ -526,79 +527,12 @@ export default function AuthWallPage() {
                     <Users className="h-3.5 w-3.5" />
                     {wall.local_users?.length || 0} users
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Server className="h-3.5 w-3.5" />
-                    {wall.providers?.length || 0} providers
-                  </div>
                 </div>
 
-                <Tabs defaultValue="providers" className="w-full">
-                  <TabsList className="w-full">
-                    <TabsTrigger value="providers" className="flex-1">Providers</TabsTrigger>
-                    <TabsTrigger value="users" className="flex-1">Users</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="providers" className="mt-3">
-                    <div className="space-y-2">
-                      {wall.providers?.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-2">
-                          No OAuth providers
-                        </p>
-                      ) : (
-                        wall.providers?.map((provider) => (
-                          <div
-                            key={provider.id}
-                            className="flex items-center justify-between rounded-lg border border-border p-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              {getProviderIcon(provider.provider_type)}
-                              <span className="text-sm">{provider.name}</span>
-                              <Badge
-                                variant={provider.enabled ? 'default' : 'secondary'}
-                                className="text-xs"
-                              >
-                                {provider.enabled ? 'Active' : 'Disabled'}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleToggleProvider(wall.id, provider)}
-                              >
-                                {provider.enabled ? (
-                                  <EyeOff className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-red-500"
-                                onClick={() => handleDeleteProvider(wall.id, provider.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => handleAddProvider(wall)}
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        Add Provider
-                      </Button>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="users" className="mt-3">
-                    <div className="space-y-2">
+                <div className="space-y-2 mt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Users</span>
+                  </div>
                       {wall.local_users?.length === 0 ? (
                         <p className="text-xs text-muted-foreground text-center py-2">
                           No local users
@@ -684,8 +618,6 @@ export default function AuthWallPage() {
                         Add User
                       </Button>
                     </div>
-                  </TabsContent>
-                </Tabs>
               </div>
             </div>
           ))
@@ -723,17 +655,11 @@ export default function AuthWallPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="multi">Multi (OAuth + Local)</SelectItem>
-                  <SelectItem value="basic">Basic Auth Only</SelectItem>
-                  <SelectItem value="oauth">OAuth Only</SelectItem>
-                  <SelectItem value="ldap">LDAP / Active Directory</SelectItem>
+                  <SelectItem value="basic">Local Auth (Username / Password)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {wallAuthType === 'multi' && 'Allow users to login with OAuth providers or local credentials'}
-                {wallAuthType === 'basic' && 'HTTP Basic Authentication (browser popup)'}
-                {wallAuthType === 'oauth' && 'OAuth providers only (Google, GitHub, etc.)'}
-                {wallAuthType === 'ldap' && 'LDAP/Active Directory authentication'}
+                {wallAuthType === 'basic' && 'Users authenticate with username and password'}
               </p>
             </div>
 
@@ -779,116 +705,6 @@ export default function AuthWallPage() {
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {editingWall ? 'Save Changes' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Provider Dialog */}
-      <Dialog open={showProviderDialog} onOpenChange={setShowProviderDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add OAuth Provider</DialogTitle>
-            <DialogDescription>
-              Configure an OAuth provider for {selectedWall?.name}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmitProvider} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Provider Type</Label>
-              <Select value={providerType} onValueChange={(v) => setProviderType(v as any)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="google">
-                    <div className="flex items-center gap-2">
-                      {getProviderIcon('google')}
-                      Google
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="github">
-                    <div className="flex items-center gap-2">
-                      {getProviderIcon('github')}
-                      GitHub
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="oidc">
-                    <div className="flex items-center gap-2">
-                      {getProviderIcon('oidc')}
-                      Generic OIDC
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="providerName">Display Name (optional)</Label>
-              <Input
-                id="providerName"
-                value={providerName}
-                onChange={(e) => setProviderName(e.target.value)}
-                placeholder={providerType.charAt(0).toUpperCase() + providerType.slice(1)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="clientId">Client ID</Label>
-              <Input
-                id="clientId"
-                value={providerClientId}
-                onChange={(e) => setProviderClientId(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="clientSecret">Client Secret</Label>
-              <div className="relative">
-                <Input
-                  id="clientSecret"
-                  type={showSecret ? 'text' : 'password'}
-                  value={providerClientSecret}
-                  onChange={(e) => setProviderClientSecret(e.target.value)}
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full"
-                  onClick={() => setShowSecret(!showSecret)}
-                >
-                  {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <Label htmlFor="enabled">Enabled</Label>
-              <Switch
-                id="enabled"
-                checked={providerEnabled}
-                onCheckedChange={setProviderEnabled}
-              />
-            </div>
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowProviderDialog(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Add Provider
               </Button>
             </DialogFooter>
           </form>
@@ -1034,7 +850,7 @@ export default function AuthWallPage() {
                         <Badge variant="secondary">{session.user_type}</Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {session.ip_address || '-'}
+                        {session.ip_address ? <IpAddress ip={session.ip_address} /> : '-'}
                       </TableCell>
                       <TableCell className="text-xs">
                         {formatDate(session.created_at)}

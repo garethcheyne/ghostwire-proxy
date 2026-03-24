@@ -29,6 +29,7 @@ class WafRuleSetResponse(BaseModel):
 
 class WafRuleCreate(BaseModel):
     rule_set_id: Optional[str] = None
+    proxy_host_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     category: str
@@ -64,6 +65,7 @@ class WafRuleCreate(BaseModel):
 
 
 class WafRuleUpdate(BaseModel):
+    proxy_host_id: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
@@ -76,6 +78,7 @@ class WafRuleUpdate(BaseModel):
 class WafRuleResponse(BaseModel):
     id: str
     rule_set_id: Optional[str]
+    proxy_host_id: Optional[str]
     name: str
     description: Optional[str]
     category: str

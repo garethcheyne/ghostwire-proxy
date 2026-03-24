@@ -139,7 +139,8 @@ ngx.timer.at(0, function(premature)
         body = cjson.encode(log_data),
         headers = {
             ["Content-Type"] = "application/json",
-            ["Host"] = "ghostwire-proxy-api"
+            ["Host"] = "ghostwire-proxy-api",
+            ["X-Internal-Auth"] = init.config.internal_auth_token,
         }
     })
 

@@ -288,6 +288,11 @@ def _generate_server_block_content(
             lines.append(f"{indent}error_page {code} {page};")
         lines.append("")
 
+    # Proxy host ID and honeypot flag for Lua
+    lines.append(f'{indent}set $proxy_host_id "{host.id}";')
+    lines.append(f'{indent}set $honeypot_enabled "{1 if host.honeypot_enabled else 0}";')
+    lines.append("")
+
     # Access control (if configured)
     if host.access_list_id:
         lines.append(f"{indent}# Access list: {host.access_list_id}")

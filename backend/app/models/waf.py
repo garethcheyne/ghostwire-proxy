@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, Index, Boolean
+from sqlalchemy import Column, String, DateTime, Text, Integer, Index, Boolean, ForeignKey
 from datetime import datetime, timezone
 import uuid
 
@@ -22,6 +22,7 @@ class WafRule(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     rule_set_id = Column(String(36), nullable=True, index=True)
+    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String(50), nullable=False, index=True)  # sqli, xss, path_traversal, rce, scanner

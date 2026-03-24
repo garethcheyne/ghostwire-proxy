@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index
+from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index, ForeignKey
 from datetime import datetime, timezone
 import uuid
 
@@ -9,7 +9,7 @@ class RateLimitRule(Base):
     __tablename__ = "rate_limit_rules"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    proxy_host_id = Column(String(36), nullable=True, index=True)  # NULL = global
+    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL = global
     name = Column(String(255), nullable=False)
     requests_per_second = Column(Integer, nullable=True)
     requests_per_minute = Column(Integer, nullable=True)
@@ -38,7 +38,7 @@ class GeoipRule(Base):
     __tablename__ = "geoip_rules"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    proxy_host_id = Column(String(36), nullable=True, index=True)  # NULL = global
+    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL = global
     name = Column(String(255), nullable=False)
     mode = Column(String(20), default="blocklist")  # blocklist, allowlist
     countries = Column(Text, nullable=False)  # JSON array of country codes

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
+import { IpAddress } from '@/components/ip-address'
 import type { ProxyHost, Certificate, TrafficStats } from '@/types'
 
 interface ThreatStats {
@@ -380,7 +381,7 @@ export default function DashboardPage() {
                         }`}
                       />
                       <div>
-                        <p className="font-mono text-sm font-medium">{actor.ip}</p>
+                        <IpAddress ip={actor.ip} />
                         <p className="text-xs text-muted-foreground">
                           {actor.events} events • {actor.status.replace('_', ' ')}
                         </p>
@@ -493,8 +494,7 @@ export default function DashboardPage() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs">{evt.ip}</span>
-                            {evt.country && <span className="text-[10px] text-muted-foreground">{evt.country}</span>}
+                            <IpAddress ip={evt.ip} />
                             <span className="text-xs text-muted-foreground">→</span>
                             <span className="text-xs font-medium truncate">{evt.host}</span>
                           </div>
@@ -530,7 +530,7 @@ export default function DashboardPage() {
                         return (
                           <div key={ip.ip}>
                             <div className="flex items-center justify-between text-sm mb-1">
-                              <span className="font-mono text-xs">{ip.ip}</span>
+                              <IpAddress ip={ip.ip} />
                               <span className="text-xs text-muted-foreground">{ip.count} hits</span>
                             </div>
                             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -563,7 +563,7 @@ export default function DashboardPage() {
                             </span>
                             <div className="min-w-0">
                               <span className="text-xs font-medium">{login.email || 'Unknown'}</span>
-                              <span className="text-xs text-muted-foreground ml-2">from {login.ip || '?'}</span>
+                              <span className="text-xs text-muted-foreground ml-2 inline-flex items-center gap-1">from <IpAddress ip={login.ip || '?'} /></span>
                             </div>
                           </div>
                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">

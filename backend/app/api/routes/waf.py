@@ -76,6 +76,7 @@ async def create_rule_set(
 async def list_rules(
     category: str | None = None,
     enabled: bool | None = None,
+    proxy_host_id: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
@@ -86,6 +87,8 @@ async def list_rules(
         query = query.where(WafRule.category == category)
     if enabled is not None:
         query = query.where(WafRule.enabled == enabled)
+    if proxy_host_id:
+        query = query.where(WafRule.proxy_host_id == proxy_host_id)
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
@@ -455,19 +458,19 @@ async def update_threat_actor(
     return actor
 
 
-@router.delete("/actors/{actor_id}")
+@router.delete("/actors/{ip}")
 async def delete_threat_actor(
-    actor_id: str,
+    ip: str,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ThreatActor).where(ThreatActor.id == actor_id))
+    result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
     actor = result.scalar_one_or_none()
     if not actor:
         raise HTTPException(status_code=404, detail="Threat actor not found")
 
-    ip = actor.ip_address
+    actor_id = actor.id
     # Delete associated firewall blocklist entries and threat events
     from app.models.firewall import FirewallBlocklist
     await db.execute(sa_delete(FirewallBlocklist).where(FirewallBlocklist.threat_actor_id == actor_id))
