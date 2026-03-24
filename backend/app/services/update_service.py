@@ -22,15 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from app.core.redis import get_redis
+from app.core.version import APP_VERSION
 from app.models.update import UpdateHistory, BaseImageVersion, UpdateSettings
 
 logger = logging.getLogger(__name__)
-
-# Read app version from main module
-try:
-    from app.main import APP_VERSION
-except ImportError:
-    APP_VERSION = os.environ.get("APP_VERSION", "0.0.0")
 
 # Update server configuration
 GITHUB_API_URL = "https://api.github.com"

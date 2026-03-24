@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.redis import close_redis
 from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
+from app.core.version import APP_VERSION
 from app.api import router as api_router
 
 # Configure logging
@@ -23,24 +24,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-def get_app_version() -> str:
-    """Read application version from VERSION file."""
-    # Check several possible locations
-    for candidate in [
-        Path(__file__).parent.parent / "VERSION",      # /app/VERSION (volume mount)
-        Path(__file__).parent.parent.parent / "VERSION", # fallback
-    ]:
-        try:
-            if candidate.exists():
-                return candidate.read_text().strip()
-        except Exception:
-            continue
-    return os.environ.get("APP_VERSION", "0.0.0")
-
-
-APP_VERSION = get_app_version()
 
 
 @asynccontextmanager

@@ -333,7 +333,7 @@ async def check_now(
     Calls GitHub and Docker Hub APIs, caches results in Redis.
     """
     from datetime import timezone
-    from app.main import APP_VERSION
+    from app.core.version import APP_VERSION
 
     app_result = await update_service.check_for_app_updates(db)
     base_results = await update_service.check_for_base_image_updates(db)
