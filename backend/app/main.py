@@ -27,13 +27,17 @@ logger = logging.getLogger(__name__)
 
 def get_app_version() -> str:
     """Read application version from VERSION file."""
-    version_file = Path(__file__).parent.parent.parent / "VERSION"
-    try:
-        if version_file.exists():
-            return version_file.read_text().strip()
-    except Exception:
-        pass
-    return os.environ.get("APP_VERSION", "1.0.0")
+    # Check several possible locations
+    for candidate in [
+        Path(__file__).parent.parent / "VERSION",      # /app/VERSION (volume mount)
+        Path(__file__).parent.parent.parent / "VERSION", # fallback
+    ]:
+        try:
+            if candidate.exists():
+                return candidate.read_text().strip()
+        except Exception:
+            continue
+    return os.environ.get("APP_VERSION", "0.0.0")
 
 
 APP_VERSION = get_app_version()

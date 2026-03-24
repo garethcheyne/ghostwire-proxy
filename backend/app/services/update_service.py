@@ -11,6 +11,7 @@ This service handles:
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 try:
     from app.main import APP_VERSION
 except ImportError:
-    APP_VERSION = os.environ.get("APP_VERSION", "1.0.0")
+    APP_VERSION = os.environ.get("APP_VERSION", "0.0.0")
 
 # Update server configuration
 GITHUB_API_URL = "https://api.github.com"
@@ -43,6 +44,39 @@ BASE_IMAGES = {
     "postgres": {"image": "postgres", "tag": "16-alpine"},
     "redis": {"image": "redis", "tag": "7-alpine"},
 }
+
+
+# CalVer pattern: YYYY.MM.DD.HHMM
+_CALVER_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}\.\d{4}$")
+
+
+def _is_calver(version: str) -> bool:
+    return bool(_CALVER_RE.match(version))
+
+
+def _parse_version_tuple(version: str) -> tuple:
+    """Parse a version string into a comparable tuple.
+
+    Supports both CalVer (2026.03.24.1430) and semver (1.2.3).
+    """
+    if _is_calver(version):
+        return tuple(int(p) for p in version.split("."))
+    try:
+        v = semver.VersionInfo.parse(version)
+        return (v.major, v.minor, v.patch)
+    except ValueError:
+        return (0,)
+
+
+def _is_valid_version(tag: str) -> bool:
+    """Check if a tag is a valid version (semver or CalVer)."""
+    if _is_calver(tag):
+        return True
+    try:
+        semver.VersionInfo.parse(tag)
+        return True
+    except ValueError:
+        return False
 
 
 class UpdateService:
@@ -112,8 +146,9 @@ class UpdateService:
                     is_prerelease = release.get("prerelease", False)
 
                     try:
-                        # Validate semver
-                        semver.VersionInfo.parse(tag)
+                        # Validate version tag (semver or CalVer)
+                        if not _is_valid_version(tag):
+                            continue
 
                         result["releases"].append({
                             "version": tag,
@@ -124,7 +159,6 @@ class UpdateService:
                             "prerelease": is_prerelease,
                         })
                     except ValueError:
-                        # Skip non-semver tags
                         continue
 
                 # Filter to stable releases for latest_version
@@ -133,12 +167,12 @@ class UpdateService:
                 if stable_releases:
                     result["latest_version"] = stable_releases[0]["version"]
 
-                    # Compare versions
+                    # Compare versions (supports both CalVer and semver)
                     try:
-                        current = semver.VersionInfo.parse(APP_VERSION)
-                        latest = semver.VersionInfo.parse(result["latest_version"])
+                        current = _parse_version_tuple(APP_VERSION)
+                        latest = _parse_version_tuple(result["latest_version"])
                         result["update_available"] = latest > current
-                    except ValueError as e:
+                    except Exception as e:
                         logger.warning(f"Version comparison failed: {e}")
 
             elif response.status_code == 404:

@@ -133,6 +133,7 @@ services:
       ghostwire-proxy-redis:
         condition: service_healthy
     volumes:
+      - ./VERSION:/app/VERSION:ro
       - ./data/certificates:/data/certificates
       - ./data/nginx-configs:/data/nginx-configs
       - ./data/letsencrypt:/etc/letsencrypt
