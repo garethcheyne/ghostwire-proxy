@@ -196,7 +196,7 @@ export default function AuthLayout({
 
         {/* Footer */}
         <p className="relative z-10 text-white/15 text-[10px] font-mono uppercase tracking-[0.3em]">
-          // Route. Protect. Monitor.
+          {"// Route. Protect. Monitor."}
         </p>
       </div>
 

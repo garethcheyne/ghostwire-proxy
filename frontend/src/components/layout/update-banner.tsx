@@ -21,13 +21,6 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    checkForUpdates()
-    // Poll every 5 minutes
-    const interval = setInterval(checkForUpdates, 300000)
-    return () => clearInterval(interval)
-  }, [])
-
   const checkForUpdates = async () => {
     try {
       const response = await api.get('/api/updates/available')
@@ -36,6 +29,13 @@ export function UpdateBanner() {
       // Silently fail — this is a background check
     }
   }
+
+  useEffect(() => {
+    checkForUpdates()
+    // Poll every 5 minutes
+    const interval = setInterval(checkForUpdates, 300000)
+    return () => clearInterval(interval)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (dismissed || !update?.checked) return null
 
