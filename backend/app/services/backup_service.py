@@ -413,6 +413,19 @@ class BackupService:
         dbname = parsed.path.lstrip("/")
         user = parsed.username or "ghostwire"
 
+        # Terminate other connections so pg_restore can DROP/CREATE tables
+        # without lock conflicts from the running API's connection pool
+        term_cmd = [
+            "psql",
+            "-h", host,
+            "-p", port,
+            "-U", user,
+            "-d", "postgres",
+            "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",
+        ]
+        subprocess.run(term_cmd, env=env, capture_output=True, text=True)
+        logger.info("Terminated active database connections for restore")
+
         # Restore database
         if use_pg_restore:
             cmd = [
