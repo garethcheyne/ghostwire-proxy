@@ -51,6 +51,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const isDev = process.env.NODE_ENV === 'development'
+    const isHttps = (process.env.NEXTAUTH_URL || '').startsWith('https://')
 
     return [
       {
@@ -73,7 +74,8 @@ const nextConfig: NextConfig = {
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
-              "upgrade-insecure-requests",
+              // Only upgrade insecure requests when served over HTTPS
+              ...(isHttps ? ["upgrade-insecure-requests"] : []),
             ].join('; '),
           },
           {

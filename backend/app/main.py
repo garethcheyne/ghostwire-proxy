@@ -25,6 +25,145 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+ADMIN_PROXY_TAG = "ghostwire-admin-ui"
+
+
+async def _auto_provision_admin_proxy():
+    """
+    If NEXTAUTH_URL contains an FQDN (not an IP / localhost), automatically
+    create a proxy host that routes that domain to the admin UI container
+    and request a Let's Encrypt certificate for it.
+
+    This makes the admin panel accessible via https://fqdn instead of
+    requiring direct IP:port access.
+    """
+    from urllib.parse import urlparse
+    import ipaddress
+    from app.core.database import AsyncSessionLocal
+    from app.models.proxy_host import ProxyHost
+    from app.models.certificate import Certificate
+    from app.services.openresty_service import generate_all_configs, reload_nginx
+    from app.services.certificate_service import request_letsencrypt_certificate
+    from sqlalchemy import select
+
+    nextauth_url = os.environ.get("NEXTAUTH_URL", "")
+    if not nextauth_url:
+        return
+
+    parsed = urlparse(nextauth_url)
+    hostname = parsed.hostname or ""
+
+    if not hostname:
+        return
+
+    # Skip if it's an IP address or localhost
+    try:
+        ipaddress.ip_address(hostname)
+        logger.debug("NEXTAUTH_URL is an IP address — skipping admin proxy auto-provision")
+        return
+    except ValueError:
+        pass  # Not an IP — good, it's probably an FQDN
+
+    if hostname in ("localhost", "127.0.0.1", "::1"):
+        return
+
+    logger.info(f"NEXTAUTH_URL has FQDN '{hostname}' — checking admin proxy auto-provision...")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # Check if a proxy host already exists for this domain
+            result = await db.execute(select(ProxyHost))
+            all_hosts = result.scalars().all()
+
+            for host in all_hosts:
+                domains = host.domain_names or []
+                if hostname in domains:
+                    logger.info(f"Proxy host already exists for '{hostname}' (id={host.id}) — skipping")
+                    return
+
+            # Create Let's Encrypt certificate
+            le_email = os.environ.get("LETSENCRYPT_EMAIL", "")
+            if not le_email:
+                logger.warning("No LETSENCRYPT_EMAIL set — cannot auto-provision SSL cert for admin UI")
+                logger.info(f"Creating admin proxy host for '{hostname}' without SSL")
+                # Create HTTP-only proxy host
+                host = ProxyHost(
+                    domain_names=[hostname],
+                    forward_scheme="http",
+                    forward_host="ghostwire-proxy-ui",
+                    forward_port=3000,
+                    ssl_enabled=False,
+                    websockets_support=True,
+                    block_exploits=True,
+                    enabled=True,
+                    advanced_config=f"# Auto-provisioned admin UI proxy ({ADMIN_PROXY_TAG})",
+                )
+                db.add(host)
+                await db.commit()
+                await generate_all_configs(db)
+                reload_nginx()
+                logger.info(f"Auto-provisioned HTTP proxy host for admin UI at http://{hostname}")
+                return
+
+            # Create certificate record first
+            cert = Certificate(
+                name=f"Admin UI - {hostname}",
+                domain_names=[hostname],
+                is_letsencrypt=True,
+                letsencrypt_email=le_email,
+                auto_renew=True,
+                status="pending",
+            )
+            db.add(cert)
+            await db.commit()
+            await db.refresh(cert)
+
+            # Create proxy host (initially HTTP-only so ACME challenge works)
+            host = ProxyHost(
+                domain_names=[hostname],
+                forward_scheme="http",
+                forward_host="ghostwire-proxy-ui",
+                forward_port=3000,
+                ssl_enabled=False,
+                websockets_support=True,
+                block_exploits=True,
+                enabled=True,
+                advanced_config=f"# Auto-provisioned admin UI proxy ({ADMIN_PROXY_TAG})",
+            )
+            db.add(host)
+            await db.commit()
+            await db.refresh(host)
+
+            # Generate HTTP config so nginx can serve ACME challenge
+            await generate_all_configs(db)
+            reload_nginx()
+            logger.info(f"Created HTTP proxy host for '{hostname}' — requesting Let's Encrypt cert...")
+
+            # Request Let's Encrypt certificate
+            success, message = await request_letsencrypt_certificate(db, cert.id)
+
+            if success:
+                await db.refresh(cert)
+                # Enable SSL on the proxy host
+                host.ssl_enabled = True
+                host.ssl_force = True
+                host.http2_support = True
+                host.hsts_enabled = True
+                host.certificate_id = cert.id
+                await db.commit()
+
+                # Regenerate with SSL
+                await generate_all_configs(db)
+                reload_nginx()
+                logger.info(f"Auto-provisioned HTTPS proxy host for admin UI at https://{hostname}")
+            else:
+                logger.warning(f"Let's Encrypt cert request failed: {message}")
+                logger.info(f"Admin UI accessible via HTTP at http://{hostname} — retry cert via UI later")
+
+        except Exception as e:
+            logger.error(f"Admin proxy auto-provision failed: {e}")
+            # Non-fatal — admin UI still accessible via IP:88
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -133,6 +272,9 @@ async def lifespan(app: FastAPI):
             logger.info("No users found - initial setup required at /auth/login")
         else:
             logger.info(f"Found {count} users in database")
+
+    # Auto-provision admin UI proxy host + SSL cert if NEXTAUTH_URL is an FQDN
+    await _auto_provision_admin_proxy()
 
     # Start background metrics collection task
     from app.services.system_service import system_monitor_service

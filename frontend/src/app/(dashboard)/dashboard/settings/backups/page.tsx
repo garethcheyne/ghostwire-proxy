@@ -92,7 +92,7 @@ export default function BackupsPage() {
 
   const fetchBackups = async () => {
     try {
-      const response = await api.get('/api/backups/')
+      const response = await api.get('/api/backups')
       setBackups(response.data.backups)
     } catch (err: any) {
       console.error('Failed to fetch backups:', err)
@@ -128,7 +128,7 @@ export default function BackupsPage() {
     setError(null)
 
     try {
-      const response = await api.post('/api/backups/', {
+      const response = await api.post('/api/backups', {
         include_database: includeDatabase,
         include_certificates: includeCertificates,
         include_letsencrypt: includeLetsencrypt,

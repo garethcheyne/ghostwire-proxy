@@ -91,7 +91,7 @@ export default function PresetsPage() {
 
   const fetchPresets = async () => {
     try {
-      const { data } = await api.get('/api/presets/')
+      const { data } = await api.get('/api/presets')
       setPresets(data)
     } catch (err) {
       console.error('Failed to fetch presets:', err)

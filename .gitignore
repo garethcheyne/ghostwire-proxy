@@ -11,6 +11,7 @@ docker-compose.override.yml
 # Environment & Secrets
 .env
 .env.local
+.env.prod
 .env.*.local
 *.pem
 *.key

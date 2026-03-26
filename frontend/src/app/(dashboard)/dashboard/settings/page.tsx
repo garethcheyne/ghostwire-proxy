@@ -320,7 +320,7 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { value: 'congratulations', label: 'Welcome Page', desc: 'Show a Ghostwire Proxy landing page' },
+              { value: 'congratulations', label: 'Ghostwire Welcome', desc: 'Show the Ghostwire Proxy landing page' },
               { value: 'redirect', label: 'Redirect', desc: 'Redirect to a custom URL' },
               { value: '404', label: '404 Not Found', desc: 'Return a 404 error page' },
               { value: '444', label: 'Drop Connection', desc: 'Silently close the connection' },
@@ -329,7 +329,7 @@ export default function SettingsPage() {
                 key={opt.value}
                 className={`relative flex flex-col rounded-lg border p-4 cursor-pointer transition-colors ${
                   defaultSite.behavior === opt.value
-                    ? 'border-primary bg-primary/5'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                     : 'border-border hover:border-muted-foreground/30'
                 }`}
               >
@@ -341,6 +341,12 @@ export default function SettingsPage() {
                   onChange={(e) => setDefaultSite({ ...defaultSite, behavior: e.target.value })}
                   className="sr-only"
                 />
+                {defaultSite.behavior === opt.value && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    <CheckCircle className="h-3 w-3" />
+                    Active
+                  </span>
+                )}
                 <span className="font-medium text-sm">{opt.label}</span>
                 <span className="text-xs text-muted-foreground mt-1">{opt.desc}</span>
               </label>
@@ -459,7 +465,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Backup & Restore */}
-      <Link href="/dashboard/settings/backups">
+      <Link href="/dashboard/settings/backups" className="block">
         <div className="rounded-xl border border-border bg-card p-6 hover:border-primary/50 hover:bg-muted/50 transition-colors cursor-pointer group">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">

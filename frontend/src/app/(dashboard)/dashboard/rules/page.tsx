@@ -252,7 +252,7 @@ export default function RulesPage() {
         const res = await api.get('/api/rate-limits')
         setRateLimitRules(res.data)
       } else if (activeTab === 'presets') {
-        const res = await api.get('/api/presets/')
+        const res = await api.get('/api/presets')
         setPresets(res.data)
       }
     } catch (error) {
