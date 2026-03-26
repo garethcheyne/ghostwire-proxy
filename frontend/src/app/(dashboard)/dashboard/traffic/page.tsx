@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -49,10 +49,6 @@ export default function TrafficPage() {
 
   usePageData(() => { fetchData() })
 
-  useEffect(() => {
-    fetchLogs()
-  }, [page, selectedHost, selectedStatus])
-
   const fetchData = async () => {
     try {
       const [hostsRes, statsRes] = await Promise.all([
@@ -66,7 +62,7 @@ export default function TrafficPage() {
     }
   }
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setIsRefreshing(true)
     try {
       const params = new URLSearchParams({
@@ -85,7 +81,11 @@ export default function TrafficPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [page, selectedHost, selectedStatus])
+
+  useEffect(() => {
+    fetchLogs()
+  }, [fetchLogs])
 
   const handleRefresh = () => {
     fetchLogs()

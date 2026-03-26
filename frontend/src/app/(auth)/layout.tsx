@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 export default function AuthLayout({
   children,
 }: {
@@ -68,9 +70,11 @@ export default function AuthLayout({
         <div className="relative z-10 flex items-center gap-4 flicker">
           <div className="relative">
             <div className="absolute inset-0 scale-150 bg-cyan-400/20 rounded-full blur-lg animate-pulse" />
-            <img
+            <Image
               src="/logo.png"
               alt="Ghostwire Logo"
+              width={40}
+              height={40}
               className="relative h-10 w-10 object-contain brightness-0 invert"
             />
           </div>

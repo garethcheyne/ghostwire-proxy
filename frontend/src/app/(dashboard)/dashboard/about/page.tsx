@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import {
   Globe,
   Shield,
@@ -128,9 +129,11 @@ export default function AboutPage() {
       <div className="text-center space-y-4 pt-4">
         <div className="flex justify-center">
           <div className="relative h-20 w-20">
-            <img
+            <Image
               src="/logo.png"
               alt="Ghostwire Logo"
+              width={80}
+              height={80}
               className="h-20 w-20 object-contain [filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
             />
           </div>

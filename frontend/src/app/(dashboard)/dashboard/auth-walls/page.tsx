@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -936,10 +937,13 @@ export default function AuthWallPage() {
                 </p>
 
                 <div className="bg-white p-4 rounded-lg inline-block">
-                  <img
+                  <Image
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpSetupData.provisioning_uri)}`}
                     alt="TOTP QR Code"
+                    width={192}
+                    height={192}
                     className="w-48 h-48"
+                    unoptimized
                   />
                 </div>
 

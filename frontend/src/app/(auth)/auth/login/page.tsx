@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Loader2, AlertCircle } from 'lucide-react'
 import api from '@/lib/api'
 import { setSessionActive } from '@/lib/session'
@@ -97,9 +98,11 @@ export default function LoginPage() {
       {/* Mobile logo */}
       <div className="lg:hidden flex flex-col items-center justify-center gap-4 mb-8">
         <div className="relative h-20 w-20">
-          <img
+          <Image
             src="/logo.png"
             alt="Ghostwire Logo"
+            width={80}
+            height={80}
             className="h-20 w-20 object-contain [filter:brightness(0)_saturate(100%)_invert(42%)_sepia(93%)_saturate(1352%)_hue-rotate(162deg)_brightness(95%)_contrast(106%)] dark:[filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
           />
         </div>

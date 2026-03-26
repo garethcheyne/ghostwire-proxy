@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'api.qrserver.com',
+        pathname: '/v1/create-qr-code/**',
+      },
+    ],
+  },
   serverExternalPackages: ['gray-matter', 'unified', 'remark-parse', 'remark-gfm', 'remark-rehype', 'rehype-raw', 'rehype-stringify'],
   experimental: {
     serverActions: {

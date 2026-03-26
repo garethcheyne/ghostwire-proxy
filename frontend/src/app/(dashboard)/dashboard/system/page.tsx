@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -117,23 +117,7 @@ export default function SystemMonitorPage() {
     fetchAllData()
   })
 
-  useEffect(() => {
-    const interval = setInterval(fetchStatus, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    fetchMetrics()
-    fetchThroughput()
-  }, [period])
-
-  const fetchAllData = async () => {
-    setIsRefreshing(true)
-    await Promise.all([fetchStatus(), fetchMetrics(), fetchThroughput()])
-    setIsRefreshing(false)
-  }
-
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const response = await api.get('/api/system/status')
       setStatus(response.data)
@@ -144,24 +128,40 @@ export default function SystemMonitorPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       const response = await api.get(`/api/system/metrics?period=${period}`)
       setMetrics(response.data)
     } catch (err) {
       console.error('Failed to fetch metrics:', err)
     }
-  }
+  }, [period])
 
-  const fetchThroughput = async () => {
+  const fetchThroughput = useCallback(async () => {
     try {
       const response = await api.get(`/api/system/throughput?period=${period}`)
       setThroughput(response.data)
     } catch (err) {
       console.error('Failed to fetch throughput:', err)
     }
+  }, [period])
+
+  useEffect(() => {
+    const interval = setInterval(fetchStatus, 30000)
+    return () => clearInterval(interval)
+  }, [fetchStatus])
+
+  useEffect(() => {
+    fetchMetrics()
+    fetchThroughput()
+  }, [fetchMetrics, fetchThroughput])
+
+  const fetchAllData = async () => {
+    setIsRefreshing(true)
+    await Promise.all([fetchStatus(), fetchMetrics(), fetchThroughput()])
+    setIsRefreshing(false)
   }
 
   const formatBytes = (bytes: number) => {

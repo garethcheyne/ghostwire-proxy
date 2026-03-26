@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -126,9 +127,11 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-slate-700/50 px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="relative h-8 w-8">
-              <img
+              <Image
                 src="/logo.png"
                 alt="Ghostwire Logo"
+                width={32}
+                height={32}
                 className="h-8 w-8 object-contain [filter:brightness(0)_saturate(100%)_invert(42%)_sepia(93%)_saturate(1352%)_hue-rotate(162deg)_brightness(95%)_contrast(106%)] dark:[filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
               />
             </div>
