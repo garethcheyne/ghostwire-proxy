@@ -213,8 +213,8 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 sm:gap-3 border-l pl-2 sm:pl-4 cursor-pointer">
                 <div className="hidden sm:text-right lg:block">
-                  <p className="text-sm font-medium truncate max-w-[120px]">{user?.name || 'Admin'}</p>
-                  <p className="text-xs text-muted-foreground truncate max-w-[120px]">{user?.email || 'admin@proxy.local'}</p>
+                  <p className="text-sm font-medium truncate max-w-[120px]" data-private="name">{user?.name || 'Admin'}</p>
+                  <p className="text-xs text-muted-foreground truncate max-w-[120px]" data-private="email">{user?.email || 'admin@proxy.local'}</p>
                 </div>
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                   <AvatarImage src="" alt={user?.name || 'User'} />

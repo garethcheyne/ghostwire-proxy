@@ -9,24 +9,25 @@ from datetime import datetime, timezone
 # Override settings BEFORE importing app modules
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-testing-only")
 os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key-for-testing-only")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://ghostwire:GhostwireProxy2024Secure@ghostwire-proxy-postgres:5432/ghostwire_proxy_test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Fast rounds for tests
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.pool import StaticPool
 from httpx import AsyncClient, ASGITransport
 
 from app.core.database import Base, get_db
 from app.core.security import get_password_hash, create_access_token
 from app.models.user import User
 
+# Test database URL — uses dedicated test database in the docker Postgres container
+TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
-# In-memory SQLite engine for tests
 test_engine = create_async_engine(
-    "sqlite+aiosqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    TEST_DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,
 )
 
 TestSessionLocal = async_sessionmaker(

@@ -1,0 +1,21 @@
+{
+  "name": "ghostwire-proxy",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">\r   <img src=\"frontend/public/logo-teal.png\" alt=\"Ghostwire Proxy\" width=\"120\" />\r </p>",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garethcheyne/ghostwire-proxy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/garethcheyne/ghostwire-proxy/issues"
+  },
+  "homepage": "https://github.com/garethcheyne/ghostwire-proxy#readme"
+}

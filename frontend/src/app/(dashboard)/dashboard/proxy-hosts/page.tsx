@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Globe,
   Plus,
@@ -18,6 +20,7 @@ import {
   MapPin,
   Settings,
   Layers,
+  Monitor,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -143,9 +146,7 @@ export default function ProxyHostsPage() {
   const [editingLocation, setEditingLocation] = useState<ProxyLocation | null>(null)
   const [locationForm, setLocationForm] = useState<LocationFormData>(defaultLocationData)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  usePageData(() => { fetchData() })
 
   const fetchData = async () => {
     try {
@@ -257,8 +258,10 @@ export default function ProxyHostsPage() {
 
       setShowDialog(false)
       fetchData()
+      toastSuccess(editingHost ? 'Proxy host updated' : 'Proxy host created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save proxy host')
+      toastError('Failed to save proxy host')
     } finally {
       setIsSubmitting(false)
     }
@@ -272,8 +275,10 @@ export default function ProxyHostsPage() {
         await api.post(`/api/proxy-hosts/${host.id}/enable`)
       }
       fetchData()
+      toastSuccess(host.enabled ? 'Proxy host disabled' : 'Proxy host enabled')
     } catch (error) {
       console.error('Failed to toggle host:', error)
+      toastError('Failed to toggle proxy host')
     }
     setActiveDropdown(null)
   }
@@ -284,8 +289,10 @@ export default function ProxyHostsPage() {
     try {
       await api.delete(`/api/proxy-hosts/${host.id}`)
       fetchData()
+      toastSuccess('Proxy host deleted')
     } catch (error) {
       console.error('Failed to delete host:', error)
+      toastError('Failed to delete proxy host')
     }
     setActiveDropdown(null)
   }
@@ -338,8 +345,10 @@ export default function ProxyHostsPage() {
       const res = await api.get(`/api/proxy-hosts/${editingHost.id}/locations`)
       setLocations(res.data)
       setShowLocationDialog(false)
+      toastSuccess(editingLocation ? 'Location updated' : 'Location created')
     } catch (err: any) {
       console.error('Failed to save location:', err)
+      toastError('Failed to save location')
     }
   }
 
@@ -351,8 +360,10 @@ export default function ProxyHostsPage() {
       await api.delete(`/api/proxy-hosts/${editingHost.id}/locations/${location.id}`)
       const res = await api.get(`/api/proxy-hosts/${editingHost.id}/locations`)
       setLocations(res.data)
+      toastSuccess('Location deleted')
     } catch (err) {
       console.error('Failed to delete location:', err)
+      toastError('Failed to delete location')
     }
   }
 
@@ -424,7 +435,7 @@ export default function ProxyHostsPage() {
                       <div className="flex items-center gap-2">
                         <Globe className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <p className="font-medium">{host.domain_names[0]}</p>
+                          <p className="font-medium" data-private="domain">{host.domain_names[0]}</p>
                           {host.domain_names.length > 1 && (
                             <p className="text-xs text-muted-foreground">
                               +{host.domain_names.length - 1} more
@@ -436,7 +447,7 @@ export default function ProxyHostsPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">→</span>
-                        <code className="text-sm">
+                        <code className="text-sm" data-private="address">
                           {host.forward_scheme}://{host.forward_host}:{host.forward_port}
                         </code>
                       </div>
@@ -516,6 +527,15 @@ export default function ProxyHostsPage() {
                               >
                                 <ExternalLink className="h-4 w-4" />
                                 Open Site
+                              </a>
+                              <a
+                                href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
+                              >
+                                <Monitor className="h-4 w-4" />
+                                Open Site Locally
                               </a>
                               <hr className="my-1 border-border" />
                               <button

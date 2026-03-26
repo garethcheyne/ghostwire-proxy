@@ -60,7 +60,7 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   ZW:[-20,30],XK:[42.6,21],HK:[22.3,114.2],MO:[22.2,113.5],PS:[32,35.2],
 }
 
-function MapContent({ data, threatData, cityData }: { data: GeoData[]; threatData: GeoData[]; cityData: CityGeoData[] }) {
+function MapContent({ data, threatData, cityData, showCountry, showCity, showThreats }: { data: GeoData[]; threatData: GeoData[]; cityData: CityGeoData[]; showCountry: boolean; showCity: boolean; showThreats: boolean }) {
   const [L, setL] = useState<typeof import('leaflet') | null>(null)
   const [RL, setRL] = useState<typeof import('react-leaflet') | null>(null)
 
@@ -101,7 +101,7 @@ function MapContent({ data, threatData, cityData }: { data: GeoData[]; threatDat
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
       {/* Traffic circles (cyan) */}
-      {data.map((item) => {
+      {showCountry && data.map((item) => {
         const coords = COUNTRY_COORDS[item.country_code]
         if (!coords) return null
         const intensity = item.count / maxCount
@@ -130,7 +130,7 @@ function MapContent({ data, threatData, cityData }: { data: GeoData[]; threatDat
         )
       })}
       {/* Threat circles (red) */}
-      {threatData.map((item) => {
+      {showThreats && threatData.map((item) => {
         const coords = COUNTRY_COORDS[item.country_code]
         if (!coords) return null
         const intensity = item.count / maxThreatCount
@@ -161,7 +161,7 @@ function MapContent({ data, threatData, cityData }: { data: GeoData[]; threatDat
         )
       })}
       {/* City-level pins (yellow/amber — precise lat/lon from enrichment) */}
-      {cityData.length > 0 && (() => {
+      {showCity && cityData.length > 0 && (() => {
         const maxCityCount = Math.max(...cityData.map(d => d.count), 1)
         return cityData.map((item, idx) => {
           const intensity = item.count / maxCityCount
@@ -210,6 +210,9 @@ export default function GeoHeatmap({
   const [threatData, setThreatData] = useState<GeoData[]>([])
   const [cityData, setCityData] = useState<CityGeoData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [layerCountry, setLayerCountry] = useState(true)
+  const [layerCity, setLayerCity] = useState(true)
+  const [layerThreats, setLayerThreats] = useState(true)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -238,7 +241,7 @@ export default function GeoHeatmap({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[400px] text-muted-foreground text-sm">
+      <div className="flex items-center justify-center h-[700px] text-muted-foreground text-sm">
         Loading geographic data...
       </div>
     )
@@ -246,7 +249,7 @@ export default function GeoHeatmap({
 
   if (data.length === 0 && threatData.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-[700px] text-muted-foreground">
         <Globe className="h-12 w-12 mb-3 opacity-30" />
         <p className="text-sm">No geographic data available yet</p>
         <p className="text-xs mt-1">Traffic country data will appear as requests come in</p>
@@ -256,25 +259,41 @@ export default function GeoHeatmap({
 
   return (
     <div className="space-y-4">
-      <div className="h-[400px] rounded-xl overflow-hidden border border-border relative">
-        <MapContent data={data} threatData={threatData} cityData={cityData} />
-        {/* Legend */}
-        <div className="absolute bottom-3 left-3 z-[1000] flex gap-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-2 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-full bg-cyan-500" />
+      <div className="h-[700px] rounded-xl overflow-hidden border border-border relative">
+        <MapContent data={data} threatData={threatData} cityData={cityData} showCountry={layerCountry} showCity={layerCity} showThreats={layerThreats} />
+        {/* Interactive Legend */}
+        <div className="absolute bottom-3 left-3 z-[1000] flex gap-1 rounded-lg bg-card/90 backdrop-blur border border-border px-2 py-1.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setLayerCountry(v => !v)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
+              layerCountry ? 'bg-cyan-500/15 text-cyan-400' : 'text-muted-foreground/50 line-through'
+            } hover:bg-cyan-500/20`}
+          >
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCountry ? 'bg-cyan-500' : 'bg-muted-foreground/30'}`} />
             Country
-          </div>
-          {cityData.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full bg-amber-400" />
-              City
-            </div>
-          )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLayerCity(v => !v)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
+              layerCity ? 'bg-amber-500/15 text-amber-400' : 'text-muted-foreground/50 line-through'
+            } hover:bg-amber-500/20`}
+          >
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCity ? 'bg-amber-400' : 'bg-muted-foreground/30'}`} />
+            City
+          </button>
           {threatData.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-full bg-red-500" />
+            <button
+              type="button"
+              onClick={() => setLayerThreats(v => !v)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
+                layerThreats ? 'bg-red-500/15 text-red-400' : 'text-muted-foreground/50 line-through'
+              } hover:bg-red-500/20`}
+            >
+              <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerThreats ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
               Threats
-            </div>
+            </button>
           )}
         </div>
       </div>

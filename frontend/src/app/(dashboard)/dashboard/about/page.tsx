@@ -14,9 +14,18 @@ import {
   Layers,
   Cpu,
   FileText,
+  Download,
+  Info,
 } from 'lucide-react'
 import api from '@/lib/api'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+// Dynamic imports for other tabs
+const LicenseContent = dynamic(() => import('../license/page'), { ssr: false })
+const UpdatesContent = dynamic(() => import('../settings/updates/page'), { ssr: false })
+
+type TabType = 'about' | 'license' | 'updates'
 
 interface VersionInfo {
   version: string
@@ -51,6 +60,7 @@ const features = [
 
 export default function AboutPage() {
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>('about')
 
   useEffect(() => {
     api.get('/version')
@@ -59,7 +69,61 @@ export default function AboutPage() {
   }, [])
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-lg bg-muted p-1 max-w-md">
+        <button
+          onClick={() => setActiveTab('about')}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'about'
+              ? 'bg-background shadow-sm'
+              : 'hover:bg-background/50 text-muted-foreground'
+          }`}
+        >
+          <Info className="h-4 w-4" />
+          About
+        </button>
+        <button
+          onClick={() => setActiveTab('license')}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'license'
+              ? 'bg-background shadow-sm'
+              : 'hover:bg-background/50 text-muted-foreground'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          License
+        </button>
+        <button
+          onClick={() => setActiveTab('updates')}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'updates'
+              ? 'bg-background shadow-sm'
+              : 'hover:bg-background/50 text-muted-foreground'
+          }`}
+        >
+          <Download className="h-4 w-4" />
+          Updates
+        </button>
+      </div>
+
+      {/* License Tab */}
+      {activeTab === 'license' && (
+        <div className="[&>div>div:first-child]:hidden">
+          <LicenseContent />
+        </div>
+      )}
+
+      {/* Updates Tab */}
+      {activeTab === 'updates' && (
+        <div className="[&>div>div:first-child]:hidden">
+          <UpdatesContent />
+        </div>
+      )}
+
+      {/* About Tab Content */}
+      {activeTab === 'about' && (
+      <div className="space-y-8 max-w-4xl mx-auto">
       {/* Header */}
       <div className="text-center space-y-4 pt-4">
         <div className="flex justify-center">
@@ -172,16 +236,16 @@ export default function AboutPage() {
           <ExternalLink className="h-4 w-4 text-muted-foreground ml-auto" />
         </a>
 
-        <Link
-          href="/dashboard/license"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-cyan-500/50 transition-colors"
+        <button
+          onClick={() => setActiveTab('license')}
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-cyan-500/50 transition-colors text-left"
         >
           <FileText className="h-5 w-5 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">MIT License</p>
             <p className="text-xs text-muted-foreground">Open source</p>
           </div>
-        </Link>
+        </button>
 
         <a
           href="https://github.com/garethcheyne/ghostwire-proxy/issues"
@@ -213,6 +277,8 @@ export default function AboutPage() {
         </p>
         <p className="mt-1">© 2024–2026 · MIT License</p>
       </div>
+      </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,14 @@
+{
+  "analytics": {
+    "title": "Analytics"
+  },
+  "traffic": {
+    "title": "Traffic Logs"
+  },
+  "system": {
+    "title": "System Monitoring"
+  },
+  "notifications": {
+    "title": "Notifications"
+  }
+}

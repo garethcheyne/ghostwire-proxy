@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Archive,
   Download,
@@ -86,10 +88,7 @@ export default function BackupsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const confirm = useConfirm()
 
-  useEffect(() => {
-    fetchBackups()
-    fetchSettings()
-  }, [])
+  usePageData(() => { fetchBackups(); fetchSettings() })
 
   const fetchBackups = async () => {
     try {
@@ -138,10 +137,12 @@ export default function BackupsPage() {
       })
 
       setSuccess('Backup created successfully')
+      toastSuccess('Backup created')
       setShowCreateDialog(false)
       fetchBackups()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create backup')
+      toastError('Failed to create backup')
     } finally {
       setIsCreating(false)
     }
@@ -171,9 +172,11 @@ export default function BackupsPage() {
     try {
       await api.delete(`/api/backups/${backup.id}`)
       setSuccess('Backup deleted')
+      toastSuccess('Backup deleted')
       fetchBackups()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to delete backup')
+      toastError('Failed to delete backup')
     }
   }
 
@@ -192,9 +195,11 @@ export default function BackupsPage() {
       })
 
       setSuccess(`Restore completed: ${response.data.message}`)
+      toastSuccess('Restore completed')
       setShowRestoreDialog(false)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to restore backup')
+      toastError('Failed to restore backup')
     } finally {
       setIsRestoring(false)
     }
@@ -210,9 +215,11 @@ export default function BackupsPage() {
       await api.put('/api/backups/settings/current', editedSettings)
       setSettings(editedSettings)
       setSuccess('Settings saved')
+      toastSuccess('Backup settings saved')
       setShowSettingsDialog(false)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save settings')
+      toastError('Failed to save settings')
     } finally {
       setIsSavingSettings(false)
     }
@@ -239,9 +246,11 @@ export default function BackupsPage() {
       })
 
       setSuccess('Backup uploaded successfully')
+      toastSuccess('Backup uploaded')
       fetchBackups()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to upload backup')
+      toastError('Failed to upload backup')
     } finally {
       setIsUploading(false)
       // Reset file input so same file can be selected again

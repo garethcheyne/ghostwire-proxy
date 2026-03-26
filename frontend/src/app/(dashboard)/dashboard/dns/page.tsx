@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Cloud,
   Plus,
@@ -75,9 +77,7 @@ export default function DnsPage() {
   const [recordTtl, setRecordTtl] = useState(3600)
   const [recordProxied, setRecordProxied] = useState(true)
 
-  useEffect(() => {
-    fetchProviders()
-  }, [])
+  usePageData(() => { fetchProviders() })
 
   const fetchProviders = async () => {
     try {
@@ -120,8 +120,10 @@ export default function DnsPage() {
     try {
       await api.post(`/api/dns/providers/${selectedProvider.id}/sync`)
       fetchProviders()
+      toastSuccess('DNS zones synced')
     } catch (error) {
       console.error('Failed to sync zones:', error)
+      toastError('Failed to sync zones')
     } finally {
       setIsSyncing(false)
     }
@@ -159,8 +161,10 @@ export default function DnsPage() {
 
       setShowProviderDialog(false)
       fetchProviders()
+      toastSuccess('DNS provider added')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to add provider')
+      toastError('Failed to add provider')
     } finally {
       setIsSubmitting(false)
     }
@@ -205,8 +209,10 @@ export default function DnsPage() {
 
       setShowRecordDialog(false)
       fetchRecords(selectedZone.zone_id)
+      toastSuccess(editingRecord ? 'DNS record updated' : 'DNS record created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save record')
+      toastError('Failed to save record')
     } finally {
       setIsSubmitting(false)
     }
@@ -219,8 +225,10 @@ export default function DnsPage() {
     try {
       await api.delete(`/api/dns/zones/${selectedZone.zone_id}/records/${record.id}`)
       fetchRecords(selectedZone.zone_id)
+      toastSuccess('DNS record deleted')
     } catch (error) {
       console.error('Failed to delete record:', error)
+      toastError('Failed to delete record')
     }
   }
 
@@ -342,7 +350,7 @@ export default function DnsPage() {
                       >
                         <div className="flex items-center gap-2">
                           <Globe className="h-4 w-4" />
-                          <span>{zone.domain}</span>
+                          <span data-private="domain">{zone.domain}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {zone.records_count} records
@@ -361,7 +369,7 @@ export default function DnsPage() {
               <div className="rounded-xl border border-border bg-card">
                 <div className="border-b border-border p-4 flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold">{selectedZone.domain}</h3>
+                    <h3 className="font-semibold" data-private="domain">{selectedZone.domain}</h3>
                     <p className="text-sm text-muted-foreground">
                       {records.length} DNS records
                     </p>
@@ -416,10 +424,10 @@ export default function DnsPage() {
                                 {record.type}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm font-mono">
+                            <td className="px-4 py-3 text-sm font-mono" data-private="domain">
                               {record.name}
                             </td>
-                            <td className="px-4 py-3 text-sm font-mono max-w-xs truncate">
+                            <td className="px-4 py-3 text-sm font-mono max-w-xs truncate" data-private="address">
                               {record.content}
                             </td>
                             <td className="px-4 py-3">

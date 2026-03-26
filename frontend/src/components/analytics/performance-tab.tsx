@@ -147,7 +147,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
               return (
                 <div key={idx}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">{host.host_name}</span>
+                    <span className="text-sm font-medium" data-private="domain">{host.host_name}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-mono text-muted-foreground">
                         {formatResponseTime(host.avg_response_time)}
@@ -188,7 +188,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
                   return (
                     <div key={host.host_id}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium truncate">{host.host_name}</span>
+                        <span className="text-sm font-medium truncate" data-private="domain">{host.host_name}</span>
                         <span className="text-xs font-mono text-muted-foreground">{formatNumber(host.total_errors)} errors</span>
                       </div>
                       <div className="h-2 rounded-full bg-muted overflow-hidden mb-1">

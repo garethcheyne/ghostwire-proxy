@@ -1,8 +1,9 @@
 'use client'
 
 import { ColumnDef } from '@tanstack/react-table'
-import { ArrowUpDown, Ban, Unlock, Trash2, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { ArrowUpDown, Ban, Unlock, Trash2, ChevronDown, ChevronUp, Search, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { IpAddress } from '@/components/ip-address'
 
 export interface ThreatActor {
@@ -41,12 +42,37 @@ function formatDate(d: string): string {
 export function createActorColumns(actions: {
   onBlock: (ip: string) => void
   onUnblock: (ip: string) => void
+  onFirewallBan?: (ip: string) => void
   onDelete: (id: string, ip: string) => void
   onToggleExpand: (ip: string) => void
   onInvestigate?: (ip: string) => void
   expandedIp: string | null
+  firewallAvailable?: boolean
+  enableSelection?: boolean
 }): ColumnDef<ThreatActor>[] {
   return [
+    // Row selection checkbox (only when enabled)
+    ...(actions.enableSelection ? [{
+      id: 'select',
+      header: ({ table }: any) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }: any) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    } as ColumnDef<ThreatActor>] : []),
     {
       accessorKey: 'ip_address',
       header: 'IP Address',
@@ -198,6 +224,23 @@ export function createActorColumns(actions: {
               >
                 <Ban className="h-3.5 w-3.5 mr-1" />
                 <span className="hidden sm:inline">Block</span>
+              </Button>
+            )}
+            {actor.current_status !== 'firewall_banned' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 text-xs ${
+                  actions.firewallAvailable
+                    ? 'text-purple-500 hover:text-purple-400 hover:bg-purple-500/10'
+                    : 'text-muted-foreground/40 cursor-not-allowed'
+                }`}
+                onClick={() => actions.firewallAvailable && actions.onFirewallBan?.(actor.ip_address)}
+                disabled={!actions.firewallAvailable}
+                title={actions.firewallAvailable ? 'Push IP to network firewall' : 'No firewall connectors configured — add one in Settings → Firewalls'}
+              >
+                <Flame className="h-3.5 w-3.5 mr-1" />
+                <span className="hidden sm:inline">FW Ban</span>
               </Button>
             )}
             <Button

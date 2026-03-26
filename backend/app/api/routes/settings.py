@@ -27,6 +27,7 @@ DEFAULT_SETTINGS = {
     "default_site_behavior": "congratulations",
     "default_site_redirect_url": "",
     "trusted_ips": "[]",
+    "abuseipdb_api_key": "",
 }
 
 

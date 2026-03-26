@@ -107,3 +107,81 @@
 .status-warning {
   @apply text-amber-500;
 }
+
+/* --- Docs: Callout blocks --- */
+.docs-callout {
+  @apply border-l-4 rounded-r-lg p-4 my-4;
+}
+.docs-callout-title {
+  @apply font-semibold text-sm mb-1;
+}
+.docs-callout-content {
+  @apply text-sm text-muted-foreground;
+}
+.docs-callout-content p:first-child {
+  @apply mt-0;
+}
+.docs-callout-content p:last-child {
+  @apply mb-0;
+}
+.docs-callout-blue {
+  @apply border-blue-500/50 bg-blue-500/5;
+}
+.docs-callout-green {
+  @apply border-green-500/50 bg-green-500/5;
+}
+.docs-callout-purple {
+  @apply border-purple-500/50 bg-purple-500/5;
+}
+.docs-callout-amber {
+  @apply border-amber-500/50 bg-amber-500/5;
+}
+.docs-callout-red {
+  @apply border-red-500/50 bg-red-500/5;
+}
+
+/* --- Docs: Heading anchors --- */
+.docs-heading-anchor {
+  @apply no-underline text-inherit;
+}
+.docs-heading-anchor:hover {
+  @apply underline underline-offset-4 decoration-cyan-500/40;
+}
+.docs-heading-anchor:hover::after {
+  content: ' #';
+  @apply text-cyan-500/40 text-sm font-normal;
+}
+
+/* --- Docs: Badges --- */
+.docs-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+}
+.docs-badge-info {
+  @apply bg-blue-500/15 text-blue-400 border border-blue-500/30;
+}
+.docs-badge-success {
+  @apply bg-green-500/15 text-green-400 border border-green-500/30;
+}
+.docs-badge-warning {
+  @apply bg-amber-500/15 text-amber-400 border border-amber-500/30;
+}
+.docs-badge-error {
+  @apply bg-red-500/15 text-red-400 border border-red-500/30;
+}
+
+/* --- Docs: Steps --- */
+.docs-steps {
+  @apply my-6 space-y-4;
+}
+.docs-step {
+  @apply flex gap-4;
+}
+.docs-step-number {
+  @apply flex-shrink-0 w-8 h-8 rounded-full bg-cyan-500/15 text-cyan-400 font-bold text-sm flex items-center justify-center border border-cyan-500/30 mt-1;
+}
+.docs-step-content {
+  @apply flex-1 min-w-0;
+}
+.docs-step-content h3 {
+  @apply mt-0 mb-2;
+}

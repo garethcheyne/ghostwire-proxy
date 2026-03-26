@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Bell,
   BellOff,
@@ -123,9 +125,7 @@ export default function NotificationsPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  useEffect(() => {
-    fetchAll()
-  }, [])
+  usePageData(() => { fetchAll() })
 
   const fetchAll = async () => {
     setIsLoading(true)
@@ -158,8 +158,10 @@ export default function NotificationsPage() {
       }
       const res = await api.get('/api/alerts/preferences')
       setPreferences(res.data)
+      toastSuccess('Subscription updated')
     } catch {
       setNotification({ type: 'error', message: 'Failed to update subscription' })
+      toastError('Failed to update subscription')
     } finally {
       setIsSaving(null)
     }
@@ -176,8 +178,10 @@ export default function NotificationsPage() {
       }
       const res = await api.get('/api/alerts/preferences')
       setPreferences(res.data)
+      toastSuccess('Severity updated')
     } catch {
       setNotification({ type: 'error', message: 'Failed to update severity' })
+      toastError('Failed to update severity')
     } finally {
       setIsSaving(null)
     }
@@ -224,6 +228,7 @@ export default function NotificationsPage() {
       const res = await api.get('/api/alerts/channels')
       setChannels(res.data)
       setNotification({ type: 'success', message: editingChannel ? 'Channel updated' : 'Channel created' })
+      toastSuccess(editingChannel ? 'Channel updated' : 'Channel created')
     } catch (err: any) {
       setFormError(err.response?.data?.detail || 'Failed to save channel')
     } finally {
@@ -238,8 +243,10 @@ export default function NotificationsPage() {
       const res = await api.get('/api/alerts/channels')
       setChannels(res.data)
       setNotification({ type: 'success', message: 'Channel deleted' })
+      toastSuccess('Channel deleted')
     } catch {
       setNotification({ type: 'error', message: 'Failed to delete channel' })
+      toastError('Failed to delete channel')
     }
     setActiveDropdown(null)
   }
@@ -249,8 +256,10 @@ export default function NotificationsPage() {
     try {
       await api.post('/api/alerts/test')
       setNotification({ type: 'success', message: 'Test notification sent to all channels!' })
+      toastSuccess('Test notification sent')
     } catch {
       setNotification({ type: 'error', message: 'Failed to send test alert' })
+      toastError('Failed to send test alert')
     } finally {
       setIsTesting(false)
     }

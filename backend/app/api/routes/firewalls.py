@@ -19,6 +19,19 @@ from app.services.firewall_service import get_connector as get_firewall_connecto
 router = APIRouter()
 
 
+@router.get("/status")
+async def firewall_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if any enabled firewall connectors are configured."""
+    result = await db.execute(
+        select(func.count(FirewallConnector.id)).where(FirewallConnector.enabled == True)
+    )
+    count = result.scalar() or 0
+    return {"has_enabled_connectors": count > 0, "enabled_count": count}
+
+
 @router.get("", response_model=list[FirewallConnectorResponse])
 async def list_connectors(
     current_user: User = Depends(get_current_user),

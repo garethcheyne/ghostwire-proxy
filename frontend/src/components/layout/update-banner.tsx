@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ArrowUpCircle, Shield, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
@@ -21,21 +21,21 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
   const router = useRouter()
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = useCallback(async () => {
     try {
       const response = await api.get('/api/updates/available')
       setUpdate(response.data)
     } catch {
       // Silently fail — this is a background check
     }
-  }
+  }, [])
 
   useEffect(() => {
     checkForUpdates()
     // Poll every 5 minutes
     const interval = setInterval(checkForUpdates, 300000)
     return () => clearInterval(interval)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [checkForUpdates])
 
   if (dismissed || !update?.checked) return null
 

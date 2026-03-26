@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { usePageData } from '@/lib/use-page-data'
 import {
   Activity,
   Users,
@@ -17,6 +18,8 @@ import { OverviewTab } from '@/components/analytics/overview-tab'
 import { TrafficTab } from '@/components/analytics/traffic-tab'
 import { SecurityTab } from '@/components/analytics/security-tab'
 import { PerformanceTab } from '@/components/analytics/performance-tab'
+import { LogsTab } from '@/components/analytics/logs-tab'
+import { FileText } from 'lucide-react'
 
 interface AnalyticsDashboard {
   total_requests: number
@@ -105,9 +108,7 @@ export default function AnalyticsPage() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  usePageData(() => { fetchData() })
 
   useEffect(() => {
     fetchRealtime()
@@ -267,7 +268,7 @@ export default function AnalyticsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview" className="gap-1.5">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Overview</span>
@@ -275,6 +276,10 @@ export default function AnalyticsPage() {
           <TabsTrigger value="traffic" className="gap-1.5">
             <Activity className="h-4 w-4" />
             <span className="hidden sm:inline">Traffic</span>
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="gap-1.5">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Logs</span>
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-1.5">
             <Shield className="h-4 w-4" />
@@ -299,6 +304,13 @@ export default function AnalyticsPage() {
           <TrafficTab
             data={data}
             formatNumber={formatNumber}
+            formatBytes={formatBytes}
+            formatResponseTime={formatResponseTime}
+          />
+        </TabsContent>
+
+        <TabsContent value="logs">
+          <LogsTab
             formatBytes={formatBytes}
             formatResponseTime={formatResponseTime}
           />

@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError, toastInfo } from '@/lib/toast'
 import {
   Flame,
   Plus,
@@ -74,6 +76,13 @@ export default function FirewallsPage() {
   const [blockTestResults, setBlockTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [findingsDialog, setFindingsDialog] = useState<{
+    connectorName: string
+    success: boolean
+    info?: string
+    error?: string
+    findings: { item: string; status: string; detail: string }[]
+  } | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -84,12 +93,10 @@ export default function FirewallsPage() {
   const [formPassword, setFormPassword] = useState('')
   const [formApiKey, setFormApiKey] = useState('')
   const [formSiteId, setFormSiteId] = useState('')
-  const [formAddressList, setFormAddressList] = useState('ghostwire-blocked')
+  const [formAddressList, setFormAddressList] = useState('Ghostwire Block')
   const [formEnabled, setFormEnabled] = useState(true)
 
-  useEffect(() => {
-    fetchData()
-  }, [activeTab])
+  usePageData(() => { fetchData() }, [activeTab])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -117,7 +124,7 @@ export default function FirewallsPage() {
     setFormPassword('')
     setFormApiKey('')
     setFormSiteId('')
-    setFormAddressList('ghostwire-blocked')
+    setFormAddressList('Ghostwire Block')
     setFormEnabled(true)
     setError('')
   }
@@ -137,7 +144,7 @@ export default function FirewallsPage() {
     setFormPassword('')
     setFormApiKey('')
     setFormSiteId(connector.site_id || '')
-    setFormAddressList(connector.address_list_name || 'ghostwire-blocked')
+    setFormAddressList(connector.address_list_name || 'Ghostwire Block')
     setFormEnabled(connector.enabled)
     setEditingConnector(connector)
     setShowCreateDialog(true)
@@ -171,8 +178,10 @@ export default function FirewallsPage() {
 
       setShowCreateDialog(false)
       fetchData()
+      toastSuccess(editingConnector ? 'Connector updated' : 'Connector created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save connector')
+      toastError('Failed to save connector')
     } finally {
       setIsSubmitting(false)
     }
@@ -183,8 +192,10 @@ export default function FirewallsPage() {
     try {
       await api.delete(`/api/firewalls/${connector.id}`)
       fetchData()
+      toastSuccess('Connector deleted')
     } catch (error) {
       console.error('Failed to delete connector:', error)
+      toastError('Failed to delete connector')
     }
     setActiveDropdown(null)
   }
@@ -192,12 +203,28 @@ export default function FirewallsPage() {
   const handleTest = async (connector: FirewallConnector) => {
     try {
       const res = await api.post(`/api/firewalls/${connector.id}/test`)
-      setTestResults({ ...testResults, [connector.id]: res.data })
+      const data = res.data
+      setTestResults({ ...testResults, [connector.id]: data })
+      if (data.findings && data.findings.length > 0) {
+        setFindingsDialog({
+          connectorName: connector.name,
+          success: data.success,
+          info: data.info,
+          error: data.error,
+          findings: data.findings,
+        })
+      }
+      if (data.success) {
+        toastSuccess('Connection successful')
+      } else {
+        toastError(data.error || 'Connection failed')
+      }
     } catch (err: any) {
       setTestResults({
         ...testResults,
         [connector.id]: { success: false, message: err.response?.data?.detail || 'Connection failed' },
       })
+      toastError('Connection failed')
     }
   }
 
@@ -219,8 +246,10 @@ export default function FirewallsPage() {
     try {
       await api.post(`/api/firewalls/${connector.id}/sync`)
       fetchData()
+      toastSuccess('Blocklist synced')
     } catch (error) {
       console.error('Failed to sync:', error)
+      toastError('Failed to sync blocklist')
     } finally {
       setSyncingId(null)
     }
@@ -232,12 +261,15 @@ export default function FirewallsPage() {
       const { removed, duplicate_ips } = res.data
       if (removed > 0) {
         setNotification({ type: 'success', message: `Removed ${removed} duplicate entries across ${duplicate_ips} IPs` })
+        toastSuccess(`Removed ${removed} duplicate entries`)
         fetchData()
       } else {
         setNotification({ type: 'success', message: 'No duplicates found' })
+        toastInfo('No duplicates found')
       }
     } catch (error) {
       setNotification({ type: 'error', message: 'Failed to deduplicate' })
+      toastError('Failed to deduplicate')
     }
   }
 
@@ -327,9 +359,11 @@ export default function FirewallsPage() {
                           {typeLabels[connector.connector_type] || connector.connector_type}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-0.5">
+                      <p className="text-sm text-muted-foreground mt-0.5" data-private="address">
                         {connector.host}{connector.port ? `:${connector.port}` : ''}
-                        {connector.address_list_name && ` • List: ${connector.address_list_name}`}
+                        {connector.address_list_name && connector.connector_type === 'unifi'
+                          ? ` • Lists: ${connector.address_list_name.replace(/ IPv[46]$/, '')} IPv4 / IPv6`
+                          : connector.address_list_name ? ` • List: ${connector.address_list_name}` : ''}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Last sync: {formatDate(connector.last_sync_at)}
@@ -436,6 +470,59 @@ export default function FirewallsPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Test Findings Dialog */}
+      {findingsDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+            <div className="border-b border-border p-6 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">
+                Test Results — {findingsDialog.connectorName}
+              </h2>
+              <span className={`text-xs px-2 py-1 rounded-full ${findingsDialog.success ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                {findingsDialog.success ? 'Passed' : 'Issues Found'}
+              </span>
+            </div>
+            <div className="p-6 space-y-3">
+              {findingsDialog.info && (
+                <p className="text-sm text-muted-foreground">{findingsDialog.info}</p>
+              )}
+              {findingsDialog.error && (
+                <p className="text-sm text-red-500">{findingsDialog.error}</p>
+              )}
+              <div className="space-y-2">
+                {findingsDialog.findings.map((f, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-lg border border-border p-3">
+                    <div className="shrink-0 mt-0.5">
+                      {f.status === 'ok' ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : f.status === 'missing' ? (
+                        <XCircle className="h-4 w-4 text-yellow-500" />
+                      ) : f.status === 'warning' ? (
+                        <XCircle className="h-4 w-4 text-yellow-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{f.item}</p>
+                      <p className="text-xs text-muted-foreground">{f.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-border p-4 flex justify-end">
+              <button
+                onClick={() => setFindingsDialog(null)}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -607,21 +694,30 @@ export default function FirewallsPage() {
               <div>
                 <label className="block text-sm font-medium mb-2">
                   {formType === 'routeros' ? 'Address List Name' :
-                   formType === 'unifi' ? 'Firewall Group Name' : 'Alias Name'}
+                   formType === 'unifi' ? 'Address List Base Name' : 'Alias Name'}
                 </label>
                 <input
                   type="text"
                   value={formAddressList}
                   onChange={(e) => setFormAddressList(e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder={formType === 'unifi' ? 'Ghostwire Blocked' : 'ghostwire-blocked'}
+                  placeholder={formType === 'unifi' ? 'Ghostwire Block' : 'ghostwire-blocked'}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   {formType === 'routeros' && 'Address list in IP → Firewall → Address Lists'}
-                  {formType === 'unifi' && 'Address group in Settings → Security → Firewall Groups (will be created if missing)'}
+                  {formType === 'unifi' && 'Base name — two lists and two policies are created automatically:'}
                   {formType === 'pfsense' && 'Firewall alias name for blocked IPs'}
                   {formType === 'opnsense' && 'Firewall alias name for blocked IPs'}
                 </p>
+                {formType === 'unifi' && formAddressList && (
+                  <div className="mt-2 rounded-lg border border-border bg-muted/50 p-3 space-y-1 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground text-xs mb-1">Will create on UniFi:</p>
+                    <p>IPv4 Address List: <span className="font-mono text-foreground">{formAddressList.replace(/ IPv[46]$/, '')} IPv4</span></p>
+                    <p>IPv6 Address List: <span className="font-mono text-foreground">{formAddressList.replace(/ IPv[46]$/, '')} IPv6</span></p>
+                    <p>IPv4 Drop Policy: <span className="font-mono text-foreground">Ghostwire Drop IPv4</span></p>
+                    <p>IPv6 Drop Policy: <span className="font-mono text-foreground">Ghostwire Drop IPv6</span></p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2">

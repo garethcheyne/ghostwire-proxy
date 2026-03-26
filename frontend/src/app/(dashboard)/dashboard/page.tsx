@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
 import {
   Globe,
   Shield,
@@ -117,9 +118,7 @@ export default function DashboardPage() {
   const [authErrors, setAuthErrors] = useState<AuthErrors | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  usePageData(() => { fetchData() })
 
   const fetchData = async () => {
     try {
@@ -270,8 +269,8 @@ export default function DashboardPage() {
                         }`}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm sm:text-base truncate">{host.domain_names[0]}</p>
-                        <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                        <p className="font-medium text-sm sm:text-base truncate" data-private="domain">{host.domain_names[0]}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate" data-private="address">
                           → {host.forward_host}:{host.forward_port}
                         </p>
                       </div>
@@ -322,8 +321,8 @@ export default function DashboardPage() {
                           <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 shrink-0" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm sm:text-base truncate">{cert.name}</p>
-                          <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                          <p className="font-medium text-sm sm:text-base truncate" data-private="domain">{cert.name}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate" data-private="domain">
                             {cert.domain_names.slice(0, 2).join(', ')}
                             {cert.domain_names.length > 2 &&
                               ` +${cert.domain_names.length - 2} more`}

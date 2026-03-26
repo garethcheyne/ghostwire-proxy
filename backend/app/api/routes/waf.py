@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, ThreatThreshold
+from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
 from app.schemas.waf import (
     WafRuleCreate, WafRuleUpdate, WafRuleResponse,
@@ -489,6 +490,114 @@ async def delete_threat_actor(
     return {"status": "deleted", "ip": ip}
 
 
+@router.post("/actors/bulk-firewall-ban")
+async def bulk_firewall_ban(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Push multiple IPs to all enabled firewall connectors in one operation."""
+    body = await request.json()
+    ips: list[str] = body.get("ips", [])
+    if not ips:
+        raise HTTPException(status_code=400, detail="No IPs provided")
+    if len(ips) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 IPs per request")
+
+    conn_result = await db.execute(
+        select(FirewallConnector).where(FirewallConnector.enabled == True)
+    )
+    connectors = conn_result.scalars().all()
+    if not connectors:
+        raise HTTPException(status_code=400, detail="No enabled firewall connectors configured")
+
+    from app.services.firewall_service import get_connector as get_fw_connector
+
+    now = datetime.now(timezone.utc)
+    results = []
+    total_pushed = 0
+    total_errors = []
+
+    for ip in ips:
+        result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
+        actor = result.scalar_one_or_none()
+        if not actor:
+            actor = ThreatActor(
+                ip_address=ip,
+                current_status="firewall_banned",
+                firewall_banned_at=now,
+                perm_blocked_at=now,
+                first_seen=now,
+                last_seen=now,
+            )
+            db.add(actor)
+            await db.flush()
+        else:
+            actor.current_status = "firewall_banned"
+            actor.firewall_banned_at = now
+            if not actor.perm_blocked_at:
+                actor.perm_blocked_at = now
+            actor.updated_at = now
+
+        pushed = 0
+        ip_errors = []
+        for connector in connectors:
+            existing = await db.execute(
+                select(FirewallBlocklist).where(
+                    FirewallBlocklist.ip_address == ip,
+                    FirewallBlocklist.connector_id == connector.id,
+                    FirewallBlocklist.status == "pushed",
+                )
+            )
+            if existing.scalar_one_or_none():
+                pushed += 1
+                continue
+
+            entry = FirewallBlocklist(
+                threat_actor_id=actor.id,
+                ip_address=ip,
+                connector_id=connector.id,
+                status="pending",
+            )
+            db.add(entry)
+            await db.flush()
+
+            try:
+                instance = get_fw_connector(connector)
+                success = await instance.add_to_blocklist(ip, "Ghostwire bulk firewall ban")
+                if success:
+                    entry.status = "pushed"
+                    entry.pushed_at = now
+                    pushed += 1
+                else:
+                    entry.error_message = "Push failed"
+                    ip_errors.append(connector.name)
+            except Exception as e:
+                entry.error_message = str(e)[:500]
+                ip_errors.append(connector.name)
+
+        total_pushed += pushed
+        total_errors.extend(ip_errors)
+        results.append({"ip": ip, "pushed": pushed, "errors": ip_errors})
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_actors_bulk_firewall_banned",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Bulk firewall banned {len(ips)} IPs (pushed {total_pushed} total)",
+    ))
+    await db.commit()
+    await _notify_nginx_reload()
+    return {
+        "status": "ok",
+        "total_ips": len(ips),
+        "total_pushed": total_pushed,
+        "total_errors": len(total_errors),
+        "results": results,
+    }
+
+
 @router.post("/actors/{ip}/block")
 async def block_threat_actor(
     ip: str,
@@ -524,6 +633,101 @@ async def block_threat_actor(
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "blocked", "ip": ip}
+
+
+@router.post("/actors/{ip}/firewall-ban")
+async def firewall_ban_threat_actor(
+    ip: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Escalate an IP to firewall_banned and push to all enabled firewall connectors."""
+    # Check that at least one enabled connector exists
+    conn_result = await db.execute(
+        select(FirewallConnector).where(FirewallConnector.enabled == True)
+    )
+    connectors = conn_result.scalars().all()
+    if not connectors:
+        raise HTTPException(status_code=400, detail="No enabled firewall connectors configured")
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
+    actor = result.scalar_one_or_none()
+
+    if not actor:
+        actor = ThreatActor(
+            ip_address=ip,
+            current_status="firewall_banned",
+            firewall_banned_at=now,
+            perm_blocked_at=now,
+            first_seen=now,
+            last_seen=now,
+        )
+        db.add(actor)
+        await db.flush()
+    else:
+        actor.current_status = "firewall_banned"
+        actor.firewall_banned_at = now
+        if not actor.perm_blocked_at:
+            actor.perm_blocked_at = now
+        actor.updated_at = now
+
+    # Create blocklist entries for each enabled connector and push
+    from app.services.firewall_service import get_connector as get_fw_connector
+    pushed = 0
+    errors = []
+    for connector in connectors:
+        # Check if already pushed for this IP + connector
+        existing = await db.execute(
+            select(FirewallBlocklist).where(
+                FirewallBlocklist.ip_address == ip,
+                FirewallBlocklist.connector_id == connector.id,
+                FirewallBlocklist.status == "pushed",
+            )
+        )
+        if existing.scalar_one_or_none():
+            pushed += 1
+            continue
+
+        entry = FirewallBlocklist(
+            threat_actor_id=actor.id,
+            ip_address=ip,
+            connector_id=connector.id,
+            status="pending",
+        )
+        db.add(entry)
+        await db.flush()
+
+        try:
+            instance = get_fw_connector(connector)
+            success = await instance.add_to_blocklist(ip, "Ghostwire manual firewall ban")
+            if success:
+                entry.status = "pushed"
+                entry.pushed_at = now
+                pushed += 1
+            else:
+                entry.error_message = "Push failed"
+                errors.append(connector.name)
+        except Exception as e:
+            entry.error_message = str(e)[:500]
+            errors.append(connector.name)
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_actor_firewall_banned",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Firewall banned IP: {ip} (pushed to {pushed} connector(s))",
+    ))
+    await db.commit()
+    await _notify_nginx_reload()
+    return {
+        "status": "firewall_banned",
+        "ip": ip,
+        "pushed": pushed,
+        "errors": errors,
+    }
 
 
 @router.post("/actors/{ip}/unblock")

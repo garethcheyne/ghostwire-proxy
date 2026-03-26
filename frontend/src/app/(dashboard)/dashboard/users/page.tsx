@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Users,
   Plus,
@@ -42,9 +44,7 @@ export default function UsersPage() {
   const [formRole, setFormRole] = useState<'admin' | 'user' | 'viewer'>('user')
   const confirm = useConfirm()
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
+  usePageData(() => { fetchUsers() })
 
   const fetchUsers = async () => {
     try {
@@ -110,8 +110,10 @@ export default function UsersPage() {
 
       setShowCreateDialog(false)
       fetchUsers()
+      toastSuccess(editingUser ? 'User updated' : 'User created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save user')
+      toastError('Failed to save user')
     } finally {
       setIsSubmitting(false)
     }
@@ -123,8 +125,10 @@ export default function UsersPage() {
     try {
       await api.delete(`/api/users/${user.id}`)
       fetchUsers()
+      toastSuccess('User deleted')
     } catch (error) {
       console.error('Failed to delete user:', error)
+      toastError('Failed to delete user')
     }
     setActiveDropdown(null)
   }
@@ -136,8 +140,10 @@ export default function UsersPage() {
         is_active: !user.is_active,
       })
       fetchUsers()
+      toastSuccess(user.is_active ? 'User deactivated' : 'User activated')
     } catch (error) {
       console.error('Failed to update user:', error)
+      toastError('Failed to update user')
     }
     setActiveDropdown(null)
   }
@@ -221,8 +227,8 @@ export default function UsersPage() {
                           <User className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                          <p className="font-medium" data-private="name">{user.name}</p>
+                          <p className="text-sm text-muted-foreground" data-private="email">{user.email}</p>
                         </div>
                       </div>
                     </td>

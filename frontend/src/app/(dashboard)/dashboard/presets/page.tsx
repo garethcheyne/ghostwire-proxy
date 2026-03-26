@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Sparkles,
   Shield,
@@ -85,9 +87,7 @@ export default function PresetsPage() {
   const [results, setResults] = useState<Record<string, ApplyResult>>({})
   const [filter, setFilter] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchPresets()
-  }, [])
+  usePageData(() => { fetchPresets() })
 
   const fetchPresets = async () => {
     try {
@@ -124,10 +124,11 @@ export default function PresetsPage() {
     try {
       const { data } = await api.post(`/api/presets/${presetId}/apply`)
       setResults((prev) => ({ ...prev, [presetId]: data }))
-      // Update the preset's applied status
       setPresets((prev) => prev.map((p) => p.id === presetId ? { ...p, applied: true } : p))
+      toastSuccess('Preset applied successfully')
     } catch (err) {
       console.error('Failed to apply preset:', err)
+      toastError('Failed to apply preset')
     } finally {
       setApplying(null)
     }
@@ -143,8 +144,10 @@ export default function PresetsPage() {
         return updated
       })
       setPresets((prev) => prev.map((p) => p.id === presetId ? { ...p, applied: false } : p))
+      toastSuccess('Preset removed')
     } catch (err) {
       console.error('Failed to remove preset:', err)
+      toastError('Failed to remove preset')
     } finally {
       setRemoving(null)
     }

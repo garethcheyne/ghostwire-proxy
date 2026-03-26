@@ -3,6 +3,7 @@
 import {
   ColumnDef,
   ColumnFiltersState,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -37,6 +38,14 @@ interface DataTableProps<TData, TValue> {
   expandedRowId?: string | null
   /** Custom accessor to get the row's expansion ID (defaults to row.id) */
   getRowExpansionId?: (row: TData) => string
+  /** Enable row selection with checkboxes */
+  enableRowSelection?: boolean
+  /** Controlled row selection state */
+  rowSelection?: RowSelectionState
+  /** Callback when row selection changes */
+  onRowSelectionChange?: (selection: RowSelectionState) => void
+  /** Custom row ID accessor for selection (defaults to row index) */
+  getRowId?: (row: TData) => string
 }
 
 export function DataTable<TData, TValue>({
@@ -49,10 +58,22 @@ export function DataTable<TData, TValue>({
   renderSubRow,
   expandedRowId,
   getRowExpansionId,
+  enableRowSelection,
+  rowSelection: controlledRowSelection,
+  onRowSelectionChange,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [internalRowSelection, setInternalRowSelection] = useState<RowSelectionState>({})
+
+  const rowSelection = controlledRowSelection ?? internalRowSelection
+  const handleRowSelectionChange = (updaterOrValue: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)) => {
+    const newValue = typeof updaterOrValue === 'function' ? updaterOrValue(rowSelection) : updaterOrValue
+    if (onRowSelectionChange) onRowSelectionChange(newValue)
+    else setInternalRowSelection(newValue)
+  }
 
   const table = useReactTable({
     data,
@@ -64,8 +85,11 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    state: { sorting, columnFilters, columnVisibility },
+    enableRowSelection: enableRowSelection ?? false,
+    onRowSelectionChange: handleRowSelectionChange,
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
     initialState: { pagination: { pageSize } },
+    getRowId: getRowId ? (row: TData) => getRowId(row) : undefined,
   })
 
   return (
@@ -135,6 +159,9 @@ export function DataTable<TData, TValue>({
       {table.getPageCount() > 1 && (
         <div className="flex items-center justify-between px-1">
           <p className="text-xs text-muted-foreground">
+            {enableRowSelection && Object.keys(rowSelection).length > 0 && (
+              <span className="font-medium text-foreground">{Object.keys(rowSelection).length} selected &middot; </span>
+            )}
             {table.getFilteredRowModel().rows.length} total &middot; Page{' '}
             {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
           </p>

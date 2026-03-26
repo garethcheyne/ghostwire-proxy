@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Key,
   Plus,
@@ -120,9 +122,7 @@ export default function AuthWallPage() {
   const [selectedUser, setSelectedUser] = useState<LocalAuthUser | null>(null)
   const confirm = useConfirm()
 
-  useEffect(() => {
-    fetchAuthWalls()
-  }, [])
+  usePageData(() => { fetchAuthWalls() })
 
   const fetchAuthWalls = async () => {
     try {
@@ -188,8 +188,10 @@ export default function AuthWallPage() {
 
       setShowWallDialog(false)
       fetchAuthWalls()
+      toastSuccess(editingWall ? 'Auth wall updated' : 'Auth wall created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save auth wall')
+      toastError('Failed to save auth wall')
     } finally {
       setIsSubmitting(false)
     }
@@ -201,8 +203,10 @@ export default function AuthWallPage() {
     try {
       await api.delete(`/api/auth-walls/${wall.id}`)
       fetchAuthWalls()
+      toastSuccess('Auth wall deleted')
     } catch (error) {
       console.error('Failed to delete auth wall:', error)
+      toastError('Failed to delete auth wall')
     }
     setActiveDropdown(null)
   }
@@ -237,8 +241,10 @@ export default function AuthWallPage() {
 
       setShowProviderDialog(false)
       fetchAuthWalls()
+      toastSuccess('Auth provider added')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to add provider')
+      toastError('Failed to add provider')
     } finally {
       setIsSubmitting(false)
     }
@@ -248,8 +254,10 @@ export default function AuthWallPage() {
     try {
       await api.delete(`/api/auth-walls/${wallId}/providers/${providerId}`)
       fetchAuthWalls()
+      toastSuccess('Auth provider deleted')
     } catch (error) {
       console.error('Failed to delete provider:', error)
+      toastError('Failed to delete provider')
     }
   }
 
@@ -259,8 +267,10 @@ export default function AuthWallPage() {
         enabled: !provider.enabled,
       })
       fetchAuthWalls()
+      toastSuccess(provider.enabled ? 'Provider disabled' : 'Provider enabled')
     } catch (error) {
       console.error('Failed to toggle provider:', error)
+      toastError('Failed to toggle provider')
     }
   }
 
@@ -291,8 +301,10 @@ export default function AuthWallPage() {
 
       setShowUserDialog(false)
       fetchAuthWalls()
+      toastSuccess('Auth wall user added')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to add user')
+      toastError('Failed to add user')
     } finally {
       setIsSubmitting(false)
     }
@@ -303,8 +315,10 @@ export default function AuthWallPage() {
     try {
       await api.delete(`/api/auth-walls/${wallId}/users/${userId}`)
       fetchAuthWalls()
+      toastSuccess('User deleted')
     } catch (error) {
       console.error('Failed to delete user:', error)
+      toastError('Failed to delete user')
     }
   }
 
@@ -314,8 +328,10 @@ export default function AuthWallPage() {
         is_active: !user.is_active,
       })
       fetchAuthWalls()
+      toastSuccess(user.is_active ? 'User deactivated' : 'User activated')
     } catch (error) {
       console.error('Failed to toggle user:', error)
+      toastError('Failed to toggle user')
     }
   }
 
@@ -331,8 +347,10 @@ export default function AuthWallPage() {
     try {
       await api.post(`/api/auth-walls/${selectedWall.id}/sessions/${sessionId}/revoke`)
       fetchSessions(selectedWall.id)
+      toastSuccess('Session revoked')
     } catch (error) {
       console.error('Failed to revoke session:', error)
+      toastError('Failed to revoke session')
     }
   }
 
@@ -342,8 +360,10 @@ export default function AuthWallPage() {
     try {
       await api.post(`/api/auth-walls/${selectedWall.id}/sessions/revoke-all`)
       fetchSessions(selectedWall.id)
+      toastSuccess('All sessions revoked')
     } catch (error) {
       console.error('Failed to revoke sessions:', error)
+      toastError('Failed to revoke sessions')
     }
   }
 
@@ -377,8 +397,10 @@ export default function AuthWallPage() {
 
       setShowTotpDialog(false)
       fetchAuthWalls()
+      toastSuccess('Two-factor authentication enabled')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid code')
+      toastError('Invalid code')
     } finally {
       setIsSubmitting(false)
     }
@@ -389,8 +411,10 @@ export default function AuthWallPage() {
     try {
       await api.delete(`/api/auth-walls/${wallId}/users/${userId}/totp`)
       fetchAuthWalls()
+      toastSuccess('Two-factor authentication disabled')
     } catch (error) {
       console.error('Failed to disable TOTP:', error)
+      toastError('Failed to disable TOTP')
     }
   }
 

@@ -1,0 +1,17 @@
+{
+  "users": {
+    "title": "User Management"
+  },
+  "alerts": {
+    "title": "Alert Channels"
+  },
+  "settings": {
+    "title": "Settings"
+  },
+  "backups": {
+    "title": "Backups"
+  },
+  "updates": {
+    "title": "Updates"
+  }
+}

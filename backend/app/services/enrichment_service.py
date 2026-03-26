@@ -101,7 +101,9 @@ async def enrich_ip(
 
     if existing and not force:
         age = datetime.now(timezone.utc) - (existing.updated_at or existing.enriched_at)
-        if age < ENRICHMENT_TTL:
+        # Re-fetch if AbuseIPDB key is now available but cached record has no abuse data
+        abuse_missing = abuseipdb_key and existing.abuse_score is None
+        if age < ENRICHMENT_TTL and not abuse_missing:
             return existing
 
     # Gather data from all sources in parallel

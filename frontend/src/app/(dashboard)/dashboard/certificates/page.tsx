@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Shield,
   Plus,
@@ -40,9 +42,7 @@ export default function CertificatesPage() {
   const [uploadCert, setUploadCert] = useState('')
   const [uploadKey, setUploadKey] = useState('')
 
-  useEffect(() => {
-    fetchCertificates()
-  }, [])
+  usePageData(() => { fetchCertificates() })
 
   const fetchCertificates = async () => {
     try {
@@ -125,8 +125,10 @@ export default function CertificatesPage() {
       setShowCreateDialog(false)
       resetForm()
       fetchCertificates()
+      toastSuccess(createMode === 'letsencrypt' ? "Let's Encrypt certificate requested" : 'Certificate uploaded successfully')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create certificate')
+      toastError('Failed to create certificate')
     } finally {
       setIsSubmitting(false)
     }
@@ -136,8 +138,10 @@ export default function CertificatesPage() {
     try {
       await api.post(`/api/certificates/${cert.id}/renew`)
       fetchCertificates()
+      toastSuccess('Certificate renewal initiated')
     } catch (error) {
       console.error('Failed to renew certificate:', error)
+      toastError('Failed to renew certificate')
     }
     setActiveDropdown(null)
   }
@@ -148,8 +152,10 @@ export default function CertificatesPage() {
     try {
       await api.delete(`/api/certificates/${cert.id}`)
       fetchCertificates()
+      toastSuccess('Certificate deleted')
     } catch (error) {
       console.error('Failed to delete certificate:', error)
+      toastError('Failed to delete certificate')
     }
     setActiveDropdown(null)
   }
@@ -225,7 +231,7 @@ export default function CertificatesPage() {
                       <Clock className="h-5 w-5 text-yellow-500" />
                     )}
                     <div>
-                      <h3 className="font-semibold">{cert.name}</h3>
+                      <h3 className="font-semibold" data-private="domain">{cert.name}</h3>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           cert.is_letsencrypt
@@ -275,7 +281,7 @@ export default function CertificatesPage() {
                 <div className="space-y-2 text-sm">
                   <div>
                     <p className="text-muted-foreground">Domains</p>
-                    <p className="font-mono text-xs">
+                    <p className="font-mono text-xs" data-private="domain">
                       {cert.domain_names.slice(0, 2).join(', ')}
                       {cert.domain_names.length > 2 && (
                         <span className="text-muted-foreground">

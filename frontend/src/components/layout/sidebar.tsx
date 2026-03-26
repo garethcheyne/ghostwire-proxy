@@ -37,6 +37,7 @@ import {
   Info,
   FileText,
   Bell,
+  BookOpen,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
@@ -62,31 +63,25 @@ const navigation: NavGroup[] = [
   {
     title: 'Proxy',
     items: [
-      { title: 'Proxy Hosts', href: '/dashboard/proxy-hosts', icon: Globe },
+      { title: 'Hosts', href: '/dashboard/proxy-hosts', icon: Globe },
       { title: 'Certificates', href: '/dashboard/certificates', icon: Shield },
-      { title: 'DNS', href: '/dashboard/dns', icon: Cloud },
+      { title: 'DNS Providers', href: '/dashboard/dns', icon: Cloud },
     ],
   },
   {
     title: 'Security',
     items: [
-      { title: 'WAF Rules', href: '/dashboard/waf', icon: ShieldAlert },
       { title: 'Threats', href: '/dashboard/threats', icon: AlertTriangle },
-      { title: 'Honeypots', href: '/dashboard/honeypot', icon: Bug },
+      { title: 'Rules', href: '/dashboard/rules', icon: ShieldAlert },
+      { title: 'Access Control', href: '/dashboard/access-control', icon: Key },
       { title: 'Firewalls', href: '/dashboard/firewalls', icon: Flame },
-      { title: 'GeoIP Blocking', href: '/dashboard/geoip', icon: Map },
-      { title: 'Rate Limiting', href: '/dashboard/rate-limits', icon: Gauge },
-      { title: 'Access Lists', href: '/dashboard/access-lists', icon: Lock },
-      { title: 'Auth Walls', href: '/dashboard/auth-walls', icon: Key },
-      { title: 'Security Presets', href: '/dashboard/presets', icon: Sparkles },
     ],
   },
   {
     title: 'Monitoring',
     items: [
       { title: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-      { title: 'Traffic', href: '/dashboard/traffic', icon: Activity },
-      { title: 'Notifications', href: '/dashboard/notifications', icon: Bell },
+      { title: 'Alerts', href: '/dashboard/alerts', icon: Bell },
       { title: 'System', href: '/dashboard/system', icon: Monitor },
     ],
   },
@@ -94,11 +89,8 @@ const navigation: NavGroup[] = [
     title: 'Administration',
     items: [
       { title: 'Users', href: '/dashboard/users', icon: Users },
-      { title: 'Alerts', href: '/dashboard/alerts', icon: AlertTriangle },
       { title: 'Settings', href: '/dashboard/settings', icon: Settings },
-      { title: 'Updates', href: '/dashboard/settings/updates', icon: Download },
       { title: 'About', href: '/dashboard/about', icon: Info },
-      { title: 'License', href: '/dashboard/license', icon: FileText },
     ],
   },
 ]

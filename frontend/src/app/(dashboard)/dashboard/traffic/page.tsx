@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Activity,
   Search,
@@ -45,9 +47,7 @@ export default function TrafficPage() {
   // Detail view
   const [selectedLog, setSelectedLog] = useState<TrafficLog | null>(null)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  usePageData(() => { fetchData() })
 
   useEffect(() => {
     fetchLogs()
@@ -98,8 +98,10 @@ export default function TrafficPage() {
       await api.delete('/api/traffic')
       setLogs([])
       fetchData()
+      toastSuccess('Traffic logs purged')
     } catch (error) {
       console.error('Failed to purge traffic logs:', error)
+      toastError('Failed to purge traffic logs')
     }
   }
 
@@ -107,8 +109,10 @@ export default function TrafficPage() {
     try {
       await api.delete(`/api/traffic/${logId}`)
       setLogs(logs.filter(l => l.id !== logId))
+      toastSuccess('Log entry deleted')
     } catch (error) {
       console.error('Failed to delete log:', error)
+      toastError('Failed to delete log')
     }
   }
 
@@ -288,7 +292,7 @@ export default function TrafficPage() {
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-1">
                         <Globe className="h-3 w-3 text-muted-foreground" />
-                        <span className="font-medium">{log.host_name || '-'}</span>
+                        <span className="font-medium" data-private="domain">{log.host_name || '-'}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">

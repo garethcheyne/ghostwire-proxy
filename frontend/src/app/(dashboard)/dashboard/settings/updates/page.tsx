@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Download,
   RefreshCw,
@@ -130,9 +132,7 @@ export default function UpdatesPage() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  usePageData(() => { fetchData() })
 
   // Poll for active update status
   useEffect(() => {
@@ -171,9 +171,11 @@ export default function UpdatesPage() {
       setAppInfo(appResponse.data)
       setBaseImages(imagesResponse.data)
       setSuccess('Update check completed')
+      toastSuccess('Update check completed')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
       setError('Failed to check for updates')
+      toastError('Failed to check for updates')
     } finally {
       setIsChecking(false)
     }
@@ -192,8 +194,10 @@ export default function UpdatesPage() {
       })
       setActiveUpdate(response.data)
       setSuccess('Update started')
+      toastSuccess('Update started')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to start update')
+      toastError('Failed to start update')
     } finally {
       setIsUpdating(false)
     }
@@ -212,8 +216,10 @@ export default function UpdatesPage() {
       })
       setActiveUpdate(response.data)
       setSuccess('Base image update started')
+      toastSuccess('Base image update started')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to start update')
+      toastError('Failed to start update')
     } finally {
       setIsUpdating(false)
     }
@@ -229,8 +235,10 @@ export default function UpdatesPage() {
       const response = await api.post(`/api/updates/rollback/${updateId}`)
       setActiveUpdate(response.data)
       setSuccess('Rollback started')
+      toastSuccess('Rollback started')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to start rollback')
+      toastError('Failed to start rollback')
     }
   }
 
@@ -245,9 +253,11 @@ export default function UpdatesPage() {
       const response = await api.put('/api/updates/settings', settings)
       setSettings(response.data)
       setSuccess('Settings saved')
+      toastSuccess('Update settings saved')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
       setError('Failed to save settings')
+      toastError('Failed to save settings')
     } finally {
       setIsSavingSettings(false)
     }

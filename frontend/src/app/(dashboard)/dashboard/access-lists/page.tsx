@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Lock,
   Plus,
@@ -35,9 +37,7 @@ export default function AccessListsPage() {
   const [newEntryAction, setNewEntryAction] = useState<'allow' | 'deny'>('allow')
   const confirm = useConfirm()
 
-  useEffect(() => {
-    fetchAccessLists()
-  }, [])
+  usePageData(() => { fetchAccessLists() })
 
   const fetchAccessLists = async () => {
     try {
@@ -123,8 +123,10 @@ export default function AccessListsPage() {
 
       setShowCreateDialog(false)
       fetchAccessLists()
+      toastSuccess(editingList ? 'Access list updated' : 'Access list created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save access list')
+      toastError('Failed to save access list')
     } finally {
       setIsSubmitting(false)
     }
@@ -136,8 +138,10 @@ export default function AccessListsPage() {
     try {
       await api.delete(`/api/access-lists/${list.id}`)
       fetchAccessLists()
+      toastSuccess('Access list deleted')
     } catch (error) {
       console.error('Failed to delete access list:', error)
+      toastError('Failed to delete access list')
     }
     setActiveDropdown(null)
   }

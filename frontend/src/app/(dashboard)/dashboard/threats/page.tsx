@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { RowSelectionState } from '@tanstack/react-table'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   AlertTriangle,
   Shield,
@@ -14,6 +17,7 @@ import {
   X,
   Crosshair,
   RefreshCw,
+  Flame,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +27,8 @@ import { createActorColumns, type ThreatActor } from '@/components/threats/actor
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
+import { HoneypotTabs } from '@/components/threats/honeypot-tabs'
+import { Bug } from 'lucide-react'
 
 interface ThreatStats {
   total_events: number
@@ -60,11 +66,14 @@ const categoryColors: Record<string, string> = {
 
 export default function ThreatsPage() {
   const confirm = useConfirm()
-  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'actors'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'actors' | 'honeypot' | 'traps' | 'hits'>('overview')
   const [stats, setStats] = useState<ThreatStats | null>(null)
   const [events, setEvents] = useState<ThreatEvent[]>([])
   const [actors, setActors] = useState<ThreatActor[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Firewall connector status
+  const [firewallAvailable, setFirewallAvailable] = useState(false)
 
   // Event filters
   const [evFilterIp, setEvFilterIp] = useState('')
@@ -88,9 +97,17 @@ export default function ThreatsPage() {
   const [intelData, setIntelData] = useState<any | null>(null)
   const [loadingIntel, setLoadingIntel] = useState(false)
 
+  // Actor row selection
+  const [actorRowSelection, setActorRowSelection] = useState<RowSelectionState>({})
+
+  usePageData(() => { fetchData() }, [activeTab])
+
+  // Fetch firewall connector status once
   useEffect(() => {
-    fetchData()
-  }, [activeTab])
+    api.get('/api/firewalls/status')
+      .then(res => setFirewallAvailable(res.data.has_enabled_connectors))
+      .catch(() => setFirewallAvailable(false))
+  }, [])
 
   // Close multi-select dropdowns on outside click
   useEffect(() => {
@@ -130,8 +147,10 @@ export default function ThreatsPage() {
     try {
       await api.post(`/api/waf/actors/${encodeURIComponent(ip)}/block`)
       fetchData()
+      toastSuccess('IP blocked')
     } catch (error) {
       console.error('Failed to block IP:', error)
+      toastError('Failed to block IP')
     }
   }
 
@@ -140,8 +159,10 @@ export default function ThreatsPage() {
     try {
       await api.post(`/api/waf/actors/${encodeURIComponent(ip)}/unblock`)
       fetchData()
+      toastSuccess('IP unblocked')
     } catch (error) {
       console.error('Failed to unblock IP:', error)
+      toastError('Failed to unblock IP')
     }
   }
 
@@ -149,8 +170,10 @@ export default function ThreatsPage() {
     try {
       await api.delete(`/api/waf/events/${eventId}`)
       setEvents(prev => prev.filter(e => e.id !== eventId))
+      toastSuccess('Threat event deleted')
     } catch (error) {
       console.error('Failed to delete event:', error)
+      toastError('Failed to delete event')
     }
   }
 
@@ -160,8 +183,10 @@ export default function ThreatsPage() {
       await api.delete('/api/waf/events')
       setEvents([])
       fetchData()
+      toastSuccess('All threat events purged')
     } catch (error) {
       console.error('Failed to purge events:', error)
+      toastError('Failed to purge events')
     }
   }
 
@@ -170,8 +195,44 @@ export default function ThreatsPage() {
     try {
       await api.delete(`/api/waf/actors/${encodeURIComponent(ip)}`)
       setActors(prev => prev.filter(a => a.id !== actorId))
+      toastSuccess('Threat actor deleted')
     } catch (error) {
       console.error('Failed to delete actor:', error)
+      toastError('Failed to delete actor')
+    }
+  }
+
+  const handleFirewallBan = async (ip: string) => {
+    if (!(await confirm({ description: `Push ${ip} to all connected firewalls? This will block the IP at the network edge.`, variant: 'destructive' }))) return
+    try {
+      await api.post(`/api/waf/actors/${encodeURIComponent(ip)}/firewall-ban`)
+      fetchData()
+      toastSuccess('IP pushed to firewalls')
+    } catch (error: any) {
+      console.error('Failed to firewall ban IP:', error)
+      toastError('Failed to firewall ban IP')
+    }
+  }
+
+  const handleBulkFirewallBan = async () => {
+    const selectedIds = Object.keys(actorRowSelection)
+    const selectedActors = filteredActors.filter(a => selectedIds.includes(a.ip_address))
+    const ips = selectedActors.map(a => a.ip_address)
+    if (ips.length === 0) return
+    if (!(await confirm({ description: `Push ${ips.length} IP(s) to all connected firewalls? This will block them at the network edge.`, variant: 'destructive' }))) return
+    try {
+      const res = await api.post('/api/waf/actors/bulk-firewall-ban', { ips })
+      setActorRowSelection({})
+      fetchData()
+      const data = res.data
+      if (data.total_errors > 0) {
+        toastSuccess(`Pushed ${data.total_pushed} to firewalls (${data.total_errors} errors)`)
+      } else {
+        toastSuccess(`${ips.length} IPs pushed to firewalls`)
+      }
+    } catch (error: any) {
+      console.error('Failed to bulk firewall ban:', error)
+      toastError('Failed to bulk firewall ban')
     }
   }
 
@@ -241,13 +302,16 @@ export default function ThreatsPage() {
     () => createActorColumns({
       onBlock: handleBlockIp,
       onUnblock: handleUnblockIp,
+      onFirewallBan: handleFirewallBan,
       onDelete: handleDeleteActor,
       onToggleExpand: toggleActorEvents,
       onInvestigate: handleInvestigateIp,
       expandedIp: expandedActorIp,
+      firewallAvailable,
+      enableSelection: true,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expandedActorIp]
+    [expandedActorIp, firewallAvailable]
   )
 
   const formatDate = (d: string) => {
@@ -266,20 +330,31 @@ export default function ThreatsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1">
-        {(['overview', 'events', 'actors'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
-              activeTab === tab
-                ? 'bg-background shadow-sm'
-                : 'hover:bg-background/50 text-muted-foreground'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex gap-1 rounded-lg bg-muted p-1 overflow-x-auto">
+        {[
+          { key: 'overview', label: 'Overview', icon: Shield },
+          { key: 'events', label: 'Events', icon: AlertTriangle },
+          { key: 'actors', label: 'Actors', icon: Eye },
+          { key: 'honeypot', label: 'Honeypot', icon: Bug },
+          { key: 'traps', label: 'Traps', icon: Crosshair },
+          { key: 'hits', label: 'Hits', icon: Flame },
+        ].map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as typeof activeTab)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-background shadow-sm'
+                  : 'hover:bg-background/50 text-muted-foreground'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {isLoading ? (
@@ -466,6 +541,12 @@ export default function ThreatsPage() {
           }
         />
 
+      ) : (activeTab === 'honeypot' || activeTab === 'traps' || activeTab === 'hits') ? (
+        <HoneypotTabs
+          activeSubTab={activeTab === 'honeypot' ? 'overview' : activeTab}
+          onInvestigateIp={handleInvestigateIp}
+        />
+
       ) : activeTab === 'actors' ? (
         <DataTable
           columns={actorColumns}
@@ -475,6 +556,10 @@ export default function ThreatsPage() {
           emptyIcon={<ShieldCheck className="h-10 w-10 text-green-500 opacity-50" />}
           expandedRowId={expandedActorIp}
           getRowExpansionId={(actor) => actor.ip_address}
+          enableRowSelection
+          rowSelection={actorRowSelection}
+          onRowSelectionChange={setActorRowSelection}
+          getRowId={(actor) => actor.ip_address}
           renderSubRow={(actor) => {
             if (actor.ip_address !== expandedActorIp) return null
             return (
@@ -583,6 +668,18 @@ export default function ThreatsPage() {
                     onClick={() => { setActorFilterIp(''); setActorFilterStatus([]); setOpenDropdown(null) }}
                 >
                   <X className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              )}
+              {/* Bulk FW Ban button */}
+              {firewallAvailable && Object.keys(actorRowSelection).length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs border-purple-500/30 text-purple-500 hover:bg-purple-500/10 ml-auto"
+                  onClick={handleBulkFirewallBan}
+                >
+                  <Flame className="h-3.5 w-3.5 mr-1" />
+                  FW Ban ({Object.keys(actorRowSelection).length})
                 </Button>
               )}
             </div>

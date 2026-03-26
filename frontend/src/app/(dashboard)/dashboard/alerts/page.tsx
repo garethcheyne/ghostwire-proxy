@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Bell,
   Plus,
@@ -70,9 +72,7 @@ export default function AlertsPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  useEffect(() => {
-    fetchChannels()
-  }, [])
+  usePageData(() => { fetchChannels() })
 
   const fetchChannels = async () => {
     setIsLoading(true)
@@ -124,6 +124,7 @@ export default function AlertsPage() {
       setShowCreateDialog(false)
       fetchChannels()
       setNotification({ type: 'success', message: editingChannel ? 'Channel updated' : 'Channel created' })
+      toastSuccess(editingChannel ? 'Channel updated' : 'Channel created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save channel')
     } finally {
@@ -137,8 +138,10 @@ export default function AlertsPage() {
       await api.delete(`/api/alerts/channels/${channel.id}`)
       fetchChannels()
       setNotification({ type: 'success', message: 'Channel deleted' })
+      toastSuccess('Channel deleted')
     } catch {
       setNotification({ type: 'error', message: 'Failed to delete channel' })
+      toastError('Failed to delete channel')
     }
     setActiveDropdown(null)
   }
@@ -148,8 +151,10 @@ export default function AlertsPage() {
     try {
       await api.post('/api/alerts/test')
       setNotification({ type: 'success', message: 'Test notification sent to all channels!' })
+      toastSuccess('Test notification sent')
     } catch {
       setNotification({ type: 'error', message: 'Failed to send test alert' })
+      toastError('Failed to send test alert')
     } finally {
       setIsTesting(false)
     }

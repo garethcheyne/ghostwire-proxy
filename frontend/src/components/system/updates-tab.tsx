@@ -85,7 +85,7 @@ export function UpdatesTab() {
 
   useEffect(() => {
     loadAll()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll active update progress
   useEffect(() => {

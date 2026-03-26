@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Shield,
   Plus,
@@ -90,9 +92,7 @@ export default function WafPage() {
   const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
-  useEffect(() => {
-    fetchData()
-  }, [filterCategory])
+  usePageData(() => { fetchData() }, [filterCategory])
 
   useEffect(() => {
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
@@ -200,8 +200,10 @@ export default function WafPage() {
 
       setShowCreateDialog(false)
       fetchData()
+      toastSuccess(editingRule ? 'WAF rule updated' : 'WAF rule created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save WAF rule')
+      toastError('Failed to save WAF rule')
     } finally {
       setIsSubmitting(false)
     }
@@ -213,8 +215,10 @@ export default function WafPage() {
     try {
       await api.delete(`/api/waf/rules/${rule.id}`)
       fetchData()
+      toastSuccess('WAF rule deleted')
     } catch (error) {
       console.error('Failed to delete rule:', error)
+      toastError('Failed to delete rule')
     }
     setActiveDropdown(null)
   }
@@ -223,8 +227,10 @@ export default function WafPage() {
     try {
       await api.put(`/api/waf/rules/${rule.id}`, { enabled: !rule.enabled })
       fetchData()
+      toastSuccess(rule.enabled ? 'Rule disabled' : 'Rule enabled')
     } catch (error) {
       console.error('Failed to toggle rule:', error)
+      toastError('Failed to toggle rule')
     }
   }
 

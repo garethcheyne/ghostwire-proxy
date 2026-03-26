@@ -565,7 +565,7 @@ async def get_realtime_stats(
 
 @router.get("/auth-errors")
 async def get_auth_errors(
-    period: str = Query("24h", pattern="^(1h|24h|7d|30d)$"),
+    period: str = Query("24h", pattern="^(1h|24h|7d|30d|90d)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -578,6 +578,7 @@ async def get_auth_errors(
         "24h": timedelta(hours=24),
         "7d": timedelta(days=7),
         "30d": timedelta(days=30),
+        "90d": timedelta(days=90),
     }
     start_time = now - period_map[period]
 

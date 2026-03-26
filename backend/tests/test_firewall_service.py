@@ -45,7 +45,7 @@ def mock_unifi_connector():
     connector.password = None
     connector.api_key = "encrypted_api_key"
     connector.site_id = "default"
-    connector.address_list_name = "Ghostwire Blocked"
+    connector.address_list_name = "Ghostwire Block"
     connector.enabled = True
     return connector
 
@@ -193,26 +193,114 @@ class TestUniFiConnector:
     """Tests for UniFi connector."""
 
     @pytest.mark.asyncio
-    async def test_test_connection_success(self, mock_unifi_connector):
-        """Test successful connection test."""
+    async def test_test_connection_success_with_findings(self, mock_unifi_connector):
+        """Test successful connection test returns findings about lists and policies."""
         connector = UniFiConnector(mock_unifi_connector)
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": [{"id": "site-1", "name": "Default"}],
-            "totalCount": 1
+        # Sites response (called twice: once directly, once by _get_site_uuid)
+        def make_sites_response():
+            r = MagicMock()
+            r.status_code = 200
+            r.json.return_value = {
+                "data": [{"id": "site-1", "internalReference": "default", "name": "Default"}],
+                "totalCount": 1,
+            }
+            return r
+
+        # Traffic matching lists response (both IPv4 and IPv6 exist)
+        lists_response = MagicMock()
+        lists_response.status_code = 200
+        lists_response.json.return_value = {
+            "data": [
+                {"id": "list-v4", "name": "Ghostwire Block IPv4", "type": "IPV4_ADDRESSES"},
+                {"id": "list-v6", "name": "Ghostwire Block IPv6", "type": "IPV6_ADDRESSES"},
+            ]
+        }
+
+        # Policies response (both exist)
+        policies_response = MagicMock()
+        policies_response.status_code = 200
+        policies_response.json.return_value = {
+            "data": [
+                {"id": "pol-v4", "name": "Ghostwire Drop IPv4"},
+                {"id": "pol-v6", "name": "Ghostwire Drop IPv6"},
+            ]
+        }
+
+        # Zones response
+        zones_response = MagicMock()
+        zones_response.status_code = 200
+        zones_response.json.return_value = {
+            "data": [
+                {"id": "zone-ext", "name": "External"},
+                {"id": "zone-int", "name": "Internal"},
+            ]
         }
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            client_mock = mock_client.return_value.__aenter__.return_value
+            client_mock.get = AsyncMock(side_effect=[
+                make_sites_response(),  # direct sites call
+                make_sites_response(),  # _get_site_uuid call
+                lists_response, policies_response, zones_response
+            ])
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.test_connection()
 
         assert result["success"] is True
         assert "Connected to UniFi" in result.get("info", "")
+        assert "findings" in result
+        findings = result["findings"]
+        assert len(findings) >= 6  # API, site, 2 lists, 2 policies, zone
+        statuses = [f["status"] for f in findings]
+        assert all(s == "ok" for s in statuses)
+
+    @pytest.mark.asyncio
+    async def test_test_connection_missing_ipv6_list(self, mock_unifi_connector):
+        """Test connection reports missing IPv6 list."""
+        connector = UniFiConnector(mock_unifi_connector)
+
+        def make_sites_response():
+            r = MagicMock()
+            r.status_code = 200
+            r.json.return_value = {
+                "data": [{"id": "site-1", "internalReference": "default", "name": "Default"}],
+                "totalCount": 1,
+            }
+            return r
+
+        # Only IPv4 list exists
+        lists_response = MagicMock()
+        lists_response.status_code = 200
+        lists_response.json.return_value = {
+            "data": [{"id": "list-v4", "name": "Ghostwire Block IPv4", "type": "IPV4_ADDRESSES"}]
+        }
+
+        policies_response = MagicMock()
+        policies_response.status_code = 200
+        policies_response.json.return_value = {
+            "data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]
+        }
+
+        zones_response = MagicMock()
+        zones_response.status_code = 200
+        zones_response.json.return_value = {"data": [{"id": "zone-ext", "name": "External"}]}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_mock = mock_client.return_value.__aenter__.return_value
+            client_mock.get = AsyncMock(side_effect=[
+                make_sites_response(), make_sites_response(),
+                lists_response, policies_response, zones_response
+            ])
+            with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
+                result = await connector.test_connection()
+
+        assert result["success"] is True
+        findings = result["findings"]
+        ipv6_list_finding = [f for f in findings if f["item"] == "IPv6 Address List"][0]
+        assert ipv6_list_finding["status"] == "missing"
+        ipv6_policy_finding = [f for f in findings if f["item"] == "IPv6 Drop Policy"][0]
+        assert ipv6_policy_finding["status"] == "missing"
 
     @pytest.mark.asyncio
     async def test_test_connection_invalid_api_key(self, mock_unifi_connector):
@@ -233,57 +321,125 @@ class TestUniFiConnector:
         assert "Invalid API key" in result.get("error", "")
 
     @pytest.mark.asyncio
-    async def test_add_to_blocklist_creates_list(self, mock_unifi_connector):
-        """Test add to blocklist creates traffic matching list if not exists."""
+    async def test_add_ipv4_to_blocklist(self, mock_unifi_connector):
+        """Test adding an IPv4 address goes to the IPv4 list."""
         connector = UniFiConnector(mock_unifi_connector)
 
-        # GET #1 - sites
+        # _get_site_uuid GET
         sites_response = MagicMock()
         sites_response.status_code = 200
         sites_response.json.return_value = {
             "data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]
         }
 
-        # GET #2 - traffic-matching-lists (empty, triggers create)
-        empty_lists_response = MagicMock()
-        empty_lists_response.status_code = 200
-        empty_lists_response.json.return_value = {"data": []}
+        # _get_or_create_traffic_matching_list GET — IPv4 list exists
+        lists_response = MagicMock()
+        lists_response.status_code = 200
+        lists_response.json.return_value = {
+            "data": [{"id": "list-v4", "name": "Ghostwire Block IPv4", "type": "IPV4_ADDRESSES"}]
+        }
 
-        # GET #3 - firewall/policies (existing policy found)
+        # _get_or_create_firewall_policy GET — Policy exists
         policies_response = MagicMock()
         policies_response.status_code = 200
         policies_response.json.return_value = {
-            "data": [{"id": "policy-id", "name": "Ghostwire - Autoblock"}]
+            "data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]
         }
 
-        # GET #4 - traffic-matching-lists/{id} (get current items)
+        # _get_traffic_matching_list GET — current items
         list_detail_response = MagicMock()
         list_detail_response.status_code = 200
         list_detail_response.json.return_value = {
             "items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}]
         }
 
-        # POST - create traffic matching list
-        create_list_response = MagicMock()
-        create_list_response.status_code = 200
-        create_list_response.json.return_value = {"id": "new-list-id"}
-
-        # PUT - update traffic matching list with new IP
         update_response = MagicMock()
         update_response.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
             client_mock.get = AsyncMock(side_effect=[
-                sites_response, empty_lists_response, policies_response, list_detail_response
+                sites_response, lists_response, policies_response, list_detail_response
             ])
-            client_mock.post = AsyncMock(return_value=create_list_response)
+            client_mock.post = AsyncMock()
             client_mock.put = AsyncMock(return_value=update_response)
 
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.add_to_blocklist("10.0.0.1", "Test")
 
         assert result is True
+        # Verify the PUT was called with IPv4 list name
+        put_call = client_mock.put.call_args
+        assert put_call[1]["json"]["name"] == "Ghostwire Block IPv4"
+        assert put_call[1]["json"]["type"] == "IPV4_ADDRESSES"
+
+    @pytest.mark.asyncio
+    async def test_add_ipv6_to_blocklist(self, mock_unifi_connector):
+        """Test adding an IPv6 address goes to the IPv6 list."""
+        connector = UniFiConnector(mock_unifi_connector)
+
+        sites_response = MagicMock()
+        sites_response.status_code = 200
+        sites_response.json.return_value = {
+            "data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]
+        }
+
+        # No existing lists — triggers create
+        empty_lists_response = MagicMock()
+        empty_lists_response.status_code = 200
+        empty_lists_response.json.return_value = {"data": []}
+
+        # No existing policies — triggers create
+        empty_policies_response = MagicMock()
+        empty_policies_response.status_code = 200
+        empty_policies_response.json.return_value = {"data": []}
+
+        # Zones
+        zones_response = MagicMock()
+        zones_response.status_code = 200
+        zones_response.json.return_value = {
+            "data": [{"id": "zone-ext", "name": "External"}, {"id": "zone-int", "name": "Internal"}]
+        }
+
+        # Get list detail after create
+        list_detail_response = MagicMock()
+        list_detail_response.status_code = 200
+        list_detail_response.json.return_value = {
+            "items": [{"type": "IP_ADDRESS", "value": "2001:db8::1"}]
+        }
+
+        # POST responses for create list and create policy
+        create_list_response = MagicMock()
+        create_list_response.status_code = 200
+        create_list_response.json.return_value = {"id": "new-v6-list"}
+
+        create_policy_response = MagicMock()
+        create_policy_response.status_code = 200
+        create_policy_response.json.return_value = {"id": "new-v6-policy"}
+
+        update_response = MagicMock()
+        update_response.status_code = 200
+
+        with patch("httpx.AsyncClient") as mock_client:
+            client_mock = mock_client.return_value.__aenter__.return_value
+            client_mock.get = AsyncMock(side_effect=[
+                sites_response, empty_lists_response,
+                empty_policies_response, zones_response,
+                list_detail_response,
+            ])
+            client_mock.post = AsyncMock(side_effect=[
+                create_list_response, create_policy_response,
+            ])
+            client_mock.put = AsyncMock(return_value=update_response)
+
+            with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
+                result = await connector.add_to_blocklist("2001:db8::1", "Test IPv6")
+
+        assert result is True
+        # Verify the PUT was called with IPv6 list name
+        put_call = client_mock.put.call_args
+        assert put_call[1]["json"]["name"] == "Ghostwire Block IPv6"
+        assert put_call[1]["json"]["type"] == "IPV6_ADDRESSES"
 
     @pytest.mark.asyncio
     async def test_remove_from_blocklist_success(self, mock_unifi_connector):
@@ -301,7 +457,7 @@ class TestUniFiConnector:
         lists_response = MagicMock()
         lists_response.status_code = 200
         lists_response.json.return_value = {
-            "data": [{"id": "list-id", "name": "Ghostwire Blocked", "type": "IPV4_ADDRESSES"}]
+            "data": [{"id": "list-id", "name": "Ghostwire Block IPv4", "type": "IPV4_ADDRESSES"}]
         }
 
         # GET #3 - traffic-matching-lists/{id} (get current items)
@@ -320,12 +476,44 @@ class TestUniFiConnector:
             client_mock.get = AsyncMock(side_effect=[
                 sites_response, lists_response, list_detail_response
             ])
+            client_mock.post = AsyncMock()  # shouldn't be called
             client_mock.put = AsyncMock(return_value=update_response)
 
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
-                result = await connector.remove_from_blocklist("192.0.2.1")
+                result = await connector.remove_from_blocklist("10.0.0.5")
 
         assert result is True
+
+    def test_is_ipv6(self, mock_unifi_connector):
+        """Test IPv4/IPv6 detection."""
+        connector = UniFiConnector(mock_unifi_connector)
+        assert connector._is_ipv6("192.168.1.1") is False
+        assert connector._is_ipv6("10.0.0.1") is False
+        assert connector._is_ipv6("2001:db8::1") is True
+        assert connector._is_ipv6("::1") is True
+        assert connector._is_ipv6("fe80::1") is True
+        assert connector._is_ipv6("not-an-ip") is False
+
+    def test_list_name_derivation(self, mock_unifi_connector):
+        """Test that list names are derived correctly from base name."""
+        connector = UniFiConnector(mock_unifi_connector)
+        # mock_unifi_connector has address_list_name = "Ghostwire Block"
+        assert connector._get_list_name_ipv4() == "Ghostwire Block IPv4"
+        assert connector._get_list_name_ipv6() == "Ghostwire Block IPv6"
+
+    def test_list_name_strips_existing_suffix(self, mock_unifi_connector):
+        """Test that existing IPv4/IPv6 suffix is stripped before re-deriving."""
+        mock_unifi_connector.address_list_name = "Ghostwire Block IPv4"
+        connector = UniFiConnector(mock_unifi_connector)
+        assert connector._get_list_base_name() == "Ghostwire Block"
+        assert connector._get_list_name_ipv4() == "Ghostwire Block IPv4"
+        assert connector._get_list_name_ipv6() == "Ghostwire Block IPv6"
+
+    def test_policy_names(self, mock_unifi_connector):
+        """Test firewall policy names."""
+        connector = UniFiConnector(mock_unifi_connector)
+        assert connector._get_policy_name_ipv4() == "Ghostwire Drop IPv4"
+        assert connector._get_policy_name_ipv6() == "Ghostwire Drop IPv6"
 
 
 class TestPfSenseConnector:

@@ -1,0 +1,22 @@
+{
+  "getting-started": {
+    "title": "Getting Started",
+    "icon": "Rocket"
+  },
+  "proxy-management": {
+    "title": "Proxy Management",
+    "icon": "Globe"
+  },
+  "security": {
+    "title": "Security",
+    "icon": "Shield"
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "icon": "BarChart3"
+  },
+  "administration": {
+    "title": "Administration",
+    "icon": "Settings"
+  }
+}

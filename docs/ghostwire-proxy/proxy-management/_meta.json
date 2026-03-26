@@ -1,0 +1,11 @@
+{
+  "proxy-hosts": {
+    "title": "Proxy Hosts"
+  },
+  "certificates": {
+    "title": "SSL Certificates"
+  },
+  "dns": {
+    "title": "DNS Providers"
+  }
+}

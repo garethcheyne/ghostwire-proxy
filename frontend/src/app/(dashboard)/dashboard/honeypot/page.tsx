@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Bug,
   Plus,
@@ -171,9 +173,8 @@ export default function HoneypotPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  useEffect(() => {
+  usePageData(() => {
     fetchData()
-    // Fetch proxy hosts once for the host selector
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
   }, [activeTab])
 
@@ -202,9 +203,11 @@ export default function HoneypotPage() {
     try {
       const res = await api.post('/api/honeypot/traps/install-defaults')
       setNotification({ type: 'success', message: `Installed ${res.data.count} default traps` })
+      toastSuccess(`Installed ${res.data.count} default traps`)
       fetchData()
     } catch {
       setNotification({ type: 'error', message: 'Failed to install defaults' })
+      toastError('Failed to install defaults')
     } finally {
       setInstallingDefaults(false)
     }
@@ -295,8 +298,10 @@ export default function HoneypotPage() {
       setShowCreateDialog(false)
       resetForm()
       fetchData()
+      toastSuccess(editingTrap ? 'Trap updated' : 'Trap created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save trap')
+      toastError('Failed to save trap')
     } finally {
       setIsSubmitting(false)
     }
@@ -313,8 +318,10 @@ export default function HoneypotPage() {
     try {
       await api.delete(`/api/honeypot/traps/${trap.id}`)
       fetchData()
+      toastSuccess('Trap deleted')
     } catch {
       setNotification({ type: 'error', message: 'Failed to delete trap' })
+      toastError('Failed to delete trap')
     }
   }
 
@@ -322,8 +329,10 @@ export default function HoneypotPage() {
     try {
       await api.put(`/api/honeypot/traps/${trap.id}`, { enabled: !trap.enabled })
       fetchData()
+      toastSuccess(trap.enabled ? 'Trap disabled' : 'Trap enabled')
     } catch {
       setNotification({ type: 'error', message: 'Failed to toggle trap' })
+      toastError('Failed to toggle trap')
     }
   }
 

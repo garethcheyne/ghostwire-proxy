@@ -1,0 +1,32 @@
+{
+  "waf": {
+    "title": "Web Application Firewall"
+  },
+  "threats": {
+    "title": "Threat Response"
+  },
+  "firewalls": {
+    "title": "Firewall Integration"
+  },
+  "abuseipdb": {
+    "title": "AbuseIPDB Integration"
+  },
+  "geoip": {
+    "title": "GeoIP Blocking"
+  },
+  "honeypot": {
+    "title": "Honeypot Traps"
+  },
+  "rate-limits": {
+    "title": "Rate Limiting"
+  },
+  "access-lists": {
+    "title": "Access Lists"
+  },
+  "auth-walls": {
+    "title": "Authentication Walls"
+  },
+  "presets": {
+    "title": "Security Presets"
+  }
+}

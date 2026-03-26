@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Map,
   Plus,
@@ -19,6 +21,7 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
+import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
 
 interface GeoipRule {
   id: string
@@ -64,27 +67,7 @@ const actionColors: Record<string, string> = {
   challenge: 'bg-yellow-500/10 text-yellow-500',
 }
 
-// Common country codes for the selector
-const COUNTRIES = [
-  { code: 'US', name: 'United States' }, { code: 'GB', name: 'United Kingdom' },
-  { code: 'DE', name: 'Germany' }, { code: 'FR', name: 'France' },
-  { code: 'CN', name: 'China' }, { code: 'RU', name: 'Russia' },
-  { code: 'JP', name: 'Japan' }, { code: 'KR', name: 'South Korea' },
-  { code: 'BR', name: 'Brazil' }, { code: 'IN', name: 'India' },
-  { code: 'AU', name: 'Australia' }, { code: 'CA', name: 'Canada' },
-  { code: 'NL', name: 'Netherlands' }, { code: 'IT', name: 'Italy' },
-  { code: 'ES', name: 'Spain' }, { code: 'SE', name: 'Sweden' },
-  { code: 'PL', name: 'Poland' }, { code: 'UA', name: 'Ukraine' },
-  { code: 'RO', name: 'Romania' }, { code: 'TH', name: 'Thailand' },
-  { code: 'VN', name: 'Vietnam' }, { code: 'ID', name: 'Indonesia' },
-  { code: 'TR', name: 'Turkey' }, { code: 'IR', name: 'Iran' },
-  { code: 'KP', name: 'North Korea' }, { code: 'NG', name: 'Nigeria' },
-  { code: 'PK', name: 'Pakistan' }, { code: 'BD', name: 'Bangladesh' },
-  { code: 'ZA', name: 'South Africa' }, { code: 'MX', name: 'Mexico' },
-  { code: 'AR', name: 'Argentina' }, { code: 'EG', name: 'Egypt' },
-  { code: 'SG', name: 'Singapore' }, { code: 'HK', name: 'Hong Kong' },
-  { code: 'TW', name: 'Taiwan' }, { code: 'NZ', name: 'New Zealand' },
-]
+
 
 export default function GeoIPPage() {
   const [rules, setRules] = useState<GeoipRule[]>([])
@@ -108,6 +91,7 @@ export default function GeoIPPage() {
   const [formEnabled, setFormEnabled] = useState(true)
   const [formHostIds, setFormHostIds] = useState<string[]>([])
   const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
+  const [countrySearch, setCountrySearch] = useState('')
 
   // Lookup state
   const [lookupIp, setLookupIp] = useState('')
@@ -115,10 +99,10 @@ export default function GeoIPPage() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const confirm = useConfirm()
 
-  useEffect(() => {
+  usePageData(() => {
     fetchData()
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [])
+  })
 
   useEffect(() => {
     if (!hostDropdownOpen) return
@@ -155,6 +139,7 @@ export default function GeoIPPage() {
     setFormEnabled(true)
     setFormHostIds([])
     setHostDropdownOpen(false)
+    setCountrySearch('')
     setError('')
   }
 
@@ -218,8 +203,10 @@ export default function GeoIPPage() {
 
       setShowCreateDialog(false)
       fetchData()
+      toastSuccess(editingRule ? 'GeoIP rule updated' : 'GeoIP rule created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save GeoIP rule')
+      toastError('Failed to save GeoIP rule')
     } finally {
       setIsSubmitting(false)
     }
@@ -230,8 +217,10 @@ export default function GeoIPPage() {
     try {
       await api.delete(`/api/geoip/rules/${rule.id}`)
       fetchData()
+      toastSuccess('GeoIP rule deleted')
     } catch (error) {
       console.error('Failed to delete rule:', error)
+      toastError('Failed to delete rule')
     }
     setActiveDropdown(null)
   }
@@ -240,8 +229,10 @@ export default function GeoIPPage() {
     try {
       await api.put(`/api/geoip/rules/${rule.id}`, { enabled: !rule.enabled })
       fetchData()
+      toastSuccess(rule.enabled ? 'Rule disabled' : 'Rule enabled')
     } catch (error) {
       console.error('Failed to toggle rule:', error)
+      toastError('Failed to toggle rule')
     }
   }
 
@@ -322,8 +313,10 @@ export default function GeoIPPage() {
                 await api.post('/api/geoip/database/update')
                 const res = await api.get('/api/geoip/database/status')
                 setDbInfo(res.data)
+                toastSuccess('GeoIP database updated')
               } catch (err: any) {
                 setError(err.response?.data?.detail || 'Failed to update GeoIP database')
+                toastError('Failed to update GeoIP database')
               } finally {
                 setIsUpdatingDb(false)
               }
@@ -426,7 +419,7 @@ export default function GeoIPPage() {
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {countries.slice(0, 8).map((code) => (
-                            <span key={code} className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">
+                            <span key={code} className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono" title={COUNTRY_MAP.get(code) || code}>
                               {code}
                             </span>
                           ))}
@@ -567,24 +560,58 @@ export default function GeoIPPage() {
                 <label className="block text-sm font-medium mb-2">
                   Countries ({formCountries.length} selected)
                 </label>
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-input p-2 grid grid-cols-2 gap-1">
-                  {COUNTRIES.map((c) => (
-                    <label
-                      key={c.code}
-                      className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer text-sm hover:bg-muted ${
-                        formCountries.includes(c.code) ? 'bg-primary/10 text-primary' : ''
-                      }`}
-                    >
+                <div className="rounded-lg border border-input">
+                  <div className="p-2 border-b border-input">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                       <input
-                        type="checkbox"
-                        checked={formCountries.includes(c.code)}
-                        onChange={() => toggleCountry(c.code)}
-                        className="h-3.5 w-3.5"
+                        type="text"
+                        value={countrySearch}
+                        onChange={(e) => setCountrySearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Search countries..."
                       />
-                      <span className="font-mono text-xs">{c.code}</span>
-                      <span className="truncate">{c.name}</span>
-                    </label>
-                  ))}
+                    </div>
+                    {formCountries.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {formCountries.map((code) => (
+                          <span
+                            key={code}
+                            className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
+                            onClick={() => toggleCountry(code)}
+                          >
+                            {code} {COUNTRY_MAP.get(code) || code}
+                            <span className="text-primary/60">×</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto p-2 grid grid-cols-2 gap-1">
+                    {COUNTRIES
+                      .filter((c) => {
+                        if (!countrySearch) return true
+                        const q = countrySearch.toLowerCase()
+                        return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+                      })
+                      .map((c) => (
+                        <label
+                          key={c.code}
+                          className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer text-sm hover:bg-muted ${
+                            formCountries.includes(c.code) ? 'bg-primary/10 text-primary' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formCountries.includes(c.code)}
+                            onChange={() => toggleCountry(c.code)}
+                            className="h-3.5 w-3.5"
+                          />
+                          <span className="font-mono text-xs">{c.code}</span>
+                          <span className="truncate">{c.name}</span>
+                        </label>
+                      ))}
+                  </div>
                 </div>
               </div>
 

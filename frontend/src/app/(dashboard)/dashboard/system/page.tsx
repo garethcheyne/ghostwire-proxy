@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
 import { useSearchParams } from 'next/navigation'
 import {
   Activity,
@@ -112,9 +113,12 @@ export default function SystemMonitorPage() {
   const [period, setPeriod] = useState<'1h' | '6h' | '24h' | '7d'>('24h')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  usePageData(() => {
     fetchAllData()
-    const interval = setInterval(fetchStatus, 30000) // Refresh status every 30s
+  })
+
+  useEffect(() => {
+    const interval = setInterval(fetchStatus, 30000)
     return () => clearInterval(interval)
   }, [])
 

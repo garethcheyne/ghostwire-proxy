@@ -109,6 +109,85 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 
 ---
 
+## Screenshots
+
+<details>
+<summary><strong>Dashboard</strong></summary>
+<img src="docs/ghostwire-proxy/_img/dashboard.png" alt="Dashboard" />
+</details>
+
+<details>
+<summary><strong>Proxy Hosts</strong></summary>
+<img src="docs/ghostwire-proxy/_img/proxy-hosts.png" alt="Proxy Hosts" />
+</details>
+
+<details>
+<summary><strong>SSL Certificates</strong></summary>
+<img src="docs/ghostwire-proxy/_img/certificates.png" alt="Certificates" />
+</details>
+
+<details>
+<summary><strong>Threat Detection & Response</strong></summary>
+<img src="docs/ghostwire-proxy/_img/threats.png" alt="Threats" />
+</details>
+
+<details>
+<summary><strong>Honeypot Traps</strong></summary>
+<img src="docs/ghostwire-proxy/_img/threats-honeypot.png" alt="Honeypot (within Threats)" />
+</details>
+
+<details>
+<summary><strong>Security Rules (WAF, GeoIP, Rate Limits)</strong></summary>
+<img src="docs/ghostwire-proxy/_img/rules-waf.png" alt="Security Rules - WAF" />
+</details>
+
+<details>
+<summary><strong>GeoIP Blocking</strong></summary>
+<img src="docs/ghostwire-proxy/_img/rules-geoip.png" alt="Security Rules - GeoIP" />
+</details>
+
+<details>
+<summary><strong>Access Control (Auth Walls & IP Lists)</strong></summary>
+<img src="docs/ghostwire-proxy/_img/access-control.png" alt="Access Control" />
+</details>
+
+<details>
+<summary><strong>Firewall Integration</strong></summary>
+<img src="docs/ghostwire-proxy/_img/firewalls.png" alt="Firewalls" />
+</details>
+
+<details>
+<summary><strong>Analytics</strong></summary>
+<img src="docs/ghostwire-proxy/_img/analytics.png" alt="Analytics" />
+</details>
+
+<details>
+<summary><strong>Traffic Logs (within Analytics)</strong></summary>
+<img src="docs/ghostwire-proxy/_img/analytics-logs.png" alt="Traffic Logs" />
+</details>
+
+<details>
+<summary><strong>Threat Origin Heatmap</strong></summary>
+<img src="docs/ghostwire-proxy/_img/analytics-heatmap.png" alt="Threat Heatmap" />
+</details>
+
+<details>
+<summary><strong>System Monitoring</strong></summary>
+<img src="docs/ghostwire-proxy/_img/system.png" alt="System" />
+</details>
+
+<details>
+<summary><strong>Settings</strong></summary>
+<img src="docs/ghostwire-proxy/_img/settings.png" alt="Settings" />
+</details>
+
+<details>
+<summary><strong>About (License & Updates)</strong></summary>
+<img src="docs/ghostwire-proxy/_img/about.png" alt="About" />
+</details>
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

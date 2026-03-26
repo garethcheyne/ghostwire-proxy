@@ -16,9 +16,7 @@ import {
   LayoutDashboard,
   Globe,
   Shield,
-  Lock,
   Key,
-  Activity,
   Settings,
   Cloud,
   Users,
@@ -26,11 +24,9 @@ import {
   ShieldAlert,
   AlertTriangle,
   Flame,
-  Map,
-  Gauge,
   Monitor,
-  Sparkles,
-  X,
+  Info,
+  Bell,
 } from 'lucide-react'
 
 interface NavItem {
@@ -54,29 +50,25 @@ const navigation: NavGroup[] = [
   {
     title: 'Proxy',
     items: [
-      { title: 'Proxy Hosts', href: '/dashboard/proxy-hosts', icon: Globe },
+      { title: 'Hosts', href: '/dashboard/proxy-hosts', icon: Globe },
       { title: 'Certificates', href: '/dashboard/certificates', icon: Shield },
-      { title: 'DNS', href: '/dashboard/dns', icon: Cloud },
+      { title: 'DNS Providers', href: '/dashboard/dns', icon: Cloud },
     ],
   },
   {
     title: 'Security',
     items: [
-      { title: 'WAF Rules', href: '/dashboard/waf', icon: ShieldAlert },
       { title: 'Threats', href: '/dashboard/threats', icon: AlertTriangle },
+      { title: 'Rules', href: '/dashboard/rules', icon: ShieldAlert },
+      { title: 'Access Control', href: '/dashboard/access-control', icon: Key },
       { title: 'Firewalls', href: '/dashboard/firewalls', icon: Flame },
-      { title: 'GeoIP Blocking', href: '/dashboard/geoip', icon: Map },
-      { title: 'Rate Limiting', href: '/dashboard/rate-limits', icon: Gauge },
-      { title: 'Access Lists', href: '/dashboard/access-lists', icon: Lock },
-      { title: 'Auth Walls', href: '/dashboard/auth-walls', icon: Key },
-      { title: 'Security Presets', href: '/dashboard/presets', icon: Sparkles },
     ],
   },
   {
     title: 'Monitoring',
     items: [
       { title: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-      { title: 'Traffic', href: '/dashboard/traffic', icon: Activity },
+      { title: 'Alerts', href: '/dashboard/alerts', icon: Bell },
       { title: 'System', href: '/dashboard/system', icon: Monitor },
     ],
   },
@@ -85,6 +77,7 @@ const navigation: NavGroup[] = [
     items: [
       { title: 'Users', href: '/dashboard/users', icon: Users },
       { title: 'Settings', href: '/dashboard/settings', icon: Settings },
+      { title: 'About', href: '/dashboard/about', icon: Info },
     ],
   },
 ]

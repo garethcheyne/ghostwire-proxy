@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Settings,
   Save,
@@ -15,6 +17,9 @@ import {
   ShieldCheck,
   Plus,
   X,
+  ExternalLink,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -53,12 +58,12 @@ export default function SettingsPage() {
   const [trustedIps, setTrustedIps] = useState<string[]>([])
   const [newTrustedIp, setNewTrustedIp] = useState('')
   const [isSavingTrusted, setIsSavingTrusted] = useState(false)
+  const [abuseIpDbKey, setAbuseIpDbKey] = useState('')
+  const [abuseIpDbKeyHasValue, setAbuseIpDbKeyHasValue] = useState(false)
+  const [isSavingAbuseKey, setIsSavingAbuseKey] = useState(false)
+  const [showAbuseKey, setShowAbuseKey] = useState(false)
 
-  useEffect(() => {
-    fetchSettings()
-    fetchDefaultSite()
-    fetchTrustedIps()
-  }, [])
+  usePageData(() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey() })
 
   const fetchSettings = async () => {
     try {
@@ -80,8 +85,10 @@ export default function SettingsPage() {
     try {
       await api.put('/api/settings', settings)
       setMessage({ type: 'success', text: 'Settings saved successfully' })
+      toastSuccess('Settings saved')
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to save settings' })
+      toastError('Failed to save settings')
     } finally {
       setIsSaving(false)
     }
@@ -102,8 +109,10 @@ export default function SettingsPage() {
     try {
       await api.put('/api/settings/default-site', defaultSite)
       setMessage({ type: 'success', text: 'Default site updated and applied' })
+      toastSuccess('Default site updated')
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update default site' })
+      toastError('Failed to update default site')
     } finally {
       setIsSavingDefault(false)
     }
@@ -116,8 +125,10 @@ export default function SettingsPage() {
     try {
       await api.post('/api/settings/reload-nginx')
       setMessage({ type: 'success', text: 'Nginx configuration reloaded successfully' })
+      toastSuccess('Nginx reloaded')
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to reload Nginx configuration' })
+      toastError('Failed to reload Nginx')
     } finally {
       setIsReloading(false)
     }
@@ -133,6 +144,45 @@ export default function SettingsPage() {
     }
   }
 
+  const fetchAbuseIpDbKey = async () => {
+    try {
+      const { data } = await api.get('/api/settings/abuseipdb_api_key')
+      setAbuseIpDbKeyHasValue(!!data.value)
+      setAbuseIpDbKey('')
+    } catch {
+      setAbuseIpDbKeyHasValue(false)
+    }
+  }
+
+  const saveAbuseIpDbKey = async () => {
+    setIsSavingAbuseKey(true)
+    try {
+      await api.put('/api/settings/abuseipdb_api_key', { value: abuseIpDbKey })
+      setAbuseIpDbKeyHasValue(!!abuseIpDbKey)
+      setAbuseIpDbKey('')
+      setShowAbuseKey(false)
+      toastSuccess(abuseIpDbKey ? 'AbuseIPDB API key saved' : 'AbuseIPDB API key removed')
+    } catch {
+      toastError('Failed to save AbuseIPDB API key')
+    } finally {
+      setIsSavingAbuseKey(false)
+    }
+  }
+
+  const clearAbuseIpDbKey = async () => {
+    setIsSavingAbuseKey(true)
+    try {
+      await api.put('/api/settings/abuseipdb_api_key', { value: '' })
+      setAbuseIpDbKeyHasValue(false)
+      setAbuseIpDbKey('')
+      toastSuccess('AbuseIPDB API key removed')
+    } catch {
+      toastError('Failed to remove AbuseIPDB API key')
+    } finally {
+      setIsSavingAbuseKey(false)
+    }
+  }
+
   const saveTrustedIps = async (ips: string[]) => {
     setIsSavingTrusted(true)
     setMessage(null)
@@ -140,8 +190,10 @@ export default function SettingsPage() {
       await api.put('/api/settings/trusted_ips', { value: JSON.stringify(ips) })
       setTrustedIps(ips)
       setMessage({ type: 'success', text: 'Trusted IPs saved. Changes will take effect within 5 minutes.' })
+      toastSuccess('Trusted IPs saved')
     } catch {
       setMessage({ type: 'error', text: 'Failed to save trusted IPs' })
+      toastError('Failed to save trusted IPs')
     } finally {
       setIsSavingTrusted(false)
     }
@@ -485,6 +537,94 @@ export default function SettingsPage() {
               />
             </div>
           )}
+        </div>
+      </div>
+
+
+      {/* IP Intelligence — AbuseIPDB */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5" />
+          IP Intelligence — AbuseIPDB
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          AbuseIPDB provides abuse confidence scores and report history for attacker IPs.
+          When configured, threat actor intelligence popups and the honeypot page will show AbuseIPDB data.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
+            <p className="font-medium">Setup instructions:</p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>
+                Go to{' '}
+                <a href="https://www.abuseipdb.com/register" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  abuseipdb.com/register <ExternalLink className="h-3 w-3" />
+                </a>
+                {' '}and create a free account
+              </li>
+              <li>Verify your email address</li>
+              <li>
+                Go to{' '}
+                <a href="https://www.abuseipdb.com/account/api" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  User Settings → API <ExternalLink className="h-3 w-3" />
+                </a>
+                {' '}and create an API key
+              </li>
+              <li>Paste your API key below</li>
+            </ol>
+            <p className="text-xs text-muted-foreground mt-2">
+              The free plan allows 1,000 lookups/day — sufficient for most installations. No subscription or blocklist selection is needed; Ghostwire queries individual IPs on demand.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">API Key</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type={showAbuseKey ? 'text' : 'password'}
+                  value={abuseIpDbKey}
+                  onChange={(e) => setAbuseIpDbKey(e.target.value)}
+                  placeholder={abuseIpDbKeyHasValue ? '••••••••••••••••••••••••' : 'Paste your AbuseIPDB API key'}
+                  className="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAbuseKey(!showAbuseKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showAbuseKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <button
+                onClick={saveAbuseIpDbKey}
+                disabled={isSavingAbuseKey || !abuseIpDbKey.trim()}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {isSavingAbuseKey ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save
+              </button>
+              {abuseIpDbKeyHasValue && (
+                <button
+                  onClick={clearAbuseIpDbKey}
+                  disabled={isSavingAbuseKey}
+                  className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                  Remove
+                </button>
+              )}
+            </div>
+            {abuseIpDbKeyHasValue && (
+              <p className="text-xs text-green-500 mt-2 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" /> API key is configured — AbuseIPDB lookups are active
+              </p>
+            )}
+            {!abuseIpDbKeyHasValue && (
+              <p className="text-xs text-muted-foreground mt-2">
+                No API key set — threat intelligence will not include AbuseIPDB data
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

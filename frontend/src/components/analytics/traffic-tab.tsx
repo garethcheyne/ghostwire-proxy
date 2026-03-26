@@ -119,7 +119,7 @@ export function TrafficTab({ data, formatNumber, formatBytes, formatResponseTime
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                      <span className="font-medium">{host.host_name}</span>
+                      <span className="font-medium" data-private="domain">{host.host_name}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{formatNumber(host.requests)}</td>

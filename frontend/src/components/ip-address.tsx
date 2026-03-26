@@ -75,9 +75,10 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
           className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold hover:text-blue-400 transition-colors cursor-pointer ${className || ''}`}
           onMouseEnter={fetchEnrichment}
           onFocus={fetchEnrichment}
+          data-private="ip"
         >
           {countryCode && <CountryBadge code={countryCode} name={countryName} />}
-          {ip}
+          <span data-private="ip">{ip}</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" className="w-80 p-0">

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Gauge,
   Plus,
@@ -64,10 +66,10 @@ export default function RateLimitsPage() {
   const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
-  useEffect(() => {
+  usePageData(() => {
     fetchRules()
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [])
+  })
 
   useEffect(() => {
     if (!hostDropdownOpen) return
@@ -163,8 +165,10 @@ export default function RateLimitsPage() {
 
       setShowCreateDialog(false)
       fetchRules()
+      toastSuccess(editingRule ? 'Rate limit rule updated' : 'Rate limit rule created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save rate limit rule')
+      toastError('Failed to save rate limit rule')
     } finally {
       setIsSubmitting(false)
     }
@@ -175,8 +179,10 @@ export default function RateLimitsPage() {
     try {
       await api.delete(`/api/rate-limits/${rule.id}`)
       fetchRules()
+      toastSuccess('Rate limit rule deleted')
     } catch (error) {
       console.error('Failed to delete rule:', error)
+      toastError('Failed to delete rule')
     }
     setActiveDropdown(null)
   }
@@ -185,8 +191,10 @@ export default function RateLimitsPage() {
     try {
       await api.put(`/api/rate-limits/${rule.id}`, { enabled: !rule.enabled })
       fetchRules()
+      toastSuccess(rule.enabled ? 'Rule disabled' : 'Rule enabled')
     } catch (error) {
       console.error('Failed to toggle rule:', error)
+      toastError('Failed to toggle rule')
     }
   }
 
