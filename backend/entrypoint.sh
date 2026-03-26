@@ -4,7 +4,7 @@
 
 for dir in /data/backups /data/certificates /data/nginx-configs /data/sqlite \
            /var/www/certbot /etc/letsencrypt /var/log/letsencrypt /var/lib/letsencrypt; do
-    if [ -d "$dir" ] && [ ! -w "$dir" ]; then
+    if [ -d "$dir" ]; then
         chown -R appuser:appuser "$dir" 2>/dev/null || chmod -R 777 "$dir" 2>/dev/null || true
     fi
 done

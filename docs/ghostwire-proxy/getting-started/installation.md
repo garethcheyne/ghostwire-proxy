@@ -9,7 +9,7 @@ excerpt: Deploy Ghostwire Proxy using Docker Compose
 ### Clone the repository
 
 ```bash
-git clone https://github.com/ghostwire/ghostwire-proxy.git
+git clone https://github.com/garethcheyne/ghostwire-proxy.git
 cd ghostwire-proxy
 ```
 

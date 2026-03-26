@@ -195,8 +195,15 @@ export default function BackupsPage() {
       })
 
       setSuccess(`Restore completed: ${response.data.message}`)
-      toastSuccess('Restore completed')
+      toastSuccess('Restore completed — logging out...')
       setShowRestoreDialog(false)
+
+      // Database was replaced — existing tokens are invalid, force re-login
+      setTimeout(() => {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        window.location.href = '/auth/login'
+      }, 2000)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to restore backup')
       toastError('Failed to restore backup')

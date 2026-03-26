@@ -195,6 +195,8 @@ class BackupService:
                 "-U", user,
                 "-d", dbname,
                 "--no-password",
+                "--clean",
+                "--if-exists",
                 "-f", dump_file,
             ] + exclude_tables
 
@@ -406,13 +408,14 @@ class BackupService:
         dbname = parsed.path.lstrip("/")
         user = parsed.username or "ghostwire"
 
-        # Restore using psql
+        # Restore using psql with single-transaction for atomicity
         cmd = [
             "psql",
             "-h", host,
             "-p", port,
             "-U", user,
             "-d", dbname,
+            "--single-transaction",
             "-f", dump_file,
         ]
 
@@ -426,6 +429,12 @@ class BackupService:
         if result.returncode != 0:
             error_msg = result.stderr or "psql failed with no output"
             raise RuntimeError(f"Database restore failed: {error_msg}")
+
+        # Check stderr for SQL errors even when exit code is 0
+        if result.stderr and "ERROR:" in result.stderr:
+            logger.warning(f"Database restore completed with errors: {result.stderr[:500]}")
+
+        logger.info(f"Database restore completed. stdout={len(result.stdout or '')} bytes")
 
     def _restore_certificates(self, temp_dir: str):
         """Restore SSL certificates."""
