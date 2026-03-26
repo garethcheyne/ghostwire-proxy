@@ -401,11 +401,11 @@ class TestUniFiConnector:
             "data": [{"id": "zone-ext", "name": "External"}, {"id": "zone-int", "name": "Internal"}]
         }
 
-        # Get list detail after create
+        # Get list detail after create (empty so the new IP gets added)
         list_detail_response = MagicMock()
         list_detail_response.status_code = 200
         list_detail_response.json.return_value = {
-            "items": [{"type": "IP_ADDRESS", "value": "2001:db8::1"}]
+            "items": []
         }
 
         # POST responses for create list and create policy

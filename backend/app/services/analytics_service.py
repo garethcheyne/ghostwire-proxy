@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, text, cast, String
+from sqlalchemy import select, func, and_, text, cast, String, literal_column
 import uuid
 
 from app.models.traffic_log import TrafficLog
@@ -37,8 +37,8 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
         )
         .where(TrafficLog.timestamp >= start)
         .group_by(
-            TrafficLog.proxy_host_id,
-            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD"T"HH24:00:00'),
+            literal_column("1"),
+            literal_column("2"),
         )
     )
     rows = result.all()
@@ -106,8 +106,8 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
         )
         .where(TrafficLog.timestamp >= start)
         .group_by(
-            TrafficLog.proxy_host_id,
-            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD'),
+            literal_column("1"),
+            literal_column("2"),
         )
     )
     rows = result.all()
@@ -203,9 +203,9 @@ async def aggregate_geo(db: AsyncSession, days_back: int = 2) -> int:
             )
         )
         .group_by(
-            TrafficLog.proxy_host_id,
-            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD'),
-            TrafficLog.country_code,
+            literal_column("1"),
+            literal_column("2"),
+            literal_column("3"),
         )
     )
     rows = result.all()

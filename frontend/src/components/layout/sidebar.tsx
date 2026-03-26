@@ -93,6 +93,12 @@ const navigation: NavGroup[] = [
       { title: 'About', href: '/dashboard/about', icon: Info },
     ],
   },
+  {
+    title: 'Help',
+    items: [
+      { title: 'Documentation', href: '/dashboard/docs', icon: BookOpen },
+    ],
+  },
 ]
 
 interface SidebarProps {

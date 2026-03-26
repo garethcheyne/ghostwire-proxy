@@ -27,6 +27,7 @@ import {
   Monitor,
   Info,
   Bell,
+  BookOpen,
 } from 'lucide-react'
 
 interface NavItem {
@@ -78,6 +79,12 @@ const navigation: NavGroup[] = [
       { title: 'Users', href: '/dashboard/users', icon: Users },
       { title: 'Settings', href: '/dashboard/settings', icon: Settings },
       { title: 'About', href: '/dashboard/about', icon: Info },
+    ],
+  },
+  {
+    title: 'Help',
+    items: [
+      { title: 'Documentation', href: '/dashboard/docs', icon: BookOpen },
     ],
   },
 ]
