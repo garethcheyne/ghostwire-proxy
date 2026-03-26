@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, text
+from sqlalchemy import select, func, and_, text, cast, String
 import uuid
 
 from app.models.traffic_log import TrafficLog
@@ -24,7 +24,7 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
     result = await db.execute(
         select(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%dT%H:00:00', TrafficLog.timestamp).label('hour'),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD"T"HH24:00:00').label('hour'),
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
@@ -38,7 +38,7 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
         .where(TrafficLog.timestamp >= start)
         .group_by(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%dT%H:00:00', TrafficLog.timestamp),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD"T"HH24:00:00'),
         )
     )
     rows = result.all()
@@ -97,7 +97,7 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
     result = await db.execute(
         select(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%d', TrafficLog.timestamp).label('date'),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD').label('date'),
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
@@ -107,7 +107,7 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
         .where(TrafficLog.timestamp >= start)
         .group_by(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%d', TrafficLog.timestamp),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD'),
         )
     )
     rows = result.all()
@@ -128,7 +128,7 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
         threat_result = await db.execute(
             select(func.count(ThreatEvent.id)).where(
                 and_(
-                    func.strftime('%Y-%m-%d', ThreatEvent.timestamp) == row.date,
+                    func.to_char(ThreatEvent.timestamp, 'YYYY-MM-DD') == row.date,
                     ThreatEvent.proxy_host_id == row.proxy_host_id if row.proxy_host_id else True,
                 )
             )
@@ -143,7 +143,7 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             )
             .where(
                 and_(
-                    func.strftime('%Y-%m-%d', TrafficLog.timestamp) == row.date,
+                    func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD') == row.date,
                     TrafficLog.proxy_host_id == row.proxy_host_id if row.proxy_host_id else True,
                 )
             )
@@ -190,7 +190,7 @@ async def aggregate_geo(db: AsyncSession, days_back: int = 2) -> int:
     result = await db.execute(
         select(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%d', TrafficLog.timestamp).label('date'),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD').label('date'),
             TrafficLog.country_code,
             func.count(TrafficLog.id).label('requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes'),
@@ -204,7 +204,7 @@ async def aggregate_geo(db: AsyncSession, days_back: int = 2) -> int:
         )
         .group_by(
             TrafficLog.proxy_host_id,
-            func.strftime('%Y-%m-%d', TrafficLog.timestamp),
+            func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD'),
             TrafficLog.country_code,
         )
     )

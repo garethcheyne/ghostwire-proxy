@@ -101,31 +101,31 @@ class TestRateLimitsPerHost:
     """Test rate limit rules per-host scoping."""
 
     @pytest.mark.asyncio
-    async def test_create_rate_limit_with_host(self, client, admin_user, auth_headers):
+    async def test_create_rate_limit_with_host(self, client, admin_user, auth_headers, proxy_host):
         """Rate limit with proxy_host_id is scoped to that host."""
         response = await client.post("/api/rate-limits", headers=auth_headers, json={
             "name": "Host Rate Limit",
             "requests_per_minute": 30,
             "burst_size": 5,
             "action": "reject",
-            "proxy_host_id": "ph-perhost-1",
+            "proxy_host_id": proxy_host.id,
         })
         assert response.status_code in (200, 201)
         data = response.json()
-        assert data["proxy_host_id"] == "ph-perhost-1"
+        assert data["proxy_host_id"] == proxy_host.id
 
     @pytest.mark.asyncio
-    async def test_list_rate_limits_filter_by_host(self, client, admin_user, auth_headers, db_session):
+    async def test_list_rate_limits_filter_by_host(self, client, admin_user, auth_headers, db_session, proxy_host):
         """Rate limit listing respects proxy_host_id filter."""
         global_rl = RateLimitRule(id="rl-global-ph", name="Global RL",
                                  requests_per_minute=100, burst_size=10, action="reject")
         host_rl = RateLimitRule(id="rl-host-ph", name="Host RL",
                                requests_per_minute=30, burst_size=5, action="reject",
-                               proxy_host_id="ph-perhost-1")
+                               proxy_host_id=proxy_host.id)
         db_session.add_all([global_rl, host_rl])
         await db_session.commit()
 
-        response = await client.get("/api/rate-limits?proxy_host_id=ph-perhost-1", headers=auth_headers)
+        response = await client.get(f"/api/rate-limits?proxy_host_id={proxy_host.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         ids = [r["id"] for r in data]
@@ -137,31 +137,31 @@ class TestGeoipPerHost:
     """Test GeoIP rules per-host scoping."""
 
     @pytest.mark.asyncio
-    async def test_create_geoip_rule_with_host(self, client, admin_user, auth_headers):
+    async def test_create_geoip_rule_with_host(self, client, admin_user, auth_headers, proxy_host):
         """GeoIP rule with proxy_host_id is scoped to that host."""
         response = await client.post("/api/geoip/rules", headers=auth_headers, json={
             "name": "Host GeoIP Block",
             "mode": "blocklist",
             "countries": '["CN", "RU"]',
             "action": "block",
-            "proxy_host_id": "ph-perhost-1",
+            "proxy_host_id": proxy_host.id,
         })
         assert response.status_code in (200, 201)
         data = response.json()
-        assert data["proxy_host_id"] == "ph-perhost-1"
+        assert data["proxy_host_id"] == proxy_host.id
 
     @pytest.mark.asyncio
-    async def test_list_geoip_rules_filter_by_host(self, client, admin_user, auth_headers, db_session):
+    async def test_list_geoip_rules_filter_by_host(self, client, admin_user, auth_headers, db_session, proxy_host):
         """GeoIP listing respects proxy_host_id filter."""
         global_geo = GeoipRule(id="geo-global-ph", name="Global Geo",
                                mode="blocklist", countries='["XX"]', action="block")
         host_geo = GeoipRule(id="geo-host-ph", name="Host Geo",
                              mode="blocklist", countries='["YY"]', action="block",
-                             proxy_host_id="ph-perhost-1")
+                             proxy_host_id=proxy_host.id)
         db_session.add_all([global_geo, host_geo])
         await db_session.commit()
 
-        response = await client.get("/api/geoip/rules?proxy_host_id=ph-perhost-1", headers=auth_headers)
+        response = await client.get(f"/api/geoip/rules?proxy_host_id={proxy_host.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         ids = [r["id"] for r in data]

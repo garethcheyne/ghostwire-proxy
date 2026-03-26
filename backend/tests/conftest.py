@@ -45,6 +45,8 @@ async def setup_database():
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    # Dispose connections so they don't leak across event loops
+    await test_engine.dispose()
 
 
 @pytest.fixture
