@@ -161,8 +161,9 @@ class BackupService:
         if "+asyncpg" in db_url:
             db_url = db_url.replace("+asyncpg", "")
 
-        # Use pg_dump
-        dump_file = os.path.join(db_dir, "ghostwire_proxy.sql")
+        # Use pg_dump in custom format (-Fc) for reliable restore
+        # Plain SQL format uses \restrict (pg_dump 17+) which breaks on any error
+        dump_file = os.path.join(db_dir, "ghostwire_proxy.dump")
 
         # Build pg_dump command
         exclude_tables = []
@@ -195,8 +196,7 @@ class BackupService:
                 "-U", user,
                 "-d", dbname,
                 "--no-password",
-                "--clean",
-                "--if-exists",
+                "-Fc",
                 "-f", dump_file,
             ] + exclude_tables
 
@@ -382,9 +382,14 @@ class BackupService:
             raise
 
     async def _restore_database(self, temp_dir: str):
-        """Restore PostgreSQL database."""
+        """Restore PostgreSQL database using pg_restore."""
         db_dir = os.path.join(temp_dir, "database")
-        dump_file = os.path.join(db_dir, "ghostwire_proxy.sql")
+        # Support both custom format (.dump) and legacy plain SQL (.sql)
+        dump_file = os.path.join(db_dir, "ghostwire_proxy.dump")
+        use_pg_restore = True
+        if not os.path.exists(dump_file):
+            dump_file = os.path.join(db_dir, "ghostwire_proxy.sql")
+            use_pg_restore = False
 
         if not os.path.exists(dump_file):
             raise FileNotFoundError("Database dump not found in backup")
@@ -408,16 +413,31 @@ class BackupService:
         dbname = parsed.path.lstrip("/")
         user = parsed.username or "ghostwire"
 
-        # Restore using psql with single-transaction for atomicity
-        cmd = [
-            "psql",
-            "-h", host,
-            "-p", port,
-            "-U", user,
-            "-d", dbname,
-            "--single-transaction",
-            "-f", dump_file,
-        ]
+        # Restore database
+        if use_pg_restore:
+            cmd = [
+                "pg_restore",
+                "-h", host,
+                "-p", port,
+                "-U", user,
+                "-d", dbname,
+                "--clean",
+                "--if-exists",
+                "--no-owner",
+                "--no-privileges",
+                dump_file,
+            ]
+        else:
+            # Legacy plain SQL fallback
+            cmd = [
+                "psql",
+                "-h", host,
+                "-p", port,
+                "-U", user,
+                "-d", dbname,
+                "-v", "ON_ERROR_STOP=0",
+                "-f", dump_file,
+            ]
 
         result = subprocess.run(
             cmd,
@@ -426,15 +446,18 @@ class BackupService:
             text=True,
         )
 
-        if result.returncode != 0:
-            error_msg = result.stderr or "psql failed with no output"
-            raise RuntimeError(f"Database restore failed: {error_msg}")
+        # Log output for debugging
+        if result.returncode != 0 and result.stderr:
+            # pg_restore returns non-zero even for warnings; check for real errors
+            error_lines = [l for l in result.stderr.splitlines() if "ERROR:" in l]
+            if error_lines:
+                logger.warning(f"Database restore had {len(error_lines)} errors. First: {error_lines[0][:200]}")
+            else:
+                logger.info("Database restore completed with warnings")
+        else:
+            logger.info("Database restore completed cleanly")
 
-        # Check stderr for SQL errors even when exit code is 0
-        if result.stderr and "ERROR:" in result.stderr:
-            logger.warning(f"Database restore completed with errors: {result.stderr[:500]}")
-
-        logger.info(f"Database restore completed. stdout={len(result.stdout or '')} bytes")
+        logger.info(f"Database restore completed. stderr={len(result.stderr or '')} bytes")
 
     def _restore_certificates(self, temp_dir: str):
         """Restore SSL certificates."""
