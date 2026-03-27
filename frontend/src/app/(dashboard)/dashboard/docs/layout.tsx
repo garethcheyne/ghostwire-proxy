@@ -11,9 +11,9 @@ export default function DocsLayout({
   const navigation = getNavigation()
 
   return (
-    <div className="flex min-h-0 -m-3 sm:-m-4 md:-m-6">
+    <div className="flex -m-3 sm:-m-4 md:-m-6 h-[calc(100vh-3.5rem)]">
       {/* Docs sidebar */}
-      <div className="hidden lg:block shrink-0">
+      <div className="hidden lg:block shrink-0 overflow-y-auto">
         <DocsSidebar navigation={navigation} />
       </div>
 

@@ -343,6 +343,7 @@ export default function ThreatsPage() {
           return (
             <button
               key={tab.key}
+              data-value={tab.key}
               onClick={() => setActiveTab(tab.key as typeof activeTab)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.key

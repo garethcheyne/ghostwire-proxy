@@ -74,6 +74,7 @@ export default function AboutPage() {
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg bg-muted p-1 max-w-md">
         <button
+          data-value="about"
           onClick={() => setActiveTab('about')}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'about'
@@ -85,6 +86,7 @@ export default function AboutPage() {
           About
         </button>
         <button
+          data-value="license"
           onClick={() => setActiveTab('license')}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'license'
@@ -96,6 +98,7 @@ export default function AboutPage() {
           License
         </button>
         <button
+          data-value="updates"
           onClick={() => setActiveTab('updates')}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'updates'

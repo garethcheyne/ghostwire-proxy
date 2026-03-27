@@ -29,6 +29,7 @@ export default function AccessControlPage() {
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg bg-muted p-1">
         <button
+          data-value="auth-walls"
           onClick={() => setActiveTab('auth-walls')}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'auth-walls'
@@ -41,6 +42,7 @@ export default function AccessControlPage() {
           <span className="sm:hidden">Auth</span>
         </button>
         <button
+          data-value="ip-lists"
           onClick={() => setActiveTab('ip-lists')}
           className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'ip-lists'

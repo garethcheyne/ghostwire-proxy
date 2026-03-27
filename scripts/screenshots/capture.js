@@ -195,24 +195,52 @@ async function redactPage(pg) {
 
       // Click a specific tab if requested
       if (entry.tab) {
-        const tabButton = page.locator(`[data-value="${entry.tab}"], [value="${entry.tab}"]`).first();
-        if (await tabButton.count()) {
-          await tabButton.click();
-          await page.waitForTimeout(3000);
+        let clicked = false;
+
+        // Try data-value attribute (custom buttons + Radix TabsTrigger)
+        const byDataValue = page.locator(`[data-value="${entry.tab}"]`).first();
+        if (await byDataValue.count()) {
+          await byDataValue.click();
+          clicked = true;
+        }
+
+        // Fallback: try role="tab" buttons by accessible name
+        if (!clicked) {
+          const byRole = page.getByRole('tab', { name: new RegExp(entry.tab.replace('-', '.*'), 'i') });
+          if (await byRole.count()) {
+            await byRole.first().click();
+            clicked = true;
+          }
+        }
+
+        if (clicked) {
+          await page.waitForTimeout(entry.wait || 3000);
+        } else {
+          console.log(`    ⚠ Tab "${entry.tab}" not found on page`);
         }
       }
 
       // Scroll to bottom if requested (to reveal heatmaps etc.)
       if (entry.scroll) {
-        await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+        await page.evaluate(() => {
+          // Try the main scrollable container first, then fall back to window
+          const main = document.querySelector('main') || document.scrollingElement || document.documentElement;
+          main.scrollTo({ top: main.scrollHeight, behavior: 'smooth' });
+        });
         await page.waitForTimeout(2000);
       }
 
       // Scroll to a specific heading so it's visible in the viewport
       if (entry.scrollTo) {
         await page.evaluate((heading) => {
-          const els = [...document.querySelectorAll('h3, h2, h4')];
-          const target = els.find((el) => el.textContent.includes(heading));
+          const els = [...document.querySelectorAll('h3, h2, h4, text, [class*="heading"], [class*="title"]')];
+          let target = els.find((el) => el.textContent.includes(heading));
+          // Also search in all elements with the heading text
+          if (!target) {
+            target = [...document.querySelectorAll('*')].find(
+              (el) => el.childElementCount === 0 && el.textContent.trim().includes(heading)
+            );
+          }
           if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, entry.scrollTo);
         await page.waitForTimeout(3000);
