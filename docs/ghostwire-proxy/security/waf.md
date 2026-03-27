@@ -3,9 +3,11 @@ title: Web Application Firewall
 excerpt: Regex-based request filtering to block SQL injection, XSS, path traversal, and more
 ---
 
+> Navigate to **Security → Rules** and select the **WAF Rules** tab.
+
 The Web Application Firewall (WAF) inspects every incoming request at the proxy layer using pattern-matching rules. Malicious requests are blocked before they reach your upstream services.
 
-![WAF Rules](../_img/waf.png)
+![WAF Rules](../_img/rules-waf.png)
 
 ## How It Works
 

@@ -3,9 +3,11 @@ title: Access Lists
 excerpt: IP-based whitelists and blacklists for fine-grained access control
 ---
 
+> Navigate to **Security → Access Control** and select the **IP Access Lists** tab.
+
 Access lists allow you to control which IP addresses can reach your proxy hosts. Create reusable lists and assign them to one or more proxy hosts.
 
-![Access Lists](../_img/access-lists.png)
+![Access Lists](../_img/access-control-ip-lists.png)
 
 ## How It Works
 

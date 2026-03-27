@@ -1,24 +1,21 @@
 {
-  "waf": {
-    "title": "Web Application Firewall"
-  },
   "threats": {
     "title": "Threat Response"
-  },
-  "firewalls": {
-    "title": "Firewall Integration"
-  },
-  "abuseipdb": {
-    "title": "AbuseIPDB Integration"
-  },
-  "geoip": {
-    "title": "GeoIP Blocking"
   },
   "honeypot": {
     "title": "Honeypot Traps"
   },
+  "waf": {
+    "title": "Web Application Firewall"
+  },
+  "geoip": {
+    "title": "GeoIP Blocking"
+  },
   "rate-limits": {
     "title": "Rate Limiting"
+  },
+  "presets": {
+    "title": "Security Presets"
   },
   "access-lists": {
     "title": "Access Lists"
@@ -26,7 +23,10 @@
   "auth-walls": {
     "title": "Authentication Walls"
   },
-  "presets": {
-    "title": "Security Presets"
+  "firewalls": {
+    "title": "Firewall Integration"
+  },
+  "abuseipdb": {
+    "title": "AbuseIPDB Integration"
   }
 }

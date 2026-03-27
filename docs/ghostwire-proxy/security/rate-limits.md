@@ -3,9 +3,11 @@ title: Rate Limiting
 excerpt: Per-host request throttling with burst support and custom thresholds
 ---
 
+> Navigate to **Security → Rules** and select the **Rate Limits** tab.
+
 Rate limiting protects your upstream services from excessive traffic by throttling requests per client IP.
 
-![Rate Limits](../_img/rate-limits.png)
+![Rate Limits](../_img/rules-rate-limits.png)
 
 ## How It Works
 

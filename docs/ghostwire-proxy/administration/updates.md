@@ -3,9 +3,11 @@ title: Updates
 excerpt: Check for and apply Ghostwire Proxy updates
 ---
 
+> Navigate to **Administration → About** and select the **Updates** tab.
+
 The updates page lets you check for new versions and apply updates to your installation.
 
-![Updates](../_img/settings-updates.png)
+![Updates](../_img/about-updates.png)
 
 ## Checking for Updates
 

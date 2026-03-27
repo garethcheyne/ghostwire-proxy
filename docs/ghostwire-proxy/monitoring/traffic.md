@@ -3,9 +3,11 @@ title: Traffic Logs
 excerpt: Raw request logs with filtering and search
 ---
 
+> Navigate to **Monitoring → Analytics** and select the **Logs** tab.
+
 The traffic log provides a detailed view of every proxy request, including timing, headers, upstream details, and security context.
 
-![Traffic Logs](../_img/traffic.png)
+![Traffic Logs](../_img/analytics-logs.png)
 
 ## Log Columns
 

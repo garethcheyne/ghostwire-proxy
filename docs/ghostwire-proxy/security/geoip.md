@@ -3,9 +3,11 @@ title: GeoIP Blocking
 excerpt: Block or allow traffic by country using MaxMind GeoLite2 geolocation
 ---
 
+> Navigate to **Security → Rules** and select the **GeoIP** tab.
+
 GeoIP blocking lets you restrict access to your services based on the geographic origin of requests. Use blocklists to deny specific countries or allowlists to permit only certain countries.
 
-![GeoIP Blocking](../_img/geoip.png)
+![GeoIP Blocking](../_img/rules-geoip.png)
 
 ## How It Works
 

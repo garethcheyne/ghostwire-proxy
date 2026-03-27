@@ -3,9 +3,11 @@ title: Authentication Walls
 excerpt: Protect services behind login gates with local, LDAP, or OAuth2 authentication
 ---
 
+> Navigate to **Security → Access Control** and select the **Auth Walls** tab.
+
 Authentication walls add a login requirement to any proxy host. Users must authenticate before accessing the upstream service. Multiple authentication methods are supported including local accounts, LDAP, and OAuth2.
 
-![Auth Walls](../_img/auth-walls.png)
+![Auth Walls](../_img/access-control.png)
 
 ## How It Works
 

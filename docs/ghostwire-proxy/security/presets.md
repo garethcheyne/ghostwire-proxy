@@ -3,9 +3,11 @@ title: Security Presets
 excerpt: One-click application of best-practice WAF, GeoIP, and rate limit configurations
 ---
 
+> Navigate to **Security → Rules** and select the **Presets** tab.
+
 Security presets provide curated bundles of security rules that can be applied with a single click. They configure WAF rules, GeoIP blocking, rate limiting, and threat response policies based on proven best practices.
 
-![Presets](../_img/presets.png)
+![Presets](../_img/rules-presets.png)
 
 ## How It Works
 

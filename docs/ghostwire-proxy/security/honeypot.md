@@ -3,9 +3,11 @@ title: Honeypot Traps
 excerpt: Detect attackers scanning for common vulnerable paths like /wp-admin or /phpmyadmin
 ---
 
+> Navigate to **Security → Threats** and select the **Honeypot** tab.
+
 Honeypot traps create fake endpoints that mimic commonly-targeted paths. When an attacker probes these paths, the event is logged and the IP can be automatically added to the threat tracking system.
 
-![Honeypot](../_img/honeypot.png)
+![Honeypot](../_img/threats-honeypot.png)
 
 ## How It Works
 

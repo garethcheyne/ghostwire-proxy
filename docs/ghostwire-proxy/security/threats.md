@@ -3,6 +3,8 @@ title: Threat Response
 excerpt: Automated IP threat scoring with tiered escalation from monitoring to firewall banning
 ---
 
+> Navigate to **Security → Threats** to view threat tracking, events, actors, honeypot traps, and hits.
+
 The threat response system tracks malicious IP addresses, accumulates threat scores based on security events, and automatically escalates responses from monitoring through to permanent firewall bans.
 
 ![Threats](../_img/threats.png)
