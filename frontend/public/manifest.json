@@ -1,6 +1,6 @@
 {
   "name": "Ghostwire Proxy",
-  "short_name": "Ghostwire",
+  "short_name": "GhostwireProxy",
   "description": "Reverse Proxy Management with built-in security features",
   "start_url": "/dashboard",
   "display": "standalone",
