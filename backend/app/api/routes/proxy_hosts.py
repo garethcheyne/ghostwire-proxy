@@ -15,19 +15,42 @@ from app.schemas.proxy_host import (
     LocationReorderRequest
 )
 from app.api.deps import get_current_user
-from app.services.openresty_service import generate_all_configs, reload_nginx, remove_config
+from app.services.openresty_service import generate_all_configs, reload_nginx, remove_config, backup_configs, restore_configs
 
 router = APIRouter()
 
 
 async def regenerate_and_reload(db: AsyncSession) -> tuple[bool, str]:
-    """Regenerate all nginx configs and reload nginx."""
+    """Regenerate all nginx configs, test, and reload nginx.
+    
+    If the new config is invalid, automatically rolls back to the
+    previous working config so nginx keeps running.
+    """
     try:
+        # 1. Backup current working configs
+        backup_configs()
+
+        # 2. Generate new configs from DB
         await generate_all_configs(db)
-        reload_nginx()
+
+        # 3. Test config before reloading
+        from app.services.openresty_service import test_nginx_config
+        test_ok, test_msg = test_nginx_config()
+        if not test_ok:
+            # Roll back to the last working config
+            restore_configs()
+            return False, f"Config validation failed — rolled back to previous working config. Error: {test_msg}"
+
+        # 4. Config is valid — reload nginx
+        success, message = reload_nginx()
+        if not success:
+            return False, f"Config is valid but reload failed: {message}"
+
         return True, "Nginx reloaded successfully"
     except Exception as e:
-        return False, str(e)
+        # If anything blew up, try to restore
+        restore_configs()
+        return False, f"Error during config generation — rolled back. Detail: {str(e)}"
 
 
 @router.get("/", response_model=list[ProxyHostResponse])
@@ -143,7 +166,9 @@ async def create_proxy_host(
     host = result.scalar_one()
 
     # Generate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return host
 
@@ -217,7 +242,9 @@ async def update_proxy_host(
     await db.refresh(host)
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return host
 
@@ -257,7 +284,9 @@ async def delete_proxy_host(
     await db.commit()
 
     # Reload nginx
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
 
 @router.post("/{host_id}/enable", response_model=ProxyHostResponse)
@@ -299,7 +328,9 @@ async def enable_proxy_host(
     await db.refresh(host)
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return host
 
@@ -343,7 +374,9 @@ async def disable_proxy_host(
     await db.refresh(host)
 
     # Regenerate nginx config and reload (disabled hosts won't be included)
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return host
 
@@ -469,7 +502,9 @@ async def create_location(
     await db.refresh(location)
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return location
 
@@ -541,7 +576,9 @@ async def update_location(
     await db.refresh(location)
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return location
 
@@ -584,7 +621,9 @@ async def delete_location(
     await db.commit()
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
 
 @router.post("/{host_id}/locations/reorder", response_model=list[ProxyLocationResponse])
@@ -628,6 +667,8 @@ async def reorder_locations(
     locations = result.scalars().all()
 
     # Regenerate nginx config and reload
-    await regenerate_and_reload(db)
+    ok, msg = await regenerate_and_reload(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return locations

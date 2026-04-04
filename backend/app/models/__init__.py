@@ -17,6 +17,7 @@ from app.models.analytics import AnalyticsHourly, AnalyticsDaily, AnalyticsGeo
 from app.models.system_metrics import SystemMetrics, ContainerMetrics
 from app.models.backup import Backup, BackupSettings
 from app.models.update import UpdateHistory, BaseImageVersion, UpdateSettings
+from app.models.honeypot import HoneypotTrap, HoneypotHit, IpEnrichment
 
 __all__ = [
     "User",
@@ -59,4 +60,7 @@ __all__ = [
     "UpdateHistory",
     "BaseImageVersion",
     "UpdateSettings",
+    "HoneypotTrap",
+    "HoneypotHit",
+    "IpEnrichment",
 ]

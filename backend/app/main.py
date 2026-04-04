@@ -174,90 +174,9 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.nginx_config_path, exist_ok=True)
     os.makedirs(settings.certificates_path, exist_ok=True)
 
-    # Create database tables if they don't exist
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-            # Add preset_id columns if missing (for existing databases)
-            from sqlalchemy import text, inspect as sa_inspect
-
-            def _add_missing_columns(connection):
-                inspector = sa_inspect(connection)
-                # Add preset_id columns
-                tables = ["waf_rule_sets", "waf_rules", "rate_limit_rules", "geoip_rules", "threat_thresholds"]
-                for table in tables:
-                    if table in inspector.get_table_names():
-                        columns = [c["name"] for c in inspector.get_columns(table)]
-                        if "preset_id" not in columns:
-                            connection.execute(text(f'ALTER TABLE {table} ADD COLUMN preset_id VARCHAR(100)'))
-                            logger.info(f"Added preset_id column to {table}")
-                # Add tags/country_name to threat_actors
-                if "threat_actors" in inspector.get_table_names():
-                    columns = [c["name"] for c in inspector.get_columns("threat_actors")]
-                    if "tags" not in columns:
-                        connection.execute(text('ALTER TABLE threat_actors ADD COLUMN tags TEXT'))
-                        logger.info("Added tags column to threat_actors")
-                    if "country_name" not in columns:
-                        connection.execute(text('ALTER TABLE threat_actors ADD COLUMN country_name VARCHAR(100)'))
-                        logger.info("Added country_name column to threat_actors")
-                # Add country_name to traffic_logs
-                if "traffic_logs" in inspector.get_table_names():
-                    columns = [c["name"] for c in inspector.get_columns("traffic_logs")]
-                    if "country_name" not in columns:
-                        connection.execute(text('ALTER TABLE traffic_logs ADD COLUMN country_name VARCHAR(100)'))
-                        logger.info("Added country_name column to traffic_logs")
-                # Add honeypot_enabled to proxy_hosts
-                if "proxy_hosts" in inspector.get_table_names():
-                    columns = [c["name"] for c in inspector.get_columns("proxy_hosts")]
-                    if "honeypot_enabled" not in columns:
-                        connection.execute(text('ALTER TABLE proxy_hosts ADD COLUMN honeypot_enabled BOOLEAN DEFAULT false'))
-                        logger.info("Added honeypot_enabled column to proxy_hosts")
-                # Add proxy_host_id to honeypot_traps
-                if "honeypot_traps" in inspector.get_table_names():
-                    columns = [c["name"] for c in inspector.get_columns("honeypot_traps")]
-                    if "proxy_host_id" not in columns:
-                        connection.execute(text('ALTER TABLE honeypot_traps ADD COLUMN proxy_host_id VARCHAR(36) REFERENCES proxy_hosts(id) ON DELETE CASCADE'))
-                        logger.info("Added proxy_host_id column to honeypot_traps")
-                    # Remove unique constraint on path (now unique per host)
-                    try:
-                        connection.execute(text('ALTER TABLE honeypot_traps DROP CONSTRAINT IF EXISTS honeypot_traps_path_key'))
-                    except Exception:
-                        pass  # Constraint may not exist
-                # Add proxy_host_id to waf_rules
-                if "waf_rules" in inspector.get_table_names():
-                    columns = [c["name"] for c in inspector.get_columns("waf_rules")]
-                    if "proxy_host_id" not in columns:
-                        connection.execute(text('ALTER TABLE waf_rules ADD COLUMN proxy_host_id VARCHAR(36) REFERENCES proxy_hosts(id) ON DELETE CASCADE'))
-                        logger.info("Added proxy_host_id column to waf_rules")
-
-                # Add FK constraints on rate_limit_rules.proxy_host_id and geoip_rules.proxy_host_id
-                for table in ["rate_limit_rules", "geoip_rules"]:
-                    if table in inspector.get_table_names():
-                        fks = inspector.get_foreign_keys(table)
-                        has_host_fk = any(
-                            fk.get("referred_table") == "proxy_hosts" and "proxy_host_id" in fk.get("constrained_columns", [])
-                            for fk in fks
-                        )
-                        if not has_host_fk:
-                            # Clean orphan rows referencing deleted proxy hosts
-                            connection.execute(text(
-                                f'DELETE FROM {table} WHERE proxy_host_id IS NOT NULL '
-                                f'AND proxy_host_id NOT IN (SELECT id FROM proxy_hosts)'
-                            ))
-                            fk_name = f"fk_{table}_proxy_host_id"
-                            connection.execute(text(
-                                f'ALTER TABLE {table} ADD CONSTRAINT {fk_name} '
-                                f'FOREIGN KEY (proxy_host_id) REFERENCES proxy_hosts(id) ON DELETE CASCADE'
-                            ))
-                            logger.info(f"Added FK constraint on {table}.proxy_host_id")
-
-            await conn.run_sync(_add_missing_columns)
-
-        logger.info("Database tables verified/created")
-    except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
-        raise
+    # Database migrations are handled by Alembic in entrypoint.sh
+    # (alembic upgrade head runs before the app starts)
+    logger.info("Database migrations handled by Alembic via entrypoint")
 
     # Check if setup is required
     from app.models.user import User

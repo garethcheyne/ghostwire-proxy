@@ -3,7 +3,10 @@ OpenResty/Nginx configuration generation service.
 Generates nginx server blocks from ProxyHost database records.
 Supports multiple locations, caching, rate limiting, and custom headers.
 """
+import glob
+import logging
 import os
+import shutil
 import socket
 import subprocess
 from typing import Optional
@@ -653,16 +656,144 @@ async def remove_config(host_id: str) -> bool:
     return False
 
 
-def test_nginx_config() -> tuple[bool, str]:
-    """Test nginx configuration"""
+logger = logging.getLogger(__name__)
+
+BACKUP_DIR = os.path.join(settings.nginx_config_path, ".backup")
+
+
+def backup_configs() -> bool:
+    """Backup all current nginx .conf files before generating new ones."""
     try:
-        result = subprocess.run(
-            ["nginx", "-t"],
-            capture_output=True,
-            text=True,
-            timeout=10
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        # Clear old backup
+        for f in glob.glob(os.path.join(BACKUP_DIR, "*.conf")):
+            os.remove(f)
+        # Copy current configs
+        for f in glob.glob(os.path.join(settings.nginx_config_path, "*.conf")):
+            shutil.copy2(f, os.path.join(BACKUP_DIR, os.path.basename(f)))
+        return True
+    except Exception as e:
+        logger.error(f"Failed to backup nginx configs: {e}")
+        return False
+
+
+def restore_configs() -> bool:
+    """Restore nginx .conf files from backup after a failed config test."""
+    try:
+        if not os.path.isdir(BACKUP_DIR):
+            logger.warning("No backup directory found — cannot restore")
+            return False
+        # Remove the bad configs
+        for f in glob.glob(os.path.join(settings.nginx_config_path, "*.conf")):
+            os.remove(f)
+        # Restore from backup
+        for f in glob.glob(os.path.join(BACKUP_DIR, "*.conf")):
+            shutil.copy2(f, os.path.join(settings.nginx_config_path, os.path.basename(f)))
+        logger.info("Restored nginx configs from backup")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to restore nginx configs: {e}")
+        return False
+
+
+def test_nginx_config() -> tuple[bool, str]:
+    """Test nginx configuration via Docker exec in the nginx container"""
+    docker_socket = "/var/run/docker.sock"
+    if not os.path.exists(docker_socket):
+        # Fallback: try local nginx -t (works if running outside Docker)
+        try:
+            result = subprocess.run(
+                ["nginx", "-t"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0, result.stderr
+        except Exception as e:
+            return False, str(e)
+
+    try:
+        import json as _json
+        import time as _time
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(docker_socket)
+
+        # Create exec instance
+        exec_body = _json.dumps({"Cmd": ["nginx", "-t"], "AttachStdout": True, "AttachStderr": True})
+        request = (
+            f"POST /containers/ghostwire-proxy-nginx/exec HTTP/1.1\r\n"
+            f"Host: localhost\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(exec_body)}\r\n\r\n"
+            f"{exec_body}"
         )
-        return result.returncode == 0, result.stderr
+        sock.sendall(request.encode())
+        response = sock.recv(4096).decode()
+        sock.close()
+
+        # Parse exec ID from response body (handle chunked encoding)
+        body_start = response.find("\r\n\r\n")
+        if body_start == -1:
+            return False, "Invalid Docker API response"
+        body = response[body_start + 4:].strip()
+        if body and body[0] != "{":
+            lines = body.split("\n", 1)
+            body = lines[1] if len(lines) > 1 else body
+        exec_data = _json.loads(body)
+        exec_id = exec_data.get("Id")
+        if not exec_id:
+            return False, f"Failed to create exec: {body}"
+
+        # Start exec (Detach=True so it runs asynchronously)
+        sock2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock2.connect(docker_socket)
+        start_body = _json.dumps({"Detach": True})
+        request2 = (
+            f"POST /exec/{exec_id}/start HTTP/1.1\r\n"
+            f"Host: localhost\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(start_body)}\r\n\r\n"
+            f"{start_body}"
+        )
+        sock2.sendall(request2.encode())
+        sock2.recv(4096)
+        sock2.close()
+
+        # Poll exec inspect until it finishes (up to 10s)
+        for _ in range(20):
+            _time.sleep(0.5)
+            sock3 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock3.connect(docker_socket)
+            request3 = (
+                f"GET /exec/{exec_id}/json HTTP/1.1\r\n"
+                f"Host: localhost\r\n\r\n"
+            )
+            sock3.sendall(request3.encode())
+            response3 = sock3.recv(4096).decode()
+            sock3.close()
+
+            body3_start = response3.find("\r\n\r\n")
+            body3 = response3[body3_start + 4:].strip() if body3_start != -1 else ""
+            if body3 and body3[0] != "{":
+                lines = body3.split("\n", 1)
+                body3 = lines[1] if len(lines) > 1 else body3
+
+            try:
+                exec_info = _json.loads(body3)
+                running = exec_info.get("Running", False)
+                if running:
+                    continue
+                exit_code = exec_info.get("ExitCode", -1)
+                if exit_code == 0:
+                    return True, "nginx config test passed"
+                else:
+                    return False, f"nginx -t failed (exit code {exit_code})"
+            except _json.JSONDecodeError:
+                continue
+
+        return False, "nginx -t timed out"
+
     except Exception as e:
         return False, str(e)
 
@@ -671,7 +802,7 @@ def reload_nginx() -> tuple[bool, str]:
     """Reload nginx configuration via Docker socket SIGHUP"""
     docker_socket = "/var/run/docker.sock"
     if not os.path.exists(docker_socket):
-        return False, "Docker socket not available"
+        return False, "Docker socket not available — mount /var/run/docker.sock in the API container"
 
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -682,8 +813,16 @@ def reload_nginx() -> tuple[bool, str]:
             "Content-Length: 0\r\n\r\n"
         )
         sock.sendall(request.encode())
-        sock.recv(4096)
+        response = sock.recv(4096).decode()
         sock.close()
-        return True, "Nginx reloaded successfully"
+
+        # Check HTTP status from Docker API
+        if "204" in response[:30] or "200" in response[:30]:
+            return True, "Nginx reloaded successfully"
+        elif "404" in response[:30]:
+            return False, "Nginx container 'ghostwire-proxy-nginx' not found"
+        else:
+            status_line = response.split("\r\n", 1)[0] if response else "empty response"
+            return False, f"Docker API returned: {status_line}"
     except Exception as e:
         return False, str(e)

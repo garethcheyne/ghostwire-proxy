@@ -38,5 +38,16 @@ if [ $retries -eq $max_retries ]; then
     echo "WARNING: PostgreSQL not reachable after ${max_retries} attempts, starting anyway..."
 fi
 
+# Run Alembic migrations
+echo "Running database migrations..."
+cd /app
+gosu appuser alembic upgrade head 2>&1
+ALEMBIC_EXIT=$?
+if [ $ALEMBIC_EXIT -eq 0 ]; then
+    echo "Database migrations complete."
+else
+    echo "WARNING: Alembic migration failed (exit $ALEMBIC_EXIT), app will attempt to start anyway."
+fi
+
 # Drop to appuser and exec the main command
 exec gosu appuser "$@"

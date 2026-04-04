@@ -162,7 +162,15 @@ async def reload_nginx_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     """Reload nginx configuration via Docker socket SIGHUP"""
-    from app.services.openresty_service import reload_nginx
+    from app.services.openresty_service import reload_nginx, test_nginx_config
+
+    # Test config first so we don't reload a broken config
+    test_ok, test_msg = test_nginx_config()
+    if not test_ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nginx config test failed — not reloading. Error: {test_msg}",
+        )
 
     success, message = reload_nginx()
     if not success:
@@ -260,14 +268,26 @@ async def update_default_site(
     await db.commit()
 
     # Regenerate and apply the default site config
-    from app.services.openresty_service import generate_default_site_config, reload_nginx
+    from app.services.openresty_service import generate_default_site_config, reload_nginx, test_nginx_config, backup_configs, restore_configs
     import os
     from app.core.config import settings as app_settings
+
+    # Backup current configs before writing the new default
+    backup_configs()
 
     config = await generate_default_site_config(db)
     config_path = os.path.join(app_settings.nginx_config_path, "_default.conf")
     with open(config_path, "w") as f:
         f.write(config)
+
+    # Test before reloading — roll back if invalid
+    test_ok, test_msg = test_nginx_config()
+    if not test_ok:
+        restore_configs()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Default site config is invalid — rolled back. Error: {test_msg}",
+        )
 
     # Reload nginx to apply
     success, message = reload_nginx()

@@ -142,6 +142,7 @@ services:
       - ./data/backups:/data/backups
       - ./data/geoip:/data/geoip
       - certbot-webroot:/var/www/certbot
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - ghostwire-proxy-network
     deploy:

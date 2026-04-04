@@ -240,6 +240,77 @@ On first launch, you'll be guided through initial setup to create your admin acc
 
 ---
 
+## Upgrading
+
+### Automatic (recommended)
+
+Run the included upgrade script from your project directory:
+
+```bash
+./scripts/upgrade.sh            # upgrade to latest tagged release
+./scripts/upgrade.sh v2026.04.05.1200  # upgrade to a specific version
+```
+
+The script will:
+1. **Back up** your database (`data/backups/pre-upgrade-*.sql`)
+2. **Pull** the new version via git
+3. **Build** new container images
+4. **Restart** services — database migrations run automatically on startup
+5. **Health check** — verifies the API is responding
+
+If the health check fails, the script prints rollback instructions.
+
+### Manual
+
+```bash
+cd /path/to/ghostwire-proxy
+
+# 1. Back up the database
+docker exec ghostwire-proxy-postgres pg_dump -U ghostwire ghostwire_proxy > backup.sql
+
+# 2. Pull the latest code
+git fetch --tags
+git checkout v2026.04.05.1200     # or: git pull origin main
+
+# 3. Rebuild and restart (migrations run automatically)
+docker compose build --no-cache ghostwire-proxy-api ghostwire-proxy-ui
+docker compose up -d ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx
+
+# 4. Verify
+docker logs ghostwire-proxy-api 2>&1 | head -20
+# Look for: "Running upgrade ... baseline schema" and "Database migrations complete."
+```
+
+### How migrations work
+
+Ghostwire Proxy uses **Alembic** for database migrations. On every container start, `entrypoint.sh` runs `alembic upgrade head` before the application starts:
+
+| Scenario | What happens |
+|---|---|
+| **Existing database** (pre-Alembic) | Creates `alembic_version` tracking table, stamps baseline. All existing tables and data are untouched. |
+| **Existing database** (already migrated) | No-op — already at latest revision. |
+| **Fresh database** (empty) | Creates all tables from scratch. |
+| **New columns/tables in update** | Automatically applied via migration files. |
+
+> **Your data is never dropped or modified** — migrations are always additive (add columns, add tables). Destructive changes (drop column, rename) are never performed without an explicit migration file committed to the repo.
+
+### Rollback
+
+If an upgrade goes wrong:
+
+```bash
+# 1. Check out the previous version
+git checkout v2026.03.25.1500
+
+# 2. Rebuild and restart
+docker compose up -d --build ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx
+
+# 3. If the database needs restoring (only if a migration changed schema):
+cat backup.sql | docker exec -i ghostwire-proxy-postgres psql -U ghostwire ghostwire_proxy
+```
+
+---
+
 ## Architecture
 
 ```

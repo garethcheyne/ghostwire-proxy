@@ -117,36 +117,18 @@ $COMPOSE build --parallel 2>&1 | tail -5
 ok "Images built"
 
 # ─────────────────────────────────────────────
-# 6. Run database migrations
+# 6. Apply database migrations & restart services
 # ─────────────────────────────────────────────
-log "Running database migrations..."
-
-# Restart API first to pick up new code
-$COMPOSE up -d ghostwire-proxy-api
-
-# Wait for API to be healthy
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:8089/health >/dev/null 2>&1; then
-        break
-    fi
-    sleep 2
-done
-
-docker exec ghostwire-proxy-api alembic upgrade head 2>&1 || warn "Migrations had warnings (may be fine)"
-
-ok "Migrations complete"
-
-# ─────────────────────────────────────────────
-# 7. Restart all services
-# ─────────────────────────────────────────────
-log "Restarting services..."
+# Alembic migrations run automatically on container start via entrypoint.sh.
+# Rebuilding and restarting handles everything: new code + new schema.
+log "Restarting services (migrations run automatically on start)..."
 
 $COMPOSE up -d --build ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater
 
 ok "Services restarted"
 
 # ─────────────────────────────────────────────
-# 8. Health check
+# 7. Health check
 # ─────────────────────────────────────────────
 log "Waiting for services to become healthy..."
 

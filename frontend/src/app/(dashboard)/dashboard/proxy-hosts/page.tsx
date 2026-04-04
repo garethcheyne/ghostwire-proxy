@@ -260,8 +260,9 @@ export default function ProxyHostsPage() {
       fetchData()
       toastSuccess(editingHost ? 'Proxy host updated' : 'Proxy host created')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save proxy host')
-      toastError('Failed to save proxy host')
+      const detail = err.response?.data?.detail || 'Failed to save proxy host'
+      setError(detail)
+      toastError(detail)
     } finally {
       setIsSubmitting(false)
     }
@@ -276,9 +277,9 @@ export default function ProxyHostsPage() {
       }
       fetchData()
       toastSuccess(host.enabled ? 'Proxy host disabled' : 'Proxy host enabled')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to toggle host:', error)
-      toastError('Failed to toggle proxy host')
+      toastError(error.response?.data?.detail || 'Failed to toggle proxy host')
     }
     setActiveDropdown(null)
   }
@@ -290,9 +291,9 @@ export default function ProxyHostsPage() {
       await api.delete(`/api/proxy-hosts/${host.id}`)
       fetchData()
       toastSuccess('Proxy host deleted')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete host:', error)
-      toastError('Failed to delete proxy host')
+      toastError(error.response?.data?.detail || 'Failed to delete proxy host')
     }
     setActiveDropdown(null)
   }
@@ -348,7 +349,7 @@ export default function ProxyHostsPage() {
       toastSuccess(editingLocation ? 'Location updated' : 'Location created')
     } catch (err: any) {
       console.error('Failed to save location:', err)
-      toastError('Failed to save location')
+      toastError(err.response?.data?.detail || 'Failed to save location')
     }
   }
 
@@ -361,9 +362,9 @@ export default function ProxyHostsPage() {
       const res = await api.get(`/api/proxy-hosts/${editingHost.id}/locations`)
       setLocations(res.data)
       toastSuccess('Location deleted')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete location:', err)
-      toastError('Failed to delete location')
+      toastError(err.response?.data?.detail || 'Failed to delete location')
     }
   }
 

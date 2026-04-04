@@ -126,9 +126,10 @@ export default function SettingsPage() {
       await api.post('/api/settings/reload-nginx')
       setMessage({ type: 'success', text: 'Nginx configuration reloaded successfully' })
       toastSuccess('Nginx reloaded')
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to reload Nginx configuration' })
-      toastError('Failed to reload Nginx')
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || 'Failed to reload Nginx configuration'
+      setMessage({ type: 'error', text: detail })
+      toastError(detail)
     } finally {
       setIsReloading(false)
     }
