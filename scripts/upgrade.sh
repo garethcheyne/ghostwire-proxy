@@ -7,12 +7,21 @@ set -euo pipefail
 # Usage:
 #   ./scripts/upgrade.sh              # upgrade to latest
 #   ./scripts/upgrade.sh v1.2.0       # upgrade to specific version
+#   ./scripts/upgrade.sh --force      # rebuild current version (if containers are stale)
 # ─────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 COMPOSE="docker compose"
+FORCE=false
+
+# Parse flags
+for arg in "$@"; do
+    case "$arg" in
+        --force|-f) FORCE=true; shift ;;
+    esac
+done
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -49,12 +58,17 @@ fi
 [[ "$TARGET_VERSION" != v* ]] && TARGET_VERSION="v$TARGET_VERSION"
 TARGET_SEMVER="${TARGET_VERSION#v}"
 
-if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ]; then
+if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ] && [ "$FORCE" = false ]; then
     ok "Already on version $TARGET_VERSION. Nothing to do."
+    echo "  Use --force to rebuild containers without changing version."
     exit 0
 fi
 
-log "Upgrading to: $TARGET_VERSION"
+if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ] && [ "$FORCE" = true ]; then
+    log "Force-rebuilding version $TARGET_VERSION..."
+else
+    log "Upgrading to: $TARGET_VERSION"
+fi
 echo ""
 
 # ─────────────────────────────────────────────
