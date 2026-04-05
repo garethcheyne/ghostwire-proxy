@@ -11,8 +11,16 @@ for dir in /data/backups /data/backups/nginx-configs /data/certificates /data/ng
 done
 
 # Allow appuser to access the Docker socket (for nginx test/reload via API)
+# The socket is mounted :ro so chmod won't work — instead add appuser to the socket's group
 if [ -S /var/run/docker.sock ]; then
-    chmod 666 /var/run/docker.sock 2>/dev/null || true
+    DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
+    if [ -n "$DOCKER_GID" ] && [ "$DOCKER_GID" != "0" ]; then
+        groupadd -g "$DOCKER_GID" dockersock 2>/dev/null || true
+        usermod -aG "$DOCKER_GID" appuser 2>/dev/null || true
+    else
+        # Socket owned by root group — appuser needs direct access
+        usermod -aG root appuser 2>/dev/null || true
+    fi
 fi
 
 # Wait for PostgreSQL to be reachable before starting the app
