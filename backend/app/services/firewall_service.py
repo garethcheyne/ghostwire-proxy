@@ -75,9 +75,10 @@ class RouterOSConnector(BaseFirewallConnector):
                         "comment": comment or f"Blocked by Ghostwire Proxy",
                     },
                 )
+                raw_response = f"HTTP {resp.status_code}: {resp.text[:500]}"
                 if resp.status_code in (200, 201):
-                    return True, ""
-                return False, f"RouterOS HTTP {resp.status_code}: {resp.text[:200]}"
+                    return True, raw_response
+                return False, raw_response
         except Exception as e:
             logger.error(f"RouterOS add_to_blocklist failed: {e}")
             return False, f"RouterOS: {e}"
@@ -524,13 +525,13 @@ class UniFiConnector(BaseFirewallConnector):
                         "items": items,
                     },
                 )
+                raw_response = f"HTTP {resp.status_code}: {resp.text[:500]}"
                 if resp.status_code == 200:
                     logger.info(f"UniFi: added IP {ip} to {list_name}")
-                    return True, ""
+                    return True, raw_response
 
-                msg = f"UniFi HTTP {resp.status_code}: {resp.text[:200]}"
-                logger.error(f"UniFi add_to_blocklist: {msg}")
-                return False, msg
+                logger.error(f"UniFi add_to_blocklist: {raw_response}")
+                return False, raw_response
         except Exception as e:
             logger.error(f"UniFi add_to_blocklist failed: {e}")
             return False, f"UniFi: {e}"
@@ -787,14 +788,16 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
         for connector in connectors:
             try:
                 fw = get_connector(connector)
-                success = await fw.add_to_blocklist(
+                success, response_msg = await fw.add_to_blocklist(
                     entry.ip_address,
                     f"Threat actor - score: {entry.threat_actor_id}",
                 )
+                entry.raw_response = response_msg  # Always store vendor response
                 if success:
                     entry.status = "pushed"
                     entry.pushed_at = now
                     entry.connector_id = connector.id
+                    entry.error_message = None
                     connector.last_sync_at = now
                     synced += 1
 
@@ -810,10 +813,14 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
                         logger.debug(f"Push notification skipped: {push_err}")
                 else:
                     entry.status = "pending"
-                    entry.error_message = f"Failed to push to {connector.name}"
+                    entry.error_message = response_msg or f"Failed to push to {connector.name} (no details)"
                     failed += 1
+                    logger.warning(
+                        "Firewall push failed: %s → %s: %s",
+                        entry.ip_address, connector.name, response_msg,
+                    )
             except Exception as e:
-                entry.error_message = str(e)
+                entry.error_message = f"{connector.name}: {e}"
                 failed += 1
 
     await db.commit()

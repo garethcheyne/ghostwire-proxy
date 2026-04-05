@@ -35,6 +35,7 @@ class FirewallBlocklist(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)  # NULL = permanent
     status = Column(String(20), default="pending")  # pending, pushed, expired, removed
     error_message = Column(Text, nullable=True)
+    raw_response = Column(Text, nullable=True)  # Raw vendor API response for audit
 
     __table_args__ = (
         Index('idx_firewall_blocklist_status', 'status'),
