@@ -105,12 +105,18 @@ log "Creating pre-upgrade backup..."
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/pre-upgrade-${CURRENT_VERSION}-$(date +%Y%m%d-%H%M%S).sql"
 
-# Source .env to get database credentials (docker compose loads this automatically,
-# but bash scripts need to source it explicitly)
+# Read .env safely without shell-expanding values (passwords may contain $ characters)
 if [ -f "$PROJECT_DIR/.env" ]; then
-    set -a
-    source "$PROJECT_DIR/.env"
-    set +a
+    while IFS='=' read -r key value; do
+        # Skip comments and blank lines
+        [[ -z "$key" || "$key" =~ ^# ]] && continue
+        # Strip quotes from value
+        value="${value%\"}"
+        value="${value#\"}"
+        value="${value%\'}"
+        value="${value#\'}"
+        export "$key=$value"
+    done < "$PROJECT_DIR/.env"
 fi
 
 PG_USER="${POSTGRES_USER:-ghostwire}"
