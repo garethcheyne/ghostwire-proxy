@@ -257,6 +257,51 @@ async function redactPage(pg) {
     }
   }
 
+  // ── PWA manifest screenshots (wide + narrow) ─────────────────────────────
+  const pwaDir = path.resolve(__dirname, '../../frontend/public/screenshots');
+  fs.mkdirSync(pwaDir, { recursive: true });
+
+  const PWA_SHOTS = [
+    { name: 'login-wide',      path: '/auth/login',      auth: false, vp: { width: 1920, height: 1080 }, scale: 1 },
+    { name: 'dashboard-wide',  path: '/dashboard/system', auth: true,  vp: { width: 1920, height: 1080 }, scale: 1 },
+    { name: 'login-narrow',    path: '/auth/login',      auth: false, vp: { width: 390, height: 844 },   scale: 2, mobile: true },
+    { name: 'dashboard-narrow', path: '/dashboard/system', auth: true,  vp: { width: 390, height: 844 },   scale: 2, mobile: true },
+  ];
+
+  console.log('\n── PWA Screenshots ─────────────────────────────');
+  for (const shot of PWA_SHOTS) {
+    const ctx = await browser.newContext({
+      viewport: shot.vp,
+      deviceScaleFactor: shot.scale,
+      colorScheme: 'dark',
+      isMobile: !!shot.mobile,
+      ...(shot.mobile ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } : {}),
+    });
+    if (shot.auth) {
+      const pg = await ctx.newPage();
+      await pg.goto(`${BASE_URL}/auth/login`, { waitUntil: 'networkidle' });
+      await pg.evaluate(({ access, refresh }) => {
+        localStorage.setItem('access_token', access);
+        localStorage.setItem('refresh_token', refresh);
+      }, { access: accessToken, refresh: refreshToken });
+      await pg.goto(`${BASE_URL}${shot.path}`, { waitUntil: 'networkidle' });
+      await pg.waitForTimeout(3000);
+      await redactPage(pg);
+      await pg.screenshot({ path: path.join(pwaDir, `${shot.name}.png`), fullPage: false });
+      console.log(`  ✓ ${shot.name}.png`);
+      await pg.close();
+    } else {
+      const pg = await ctx.newPage();
+      await pg.goto(`${BASE_URL}${shot.path}`, { waitUntil: 'networkidle' });
+      await pg.waitForTimeout(2000);
+      await pg.screenshot({ path: path.join(pwaDir, `${shot.name}.png`), fullPage: false });
+      console.log(`  ✓ ${shot.name}.png`);
+      await pg.close();
+    }
+    await ctx.close();
+  }
+
   await browser.close();
   console.log(`\nDone! Screenshots saved to ${outDir}`);
+  console.log(`PWA screenshots saved to ${pwaDir}`);
 })();
