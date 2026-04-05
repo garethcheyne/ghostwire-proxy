@@ -112,7 +112,7 @@ PG_USER="${PG_USER:-ghostwire}"
 PG_DB="${PG_DB:-ghostwire_proxy}"
 
 log "Backing up database ($PG_DB as $PG_USER)..."
-if docker exec -e PGPASSWORD="$PG_PASS" ghostwire-proxy-postgres pg_dump -U "$PG_USER" "$PG_DB" > "$BACKUP_FILE" 2>&1; then
+if docker exec ghostwire-proxy-postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$BACKUP_FILE" 2>&1; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     ok "Database backed up to: $BACKUP_FILE ($BACKUP_SIZE)"
 else
