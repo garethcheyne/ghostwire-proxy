@@ -15,12 +15,15 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 COMPOSE="docker compose"
 FORCE=false
+TARGET_VERSION=""
 
-# Parse flags
-for arg in "$@"; do
-    case "$arg" in
-        --force|-f) FORCE=true; shift ;;
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force|-f) FORCE=true ;;
+        *) TARGET_VERSION="$1" ;;
     esac
+    shift
 done
 
 RED='\033[0;31m'
@@ -35,7 +38,6 @@ warn()  { echo -e "${YELLOW}[ warn ]${NC} $*"; }
 err()   { echo -e "${RED}[error ]${NC} $*" >&2; }
 
 CURRENT_VERSION=$(cat "$PROJECT_DIR/VERSION" 2>/dev/null || echo "unknown")
-TARGET_VERSION="${1:-}"
 
 # ─────────────────────────────────────────────
 # 1. Determine target version
@@ -103,16 +105,24 @@ log "Creating pre-upgrade backup..."
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/pre-upgrade-${CURRENT_VERSION}-$(date +%Y%m%d-%H%M%S).sql"
 
-# Database backup via pg_dump in the postgres container
-# Read credentials from the running container's environment
-PG_USER=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_USER' 2>/dev/null)
-PG_DB=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_DB' 2>/dev/null)
-PG_PASS=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_PASSWORD' 2>/dev/null)
-PG_USER="${PG_USER:-ghostwire}"
-PG_DB="${PG_DB:-ghostwire_proxy}"
+# Source .env to get database credentials (docker compose loads this automatically,
+# but bash scripts need to source it explicitly)
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+fi
+
+PG_USER="${POSTGRES_USER:-ghostwire}"
+PG_DB="${POSTGRES_DB:-ghostwire_proxy}"
+PG_PASS="${POSTGRES_PASSWORD:-}"
+
+if [ -z "$PG_PASS" ]; then
+    warn "POSTGRES_PASSWORD not found in .env — cannot create automated backup"
+fi
 
 log "Backing up database ($PG_DB as $PG_USER)..."
-if docker exec ghostwire-proxy-postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$BACKUP_FILE" 2>&1; then
+if docker exec -e PGPASSWORD="$PG_PASS" ghostwire-proxy-postgres pg_dump -U "$PG_USER" "$PG_DB" > "$BACKUP_FILE" 2>&1; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     ok "Database backed up to: $BACKUP_FILE ($BACKUP_SIZE)"
 else
