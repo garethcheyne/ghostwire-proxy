@@ -107,11 +107,12 @@ BACKUP_FILE="$BACKUP_DIR/pre-upgrade-${CURRENT_VERSION}-$(date +%Y%m%d-%H%M%S).s
 # Read credentials from the running container's environment
 PG_USER=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_USER' 2>/dev/null)
 PG_DB=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_DB' 2>/dev/null)
+PG_PASS=$(docker exec ghostwire-proxy-postgres sh -c 'echo $POSTGRES_PASSWORD' 2>/dev/null)
 PG_USER="${PG_USER:-ghostwire}"
 PG_DB="${PG_DB:-ghostwire_proxy}"
 
 log "Backing up database ($PG_DB as $PG_USER)..."
-if docker exec ghostwire-proxy-postgres pg_dump -U "$PG_USER" "$PG_DB" > "$BACKUP_FILE" 2>&1; then
+if docker exec -e PGPASSWORD="$PG_PASS" ghostwire-proxy-postgres pg_dump -U "$PG_USER" "$PG_DB" > "$BACKUP_FILE" 2>&1; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     ok "Database backed up to: $BACKUP_FILE ($BACKUP_SIZE)"
 else
