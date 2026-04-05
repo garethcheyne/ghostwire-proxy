@@ -564,13 +564,13 @@ async def bulk_firewall_ban(
 
             try:
                 instance = get_fw_connector(connector)
-                success = await instance.add_to_blocklist(ip, "Ghostwire bulk firewall ban")
+                success, error_msg = await instance.add_to_blocklist(ip, "Ghostwire bulk firewall ban")
                 if success:
                     entry.status = "pushed"
                     entry.pushed_at = now
                     pushed += 1
                 else:
-                    entry.error_message = "Push failed"
+                    entry.error_message = error_msg or "Push failed (unknown error)"
                     ip_errors.append(connector.name)
             except Exception as e:
                 entry.error_message = str(e)[:500]
@@ -701,13 +701,13 @@ async def firewall_ban_threat_actor(
 
         try:
             instance = get_fw_connector(connector)
-            success = await instance.add_to_blocklist(ip, "Ghostwire manual firewall ban")
+            success, error_msg = await instance.add_to_blocklist(ip, "Ghostwire manual firewall ban")
             if success:
                 entry.status = "pushed"
                 entry.pushed_at = now
                 pushed += 1
             else:
-                entry.error_message = "Push failed"
+                entry.error_message = error_msg or "Push failed (unknown error)"
                 errors.append(connector.name)
         except Exception as e:
             entry.error_message = str(e)[:500]

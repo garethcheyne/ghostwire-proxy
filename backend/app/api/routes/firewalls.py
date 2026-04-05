@@ -289,14 +289,14 @@ async def sync_blocklist(
 
     from datetime import datetime, timezone
     for entry in entries:
-        success = await instance.add_to_blocklist(entry.ip_address, f"Ghostwire threat score block")
+        success, error_msg = await instance.add_to_blocklist(entry.ip_address, f"Ghostwire threat score block")
         if success:
             entry.status = "pushed"
             entry.pushed_at = datetime.now(timezone.utc)
             entry.connector_id = connector_id
             pushed += 1
         else:
-            entry.error_message = "Push failed"
+            entry.error_message = error_msg or "Push failed (unknown error)"
             errors += 1
 
     connector.last_sync_at = datetime.now(timezone.utc)

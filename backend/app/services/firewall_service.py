@@ -27,7 +27,7 @@ class BaseFirewallConnector:
     async def test_connection(self) -> dict:
         raise NotImplementedError
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         raise NotImplementedError
 
     async def remove_from_blocklist(self, ip: str) -> bool:
@@ -62,7 +62,7 @@ class RouterOSConnector(BaseFirewallConnector):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         list_name = self.connector.address_list_name or "ghostwire-blocked"
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
@@ -75,10 +75,12 @@ class RouterOSConnector(BaseFirewallConnector):
                         "comment": comment or f"Blocked by Ghostwire Proxy",
                     },
                 )
-                return resp.status_code in (200, 201)
+                if resp.status_code in (200, 201):
+                    return True, ""
+                return False, f"RouterOS HTTP {resp.status_code}: {resp.text[:200]}"
         except Exception as e:
             logger.error(f"RouterOS add_to_blocklist failed: {e}")
-            return False
+            return False, f"RouterOS: {e}"
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         list_name = self.connector.address_list_name or "ghostwire-blocked"
@@ -471,7 +473,7 @@ class UniFiConnector(BaseFirewallConnector):
             logger.error(f"UniFi ensure_firewall_rule failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         """Add IP to the correct UniFi traffic matching list (IPv4 or IPv6) and ensure blocking policy exists."""
         is_v6 = self._is_ipv6(ip)
         list_name = self._get_list_name_ipv6() if is_v6 else self._get_list_name_ipv4()
@@ -484,12 +486,12 @@ class UniFiConnector(BaseFirewallConnector):
                 site_uuid = await self._get_site_uuid(client)
                 if not site_uuid:
                     logger.error("UniFi: could not get site UUID")
-                    return False
+                    return False, "UniFi: could not get site UUID"
 
                 list_id = await self._get_or_create_traffic_matching_list(client, site_uuid, list_name, list_type)
                 if not list_id:
                     logger.error(f"UniFi: could not get or create traffic matching list '{list_name}'")
-                    return False
+                    return False, f"UniFi: could not get or create list '{list_name}'"
 
                 # Ensure firewall policy exists
                 policy_id = await self._get_or_create_firewall_policy(client, site_uuid, list_id, policy_name, ip_version)
@@ -500,14 +502,14 @@ class UniFiConnector(BaseFirewallConnector):
                 current_list = await self._get_traffic_matching_list(client, site_uuid, list_id)
                 if not current_list:
                     logger.error("UniFi: could not fetch traffic matching list")
-                    return False
+                    return False, "UniFi: could not fetch traffic matching list"
 
                 items = current_list.get("items", [])
                 existing_ips = [item.get("value") for item in items if item.get("type") == "IP_ADDRESS"]
 
                 if ip in existing_ips:
                     logger.info(f"UniFi: IP {ip} already in blocklist")
-                    return True
+                    return True, ""
 
                 # Add new IP to items
                 items.append({"type": "IP_ADDRESS", "value": ip})
@@ -524,13 +526,14 @@ class UniFiConnector(BaseFirewallConnector):
                 )
                 if resp.status_code == 200:
                     logger.info(f"UniFi: added IP {ip} to {list_name}")
-                    return True
+                    return True, ""
 
-                logger.error(f"UniFi add_to_blocklist: HTTP {resp.status_code} - {resp.text}")
-                return False
+                msg = f"UniFi HTTP {resp.status_code}: {resp.text[:200]}"
+                logger.error(f"UniFi add_to_blocklist: {msg}")
+                return False, msg
         except Exception as e:
             logger.error(f"UniFi add_to_blocklist failed: {e}")
-            return False
+            return False, f"UniFi: {e}"
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         """Remove IP from the correct UniFi traffic matching list."""
@@ -643,7 +646,7 @@ class PfSenseConnector(BaseFirewallConnector):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
                 resp = await client.post(
@@ -655,10 +658,12 @@ class PfSenseConnector(BaseFirewallConnector):
                         "detail": [comment or "Blocked by Ghostwire Proxy"],
                     },
                 )
-                return resp.status_code in (200, 201)
+                if resp.status_code in (200, 201):
+                    return True, ""
+                return False, f"pfSense HTTP {resp.status_code}: {resp.text[:200]}"
         except Exception as e:
             logger.error(f"pfSense add_to_blocklist failed: {e}")
-            return False
+            return False, f"pfSense: {e}"
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         try:
@@ -705,7 +710,7 @@ class OPNsenseConnector(BaseFirewallConnector):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def add_to_blocklist(self, ip: str, comment: str = "") -> bool:
+    async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         try:
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
                 alias_name = self.connector.address_list_name or "ghostwire_blocked"
@@ -714,10 +719,12 @@ class OPNsenseConnector(BaseFirewallConnector):
                     auth=self._get_auth(),
                     json={"address": ip},
                 )
-                return resp.status_code == 200
+                if resp.status_code == 200:
+                    return True, ""
+                return False, f"OPNsense HTTP {resp.status_code}: {resp.text[:200]}"
         except Exception as e:
             logger.error(f"OPNsense add_to_blocklist failed: {e}")
-            return False
+            return False, f"OPNsense: {e}"
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         try:
