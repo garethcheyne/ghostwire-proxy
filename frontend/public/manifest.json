@@ -71,7 +71,36 @@
       "purpose": "maskable"
     }
   ],
-  "screenshots": [],
+  "screenshots": [
+    {
+      "src": "/screenshots/login-wide.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Ghostwire Proxy Login"
+    },
+    {
+      "src": "/screenshots/dashboard-wide.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Ghostwire Proxy Dashboard"
+    },
+    {
+      "src": "/screenshots/login-narrow.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ghostwire Proxy Login - Mobile"
+    },
+    {
+      "src": "/screenshots/dashboard-narrow.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ghostwire Proxy Dashboard - Mobile"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Dashboard",

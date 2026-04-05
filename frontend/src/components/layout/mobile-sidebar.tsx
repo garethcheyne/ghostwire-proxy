@@ -112,7 +112,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                 alt="Ghostwire Logo"
                 width={32}
                 height={32}
-                className="h-8 w-8 object-contain [filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
+                className="h-8 w-8 object-contain"
               />
             </div>
             <SheetTitle className="flex flex-col">

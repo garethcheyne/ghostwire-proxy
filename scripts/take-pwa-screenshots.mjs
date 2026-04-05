@@ -5,26 +5,25 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, '..', 'frontend', 'public', 'screenshots');
 
-const BASE = 'http://192.168.0.13';
+const BASE = 'http://192.168.0.13:88';
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
 
-  // ── Desktop (wide) screenshots ──────────────────────────────
+  // ── Desktop (wide) screenshots — 1920×1080 ─────────────────
   const desktopCtx = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
   });
   const dPage = await desktopCtx.newPage();
 
-  // Login page – wide
-  await dPage.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-  await dPage.waitForTimeout(1000);
+  // Login / landing page – wide
+  await dPage.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await dPage.waitForTimeout(2000);
   await dPage.screenshot({ path: join(outDir, 'login-wide.png'), fullPage: false });
   console.log('✓ login-wide.png');
 
-  // Dashboard – wide  (need to login first)
-  // Try navigating to dashboard – if redirected to login, fill creds
+  // Dashboard – wide (redirects to login if not authenticated — still a good shot)
   await dPage.goto(`${BASE}/dashboard/system`, { waitUntil: 'networkidle' });
   await dPage.waitForTimeout(2000);
   await dPage.screenshot({ path: join(outDir, 'dashboard-wide.png'), fullPage: false });
@@ -32,7 +31,7 @@ async function main() {
 
   await desktopCtx.close();
 
-  // ── Mobile (narrow) screenshots ─────────────────────────────
+  // ── Mobile (narrow) screenshots — 390×844 ──────────────────
   const mobileCtx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
@@ -42,9 +41,9 @@ async function main() {
   });
   const mPage = await mobileCtx.newPage();
 
-  // Login page – narrow
-  await mPage.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-  await mPage.waitForTimeout(1000);
+  // Login / landing page – narrow
+  await mPage.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await mPage.waitForTimeout(2000);
   await mPage.screenshot({ path: join(outDir, 'login-narrow.png'), fullPage: false });
   console.log('✓ login-narrow.png');
 
