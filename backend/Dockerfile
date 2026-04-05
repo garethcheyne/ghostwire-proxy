@@ -21,7 +21,7 @@ COPY . .
 
 # Create non-root user and directories
 RUN useradd -m -u 1000 appuser && \
-    mkdir -p /data/sqlite /data/certificates /data/nginx-configs /data/nginx-configs/.backup /data/backups \
+    mkdir -p /data/sqlite /data/certificates /data/nginx-configs /data/backups /data/backups/nginx-configs \
              /var/www/certbot /etc/letsencrypt /var/log/letsencrypt /var/lib/letsencrypt && \
     chown -R appuser:appuser /app /data /var/www/certbot /etc/letsencrypt /var/log/letsencrypt /var/lib/letsencrypt
 

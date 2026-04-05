@@ -658,7 +658,7 @@ async def remove_config(host_id: str) -> bool:
 
 logger = logging.getLogger(__name__)
 
-BACKUP_DIR = os.path.join(settings.nginx_config_path, ".backup")
+BACKUP_DIR = "/data/backups/nginx-configs"
 
 
 def backup_configs() -> bool:
