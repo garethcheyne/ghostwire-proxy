@@ -8,19 +8,26 @@ import {
   Plus,
   MoreHorizontal,
   Shield,
-  ShieldOff,
+
   Pencil,
   Trash2,
   Power,
   PowerOff,
-  Cloud,
-  CloudOff,
   Loader2,
   ExternalLink,
   MapPin,
   Settings,
   Layers,
   Monitor,
+  Zap,
+  Bug,
+  FileText,
+  Lock,
+  Cable,
+  Gauge,
+  HardDrive,
+  ArrowRightLeft,
+  RefreshCw,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -298,6 +305,22 @@ export default function ProxyHostsPage() {
 
   }
 
+  const [reloadingHost, setReloadingHost] = useState<string | null>(null)
+
+  const handleReload = async (host: ProxyHost) => {
+    setReloadingHost(host.id)
+    try {
+      // Re-enable triggers config regeneration and nginx reload
+      await api.post(`/api/proxy-hosts/${host.id}/enable`)
+      fetchData()
+      toastSuccess(`${host.domain_names[0]} reloaded`)
+    } catch (error: any) {
+      toastError(error.response?.data?.detail || 'Failed to reload proxy host')
+    } finally {
+      setReloadingHost(null)
+    }
+  }
+
   const handleDelete = async (host: ProxyHost) => {
     if (!(await confirm({ description: `Are you sure you want to delete ${host.domain_names[0]}?`, variant: 'destructive' }))) return
 
@@ -417,120 +440,223 @@ export default function ProxyHostsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {hosts.map((host) => (
-            <div key={host.id} className="rounded-xl border border-border bg-card p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleEnabled(host)}
-                    className="shrink-0"
-                    title={host.enabled ? 'Disable host' : 'Enable host'}
-                  >
-                    {host.enabled ? (
-                      <div className="h-3 w-3 rounded-full bg-green-500" />
-                    ) : (
-                      <div className="h-3 w-3 rounded-full bg-gray-500" />
-                    )}
-                  </button>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm sm:text-base truncate" data-private="domain">
-                        {host.domain_names[0]}
-                      </h3>
-                      {host.domain_names.length > 1 && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                          +{host.domain_names.length - 1} more
-                        </span>
-                      )}
-                      {host.ssl_enabled ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 flex items-center gap-1">
-                          <Shield className="h-3 w-3" />
-                          SSL
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
-                          <ShieldOff className="h-3 w-3" />
-                          No SSL
-                        </span>
-                      )}
-                      {(host.locations || []).length > 0 && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 flex items-center gap-1">
-                          <Layers className="h-3 w-3" />
-                          {(host.locations || []).length} location{(host.locations || []).length !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                      {!host.enabled && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
-                          Disabled
-                        </span>
-                      )}
-                    </div>
-                    <code className="text-xs text-muted-foreground mt-1 block truncate" data-private="address">
-                      → {host.forward_scheme}://{host.forward_host}:{host.forward_port}
-                    </code>
-                  </div>
-                </div>
+          {hosts.map((host) => {
+            const locationCount = (host.locations || []).length
+            const hasAdvanced = !!(host.advanced_config || host.server_advanced_config)
+            const authWall = host.auth_wall_id ? authWalls.find(w => w.id === host.auth_wall_id) : null
+            const accessList = host.access_list_id ? accessLists.find(l => l.id === host.access_list_id) : null
 
-                <div className="shrink-0 ml-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button type="button" className="rounded-lg p-2 hover:bg-muted" title="Actions">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => handleEdit(host)}>
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleEnabled(host)}>
-                        {host.enabled ? (
-                          <>
-                            <PowerOff className="h-4 w-4" />
-                            Disable
-                          </>
-                        ) : (
-                          <>
-                            <Power className="h-4 w-4" />
-                            Enable
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
+            return (
+              <div
+                key={host.id}
+                className={`rounded-xl border bg-card p-4 ${host.enabled ? 'border-border' : 'border-border opacity-60'}`}
+              >
+                {/* Row 1: Domain, destination, actions */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEnabled(host)}
+                      className="shrink-0 mt-1.5"
+                      title={host.enabled ? 'Disable host' : 'Enable host'}
+                    >
+                      {host.enabled ? (
+                        <div className="h-3 w-3 rounded-full bg-green-500" />
+                      ) : (
+                        <div className="h-3 w-3 rounded-full bg-gray-500" />
+                      )}
+                    </button>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <a
                           href={`${host.ssl_enabled ? 'https' : 'http'}://${host.domain_names[0]}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          className="font-semibold text-sm sm:text-base hover:text-primary transition-colors"
+                          data-private="domain"
                         >
-                          <ExternalLink className="h-4 w-4" />
-                          Open Site
+                          {host.domain_names[0]}
                         </a>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a
-                          href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Monitor className="h-4 w-4" />
-                          Open Site Locally
-                        </a>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(host)}
-                        className="text-red-500 focus:text-red-500"
+                        {host.domain_names.length > 1 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            +{host.domain_names.length - 1} more
+                          </span>
+                        )}
+                        {!host.enabled && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
+                      <a
+                        href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-0.5 block truncate"
+                        data-private="address"
                       >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        {host.forward_scheme}://{host.forward_host}:{host.forward_port}
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Quick actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleReload(host)}
+                      disabled={reloadingHost === host.id || !host.enabled}
+                      className="rounded-lg p-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Reload config"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${reloadingHost === host.id ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEnabled(host)}
+                      className={`rounded-lg p-2 hover:bg-muted ${host.enabled ? '' : 'text-green-500'}`}
+                      title={host.enabled ? 'Disable host' : 'Enable host'}
+                    >
+                      {host.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="rounded-lg p-2 hover:bg-muted" title="More actions">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => handleEdit(host)}>
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleEnabled(host)}>
+                          {host.enabled ? (
+                            <>
+                              <PowerOff className="h-4 w-4" />
+                              Disable
+                            </>
+                          ) : (
+                            <>
+                              <Power className="h-4 w-4" />
+                              Enable
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleReload(host)} disabled={!host.enabled}>
+                          <RefreshCw className="h-4 w-4" />
+                          Reload
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a
+                            href={`${host.ssl_enabled ? 'https' : 'http'}://${host.domain_names[0]}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Open Site
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a
+                            href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Monitor className="h-4 w-4" />
+                            Open Site Locally
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(host)}
+                          className="text-red-500 focus:text-red-500"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                {/* Row 2: Feature indicators */}
+                <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                  {/* SSL / HSTS / HTTP2 */}
+                  <span className={`flex items-center gap-1 ${host.ssl_enabled ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                    <Shield className="h-3.5 w-3.5" />
+                    SSL
+                  </span>
+                  <span className={`flex items-center gap-1 ${host.hsts_enabled ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                    <Lock className="h-3.5 w-3.5" />
+                    HSTS
+                  </span>
+                  <span className={`flex items-center gap-1 ${host.http2_support ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                    <Zap className="h-3.5 w-3.5" />
+                    HTTP/2
+                  </span>
+
+                  <span className="text-border">|</span>
+
+                  {/* Security features */}
+                  <span className={`flex items-center gap-1 ${host.websockets_support ? 'text-cyan-500' : 'text-muted-foreground/50'}`}>
+                    <Cable className="h-3.5 w-3.5" />
+                    WebSocket
+                  </span>
+                  <span className={`flex items-center gap-1 ${host.block_exploits ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
+                    <Bug className="h-3.5 w-3.5" />
+                    Block Exploits
+                  </span>
+                  <span className={`flex items-center gap-1 ${host.honeypot_enabled ? 'text-amber-500' : 'text-muted-foreground/50'}`}>
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    Honeypot
+                  </span>
+                  <span className={`flex items-center gap-1 ${host.traffic_logging_enabled ? 'text-blue-500' : 'text-muted-foreground/50'}`}>
+                    <FileText className="h-3.5 w-3.5" />
+                    Logging
+                  </span>
+
+                  {/* Conditional extras */}
+                  {host.cache_enabled && (
+                    <span className="flex items-center gap-1 text-purple-500">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      Cache
+                    </span>
+                  )}
+                  {host.rate_limit_enabled && (
+                    <span className="flex items-center gap-1 text-yellow-500">
+                      <Gauge className="h-3.5 w-3.5" />
+                      Rate Limit
+                    </span>
+                  )}
+                  {locationCount > 0 && (
+                    <span className="flex items-center gap-1 text-blue-400">
+                      <Layers className="h-3.5 w-3.5" />
+                      {locationCount} Location{locationCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {hasAdvanced && (
+                    <span className="flex items-center gap-1 text-violet-500">
+                      <Settings className="h-3.5 w-3.5" />
+                      Advanced
+                    </span>
+                  )}
+                  {authWall && (
+                    <span className="flex items-center gap-1 text-rose-500">
+                      <Shield className="h-3.5 w-3.5" />
+                      {authWall.name}
+                    </span>
+                  )}
+                  {accessList && (
+                    <span className="flex items-center gap-1 text-teal-500">
+                      <Lock className="h-3.5 w-3.5" />
+                      {accessList.name}
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
