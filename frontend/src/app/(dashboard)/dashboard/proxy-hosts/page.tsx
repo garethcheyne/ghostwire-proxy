@@ -24,6 +24,13 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 
 type TabType = 'details' | 'locations' | 'advanced'
@@ -34,29 +41,29 @@ interface FormData {
   forward_host: string
   forward_port: number
   ssl_enabled: boolean
-  certificate_id?: string
-  access_list_id?: string
-  auth_wall_id?: string
+  certificate_id: string | null
+  access_list_id: string | null
+  auth_wall_id: string | null
   http2_support: boolean
   hsts_enabled: boolean
   hsts_subdomains: boolean
   websockets_support: boolean
   block_exploits: boolean
   honeypot_enabled: boolean
-  advanced_config?: string
-  server_advanced_config?: string
+  advanced_config: string | null
+  server_advanced_config: string | null
   client_max_body_size: string
   proxy_buffering: boolean
   proxy_buffer_size: string
   proxy_buffers: string
   cache_enabled: boolean
-  cache_valid?: string
-  cache_bypass?: string
+  cache_valid: string | null
+  cache_bypass: string | null
   rate_limit_enabled: boolean
   rate_limit_requests: number
   rate_limit_period: string
   rate_limit_burst: number
-  custom_error_pages?: Record<string, string>
+  custom_error_pages: Record<string, string> | null
   traffic_logging_enabled: boolean
 }
 
@@ -86,21 +93,29 @@ const defaultFormData: FormData = {
   forward_host: '',
   forward_port: 80,
   ssl_enabled: false,
+  certificate_id: null,
+  access_list_id: null,
+  auth_wall_id: null,
   http2_support: true,
   hsts_enabled: false,
   hsts_subdomains: false,
   websockets_support: true,
   block_exploits: true,
   honeypot_enabled: false,
+  advanced_config: null,
+  server_advanced_config: null,
   client_max_body_size: '100m',
   proxy_buffering: true,
   proxy_buffer_size: '4k',
   proxy_buffers: '8 4k',
   cache_enabled: false,
+  cache_valid: null,
+  cache_bypass: null,
   rate_limit_enabled: false,
   rate_limit_requests: 100,
   rate_limit_period: '1s',
   rate_limit_burst: 50,
+  custom_error_pages: null,
   traffic_logging_enabled: false,
 }
 
@@ -133,7 +148,6 @@ export default function ProxyHostsPage() {
   const [editingHost, setEditingHost] = useState<ProxyHost | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('details')
 
   // Form state
@@ -188,29 +202,29 @@ export default function ProxyHostsPage() {
       forward_host: host.forward_host,
       forward_port: host.forward_port,
       ssl_enabled: host.ssl_enabled,
-      certificate_id: host.certificate_id || undefined,
-      access_list_id: host.access_list_id || undefined,
-      auth_wall_id: host.auth_wall_id || undefined,
+      certificate_id: host.certificate_id || null,
+      access_list_id: host.access_list_id || null,
+      auth_wall_id: host.auth_wall_id || null,
       http2_support: host.http2_support,
       hsts_enabled: host.hsts_enabled,
       hsts_subdomains: host.hsts_subdomains,
       websockets_support: host.websockets_support,
       block_exploits: host.block_exploits,
       honeypot_enabled: host.honeypot_enabled,
-      advanced_config: host.advanced_config || undefined,
-      server_advanced_config: host.server_advanced_config || undefined,
+      advanced_config: host.advanced_config || null,
+      server_advanced_config: host.server_advanced_config || null,
       client_max_body_size: host.client_max_body_size,
       proxy_buffering: host.proxy_buffering,
       proxy_buffer_size: host.proxy_buffer_size,
       proxy_buffers: host.proxy_buffers,
       cache_enabled: host.cache_enabled,
-      cache_valid: host.cache_valid || undefined,
-      cache_bypass: host.cache_bypass || undefined,
+      cache_valid: host.cache_valid || null,
+      cache_bypass: host.cache_bypass || null,
       rate_limit_enabled: host.rate_limit_enabled,
       rate_limit_requests: host.rate_limit_requests,
       rate_limit_period: host.rate_limit_period,
       rate_limit_burst: host.rate_limit_burst,
-      custom_error_pages: host.custom_error_pages || undefined,
+      custom_error_pages: host.custom_error_pages || null,
       traffic_logging_enabled: host.traffic_logging_enabled,
     })
     setLocations(host.locations || [])
@@ -218,7 +232,7 @@ export default function ProxyHostsPage() {
     setEditingHost(host)
     setShowDialog(true)
     setActiveTab('details')
-    setActiveDropdown(null)
+
   }
 
   const handleAddDomain = () => {
@@ -238,8 +252,8 @@ export default function ProxyHostsPage() {
     })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault()
     setError('')
     setIsSubmitting(true)
 
@@ -281,7 +295,7 @@ export default function ProxyHostsPage() {
       console.error('Failed to toggle host:', error)
       toastError(error.response?.data?.detail || 'Failed to toggle proxy host')
     }
-    setActiveDropdown(null)
+
   }
 
   const handleDelete = async (host: ProxyHost) => {
@@ -295,7 +309,7 @@ export default function ProxyHostsPage() {
       console.error('Failed to delete host:', error)
       toastError(error.response?.data?.detail || 'Failed to delete proxy host')
     }
-    setActiveDropdown(null)
+
   }
 
   // Location handlers
@@ -394,170 +408,131 @@ export default function ProxyHostsPage() {
         </button>
       </div>
 
-      {/* Proxy Hosts Table */}
-      <div className="rounded-xl border border-border bg-card overflow-visible">
-        <div className="overflow-x-auto overflow-y-visible">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Source
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Destination
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  SSL
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Locations
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {hosts.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                    <Globe className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                    <p>No proxy hosts configured</p>
-                    <p className="text-sm mt-1">Click "Add Proxy Host" to create one</p>
-                  </td>
-                </tr>
-              ) : (
-                hosts.map((host) => (
-                  <tr key={host.id} className="hover:bg-muted/50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium" data-private="domain">{host.domain_names[0]}</p>
-                          {host.domain_names.length > 1 && (
-                            <p className="text-xs text-muted-foreground">
-                              +{host.domain_names.length - 1} more
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">→</span>
-                        <code className="text-sm" data-private="address">
-                          {host.forward_scheme}://{host.forward_host}:{host.forward_port}
-                        </code>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {host.ssl_enabled ? (
-                        <div className="flex items-center gap-1 text-green-500">
-                          <Shield className="h-4 w-4" />
-                          <span className="text-xs">Secured</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <ShieldOff className="h-4 w-4" />
-                          <span className="text-xs">None</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Layers className="h-4 w-4" />
-                        <span className="text-xs">{(host.locations || []).length}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          host.enabled
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-gray-500/10 text-gray-500'
-                        }`}
-                      >
-                        {host.enabled ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="relative">
-                        <button
-                          onClick={() =>
-                            setActiveDropdown(activeDropdown === host.id ? null : host.id)
-                          }
-                          className="rounded-lg p-2 hover:bg-muted"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-
-                        {activeDropdown === host.id && (
-                          <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg">
-                            <div className="p-1">
-                              <button
-                                onClick={() => handleEdit(host)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleToggleEnabled(host)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                {host.enabled ? (
-                                  <>
-                                    <PowerOff className="h-4 w-4" />
-                                    Disable
-                                  </>
-                                ) : (
-                                  <>
-                                    <Power className="h-4 w-4" />
-                                    Enable
-                                  </>
-                                )}
-                              </button>
-                              <a
-                                href={`${host.ssl_enabled ? 'https' : 'http'}://${host.domain_names[0]}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                                Open Site
-                              </a>
-                              <a
-                                href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                <Monitor className="h-4 w-4" />
-                                Open Site Locally
-                              </a>
-                              <hr className="my-1 border-border" />
-                              <button
-                                onClick={() => handleDelete(host)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* Proxy Hosts */}
+      {hosts.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-muted-foreground">
+          <Globe className="mx-auto h-12 w-12 mb-4 opacity-50" />
+          <p>No proxy hosts configured</p>
+          <p className="text-sm mt-1">Click &quot;Add Proxy Host&quot; to create one</p>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          {hosts.map((host) => (
+            <div key={host.id} className="rounded-xl border border-border bg-card p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEnabled(host)}
+                    className="shrink-0"
+                    title={host.enabled ? 'Disable host' : 'Enable host'}
+                  >
+                    {host.enabled ? (
+                      <div className="h-3 w-3 rounded-full bg-green-500" />
+                    ) : (
+                      <div className="h-3 w-3 rounded-full bg-gray-500" />
+                    )}
+                  </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      <h3 className="font-semibold text-sm sm:text-base truncate" data-private="domain">
+                        {host.domain_names[0]}
+                      </h3>
+                      {host.domain_names.length > 1 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          +{host.domain_names.length - 1} more
+                        </span>
+                      )}
+                      {host.ssl_enabled ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 flex items-center gap-1">
+                          <Shield className="h-3 w-3" />
+                          SSL
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
+                          <ShieldOff className="h-3 w-3" />
+                          No SSL
+                        </span>
+                      )}
+                      {(host.locations || []).length > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 flex items-center gap-1">
+                          <Layers className="h-3 w-3" />
+                          {(host.locations || []).length} location{(host.locations || []).length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {!host.enabled && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
+                          Disabled
+                        </span>
+                      )}
+                    </div>
+                    <code className="text-xs text-muted-foreground mt-1 block truncate" data-private="address">
+                      → {host.forward_scheme}://{host.forward_host}:{host.forward_port}
+                    </code>
+                  </div>
+                </div>
+
+                <div className="shrink-0 ml-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="rounded-lg p-2 hover:bg-muted" title="Actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => handleEdit(host)}>
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleEnabled(host)}>
+                        {host.enabled ? (
+                          <>
+                            <PowerOff className="h-4 w-4" />
+                            Disable
+                          </>
+                        ) : (
+                          <>
+                            <Power className="h-4 w-4" />
+                            Enable
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a
+                          href={`${host.ssl_enabled ? 'https' : 'http'}://${host.domain_names[0]}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Open Site
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a
+                          href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Monitor className="h-4 w-4" />
+                          Open Site Locally
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(host)}
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       {showDialog && (
@@ -616,7 +591,7 @@ export default function ProxyHostsPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto min-h-[400px]">
               {activeTab === 'details' && (
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                   {/* Domain Names */}
@@ -729,7 +704,7 @@ export default function ProxyHostsPage() {
                             onChange={(e) =>
                               setFormData({
                                 ...formData,
-                                certificate_id: e.target.value || undefined,
+                                certificate_id: e.target.value || null,
                               })
                             }
                             className="w-full px-4 py-2 rounded-lg border border-input bg-background"
@@ -779,7 +754,7 @@ export default function ProxyHostsPage() {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            access_list_id: e.target.value || undefined,
+                            access_list_id: e.target.value || null,
                           })
                         }
                         className="w-full px-4 py-2 rounded-lg border border-input bg-background"
@@ -799,7 +774,7 @@ export default function ProxyHostsPage() {
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            auth_wall_id: e.target.value || undefined,
+                            auth_wall_id: e.target.value || null,
                           })
                         }
                         className="w-full px-4 py-2 rounded-lg border border-input bg-background"
@@ -870,24 +845,6 @@ export default function ProxyHostsPage() {
                       {error}
                     </div>
                   )}
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                    <button
-                      type="button"
-                      onClick={() => setShowDialog(false)}
-                      className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {editingHost ? 'Save Changes' : 'Create'}
-                    </button>
-                  </div>
                 </form>
               )}
 
@@ -1019,7 +976,7 @@ export default function ProxyHostsPage() {
                               type="text"
                               value={formData.cache_valid || ''}
                               onChange={(e) =>
-                                setFormData({ ...formData, cache_valid: e.target.value || undefined })
+                                setFormData({ ...formData, cache_valid: e.target.value || null })
                               }
                               className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
                               placeholder="200 302 10m"
@@ -1031,7 +988,7 @@ export default function ProxyHostsPage() {
                               type="text"
                               value={formData.cache_bypass || ''}
                               onChange={(e) =>
-                                setFormData({ ...formData, cache_bypass: e.target.value || undefined })
+                                setFormData({ ...formData, cache_bypass: e.target.value || null })
                               }
                               className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
                               placeholder="$http_cache_control"
@@ -1116,7 +1073,7 @@ export default function ProxyHostsPage() {
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              server_advanced_config: e.target.value || undefined,
+                              server_advanced_config: e.target.value || null,
                             })
                           }
                           className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
@@ -1131,7 +1088,7 @@ export default function ProxyHostsPage() {
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              advanced_config: e.target.value || undefined,
+                              advanced_config: e.target.value || null,
                             })
                           }
                           className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
@@ -1142,25 +1099,28 @@ export default function ProxyHostsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                    <button
-                      type="button"
-                      onClick={() => setShowDialog(false)}
-                      className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Save Changes
-                    </button>
-                  </div>
                 </div>
               )}
+            </div>
+
+            {/* Shared footer buttons - visible on all tabs */}
+            <div className="flex justify-end gap-3 p-6 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowDialog(false)}
+                className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editingHost ? 'Save Changes' : 'Create'}
+              </button>
             </div>
           </div>
         </div>
@@ -1321,10 +1281,6 @@ export default function ProxyHostsPage() {
         </div>
       )}
 
-      {/* Click outside to close dropdown */}
-      {activeDropdown && (
-        <div className="fixed inset-0 z-0" onClick={() => setActiveDropdown(null)} />
-      )}
     </div>
   )
 }

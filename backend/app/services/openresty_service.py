@@ -324,13 +324,25 @@ def _generate_server_block_content(
         if hasattr(host, 'auth_wall') and host.auth_wall and hasattr(host.auth_wall, 'theme'):
             theme = host.auth_wall.theme or "default"
 
-        # Auth portal - Static files served directly from nginx (self-contained, no UI dependency)
-        lines.append(f"{indent}# Auth portal - Static files (theme: {theme})")
+        # Auth portal - Static assets (JS, CSS, images) with long cache
+        lines.append(f"{indent}# Auth portal - Static assets (theme: {theme})")
+        lines.append(f"{indent}location /__auth/assets/ {{")
+        lines.append(f"{indent}    alias /var/www/auth-portal/{theme}/assets/;")
+        lines.append(f"{indent}    add_header Cache-Control \"public, max-age=31536000, immutable\";")
+        lines.append(f"{indent}}}")
+        lines.append("")
+        lines.append(f"{indent}location = /__auth/favicon.svg {{")
+        lines.append(f"{indent}    alias /var/www/auth-portal/{theme}/favicon.svg;")
+        lines.append(f"{indent}    add_header Cache-Control \"public, max-age=3600\";")
+        lines.append(f"{indent}}}")
+        lines.append("")
+        # Auth portal - SPA fallback for client-side routes (e.g. /__auth/login)
+        lines.append(f"{indent}# Auth portal - SPA fallback")
         lines.append(f"{indent}location /__auth/ {{")
         lines.append(f"{indent}    alias /var/www/auth-portal/{theme}/;")
         lines.append(f"{indent}    index index.html;")
-        lines.append(f"{indent}    try_files $uri $uri/ /__auth/index.html;")
-        lines.append(f"{indent}    add_header Cache-Control \"public, max-age=3600\";")
+        lines.append(f"{indent}    try_files $uri $uri/ /index.html;")
+        lines.append(f"{indent}    add_header Cache-Control \"no-cache\";")
         lines.append(f"{indent}}}")
         lines.append("")
 
