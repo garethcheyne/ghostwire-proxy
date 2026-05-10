@@ -476,95 +476,130 @@ export default function UpdatesPage() {
 
       {/* Application Updates */}
       <div className="rounded-xl border border-border bg-card p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Package className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold">Application Updates</h2>
-            <p className="text-sm text-muted-foreground">
-              Current version: <span className="font-mono font-medium">{appInfo?.current_version}</span>
-            </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Package className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Application Updates</h2>
+                <p className="text-sm text-muted-foreground">
+                  Current version: <span className="font-mono font-medium">{appInfo?.current_version}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border p-4 bg-muted">
+                <p className="text-sm text-muted-foreground">Current Version</p>
+                <p className="mt-2 font-mono text-lg font-semibold">{appInfo?.current_version}</p>
+              </div>
+              <div className="rounded-xl border border-border p-4 bg-muted">
+                <p className="text-sm text-muted-foreground">Latest Release</p>
+                <p className="mt-2 font-mono text-lg font-semibold">
+                  {appInfo?.latest_version ?? 'Unknown'}
+                </p>
+                {appInfo?.releases?.[0]?.published_at && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Released {formatRelativeDate(appInfo.releases[0].published_at)}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {appInfo?.update_available && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-sm font-medium">
-              <Download className="h-4 w-4" />
-              Update Available
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <p className="text-sm font-medium text-green-700">Update Available</p>
+              <p className="text-xl font-semibold text-green-800">
+                {appInfo.latest_version}
+              </p>
+              {appInfo.releases[0]?.published_at && (
+                <p className="text-sm text-green-700/80">
+                  Released {formatRelativeDate(appInfo.releases[0].published_at)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!appInfo?.update_available && !appInfo?.error && (
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <p className="text-sm font-medium text-green-700">Up to date</p>
+              <p className="text-xl font-semibold text-green-800">{appInfo?.current_version}</p>
             </div>
           )}
         </div>
 
         {appInfo?.error && (
-          <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <div className="mb-4 mt-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             {appInfo.error}
           </div>
         )}
 
-        {appInfo?.update_available && appInfo.latest_version && (
-          <div className="mb-4 p-4 rounded-lg bg-green-500/5 border border-green-500/20">
-            <div className="flex items-center justify-between">
+        {appInfo?.releases?.[0] && (
+          <div className="mt-6 rounded-xl border border-border bg-background p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="font-medium text-green-600 dark:text-green-400">
-                  Version {appInfo.latest_version} is available
+                <p className="text-sm text-muted-foreground">Latest Release Notes</p>
+                <p className="text-lg font-semibold">
+                  {appInfo.releases[0].name || `v${appInfo.releases[0].version}`}
                 </p>
-                {appInfo.releases[0]?.published_at && (
+                {appInfo.releases[0].published_at && (
                   <p className="text-sm text-muted-foreground">
-                    Released {formatRelativeDate(appInfo.releases[0].published_at)}
+                    Published {formatRelativeDate(appInfo.releases[0].published_at)}
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                {appInfo.releases[0]?.html_url && (
+              <div className="flex flex-wrap gap-2">
+                {appInfo.releases[0].html_url && (
                   <a
                     href={appInfo.releases[0].html_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted"
+                    className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
                   >
                     <ExternalLink className="h-3 w-3" />
-                    Release Notes
+                    View Release Notes
                   </a>
                 )}
-                <button
-                  onClick={() => handleStartAppUpdate(appInfo.latest_version!)}
-                  disabled={isUpdating || isUpdateInProgress}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50"
-                >
-                  <Download className="h-4 w-4" />
-                  Update Now
-                </button>
+                {appInfo.update_available && appInfo.latest_version && (
+                  <button
+                    onClick={() => handleStartAppUpdate(appInfo.latest_version!)}
+                    disabled={isUpdating || isUpdateInProgress}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+                  >
+                    <Download className="h-4 w-4" />
+                    Update Now
+                  </button>
+                )}
               </div>
             </div>
 
-            {appInfo.releases[0]?.changelog && (
-              <div className="mt-3 pt-3 border-t border-green-500/20">
-                <button
-                  onClick={() => setSelectedRelease(selectedRelease?.version === appInfo.releases[0].version ? null : appInfo.releases[0])}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  {selectedRelease?.version === appInfo.releases[0].version ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                  View Changelog
-                </button>
+            {appInfo.releases[0].changelog && (
+              <div className="mt-4 rounded-lg border border-border bg-muted p-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">Release Notes</p>
+                  <button
+                    onClick={() => setSelectedRelease(selectedRelease?.version === appInfo.releases[0].version ? null : appInfo.releases[0])}
+                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {selectedRelease?.version === appInfo.releases[0].version ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                    {selectedRelease?.version === appInfo.releases[0].version ? 'Hide' : 'View'} changelog
+                  </button>
+                </div>
                 {selectedRelease?.version === appInfo.releases[0].version && (
-                  <pre className="mt-2 p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap overflow-x-auto max-h-64 overflow-y-auto">
+                  <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900/5 p-4 text-sm text-slate-900 dark:bg-slate-900/10 dark:text-slate-100">
                     {appInfo.releases[0].changelog}
                   </pre>
                 )}
               </div>
             )}
           </div>
-        )}
-
-        {!appInfo?.update_available && !appInfo?.error && (
-          <p className="text-muted-foreground flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            You are running the latest version
-          </p>
         )}
 
         {/* Previous releases */}
@@ -579,31 +614,59 @@ export default function UpdatesPage() {
             </button>
 
             {showAllReleases && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-3">
                 {appInfo.releases.slice(1).map((release) => (
-                  <div key={release.version} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm">{release.version}</span>
-                      {release.prerelease && (
-                        <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-                          Pre-release
-                        </span>
-                      )}
-                      {release.published_at && (
-                        <span className="text-sm text-muted-foreground">
-                          {formatRelativeDate(release.published_at)}
-                        </span>
-                      )}
+                  <div key={release.version} className="rounded-lg border border-border bg-background p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="font-mono text-sm">{release.version}</span>
+                        {release.prerelease && (
+                          <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                            Pre-release
+                          </span>
+                        )}
+                        {release.published_at && (
+                          <span className="text-sm text-muted-foreground">
+                            {formatRelativeDate(release.published_at)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {release.html_url && (
+                          <a
+                            href={release.html_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Release Notes
+                          </a>
+                        )}
+                        {release.changelog && (
+                          <button
+                            onClick={() =>
+                              setSelectedRelease(
+                                selectedRelease?.version === release.version ? null : release
+                              )
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
+                          >
+                            {selectedRelease?.version === release.version ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                            {selectedRelease?.version === release.version ? 'Hide' : 'View'} notes
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {release.html_url && (
-                      <a
-                        href={release.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
+
+                    {selectedRelease?.version === release.version && release.changelog && (
+                      <pre className="mt-3 rounded-lg border border-border bg-muted p-3 text-sm whitespace-pre-wrap">
+                        {release.changelog}
+                      </pre>
                     )}
                   </div>
                 ))}
