@@ -171,7 +171,8 @@ class TestNginxOperations:
         mock_result.returncode = 0
         mock_result.stdout = "test is successful"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("os.path.exists", return_value=False):
             success, output = test_nginx_config()
 
         assert success is True
@@ -181,7 +182,8 @@ class TestNginxOperations:
         mock_result.returncode = 1
         mock_result.stderr = "syntax error"
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("subprocess.run", return_value=mock_result), \
+             patch("os.path.exists", return_value=False):
             success, output = test_nginx_config()
 
         assert success is False

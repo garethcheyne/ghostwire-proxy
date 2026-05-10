@@ -186,7 +186,7 @@ class TestRouterOSConnector:
             with patch("app.services.firewall_service.decrypt_data", return_value="password"):
                 result = await connector.add_to_blocklist("192.0.2.1", "Test block")
 
-        assert result is True
+        assert result[0] is True
 
 
 class TestUniFiConnector:
@@ -367,7 +367,7 @@ class TestUniFiConnector:
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.add_to_blocklist("10.0.0.1", "Test")
 
-        assert result is True
+        assert result[0] is True
         # Verify the PUT was called with IPv4 list name
         put_call = client_mock.put.call_args
         assert put_call[1]["json"]["name"] == "Ghostwire Block IPv4"
@@ -435,7 +435,7 @@ class TestUniFiConnector:
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.add_to_blocklist("2001:db8::1", "Test IPv6")
 
-        assert result is True
+        assert result[0] is True
         # Verify the PUT was called with IPv6 list name
         put_call = client_mock.put.call_args
         assert put_call[1]["json"]["name"] == "Ghostwire Block IPv6"
