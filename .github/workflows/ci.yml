@@ -135,3 +135,44 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           tags: ghostwire-proxy-${{ matrix.service }}:${{ github.sha }}
+
+  # ─────────────────────────────────────────────
+  # Auto-tag: create git tag when VERSION changes
+  # ─────────────────────────────────────────────
+  auto-tag:
+    name: Auto Tag
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Check if VERSION changed
+        id: version_check
+        run: |
+          if git diff HEAD~1 --name-only | grep -qx "VERSION"; then
+            VERSION=$(cat VERSION | tr -d '[:space:]')
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.version_check.outputs.changed == 'true'
+        run: |
+          TAG="v${{ steps.version_check.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "Created and pushed tag $TAG"
+          fi
