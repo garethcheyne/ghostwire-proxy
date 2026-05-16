@@ -78,7 +78,7 @@ function _M.access(rules)
         return
     end
 
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
     local geo = _M.lookup(client_ip)
 
     if not geo then
@@ -140,7 +140,7 @@ function _M.block_response(geo, action)
 
     if action == "log" then
         -- Log only, don't block
-        ngx.log(ngx.WARN, "GeoIP: would block ", ngx.var.remote_addr,
+        ngx.log(ngx.WARN, "GeoIP: would block ", init.get_client_ip(),
             " from ", geo.country_code, " (log-only mode)")
         return
     end

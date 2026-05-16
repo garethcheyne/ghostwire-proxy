@@ -50,7 +50,7 @@ local function check_db_rules(uri, args, user_agent)
                         matched = user_agent,
                     }
                 end
-            elseif rule.category == "path_traversal" then
+            elseif rule.category == "path_traversal" or rule.category == "probe" then
                 target = uri
             else
                 target = request_data
@@ -86,7 +86,7 @@ local function check_default_rules(uri, args, user_agent)
 
     for _, rule in ipairs(defaults) do
         local target
-        if rule.category == "path_traversal" then
+        if rule.category == "path_traversal" or rule.category == "probe" then
             target = uri
         else
             target = request_data
@@ -136,7 +136,7 @@ function _M.check_request()
     local uri = ngx.var.uri or ""
     local args = ngx.var.query_string or ""
     local user_agent = ngx.var.http_user_agent or ""
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
 
     -- Skip all checks for trusted IPs
     if init.is_trusted_ip(client_ip) then
@@ -175,7 +175,7 @@ function _M.log_threat(threat_info)
     local httpc = http.new()
     local geoip = require "geoip"
 
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
     local geo = geoip.lookup(client_ip)
 
     local body = cjson.encode({
@@ -213,7 +213,7 @@ end
 
 -- Main access handler
 function _M.access()
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
 
     -- Check honeypot traps FIRST (before WAF rules)
     -- Only if honeypot is enabled for this virtual host

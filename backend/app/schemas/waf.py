@@ -42,7 +42,8 @@ class WafRuleCreate(BaseModel):
     @field_validator('category')
     @classmethod
     def validate_category(cls, v: str) -> str:
-        valid = ('sqli', 'xss', 'path_traversal', 'rce', 'scanner', 'custom')
+        valid = ('sqli', 'xss', 'path_traversal', 'rce', 'scanner', 'probe', 'custom',
+                 'protocol', 'file_upload', 'injection', 'recon', 'dos', 'sensitive_data')
         if v not in valid:
             raise ValueError(f'Category must be one of: {", ".join(valid)}')
         return v

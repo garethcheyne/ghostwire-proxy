@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -52,6 +53,12 @@ const categoryColors: Record<string, string> = {
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
   rce: 'bg-purple-500/10 text-purple-500',
   scanner: 'bg-blue-500/10 text-blue-500',
+  probe: 'bg-indigo-500/10 text-indigo-500',
+  protocol: 'bg-slate-500/10 text-slate-400',
+  file_upload: 'bg-amber-500/10 text-amber-500',
+  injection: 'bg-red-500/10 text-red-400',
+  recon: 'bg-teal-500/10 text-teal-400',
+  dos: 'bg-pink-500/10 text-pink-500',
   custom: 'bg-cyan-500/10 text-cyan-500',
 }
 
@@ -69,6 +76,10 @@ const actionColors: Record<string, string> = {
 }
 
 export default function WafPage() {
+  const searchParams = useSearchParams()
+  const highlightId = searchParams.get('highlight')
+  const highlightRef = useRef<HTMLDivElement>(null)
+
   const [rules, setRules] = useState<WafRule[]>([])
   const [ruleSets, setRuleSets] = useState<WafRuleSet[]>([])
   const [hosts, setHosts] = useState<ProxyHostBasic[]>([])
@@ -97,6 +108,13 @@ export default function WafPage() {
   useEffect(() => {
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
   }, [])
+
+  // Scroll to highlighted rule when data loads
+  useEffect(() => {
+    if (highlightId && !isLoading && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightId, isLoading])
 
   useEffect(() => {
     if (!hostDropdownOpen) return
@@ -293,7 +311,15 @@ export default function WafPage() {
           </div>
         ) : (
           rules.map((rule) => (
-            <div key={rule.id} className="rounded-xl border border-border bg-card p-4">
+            <div
+              key={rule.id}
+              ref={rule.id === highlightId ? highlightRef : undefined}
+              className={`rounded-xl border bg-card p-4 transition-all duration-500 ${
+                rule.id === highlightId
+                  ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-500/5'
+                  : 'border-border'
+              }`}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <button onClick={() => handleToggle(rule)} className="shrink-0">

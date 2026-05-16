@@ -43,7 +43,7 @@ end
 
 -- Check access for a given host
 function _M.check_access(host)
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
 
     -- Fetch access list config from API (cached)
     local cache_key = "acl:" .. (host or "default")

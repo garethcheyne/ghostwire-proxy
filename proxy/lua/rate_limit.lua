@@ -77,7 +77,7 @@ end
 
 -- Access handler
 function _M.access()
-    local client_ip = ngx.var.remote_addr
+    local client_ip = init.get_client_ip()
     local host = ngx.var.host or "default"
 
     -- Skip rate limiting for trusted IPs

@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table'
 import { ArrowUpDown, Ban, Globe, Trash2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { IpAddress } from '@/components/ip-address'
+import Link from 'next/link'
 
 export interface ThreatEvent {
   id: string
@@ -35,6 +36,7 @@ const categoryColors: Record<string, string> = {
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
   rce: 'bg-purple-500/10 text-purple-500',
   scanner: 'bg-blue-500/10 text-blue-500',
+  probe: 'bg-indigo-500/10 text-indigo-500',
   sensitive_data: 'bg-cyan-500/10 text-cyan-400',
   injection: 'bg-red-500/10 text-red-400',
   recon: 'bg-slate-500/10 text-slate-400',
@@ -147,7 +149,19 @@ export function createEventColumns(actions: {
       header: 'Rule',
       cell: ({ row }) => {
         const rule = row.getValue('rule_name') as string | null
+        const ruleId = row.original.rule_id
         if (!rule) return <span className="text-xs text-muted-foreground">—</span>
+        if (ruleId && !ruleId.startsWith('default-')) {
+          return (
+            <Link
+              href={`/dashboard/waf?highlight=${ruleId}`}
+              className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 max-w-48 truncate block"
+              title={`${rule} — Click to view/edit rule`}
+            >
+              {rule}
+            </Link>
+          )
+        }
         return (
           <span className="text-xs text-muted-foreground max-w-48 truncate block" title={rule}>
             {rule}

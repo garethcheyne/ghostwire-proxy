@@ -426,6 +426,37 @@ function _M.get_honeypot_traps()
     return nil
 end
 
+--- Get the real client IP, handling Cloudflare and other proxies.
+--- Checks CF-Connecting-IP, X-Forwarded-For (first IP), X-Real-IP, then remote_addr.
+--- Note: When nginx real_ip module is properly configured with Cloudflare ranges,
+--- ngx.var.remote_addr will already be the real IP. This function provides a
+--- belt-and-suspenders approach for Lua modules that run in access phase.
+function _M.get_client_ip()
+    -- CF-Connecting-IP is set by Cloudflare to the true client IP
+    local cf_ip = ngx.var.http_cf_connecting_ip
+    if cf_ip and cf_ip ~= "" then
+        return cf_ip
+    end
+
+    -- X-Forwarded-For may contain multiple IPs; first is the original client
+    local xff = ngx.var.http_x_forwarded_for
+    if xff then
+        local first_ip = xff:match("^([^,]+)")
+        if first_ip then
+            return first_ip:gsub("^%s*(.-)%s*$", "%1")
+        end
+    end
+
+    -- X-Real-IP set by upstream proxy
+    local real_ip = ngx.var.http_x_real_ip
+    if real_ip and real_ip ~= "" then
+        return real_ip
+    end
+
+    -- Fallback to remote_addr (which should be correct if real_ip module is configured)
+    return ngx.var.remote_addr
+end
+
 --- Check if an IP is in the trusted IPs list.
 --- Supports exact IP match and CIDR notation.
 function _M.is_trusted_ip(ip)

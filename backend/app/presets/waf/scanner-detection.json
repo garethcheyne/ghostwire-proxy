@@ -28,7 +28,7 @@
     },
     {
       "name": "WordPress & CMS Probing",
-      "category": "scanner",
+      "category": "probe",
       "pattern": "(?i)(/wp-(admin|login|content|includes|config|cron)|/xmlrpc\\.php|/wp-json/|/administrator/|/phpmyadmin|/pma/|/myadmin|/adminer)",
       "severity": "medium",
       "action": "block",
@@ -37,7 +37,7 @@
     },
     {
       "name": "Sensitive File Probing",
-      "category": "scanner",
+      "category": "probe",
       "pattern": "(?i)(/\\.env|/\\.git/|/\\.svn/|/\\.htaccess|/\\.htpasswd|/web\\.config|/config\\.yml|/database\\.yml|/composer\\.json|/package\\.json|/Gemfile|/requirements\\.txt|/Dockerfile|/docker-compose)",
       "severity": "high",
       "action": "block",
@@ -46,16 +46,16 @@
     },
     {
       "name": "Backup File Probing",
-      "category": "scanner",
-      "pattern": "(?i)(\\.(bak|backup|old|orig|copy|swp|sav|save|tmp|temp|sql|tar|tar\\.gz|zip|rar)$|\\.\\~|~$|#$)",
+      "category": "probe",
+      "pattern": "(?i)(?<!/_next/[^\\s]{0,200})(\\.(bak|backup|old|orig|copy|swp|sav|save|tmp|temp|sql|tar|tar\\.gz|zip|rar)$|\\.~[^/]|#$)",
       "severity": "medium",
       "action": "block",
       "enabled": true,
-      "description": "Detects attempts to access backup, temporary, and editor swap files."
+      "description": "Detects attempts to access backup, temporary, and editor swap files. Excludes Next.js static asset paths."
     },
     {
       "name": "Admin Panel Enumeration",
-      "category": "scanner",
+      "category": "probe",
       "pattern": "(?i)(/admin/?$|/login/?$|/dashboard/?$|/panel/?$|/console/?$|/manager/?$|/cpanel|/webmail|/portal/?$|/backend/?$)",
       "severity": "low",
       "action": "log",
