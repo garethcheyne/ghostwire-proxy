@@ -116,29 +116,40 @@ export default function DashboardPage() {
   const [trafficStats, setTrafficStats] = useState<TrafficStats | null>(null)
   const [threatStats, setThreatStats] = useState<ThreatStats | null>(null)
   const [authErrors, setAuthErrors] = useState<AuthErrors | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // Per-section loading — render each card as soon as its data arrives
+  // instead of blocking the whole page on the slowest endpoint.
+  const [hostsLoading, setHostsLoading] = useState(true)
+  const [certsLoading, setCertsLoading] = useState(true)
+  const [trafficLoading, setTrafficLoading] = useState(true)
 
   usePageData(() => { fetchData() })
 
-  const fetchData = async () => {
-    try {
-      const [hostsRes, certsRes, trafficRes, threatRes, authRes] = await Promise.all([
-        api.get('/api/proxy-hosts'),
-        api.get('/api/certificates'),
-        api.get('/api/traffic/stats'),
-        api.get('/api/waf/stats').catch(() => ({ data: null })),
-        api.get('/api/analytics/auth-errors?period=24h').catch(() => ({ data: null })),
-      ])
-      setHosts(hostsRes.data)
-      setCertificates(certsRes.data)
-      setTrafficStats(trafficRes.data)
-      setThreatStats(threatRes.data)
-      setAuthErrors(authRes.data)
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error)
-    } finally {
-      setIsLoading(false)
-    }
+  const fetchData = () => {
+    // Fire all requests in parallel but resolve each independently so a slow
+    // analytics query never holds up the proxy-host / certificate cards.
+    api.get('/api/proxy-hosts')
+      .then((r) => setHosts(r.data))
+      .catch((e) => console.error('proxy-hosts failed:', e))
+      .finally(() => setHostsLoading(false))
+
+    api.get('/api/certificates')
+      .then((r) => setCertificates(r.data))
+      .catch((e) => console.error('certificates failed:', e))
+      .finally(() => setCertsLoading(false))
+
+    api.get('/api/traffic/stats')
+      .then((r) => setTrafficStats(r.data))
+      .catch((e) => console.error('traffic stats failed:', e))
+      .finally(() => setTrafficLoading(false))
+
+    // These two are best-effort enrichments — never block the UI on them.
+    api.get('/api/waf/stats')
+      .then((r) => setThreatStats(r.data))
+      .catch(() => {})
+
+    api.get('/api/analytics/auth-errors?period=24h')
+      .then((r) => setAuthErrors(r.data))
+      .catch(() => {})
   }
 
   const activeHosts = hosts.filter((h) => h.enabled).length
@@ -150,6 +161,10 @@ export default function DashboardPage() {
     )
     return daysUntilExpiry <= 30 && daysUntilExpiry > 0
   }).length
+
+  // Only show the full-page spinner while the *core* cards (hosts/certs/traffic)
+  // are still loading. Threat stats and auth errors are progressive enhancements.
+  const isLoading = hostsLoading && certsLoading && trafficLoading
 
   if (isLoading) {
     return (

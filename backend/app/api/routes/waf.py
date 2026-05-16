@@ -4,10 +4,11 @@ import httpx
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, delete as sa_delete
+from sqlalchemy import select, func, and_, case, delete as sa_delete
 from datetime import datetime, timezone, timedelta
 
 from app.core.database import get_db
+from app.core.cache import cached_json
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, ThreatThreshold
@@ -324,75 +325,73 @@ async def get_threat_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=today_start.weekday())
+    """Threat stats (cached for 30s)."""
 
-    # Total events
-    total = await db.execute(select(func.count(ThreatEvent.id)))
-    total_events = total.scalar() or 0
+    async def _compute() -> ThreatStatsResponse:
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
 
-    # Today
-    today_result = await db.execute(
-        select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= today_start)
-    )
-    events_today = today_result.scalar() or 0
+        # Single aggregate query for all event counts.
+        ev_row = (await db.execute(
+            select(
+                func.count(ThreatEvent.id).label("total"),
+                func.count(case((ThreatEvent.timestamp >= today_start, 1))).label("today"),
+                func.count(case((ThreatEvent.timestamp >= week_start, 1))).label("week"),
+            )
+        )).one()
 
-    # This week
-    week_result = await db.execute(
-        select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= week_start)
-    )
-    events_this_week = week_result.scalar() or 0
+        # Single aggregate query for actor counts.
+        actor_row = (await db.execute(
+            select(
+                func.count(ThreatActor.id).label("total"),
+                func.count(case((
+                    ThreatActor.current_status.in_(['temp_blocked', 'perm_blocked', 'firewall_banned']),
+                    1,
+                ))).label("blocked"),
+            )
+        )).one()
 
-    # Total actors
-    total_actors_result = await db.execute(select(func.count(ThreatActor.id)))
-    total_actors = total_actors_result.scalar() or 0
-
-    # Blocked actors
-    blocked_result = await db.execute(
-        select(func.count(ThreatActor.id)).where(
-            ThreatActor.current_status.in_(['temp_blocked', 'perm_blocked', 'firewall_banned'])
+        # Top categories
+        cat_result = await db.execute(
+            select(ThreatEvent.category, func.count(ThreatEvent.id).label('count'))
+            .group_by(ThreatEvent.category)
+            .order_by(func.count(ThreatEvent.id).desc())
+            .limit(10)
         )
-    )
-    blocked_actors = blocked_result.scalar() or 0
+        top_categories = [{"category": r.category, "count": r.count} for r in cat_result.all()]
 
-    # Top categories
-    cat_result = await db.execute(
-        select(ThreatEvent.category, func.count(ThreatEvent.id).label('count'))
-        .group_by(ThreatEvent.category)
-        .order_by(func.count(ThreatEvent.id).desc())
-        .limit(10)
-    )
-    top_categories = [{"category": r.category, "count": r.count} for r in cat_result.all()]
+        # Top actors
+        actor_result = await db.execute(
+            select(ThreatActor)
+            .order_by(ThreatActor.threat_score.desc())
+            .limit(10)
+        )
+        top_actors = [
+            {"ip": a.ip_address, "score": a.threat_score, "events": a.total_events, "status": a.current_status}
+            for a in actor_result.scalars().all()
+        ]
 
-    # Top actors
-    actor_result = await db.execute(
-        select(ThreatActor)
-        .order_by(ThreatActor.threat_score.desc())
-        .limit(10)
-    )
-    top_actors = [
-        {"ip": a.ip_address, "score": a.threat_score, "events": a.total_events, "status": a.current_status}
-        for a in actor_result.scalars().all()
-    ]
+        # Severity breakdown
+        sev_result = await db.execute(
+            select(ThreatEvent.severity, func.count(ThreatEvent.id).label('count'))
+            .group_by(ThreatEvent.severity)
+        )
+        severity_breakdown = {r.severity: r.count for r in sev_result.all()}
 
-    # Severity breakdown
-    sev_result = await db.execute(
-        select(ThreatEvent.severity, func.count(ThreatEvent.id).label('count'))
-        .group_by(ThreatEvent.severity)
-    )
-    severity_breakdown = {r.severity: r.count for r in sev_result.all()}
+        return ThreatStatsResponse(
+            total_events=ev_row.total or 0,
+            events_today=ev_row.today or 0,
+            events_this_week=ev_row.week or 0,
+            total_actors=actor_row.total or 0,
+            blocked_actors=actor_row.blocked or 0,
+            top_categories=top_categories,
+            top_actors=top_actors,
+            severity_breakdown=severity_breakdown,
+        )
 
-    return ThreatStatsResponse(
-        total_events=total_events,
-        events_today=events_today,
-        events_this_week=events_this_week,
-        total_actors=total_actors,
-        blocked_actors=blocked_actors,
-        top_categories=top_categories,
-        top_actors=top_actors,
-        severity_breakdown=severity_breakdown,
-    )
+    payload = await cached_json("waf:stats", ttl=30, producer=_compute)
+    return ThreatStatsResponse(**payload) if isinstance(payload, dict) else payload
 
 
 # ── Threat Actors ──────────────────────────────────────────────

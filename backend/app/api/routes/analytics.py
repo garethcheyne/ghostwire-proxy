@@ -6,6 +6,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.cache import cached_json
 from app.models.user import User
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
@@ -569,165 +570,158 @@ async def get_auth_errors(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get 403/401 errors from traffic and failed login attempts from audit log."""
+    """Get 403/401 errors from traffic and failed login attempts from audit log.
+
+    Cached for 30s — dashboard reload should not trigger a full recompute.
+    """
     from app.models.audit_log import AuditLog
 
-    now = datetime.now(timezone.utc)
-    period_map = {
-        "1h": timedelta(hours=1),
-        "24h": timedelta(hours=24),
-        "7d": timedelta(days=7),
-        "30d": timedelta(days=30),
-        "90d": timedelta(days=90),
-    }
-    start_time = now - period_map[period]
+    cache_key = f"analytics:auth_errors:{period}"
 
-    # --- 403/401 from TrafficLog ---
-
-    # Summary counts
-    for_status = {}
-    for code in [401, 403]:
-        count = (await db.execute(
-            select(func.count(TrafficLog.id)).where(
-                and_(TrafficLog.timestamp >= start_time, TrafficLog.status == code)
-            )
-        )).scalar() or 0
-        for_status[code] = count
-
-    # Recent 403/401 events (last 50)
-    recent_query = (
-        select(
-            TrafficLog.timestamp,
-            TrafficLog.client_ip,
-            TrafficLog.status,
-            TrafficLog.request_method,
-            TrafficLog.request_uri,
-            TrafficLog.proxy_host_id,
-            TrafficLog.user_agent,
-            TrafficLog.country_code,
-        )
-        .where(and_(
-            TrafficLog.timestamp >= start_time,
-            TrafficLog.status.in_([401, 403]),
-        ))
-        .order_by(TrafficLog.timestamp.desc())
-        .limit(50)
-    )
-    recent_result = await db.execute(recent_query)
-
-    recent_events = []
-    host_cache: dict[str, str] = {}
-    for row in recent_result.all():
-        host_id = row[5]
-        if host_id and host_id not in host_cache:
-            host = (await db.execute(
-                select(ProxyHost).where(ProxyHost.id == host_id)
-            )).scalar_one_or_none()
-            host_cache[host_id] = host.domain_names[0] if host and host.domain_names else "Unknown"
-
-        recent_events.append({
-            "timestamp": row[0].isoformat(),
-            "ip": row[1],
-            "status": row[2],
-            "method": row[3],
-            "uri": (row[4] or "")[:100],
-            "host": host_cache.get(host_id, "Unknown") if host_id else "Unknown",
-            "country": row[7],
-        })
-
-    # Top IPs generating 403/401
-    top_ips_query = (
-        select(
-            TrafficLog.client_ip,
-            func.count(TrafficLog.id).label("count"),
-            func.max(TrafficLog.timestamp).label("last_seen"),
-        )
-        .where(and_(
-            TrafficLog.timestamp >= start_time,
-            TrafficLog.status.in_([401, 403]),
-        ))
-        .group_by(TrafficLog.client_ip)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-    top_ips_result = await db.execute(top_ips_query)
-    top_offenders = [
-        {"ip": row[0], "count": row[1], "last_seen": row[2].isoformat()}
-        for row in top_ips_result.all()
-    ]
-
-    # Top hosts receiving 403/401
-    top_hosts_query = (
-        select(
-            TrafficLog.proxy_host_id,
-            func.count(TrafficLog.id).label("count"),
-        )
-        .where(and_(
-            TrafficLog.timestamp >= start_time,
-            TrafficLog.status.in_([401, 403]),
-        ))
-        .group_by(TrafficLog.proxy_host_id)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-    top_hosts_result = await db.execute(top_hosts_query)
-    top_hosts = []
-    for row in top_hosts_result.all():
-        hid = row[0]
-        if hid and hid not in host_cache:
-            host = (await db.execute(
-                select(ProxyHost).where(ProxyHost.id == hid)
-            )).scalar_one_or_none()
-            host_cache[hid] = host.domain_names[0] if host and host.domain_names else "Unknown"
-        top_hosts.append({
-            "host": host_cache.get(hid, "Unknown") if hid else "Unknown",
-            "count": row[1],
-        })
-
-    # --- Failed logins from AuditLog ---
-
-    failed_logins_count = (await db.execute(
-        select(func.count(AuditLog.id)).where(and_(
-            AuditLog.timestamp >= start_time,
-            AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
-        ))
-    )).scalar() or 0
-
-    recent_failed_logins_query = (
-        select(
-            AuditLog.timestamp,
-            AuditLog.email,
-            AuditLog.action,
-            AuditLog.ip_address,
-            AuditLog.details,
-        )
-        .where(and_(
-            AuditLog.timestamp >= start_time,
-            AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
-        ))
-        .order_by(AuditLog.timestamp.desc())
-        .limit(20)
-    )
-    recent_failed_result = await db.execute(recent_failed_logins_query)
-    failed_logins = [
-        {
-            "timestamp": row[0].isoformat(),
-            "email": row[1],
-            "type": "admin" if row[2] == "login_failed" else "auth_wall",
-            "ip": row[3],
-            "details": row[4],
+    async def _compute() -> dict:
+        now = datetime.now(timezone.utc)
+        period_map = {
+            "1h": timedelta(hours=1),
+            "24h": timedelta(hours=24),
+            "7d": timedelta(days=7),
+            "30d": timedelta(days=30),
+            "90d": timedelta(days=90),
         }
-        for row in recent_failed_result.all()
-    ]
+        start_time = now - period_map[period]
 
-    return {
-        "summary": {
-            "total_401": for_status[401],
-            "total_403": for_status[403],
-            "failed_logins": failed_logins_count,
-        },
-        "recent_events": recent_events,
-        "top_offenders": top_offenders,
-        "top_hosts": top_hosts,
-        "failed_logins": failed_logins,
-    }
+        # --- 403/401 from TrafficLog ---
+
+        # Single query: counts for 401 + 403 in one round trip.
+        summary_row = (await db.execute(
+            select(
+                func.count(case((TrafficLog.status == 401, 1))).label("c401"),
+                func.count(case((TrafficLog.status == 403, 1))).label("c403"),
+            ).where(TrafficLog.timestamp >= start_time)
+        )).one()
+        for_status = {401: summary_row.c401 or 0, 403: summary_row.c403 or 0}
+
+        # Recent events — JOIN ProxyHost so we don't N+1 to resolve names.
+        recent_query = (
+            select(
+                TrafficLog.timestamp,
+                TrafficLog.client_ip,
+                TrafficLog.status,
+                TrafficLog.request_method,
+                TrafficLog.request_uri,
+                TrafficLog.proxy_host_id,
+                TrafficLog.country_code,
+                ProxyHost.domain_names,
+            )
+            .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
+            .where(and_(
+                TrafficLog.timestamp >= start_time,
+                TrafficLog.status.in_([401, 403]),
+            ))
+            .order_by(TrafficLog.timestamp.desc())
+            .limit(50)
+        )
+        recent_result = await db.execute(recent_query)
+        recent_events = [
+            {
+                "timestamp": row[0].isoformat(),
+                "ip": row[1],
+                "status": row[2],
+                "method": row[3],
+                "uri": (row[4] or "")[:100],
+                "host": (row[7][0] if row[7] else "Unknown"),
+                "country": row[6],
+            }
+            for row in recent_result.all()
+        ]
+
+        # Top IPs generating 403/401
+        top_ips_result = await db.execute(
+            select(
+                TrafficLog.client_ip,
+                func.count(TrafficLog.id).label("count"),
+                func.max(TrafficLog.timestamp).label("last_seen"),
+            )
+            .where(and_(
+                TrafficLog.timestamp >= start_time,
+                TrafficLog.status.in_([401, 403]),
+            ))
+            .group_by(TrafficLog.client_ip)
+            .order_by(func.count(TrafficLog.id).desc())
+            .limit(10)
+        )
+        top_offenders = [
+            {"ip": row[0], "count": row[1], "last_seen": row[2].isoformat()}
+            for row in top_ips_result.all()
+        ]
+
+        # Top hosts receiving 403/401 — JOIN to resolve host name in one query.
+        top_hosts_result = await db.execute(
+            select(
+                TrafficLog.proxy_host_id,
+                ProxyHost.domain_names,
+                func.count(TrafficLog.id).label("count"),
+            )
+            .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
+            .where(and_(
+                TrafficLog.timestamp >= start_time,
+                TrafficLog.status.in_([401, 403]),
+            ))
+            .group_by(TrafficLog.proxy_host_id, ProxyHost.domain_names)
+            .order_by(func.count(TrafficLog.id).desc())
+            .limit(10)
+        )
+        top_hosts = [
+            {
+                "host": (row[1][0] if row[1] else "Unknown"),
+                "count": row[2],
+            }
+            for row in top_hosts_result.all()
+        ]
+
+        # --- Failed logins from AuditLog ---
+        failed_logins_count = (await db.execute(
+            select(func.count(AuditLog.id)).where(and_(
+                AuditLog.timestamp >= start_time,
+                AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
+            ))
+        )).scalar() or 0
+
+        recent_failed_result = await db.execute(
+            select(
+                AuditLog.timestamp,
+                AuditLog.email,
+                AuditLog.action,
+                AuditLog.ip_address,
+                AuditLog.details,
+            )
+            .where(and_(
+                AuditLog.timestamp >= start_time,
+                AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
+            ))
+            .order_by(AuditLog.timestamp.desc())
+            .limit(20)
+        )
+        failed_logins = [
+            {
+                "timestamp": row[0].isoformat(),
+                "email": row[1],
+                "type": "admin" if row[2] == "login_failed" else "auth_wall",
+                "ip": row[3],
+                "details": row[4],
+            }
+            for row in recent_failed_result.all()
+        ]
+
+        return {
+            "summary": {
+                "total_401": for_status[401],
+                "total_403": for_status[403],
+                "failed_logins": failed_logins_count,
+            },
+            "recent_events": recent_events,
+            "top_offenders": top_offenders,
+            "top_hosts": top_hosts,
+            "failed_logins": failed_logins,
+        }
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)

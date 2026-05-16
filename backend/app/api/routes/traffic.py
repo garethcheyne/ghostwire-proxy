@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, delete as sa_delete
+from sqlalchemy import select, func, and_, case, delete as sa_delete
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.cache import cached_json
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.traffic_log import TrafficLog
@@ -102,112 +103,97 @@ async def get_traffic_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get traffic statistics"""
-    # Scope all aggregate queries to the last N days for performance
-    stats_since = datetime.now(timezone.utc) - timedelta(days=days)
+    """Get traffic statistics (cached for 30s — heavy aggregate query)."""
 
-    # Base query
-    base_filter = [TrafficLog.timestamp >= stats_since]
-    if proxy_host_id:
-        base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
+    cache_key = f"traffic:stats:{proxy_host_id or 'all'}:{days}"
 
-    # Total requests
-    total_query = select(func.count(TrafficLog.id))
-    if base_filter:
-        total_query = total_query.where(and_(*base_filter))
-    total_requests = (await db.execute(total_query)).scalar() or 0
+    async def _compute() -> TrafficStatsResponse:
+        now = datetime.now(timezone.utc)
+        stats_since = now - timedelta(days=days)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
 
-    # Requests today
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_filter = base_filter + [TrafficLog.timestamp >= today_start]
-    today_query = select(func.count(TrafficLog.id)).where(and_(*today_filter))
-    requests_today = (await db.execute(today_query)).scalar() or 0
+        base_filter = [TrafficLog.timestamp >= stats_since]
+        if proxy_host_id:
+            base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
+        base_where = and_(*base_filter)
 
-    # Requests this week
-    week_start = today_start - timedelta(days=today_start.weekday())
-    week_filter = base_filter + [TrafficLog.timestamp >= week_start]
-    week_query = select(func.count(TrafficLog.id)).where(and_(*week_filter))
-    requests_this_week = (await db.execute(week_query)).scalar() or 0
+        # ─── ONE aggregate query for: total / today / week / status buckets /
+        #     avg response time / total bytes sent / total bytes received ───
+        agg_query = select(
+            func.count(TrafficLog.id).label("total"),
+            func.count(case((TrafficLog.timestamp >= today_start, 1))).label("today"),
+            func.count(case((TrafficLog.timestamp >= week_start, 1))).label("week"),
+            func.count(case((and_(TrafficLog.status >= 200, TrafficLog.status < 300), 1))).label("s2"),
+            func.count(case((and_(TrafficLog.status >= 300, TrafficLog.status < 400), 1))).label("s3"),
+            func.count(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1))).label("s4"),
+            func.count(case((and_(TrafficLog.status >= 500, TrafficLog.status < 600), 1))).label("s5"),
+            func.avg(TrafficLog.response_time).label("avg_rt"),
+            func.coalesce(func.sum(TrafficLog.bytes_sent), 0).label("bytes_sent"),
+            func.coalesce(func.sum(TrafficLog.bytes_received), 0).label("bytes_recv"),
+        ).where(base_where)
+        agg = (await db.execute(agg_query)).one()
 
-    # Requests by status (2xx, 3xx, 4xx, 5xx)
-    requests_by_status = {}
-    for status_prefix in ['2', '3', '4', '5']:
-        status_filter = base_filter + [
-            TrafficLog.status >= int(status_prefix + '00'),
-            TrafficLog.status < int(status_prefix + '00') + 100
+        # Methods
+        method_result = await db.execute(
+            select(TrafficLog.request_method, func.count(TrafficLog.id))
+            .where(base_where)
+            .group_by(TrafficLog.request_method)
+        )
+        requests_by_method = {row[0]: row[1] for row in method_result.all()}
+
+        # Top IPs
+        top_ips_result = await db.execute(
+            select(TrafficLog.client_ip, func.count(TrafficLog.id).label("count"))
+            .where(base_where)
+            .group_by(TrafficLog.client_ip)
+            .order_by(func.count(TrafficLog.id).desc())
+            .limit(10)
+        )
+        top_ips = [{"ip": row[0], "count": row[1]} for row in top_ips_result.all()]
+
+        # Top hosts — JOIN to ProxyHost in a single query (was N+1)
+        top_hosts_result = await db.execute(
+            select(
+                TrafficLog.proxy_host_id,
+                ProxyHost.domain_names,
+                func.count(TrafficLog.id).label("count"),
+            )
+            .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
+            .where(base_where)
+            .group_by(TrafficLog.proxy_host_id, ProxyHost.domain_names)
+            .order_by(func.count(TrafficLog.id).desc())
+            .limit(10)
+        )
+        top_hosts = [
+            {
+                "host_id": row[0],
+                "name": (row[1][0] if row[1] else "Unknown"),
+                "count": row[2],
+            }
+            for row in top_hosts_result.all()
         ]
-        status_query = select(func.count(TrafficLog.id)).where(and_(*status_filter))
-        count = (await db.execute(status_query)).scalar() or 0
-        requests_by_status[f"{status_prefix}xx"] = count
 
-    # Requests by method
-    method_query = (
-        select(TrafficLog.request_method, func.count(TrafficLog.id))
-        .group_by(TrafficLog.request_method)
-    )
-    if base_filter:
-        method_query = method_query.where(and_(*base_filter))
-    method_result = await db.execute(method_query)
-    requests_by_method = {row[0]: row[1] for row in method_result.all()}
+        return TrafficStatsResponse(
+            total_requests=agg.total or 0,
+            requests_today=agg.today or 0,
+            requests_this_week=agg.week or 0,
+            requests_by_status={
+                "2xx": agg.s2 or 0,
+                "3xx": agg.s3 or 0,
+                "4xx": agg.s4 or 0,
+                "5xx": agg.s5 or 0,
+            },
+            requests_by_method=requests_by_method,
+            avg_response_time=float(agg.avg_rt) if agg.avg_rt is not None else None,
+            total_bytes_sent=int(agg.bytes_sent or 0),
+            total_bytes_received=int(agg.bytes_recv or 0),
+            top_ips=top_ips,
+            top_hosts=top_hosts,
+        )
 
-    # Average response time
-    avg_query = select(func.avg(TrafficLog.response_time))
-    if base_filter:
-        avg_query = avg_query.where(and_(*base_filter))
-    avg_response_time = (await db.execute(avg_query)).scalar()
-
-    # Total bytes
-    bytes_sent_query = select(func.sum(TrafficLog.bytes_sent))
-    bytes_recv_query = select(func.sum(TrafficLog.bytes_received))
-    if base_filter:
-        bytes_sent_query = bytes_sent_query.where(and_(*base_filter))
-        bytes_recv_query = bytes_recv_query.where(and_(*base_filter))
-    total_bytes_sent = (await db.execute(bytes_sent_query)).scalar() or 0
-    total_bytes_received = (await db.execute(bytes_recv_query)).scalar() or 0
-
-    # Top IPs
-    top_ips_query = (
-        select(TrafficLog.client_ip, func.count(TrafficLog.id).label('count'))
-        .group_by(TrafficLog.client_ip)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-    if base_filter:
-        top_ips_query = top_ips_query.where(and_(*base_filter))
-    top_ips_result = await db.execute(top_ips_query)
-    top_ips = [{"ip": row[0], "count": row[1]} for row in top_ips_result.all()]
-
-    # Top hosts
-    top_hosts_query = (
-        select(TrafficLog.proxy_host_id, func.count(TrafficLog.id).label('count'))
-        .where(and_(*base_filter))
-        .group_by(TrafficLog.proxy_host_id)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-    top_hosts_result = await db.execute(top_hosts_query)
-    top_hosts_data = top_hosts_result.all()
-
-    # Get host names
-    top_hosts = []
-    for host_id, count in top_hosts_data:
-        host_result = await db.execute(select(ProxyHost).where(ProxyHost.id == host_id))
-        host = host_result.scalar_one_or_none()
-        host_name = host.domain_names[0] if host and host.domain_names else "Unknown"
-        top_hosts.append({"host_id": host_id, "name": host_name, "count": count})
-
-    return TrafficStatsResponse(
-        total_requests=total_requests,
-        requests_today=requests_today,
-        requests_this_week=requests_this_week,
-        requests_by_status=requests_by_status,
-        requests_by_method=requests_by_method,
-        avg_response_time=float(avg_response_time) if avg_response_time else None,
-        total_bytes_sent=total_bytes_sent,
-        total_bytes_received=total_bytes_received,
-        top_ips=top_ips,
-        top_hosts=top_hosts,
-    )
+    payload = await cached_json(cache_key, ttl=30, producer=_compute)
+    return TrafficStatsResponse(**payload) if isinstance(payload, dict) else payload
 
 
 @router.get("/geo/heatmap")
