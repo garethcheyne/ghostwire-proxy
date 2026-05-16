@@ -161,6 +161,11 @@ export default function ProxyHostsPage() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
   const [domainInput, setDomainInput] = useState('')
 
+  // SSL mode: none = no SSL, existing = pick existing cert, letsencrypt = request new LE cert
+  const [sslMode, setSslMode] = useState<'none' | 'existing' | 'letsencrypt'>('none')
+  const [leEmail, setLeEmail] = useState('')
+  const [sslProgress, setSslProgress] = useState('')
+
   // Location state
   const [locations, setLocations] = useState<ProxyLocation[]>([])
   const [showLocationDialog, setShowLocationDialog] = useState(false)
@@ -188,12 +193,24 @@ export default function ProxyHostsPage() {
     }
   }
 
+  // Derive unique previous LE emails from existing certificates
+  const previousLeEmails = Array.from(
+    new Set(
+      certificates
+        .map((c) => c.letsencrypt_email)
+        .filter((e): e is string => !!e)
+    )
+  )
+
   const resetForm = () => {
     setFormData(defaultFormData)
     setDomainInput('')
     setError('')
     setActiveTab('details')
     setLocations([])
+    setSslMode('none')
+    setLeEmail(previousLeEmails[0] || '')
+    setSslProgress('')
   }
 
   const handleCreate = () => {
@@ -239,7 +256,9 @@ export default function ProxyHostsPage() {
     setEditingHost(host)
     setShowDialog(true)
     setActiveTab('details')
-
+    setSslMode(host.ssl_enabled ? 'existing' : 'none')
+    setLeEmail(previousLeEmails[0] || '')
+    setSslProgress('')
   }
 
   const handleAddDomain = () => {
@@ -271,19 +290,90 @@ export default function ProxyHostsPage() {
         return
       }
 
-      if (editingHost) {
-        await api.put(`/api/proxy-hosts/${editingHost.id}`, formData)
-      } else {
-        await api.post('/api/proxy-hosts', formData)
-      }
+      if (sslMode === 'letsencrypt' && !editingHost) {
+        // Multi-step: create host without SSL → request LE cert → attach cert
+        if (!leEmail) {
+          setError('Email is required for Let\'s Encrypt')
+          setIsSubmitting(false)
+          return
+        }
 
-      setShowDialog(false)
-      fetchData()
-      toastSuccess(editingHost ? 'Proxy host updated' : 'Proxy host created')
+        // Step 1: Create host without SSL so nginx serves the domain for ACME challenge
+        setSslProgress('Creating host...')
+        const hostRes = await api.post('/api/proxy-hosts', {
+          ...formData,
+          ssl_enabled: false,
+          certificate_id: null,
+        })
+        const newHostId = hostRes.data.id
+
+        // Step 2: Request LE certificate
+        setSslProgress('Requesting SSL certificate...')
+        const certName = formData.domain_names[0].replace(/^\*\./, 'wildcard.')
+        const certRes = await api.post('/api/certificates/letsencrypt', {
+          name: certName,
+          domain_names: formData.domain_names,
+          email: leEmail,
+        })
+        const certId = certRes.data.id
+
+        // Step 3: Poll certificate status until valid or failed
+        setSslProgress('Issuing certificate (this may take 30-60s)...')
+        const maxAttempts = 30
+        let attempt = 0
+        let certReady = false
+        while (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 2000))
+          const statusRes = await api.get(`/api/certificates/${certId}`)
+          if (statusRes.data.status === 'valid') {
+            certReady = true
+            break
+          }
+          if (statusRes.data.status === 'error') {
+            throw new Error(statusRes.data.error_message || 'Certificate issuance failed')
+          }
+          attempt++
+        }
+
+        if (!certReady) {
+          throw new Error('Certificate issuance timed out. Check Certificates page for status.')
+        }
+
+        // Step 4: Update host to enable SSL with the new cert
+        setSslProgress('Enabling SSL on host...')
+        await api.put(`/api/proxy-hosts/${newHostId}`, {
+          ...formData,
+          ssl_enabled: true,
+          certificate_id: certId,
+        })
+
+        setSslProgress('')
+        setShowDialog(false)
+        fetchData()
+        toastSuccess('Proxy host created with SSL certificate')
+      } else {
+        // Normal flow: create/update host directly
+        const submitData = { ...formData }
+        if (sslMode === 'none') {
+          submitData.ssl_enabled = false
+          submitData.certificate_id = null
+        }
+
+        if (editingHost) {
+          await api.put(`/api/proxy-hosts/${editingHost.id}`, submitData)
+        } else {
+          await api.post('/api/proxy-hosts', submitData)
+        }
+
+        setShowDialog(false)
+        fetchData()
+        toastSuccess(editingHost ? 'Proxy host updated' : 'Proxy host created')
+      }
     } catch (err: any) {
-      const detail = err.response?.data?.detail || 'Failed to save proxy host'
+      const detail = err.response?.data?.detail || err.message || 'Failed to save proxy host'
       setError(detail)
       toastError(detail)
+      setSslProgress('')
     } finally {
       setIsSubmitting(false)
     }
@@ -808,65 +898,139 @@ export default function ProxyHostsPage() {
 
                   {/* SSL Settings */}
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id="ssl_enabled"
-                        checked={formData.ssl_enabled}
-                        onChange={(e) => setFormData({ ...formData, ssl_enabled: e.target.checked })}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <label htmlFor="ssl_enabled" className="text-sm font-medium">
-                        Enable SSL
+                    <label className="block text-sm font-medium">SSL</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sslMode"
+                          checked={sslMode === 'none'}
+                          onChange={() => {
+                            setSslMode('none')
+                            setFormData({ ...formData, ssl_enabled: false, certificate_id: null })
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">None</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sslMode"
+                          checked={sslMode === 'existing'}
+                          onChange={() => {
+                            setSslMode('existing')
+                            setFormData({ ...formData, ssl_enabled: true })
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">Existing Certificate</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sslMode"
+                          checked={sslMode === 'letsencrypt'}
+                          onChange={() => {
+                            setSslMode('letsencrypt')
+                            setFormData({ ...formData, ssl_enabled: true, certificate_id: null })
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">New Let&apos;s Encrypt</span>
                       </label>
                     </div>
 
-                    {formData.ssl_enabled && (
-                      <div className="grid grid-cols-2 gap-4">
+                    {sslMode === 'existing' && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">SSL Certificate</label>
+                        <select
+                          value={formData.certificate_id || ''}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              certificate_id: e.target.value || null,
+                            })
+                          }
+                          className="w-full px-4 py-2 rounded-lg border border-input bg-background"
+                        >
+                          <option value="">Select certificate...</option>
+                          {certificates.map((cert) => (
+                            <option key={cert.id} value={cert.id}>
+                              {cert.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {sslMode === 'letsencrypt' && (
+                      <div className="space-y-3 p-3 rounded-lg border border-input bg-muted/30">
+                        <p className="text-xs text-muted-foreground">
+                          A Let&apos;s Encrypt certificate will be automatically requested for the domains above.
+                        </p>
                         <div>
-                          <label className="block text-sm font-medium mb-2">SSL Certificate</label>
-                          <select
-                            value={formData.certificate_id || ''}
+                          <label className="block text-sm font-medium mb-2">Email for Let&apos;s Encrypt</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="email"
+                              value={leEmail}
+                              onChange={(e) => setLeEmail(e.target.value)}
+                              className="flex-1 px-4 py-2 rounded-lg border border-input bg-background"
+                              placeholder="admin@example.com"
+                              required
+                            />
+                            {previousLeEmails.length > 0 && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) setLeEmail(e.target.value)
+                                }}
+                                className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                              >
+                                <option value="">Previous...</option>
+                                {previousLeEmails.map((email) => (
+                                  <option key={email} value={email}>
+                                    {email}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                        {sslProgress && (
+                          <div className="flex items-center gap-2 text-sm text-blue-600">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {sslProgress}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {sslMode !== 'none' && (
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={formData.http2_support}
                             onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                certificate_id: e.target.value || null,
-                              })
+                              setFormData({ ...formData, http2_support: e.target.checked })
                             }
-                            className="w-full px-4 py-2 rounded-lg border border-input bg-background"
-                          >
-                            <option value="">Select certificate...</option>
-                            {certificates.map((cert) => (
-                              <option key={cert.id} value={cert.id}>
-                                {cert.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={formData.http2_support}
-                              onChange={(e) =>
-                                setFormData({ ...formData, http2_support: e.target.checked })
-                              }
-                              className="h-4 w-4 rounded border-input"
-                            />
-                            <span className="text-sm">HTTP/2 Support</span>
-                          </label>
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={formData.hsts_enabled}
-                              onChange={(e) =>
-                                setFormData({ ...formData, hsts_enabled: e.target.checked })
-                              }
-                              className="h-4 w-4 rounded border-input"
-                            />
-                            <span className="text-sm">Enable HSTS</span>
-                          </label>
-                        </div>
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <span className="text-sm">HTTP/2 Support</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={formData.hsts_enabled}
+                            onChange={(e) =>
+                              setFormData({ ...formData, hsts_enabled: e.target.checked })
+                            }
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <span className="text-sm">Enable HSTS</span>
+                        </label>
                       </div>
                     )}
                   </div>

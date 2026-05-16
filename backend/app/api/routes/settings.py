@@ -18,6 +18,7 @@ DEFAULT_SETTINGS = {
     "letsencrypt_email": "",
     "letsencrypt_staging": "false",
     "traffic_log_retention_days": "30",
+    "threat_event_retention_days": "90",
     "audit_log_retention_days": "90",
     "default_http2_support": "true",
     "default_hsts_enabled": "false",

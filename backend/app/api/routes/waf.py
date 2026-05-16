@@ -598,6 +598,76 @@ async def bulk_firewall_ban(
     }
 
 
+@router.post("/actors/bulk-unblock")
+async def bulk_unblock_actors(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unblock multiple threat actors at once."""
+    body = await request.json()
+    ips = body.get("ips", [])
+    if not ips or not isinstance(ips, list):
+        raise HTTPException(status_code=400, detail="ips list is required")
+
+    unblocked = 0
+    for ip in ips:
+        result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
+        actor = result.scalar_one_or_none()
+        if actor and actor.current_status in ("temp_blocked", "perm_blocked", "firewall_banned"):
+            actor.current_status = "monitored"
+            actor.temp_block_until = None
+            actor.perm_blocked_at = None
+            actor.firewall_banned_at = None
+            actor.updated_at = datetime.now(timezone.utc)
+            unblocked += 1
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_actors_bulk_unblocked",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Bulk unblocked {unblocked} of {len(ips)} IPs",
+    ))
+    await db.commit()
+    await _notify_nginx_reload()
+    return {"status": "ok", "total_ips": len(ips), "unblocked": unblocked}
+
+
+@router.post("/actors/bulk-delete")
+async def bulk_delete_actors(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete multiple threat actors and their associated events."""
+    body = await request.json()
+    ips = body.get("ips", [])
+    if not ips or not isinstance(ips, list):
+        raise HTTPException(status_code=400, detail="ips list is required")
+
+    deleted = 0
+    for ip in ips:
+        result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
+        actor = result.scalar_one_or_none()
+        if actor:
+            await db.execute(sa_delete(FirewallBlocklist).where(FirewallBlocklist.threat_actor_id == actor.id))
+            await db.execute(sa_delete(ThreatEvent).where(ThreatEvent.client_ip == ip))
+            await db.delete(actor)
+            deleted += 1
+
+    db.add(AuditLog(
+        user_id=current_user.id, email=current_user.email,
+        action="threat_actors_bulk_deleted",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Bulk deleted {deleted} threat actors and their events",
+    ))
+    await db.commit()
+    await _notify_nginx_reload()
+    return {"status": "ok", "total_ips": len(ips), "deleted": deleted}
+
+
 @router.post("/actors/{ip}/block")
 async def block_threat_actor(
     ip: str,

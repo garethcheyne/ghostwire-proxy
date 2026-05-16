@@ -475,3 +475,26 @@ async def _save_setting(db: AsyncSession, key: str, value: str) -> None:
     else:
         setting = Setting(key=key, value=value)
         db.add(setting)
+
+
+# ── Data Retention / Database Health ───────────────────────────
+
+@router.get("/database-health")
+async def get_database_health(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Get table sizes and row counts for monitoring DB growth."""
+    from app.services.retention_service import get_table_sizes
+    sizes = await get_table_sizes()
+    return {"status": "ok", "tables": sizes}
+
+
+@router.post("/retention-cleanup")
+async def trigger_retention_cleanup(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Manually trigger data retention cleanup (prunes old traffic logs, events, etc.)."""
+    from app.services.retention_service import run_retention_cleanup
+    summary = await run_retention_cleanup()
+    total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
+    return {"status": "ok", "total_deleted": total_deleted, "details": summary}

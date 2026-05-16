@@ -18,6 +18,7 @@ import {
   Crosshair,
   RefreshCw,
   Flame,
+  Unlock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -233,6 +234,44 @@ export default function ThreatsPage() {
     } catch (error: any) {
       console.error('Failed to bulk firewall ban:', error)
       toastError('Failed to bulk firewall ban')
+    }
+  }
+
+  const handleBulkUnblock = async () => {
+    const selectedIds = Object.keys(actorRowSelection)
+    const selectedActors = filteredActors.filter(a => selectedIds.includes(a.ip_address))
+    const blockedActors = selectedActors.filter(a => ['temp_blocked', 'perm_blocked', 'firewall_banned'].includes(a.current_status))
+    const ips = blockedActors.map(a => a.ip_address)
+    if (ips.length === 0) {
+      toastError('No blocked actors in selection')
+      return
+    }
+    if (!(await confirm({ description: `Unblock ${ips.length} IP(s)? They will be set back to monitored status.` }))) return
+    try {
+      await api.post('/api/waf/actors/bulk-unblock', { ips })
+      setActorRowSelection({})
+      fetchData()
+      toastSuccess(`${ips.length} IPs unblocked`)
+    } catch (error: any) {
+      console.error('Failed to bulk unblock:', error)
+      toastError('Failed to bulk unblock')
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const selectedIds = Object.keys(actorRowSelection)
+    const selectedActors = filteredActors.filter(a => selectedIds.includes(a.ip_address))
+    const ips = selectedActors.map(a => a.ip_address)
+    if (ips.length === 0) return
+    if (!(await confirm({ description: `Delete ${ips.length} threat actor(s) and ALL their event history? This cannot be undone.`, variant: 'destructive' }))) return
+    try {
+      await api.post('/api/waf/actors/bulk-delete', { ips })
+      setActorRowSelection({})
+      fetchData()
+      toastSuccess(`${ips.length} actors deleted`)
+    } catch (error: any) {
+      console.error('Failed to bulk delete:', error)
+      toastError('Failed to bulk delete')
     }
   }
 
@@ -681,6 +720,30 @@ export default function ThreatsPage() {
                 >
                   <Flame className="h-3.5 w-3.5 mr-1" />
                   FW Ban ({Object.keys(actorRowSelection).length})
+                </Button>
+              )}
+              {/* Bulk Unblock button */}
+              {Object.keys(actorRowSelection).length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-9 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 ${!firewallAvailable ? 'ml-auto' : ''}`}
+                  onClick={handleBulkUnblock}
+                >
+                  <Unlock className="h-3.5 w-3.5 mr-1" />
+                  Unblock ({Object.keys(actorRowSelection).length})
+                </Button>
+              )}
+              {/* Bulk Delete button */}
+              {Object.keys(actorRowSelection).length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
+                  onClick={handleBulkDelete}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete ({Object.keys(actorRowSelection).length})
                 </Button>
               )}
             </div>

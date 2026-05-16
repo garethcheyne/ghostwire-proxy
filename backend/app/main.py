@@ -437,6 +437,32 @@ async def lifespan(app: FastAPI):
     enrichment_backfill_task = asyncio.create_task(enrichment_backfill_loop())
     logger.info("Started IP enrichment backfill task")
 
+    # Data retention cleanup — prune old traffic_logs, threat_events, audit_logs daily
+    from app.services.retention_service import run_retention_cleanup
+
+    async def data_retention_loop():
+        """Run data retention cleanup once per hour."""
+        # Wait 5 minutes on startup before first run
+        await asyncio.sleep(300)
+        while True:
+            try:
+                summary = await run_retention_cleanup()
+                total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
+                if total_deleted > 0:
+                    logger.info(f"Data retention cleanup: removed {total_deleted} total rows")
+                else:
+                    logger.debug("Data retention cleanup: nothing to prune")
+            except asyncio.CancelledError:
+                logger.info("Data retention task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in data retention cleanup: {e}")
+            # Run every hour
+            await asyncio.sleep(3600)
+
+    retention_task = asyncio.create_task(data_retention_loop())
+    logger.info("Started data retention cleanup task")
+
     yield
 
     # Cancel background tasks
@@ -445,6 +471,7 @@ async def lifespan(app: FastAPI):
     geoip_task.cancel()
     update_check_task.cancel()
     enrichment_backfill_task.cancel()
+    retention_task.cancel()
     try:
         await metrics_task
     except asyncio.CancelledError:
@@ -463,6 +490,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await enrichment_backfill_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await retention_task
     except asyncio.CancelledError:
         pass
 

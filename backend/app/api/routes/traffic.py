@@ -98,12 +98,16 @@ async def list_traffic_logs(
 @router.get("/stats", response_model=TrafficStatsResponse)
 async def get_traffic_stats(
     proxy_host_id: Optional[str] = None,
+    days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get traffic statistics"""
+    # Scope all aggregate queries to the last N days for performance
+    stats_since = datetime.now(timezone.utc) - timedelta(days=days)
+
     # Base query
-    base_filter = []
+    base_filter = [TrafficLog.timestamp >= stats_since]
     if proxy_host_id:
         base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
 
@@ -176,6 +180,7 @@ async def get_traffic_stats(
     # Top hosts
     top_hosts_query = (
         select(TrafficLog.proxy_host_id, func.count(TrafficLog.id).label('count'))
+        .where(and_(*base_filter))
         .group_by(TrafficLog.proxy_host_id)
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
