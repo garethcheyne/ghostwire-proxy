@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { usePageData } from '@/lib/use-page-data'
+import { useQueryClient } from '@tanstack/react-query'
+import { useProxyHosts } from '@/lib/queries/proxy-hosts'
+import { useTrafficStats } from '@/lib/queries/dashboard'
+import { proxyHostKeys, trafficKeys } from '@/lib/queries/keys'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Activity,
@@ -20,19 +23,13 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import type { TrafficLog, ProxyHost } from '@/types'
 
-interface TrafficStats {
-  requests_today: number
-  requests_this_week: number
-  total_bytes_sent: number
-  total_bytes_received: number
-  avg_response_time: number
-}
-
 export default function TrafficPage() {
   const confirm = useConfirm()
+  const queryClient = useQueryClient()
+  const { data: hostsData } = useProxyHosts({ limit: 100 })
+  const { data: stats } = useTrafficStats()
+  const hosts: ProxyHost[] = hostsData?.items ?? []
   const [logs, setLogs] = useState<TrafficLog[]>([])
-  const [hosts, setHosts] = useState<ProxyHost[]>([])
-  const [stats, setStats] = useState<TrafficStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -47,19 +44,9 @@ export default function TrafficPage() {
   // Detail view
   const [selectedLog, setSelectedLog] = useState<TrafficLog | null>(null)
 
-  usePageData(() => { fetchData() })
-
-  const fetchData = async () => {
-    try {
-      const [hostsRes, statsRes] = await Promise.all([
-        api.get('/api/proxy-hosts'),
-        api.get('/api/traffic/stats'),
-      ])
-      setHosts(hostsRes.data)
-      setStats(statsRes.data)
-    } catch (error) {
-      console.error('Failed to fetch data:', error)
-    }
+  const fetchData = () => {
+    queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+    queryClient.invalidateQueries({ queryKey: trafficKeys.all })
   }
 
   const fetchLogs = useCallback(async () => {
@@ -131,7 +118,8 @@ export default function TrafficPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const formatResponseTime = (ms: number) => {
+  const formatResponseTime = (ms: number | null) => {
+    if (ms == null) return '-'
     if (ms < 1000) return `${ms}ms`
     return `${(ms / 1000).toFixed(2)}s`
   }

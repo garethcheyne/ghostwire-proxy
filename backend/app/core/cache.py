@@ -96,9 +96,18 @@ async def cached_json(
     if hit is not None:
         return hit
     value = await producer()
-    # Normalise pydantic models so subsequent reads come back as plain dicts.
-    if hasattr(value, "model_dump"):
-        payload = value.model_dump()
+    # Normalise pydantic models / lists of models so subsequent reads come
+    # back as plain dicts and producers can return ORM-backed Pydantic objects
+    # without callers caring.
+    if isinstance(value, list):
+        payload = [
+            v.model_dump(mode="json") if hasattr(v, "model_dump")
+            else v.dict() if hasattr(v, "dict")
+            else v
+            for v in value
+        ]
+    elif hasattr(value, "model_dump"):
+        payload = value.model_dump(mode="json")
     elif hasattr(value, "dict"):
         payload = value.dict()
     else:

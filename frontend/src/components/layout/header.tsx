@@ -190,7 +190,14 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Best-effort notify backend so the logout is audit-logged.
+    // We don't await failure — even if the call fails, we still clear the client.
+    try {
+      await api.post('/api/auth/logout')
+    } catch {
+      // Ignore — local logout still proceeds.
+    }
     clearSession()
     router.push('/auth/login')
   }

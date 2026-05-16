@@ -26,6 +26,24 @@ if not _env_token:
         "For production, set INTERNAL_AUTH_TOKEN in your .env file."
     )
 INTERNAL_AUTH_TOKEN = _env_token
+
+
+def verify_internal_auth(request: Request) -> None:
+    """Shared dependency: reject requests missing or with bad X-Internal-Auth header.
+
+    Used by all /api/internal/* endpoints that are called by the proxy (nginx/Lua)
+    or other co-located services. Even though the API container is on the internal
+    Docker network, the API port can be exposed to the host, so every internal route
+    must require this token.
+    """
+    auth_token = request.headers.get("X-Internal-Auth")
+    if not auth_token or auth_token != INTERNAL_AUTH_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal auth token",
+        )
+
+
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
@@ -199,7 +217,7 @@ async def log_threat(
 # WAF / GeoIP / Blocklist Internal Endpoints (called by Lua)
 # ============================================================================
 
-@router.get("/waf/rules")
+@router.get("/waf/rules", dependencies=[Depends(verify_internal_auth)])
 async def get_waf_rules(
     db: AsyncSession = Depends(get_db),
 ):
@@ -225,7 +243,7 @@ async def get_waf_rules(
     ]
 
 
-@router.get("/geoip/rules")
+@router.get("/geoip/rules", dependencies=[Depends(verify_internal_auth)])
 async def get_geoip_rules(
     db: AsyncSession = Depends(get_db),
 ):
@@ -251,7 +269,7 @@ async def get_geoip_rules(
     ]
 
 
-@router.get("/trusted-ips")
+@router.get("/trusted-ips", dependencies=[Depends(verify_internal_auth)])
 async def get_trusted_ips(
     db: AsyncSession = Depends(get_db),
 ):
@@ -273,7 +291,7 @@ async def get_trusted_ips(
         return []
 
 
-@router.get("/blocked-ips")
+@router.get("/blocked-ips", dependencies=[Depends(verify_internal_auth)])
 async def get_blocked_ips(
     db: AsyncSession = Depends(get_db),
 ):
@@ -309,7 +327,7 @@ async def get_blocked_ips(
 # Honeypot Internal Endpoints (called by Lua)
 # ============================================================================
 
-@router.get("/honeypot/traps")
+@router.get("/honeypot/traps", dependencies=[Depends(verify_internal_auth)])
 async def get_honeypot_traps(
     db: AsyncSession = Depends(get_db),
 ):
@@ -355,7 +373,7 @@ class HoneypotHitRequest(BaseModel):
     severity: str = "high"
 
 
-@router.post("/honeypot/hit")
+@router.post("/honeypot/hit", dependencies=[Depends(verify_internal_auth)])
 async def log_honeypot_hit(
     data: HoneypotHitRequest,
     request: Request,
@@ -441,7 +459,7 @@ async def log_honeypot_hit(
     return {"status": action, "ip": data.client_ip}
 
 
-@router.get("/rate-limits")
+@router.get("/rate-limits", dependencies=[Depends(verify_internal_auth)])
 async def get_rate_limit_rules(
     db: AsyncSession = Depends(get_db),
 ):

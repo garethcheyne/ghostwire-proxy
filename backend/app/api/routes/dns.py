@@ -189,7 +189,12 @@ async def sync_zones(
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    api_key = decrypt_data(provider.api_key)
+    if not provider.api_key:
+        raise HTTPException(status_code=400, detail='DNS provider has no API key configured')
+    try:
+        api_key = decrypt_data(provider.api_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -247,7 +252,12 @@ async def list_records(
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    api_key = decrypt_data(provider.api_key)
+    if not provider.api_key:
+        raise HTTPException(status_code=400, detail='DNS provider has no API key configured')
+    try:
+        api_key = decrypt_data(provider.api_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -291,7 +301,12 @@ async def create_record(
     )
     provider = provider_result.scalar_one_or_none()
 
-    api_key = decrypt_data(provider.api_key)
+    if not provider.api_key:
+        raise HTTPException(status_code=400, detail='DNS provider has no API key configured')
+    try:
+        api_key = decrypt_data(provider.api_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -345,7 +360,12 @@ async def update_record(
     )
     provider = provider_result.scalar_one_or_none()
 
-    api_key = decrypt_data(provider.api_key)
+    if not provider.api_key:
+        raise HTTPException(status_code=400, detail='DNS provider has no API key configured')
+    try:
+        api_key = decrypt_data(provider.api_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -413,7 +433,12 @@ async def delete_record(
     )
     provider = provider_result.scalar_one_or_none()
 
-    api_key = decrypt_data(provider.api_key)
+    if not provider.api_key:
+        raise HTTPException(status_code=400, detail='DNS provider has no API key configured')
+    try:
+        api_key = decrypt_data(provider.api_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)

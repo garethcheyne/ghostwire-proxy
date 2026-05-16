@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.rate_limit import GeoipSettings, GeoipRule
@@ -13,7 +14,7 @@ from app.schemas.rate_limit import (
     GeoipSettingsUpdate, GeoipSettingsResponse,
     GeoipRuleCreate, GeoipRuleUpdate, GeoipRuleResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 
 router = APIRouter()
 
@@ -33,7 +34,7 @@ async def get_geoip_settings(
 async def update_geoip_settings(
     data: GeoipSettingsUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     from app.core.security import encrypt_data
@@ -66,6 +67,7 @@ async def update_geoip_settings(
         details="Updated GeoIP settings",
     ))
     await db.commit()
+    await cache_delete_prefix("geoip:")
     await db.refresh(settings_obj)
     return settings_obj
 
@@ -78,18 +80,24 @@ async def list_geoip_rules(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(GeoipRule).order_by(GeoipRule.name)
-    if proxy_host_id:
-        query = query.where(GeoipRule.proxy_host_id == proxy_host_id)
-    result = await db.execute(query)
-    return result.scalars().all()
+    cache_key = f"geoip:rules:{proxy_host_id}"
+
+    async def _compute():
+        query = select(GeoipRule).order_by(GeoipRule.name)
+        if proxy_host_id:
+            query = query.where(GeoipRule.proxy_host_id == proxy_host_id)
+        result = await db.execute(query)
+        return [GeoipRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+                for r in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)
 
 
 @router.post("/rules", response_model=GeoipRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_geoip_rule(
     data: GeoipRuleCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     rule = GeoipRule(**data.model_dump())
@@ -103,6 +111,7 @@ async def create_geoip_rule(
         details=f"Created GeoIP rule: {data.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("geoip:")
     await db.refresh(rule)
     return rule
 
@@ -112,7 +121,7 @@ async def update_geoip_rule(
     rule_id: str,
     data: GeoipRuleUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(GeoipRule).where(GeoipRule.id == rule_id))
@@ -131,6 +140,7 @@ async def update_geoip_rule(
         details=f"Updated GeoIP rule: {rule.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("geoip:")
     await db.refresh(rule)
     return rule
 
@@ -139,7 +149,7 @@ async def update_geoip_rule(
 async def delete_geoip_rule(
     rule_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(GeoipRule).where(GeoipRule.id == rule_id))
@@ -156,6 +166,7 @@ async def delete_geoip_rule(
     ))
     await db.delete(rule)
     await db.commit()
+    await cache_delete_prefix("geoip:")
 
 
 # ── GeoIP Lookup ───────────────────────────────────────────────
@@ -202,7 +213,7 @@ async def get_geoip_database_status(
 @router.post("/database/update")
 async def update_geoip_database(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Download and install the latest GeoIP database."""
@@ -218,6 +229,7 @@ async def update_geoip_database(
         details=f"GeoIP database update: {result['status']} - {result['message']}",
     ))
     await db.commit()
+    await cache_delete_prefix("geoip:")
 
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])

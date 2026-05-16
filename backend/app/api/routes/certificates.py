@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from datetime import datetime, timezone
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.security import encrypt_data, decrypt_data
 from app.models.user import User
 from app.models.certificate import Certificate
@@ -11,7 +12,7 @@ from app.models.audit_log import AuditLog
 from app.schemas.certificate import (
     CertificateUpload, CertificateLetsEncrypt, CertificateResponse
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.core.utils import get_client_ip
 from app.services.certificate_service import (
     request_letsencrypt_certificate,
@@ -25,22 +26,33 @@ router = APIRouter()
 
 @router.get("/", response_model=list[CertificateResponse])
 async def list_certificates(
+    response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all certificates"""
-    query = select(Certificate).order_by(Certificate.created_at.desc()).offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+    """List all certificates (15s cache, invalidated on writes)."""
+    cache_key = f"certificates:list:{skip}:{limit}"
+
+    async def _compute() -> dict:
+        query = select(Certificate).order_by(Certificate.created_at.desc()).offset(skip).limit(limit)
+        items_result = await db.execute(query)
+        total_result = await db.execute(select(func.count()).select_from(Certificate))
+        items = [CertificateResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
+                 for c in items_result.scalars().all()]
+        return {"items": items, "total": int(total_result.scalar() or 0)}
+
+    payload = await cached_json(cache_key, ttl=15, producer=_compute)
+    response.headers["X-Total-Count"] = str(payload["total"])
+    return payload["items"]
 
 
 @router.post("/", response_model=CertificateResponse, status_code=status.HTTP_201_CREATED)
 async def upload_certificate(
     cert_data: CertificateUpload,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a custom SSL certificate"""
@@ -79,6 +91,7 @@ async def upload_certificate(
     )
     db.add(audit_log)
     await db.commit()
+    await cache_delete_prefix("certificates:")
     await db.refresh(cert)
 
     return cert
@@ -110,7 +123,7 @@ async def request_letsencrypt_cert(
     cert_data: CertificateLetsEncrypt,
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Request a Let's Encrypt certificate"""
@@ -135,6 +148,7 @@ async def request_letsencrypt_cert(
     )
     db.add(audit_log)
     await db.commit()
+    await cache_delete_prefix("certificates:")
     await db.refresh(cert)
 
     # Queue certificate request in background
@@ -166,7 +180,7 @@ async def get_certificate(
 async def delete_certificate(
     cert_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete certificate"""
@@ -192,6 +206,7 @@ async def delete_certificate(
 
     await db.delete(cert)
     await db.commit()
+    await cache_delete_prefix("certificates:")
 
 
 async def process_certificate_renewal(cert_id: str):
@@ -218,7 +233,7 @@ async def renew_cert(
     cert_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Renew Let's Encrypt certificate"""
@@ -251,6 +266,7 @@ async def renew_cert(
     )
     db.add(audit_log)
     await db.commit()
+    await cache_delete_prefix("certificates:")
     await db.refresh(cert)
 
     # Queue renewal in background

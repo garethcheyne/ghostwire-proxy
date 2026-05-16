@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.rate_limit import RateLimitRule
@@ -12,7 +13,7 @@ from app.models.audit_log import AuditLog
 from app.schemas.rate_limit import (
     RateLimitRuleCreate, RateLimitRuleUpdate, RateLimitRuleResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 
 router = APIRouter()
 
@@ -23,18 +24,24 @@ async def list_rate_limits(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(RateLimitRule).order_by(RateLimitRule.name)
-    if proxy_host_id:
-        query = query.where(RateLimitRule.proxy_host_id == proxy_host_id)
-    result = await db.execute(query)
-    return result.scalars().all()
+    cache_key = f"rate_limits:list:{proxy_host_id}"
+
+    async def _compute():
+        query = select(RateLimitRule).order_by(RateLimitRule.name)
+        if proxy_host_id:
+            query = query.where(RateLimitRule.proxy_host_id == proxy_host_id)
+        result = await db.execute(query)
+        return [RateLimitRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+                for r in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)
 
 
 @router.post("", response_model=RateLimitRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_rate_limit(
     data: RateLimitRuleCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     rule = RateLimitRule(**data.model_dump())
@@ -48,6 +55,7 @@ async def create_rate_limit(
         details=f"Created rate limit rule: {data.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("rate_limits:")
     await db.refresh(rule)
     return rule
 
@@ -70,7 +78,7 @@ async def update_rate_limit(
     rule_id: str,
     data: RateLimitRuleUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(RateLimitRule).where(RateLimitRule.id == rule_id))
@@ -89,6 +97,7 @@ async def update_rate_limit(
         details=f"Updated rate limit rule: {rule.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("rate_limits:")
     await db.refresh(rule)
     return rule
 
@@ -97,7 +106,7 @@ async def update_rate_limit(
 async def delete_rate_limit(
     rule_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(RateLimitRule).where(RateLimitRule.id == rule_id))
@@ -114,3 +123,4 @@ async def delete_rate_limit(
     ))
     await db.delete(rule)
     await db.commit()
+    await cache_delete_prefix("rate_limits:")

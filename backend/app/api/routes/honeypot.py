@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, distinct
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.honeypot import HoneypotTrap, HoneypotHit, IpEnrichment
@@ -19,7 +20,7 @@ from app.schemas.honeypot import (
     HoneypotHitResponse, IpEnrichmentResponse, IpLookupRequest,
     HoneypotStatsResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -34,18 +35,24 @@ async def list_traps(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(HoneypotTrap).order_by(HoneypotTrap.hit_count.desc())
-    if enabled is not None:
-        query = query.where(HoneypotTrap.enabled == enabled)
-    result = await db.execute(query)
-    return result.scalars().all()
+    cache_key = f"honeypot:traps:{enabled}"
+
+    async def _compute():
+        query = select(HoneypotTrap).order_by(HoneypotTrap.hit_count.desc())
+        if enabled is not None:
+            query = query.where(HoneypotTrap.enabled == enabled)
+        result = await db.execute(query)
+        return [HoneypotTrapResponse.model_validate(t, from_attributes=True).model_dump(mode="json")
+                for t in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)
 
 
 @router.post("/traps", response_model=HoneypotTrapResponse, status_code=status.HTTP_201_CREATED)
 async def create_trap(
     data: HoneypotTrapCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     # Ensure path starts with /
@@ -74,6 +81,7 @@ async def create_trap(
         details=f"Created honeypot trap: {data.name} ({path})",
     ))
     await db.commit()
+    await cache_delete_prefix("honeypot:")
     await db.refresh(trap)
 
     # Notify nginx to reload honeypot paths
@@ -99,7 +107,7 @@ async def update_trap(
     trap_id: str,
     data: HoneypotTrapUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(HoneypotTrap).where(HoneypotTrap.id == trap_id))
@@ -123,6 +131,7 @@ async def update_trap(
         details=f"Updated honeypot trap: {trap.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("honeypot:")
     await db.refresh(trap)
 
     await _notify_nginx_reload()
@@ -133,7 +142,7 @@ async def update_trap(
 async def delete_trap(
     trap_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(HoneypotTrap).where(HoneypotTrap.id == trap_id))
@@ -150,6 +159,7 @@ async def delete_trap(
     ))
     await db.delete(trap)
     await db.commit()
+    await cache_delete_prefix("honeypot:")
 
     await _notify_nginx_reload()
 
@@ -317,7 +327,7 @@ async def get_honeypot_stats(
 @router.post("/traps/install-defaults", status_code=status.HTTP_201_CREATED)
 async def install_default_traps(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Install a curated set of default honeypot traps for common scanner targets."""
@@ -462,6 +472,7 @@ async def install_default_traps(
             details=f"Installed {len(installed)} default honeypot traps",
         ))
         await db.commit()
+        await cache_delete_prefix("honeypot:")
         await _notify_nginx_reload()
 
     return {"installed": installed, "count": len(installed)}

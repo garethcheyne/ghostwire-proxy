@@ -8,7 +8,7 @@ from sqlalchemy import select, func, and_, case, delete as sa_delete
 from datetime import datetime, timezone, timedelta
 
 from app.core.database import get_db
-from app.core.cache import cached_json
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, ThreatThreshold
@@ -21,7 +21,7 @@ from app.schemas.waf import (
     ThreatThresholdCreate, ThreatThresholdUpdate, ThreatThresholdResponse,
     ThreatStatsResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,10 @@ async def _notify_nginx_reload():
             await client.get(NGINX_RELOAD_URL, headers={"Host": "localhost"})
     except Exception as e:
         logger.warning("Could not notify nginx to reload rules: %s", e)
+    # Any rule-mutating call path triggers a reload, so use this hook to also
+    # invalidate the cached rules/events lists.
+    await cache_delete_prefix("waf_rules:")
+    await cache_delete_prefix("waf_events:")
 
 
 # ── WAF Rule Sets ──────────────────────────────────────────────
@@ -54,7 +58,7 @@ async def list_rule_sets(
 async def create_rule_set(
     data: WafRuleSetCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     rule_set = WafRuleSet(**data.model_dump())
@@ -84,23 +88,29 @@ async def list_rules(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(WafRule).order_by(WafRule.category, WafRule.name)
-    if category:
-        query = query.where(WafRule.category == category)
-    if enabled is not None:
-        query = query.where(WafRule.enabled == enabled)
-    if proxy_host_id:
-        query = query.where(WafRule.proxy_host_id == proxy_host_id)
-    query = query.offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+    cache_key = f"waf_rules:list:{category}:{enabled}:{proxy_host_id}:{skip}:{limit}"
+
+    async def _compute():
+        query = select(WafRule).order_by(WafRule.category, WafRule.name)
+        if category:
+            query = query.where(WafRule.category == category)
+        if enabled is not None:
+            query = query.where(WafRule.enabled == enabled)
+        if proxy_host_id:
+            query = query.where(WafRule.proxy_host_id == proxy_host_id)
+        query = query.offset(skip).limit(limit)
+        result = await db.execute(query)
+        return [WafRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+                for r in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)
 
 
 @router.post("/rules", response_model=WafRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_rule(
     data: WafRuleCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     rule = WafRule(**data.model_dump())
@@ -115,6 +125,7 @@ async def create_rule(
     ))
     await db.commit()
     await db.refresh(rule)
+    await cache_delete_prefix("waf_rules:")
     return rule
 
 
@@ -136,7 +147,7 @@ async def update_rule(
     rule_id: str,
     data: WafRuleUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(WafRule).where(WafRule.id == rule_id))
@@ -156,6 +167,7 @@ async def update_rule(
     ))
     await db.commit()
     await db.refresh(rule)
+    await cache_delete_prefix("waf_rules:")
     return rule
 
 
@@ -163,7 +175,7 @@ async def update_rule(
 async def delete_rule(
     rule_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(WafRule).where(WafRule.id == rule_id))
@@ -180,6 +192,7 @@ async def delete_rule(
     ))
     await db.delete(rule)
     await db.commit()
+    await cache_delete_prefix("waf_rules:")
 
 
 # ── Threat Events ──────────────────────────────────────────────
@@ -194,23 +207,29 @@ async def list_threat_events(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ThreatEvent).order_by(ThreatEvent.timestamp.desc())
-    if category:
-        query = query.where(ThreatEvent.category == category)
-    if severity:
-        query = query.where(ThreatEvent.severity == severity)
-    if client_ip:
-        query = query.where(ThreatEvent.client_ip == client_ip)
-    query = query.offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+    cache_key = f"waf_events:list:{category}:{severity}:{client_ip}:{skip}:{limit}"
+
+    async def _compute():
+        query = select(ThreatEvent).order_by(ThreatEvent.timestamp.desc())
+        if category:
+            query = query.where(ThreatEvent.category == category)
+        if severity:
+            query = query.where(ThreatEvent.severity == severity)
+        if client_ip:
+            query = query.where(ThreatEvent.client_ip == client_ip)
+        query = query.offset(skip).limit(limit)
+        result = await db.execute(query)
+        return [ThreatEventResponse.model_validate(e, from_attributes=True).model_dump(mode="json")
+                for e in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=15, producer=_compute)
 
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_threat_event(
     event_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a single threat event."""
@@ -228,12 +247,13 @@ async def delete_threat_event(
     ))
     await db.delete(event)
     await db.commit()
+    await cache_delete_prefix("waf_events:")
 
 
 @router.delete("/events", status_code=status.HTTP_200_OK)
 async def purge_threat_events(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Purge all threat events."""
@@ -250,6 +270,7 @@ async def purge_threat_events(
         details=f"Purged all threat events ({count} records)",
     ))
     await db.commit()
+    await cache_delete_prefix("waf_events:")
     return {"status": "ok", "deleted": count}
 
 
@@ -430,7 +451,7 @@ async def update_threat_actor(
     ip: str,
     data: ThreatActorUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
@@ -462,7 +483,7 @@ async def update_threat_actor(
 async def delete_threat_actor(
     ip: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
@@ -492,7 +513,7 @@ async def delete_threat_actor(
 @router.post("/actors/bulk-firewall-ban")
 async def bulk_firewall_ban(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Push multiple IPs to all enabled firewall connectors in one operation."""
@@ -600,7 +621,7 @@ async def bulk_firewall_ban(
 @router.post("/actors/bulk-unblock")
 async def bulk_unblock_actors(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Unblock multiple threat actors at once."""
@@ -636,7 +657,7 @@ async def bulk_unblock_actors(
 @router.post("/actors/bulk-delete")
 async def bulk_delete_actors(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete multiple threat actors and their associated events."""
@@ -671,7 +692,7 @@ async def bulk_delete_actors(
 async def block_threat_actor(
     ip: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
@@ -708,7 +729,7 @@ async def block_threat_actor(
 async def firewall_ban_threat_actor(
     ip: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Escalate an IP to firewall_banned and push to all enabled firewall connectors."""
@@ -803,7 +824,7 @@ async def firewall_ban_threat_actor(
 async def unblock_threat_actor(
     ip: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
@@ -846,7 +867,7 @@ async def list_thresholds(
 async def create_threshold(
     data: ThreatThresholdCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     threshold = ThreatThreshold(**data.model_dump())
@@ -869,7 +890,7 @@ async def update_threshold(
     threshold_id: str,
     data: ThreatThresholdUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatThreshold).where(ThreatThreshold.id == threshold_id))
@@ -896,7 +917,7 @@ async def update_threshold(
 async def delete_threshold(
     threshold_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(ThreatThreshold).where(ThreatThreshold.id == threshold_id))

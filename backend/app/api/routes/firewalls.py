@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.firewall import FirewallConnector, FirewallBlocklist
@@ -13,7 +14,7 @@ from app.schemas.firewall import (
     FirewallConnectorCreate, FirewallConnectorUpdate, FirewallConnectorResponse,
     FirewallBlocklistResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.firewall_service import get_connector as get_firewall_connector
 
 router = APIRouter()
@@ -25,11 +26,14 @@ async def firewall_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Check if any enabled firewall connectors are configured."""
-    result = await db.execute(
-        select(func.count(FirewallConnector.id)).where(FirewallConnector.enabled == True)
-    )
-    count = result.scalar() or 0
-    return {"has_enabled_connectors": count > 0, "enabled_count": count}
+    async def _compute():
+        result = await db.execute(
+            select(func.count(FirewallConnector.id)).where(FirewallConnector.enabled == True)
+        )
+        count = result.scalar() or 0
+        return {"has_enabled_connectors": count > 0, "enabled_count": int(count)}
+
+    return await cached_json("firewalls:status", ttl=30, producer=_compute)
 
 
 @router.get("", response_model=list[FirewallConnectorResponse])
@@ -37,15 +41,19 @@ async def list_connectors(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(FirewallConnector).order_by(FirewallConnector.name))
-    return result.scalars().all()
+    async def _compute():
+        result = await db.execute(select(FirewallConnector).order_by(FirewallConnector.name))
+        return [FirewallConnectorResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
+                for c in result.scalars().all()]
+
+    return await cached_json("firewalls:list", ttl=30, producer=_compute)
 
 
 @router.post("", response_model=FirewallConnectorResponse, status_code=status.HTTP_201_CREATED)
 async def create_connector(
     data: FirewallConnectorCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     from app.core.security import encrypt_data
@@ -72,6 +80,7 @@ async def create_connector(
         details=f"Created firewall connector: {data.name} ({data.connector_type})",
     ))
     await db.commit()
+    await cache_delete_prefix("firewalls:")
     await db.refresh(connector)
     return connector
 
@@ -94,7 +103,7 @@ async def update_connector(
     connector_id: str,
     data: FirewallConnectorUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     from app.core.security import encrypt_data
@@ -121,6 +130,7 @@ async def update_connector(
         details=f"Updated firewall connector: {connector.name}",
     ))
     await db.commit()
+    await cache_delete_prefix("firewalls:")
     await db.refresh(connector)
     return connector
 
@@ -129,7 +139,7 @@ async def update_connector(
 async def delete_connector(
     connector_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
@@ -146,12 +156,13 @@ async def delete_connector(
     ))
     await db.delete(connector)
     await db.commit()
+    await cache_delete_prefix("firewalls:")
 
 
 @router.post("/{connector_id}/test")
 async def test_connector(
     connector_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
@@ -168,7 +179,7 @@ async def test_connector(
 async def ensure_firewall_rule(
     connector_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Ensure the firewall rule exists that enforces blocking for the IP group.
@@ -201,6 +212,7 @@ async def ensure_firewall_rule(
             details=f"Ensured firewall rule for {connector.name}: {rule_result.get('message', '')}",
         ))
         await db.commit()
+    await cache_delete_prefix("firewalls:")
 
     return rule_result
 
@@ -209,7 +221,7 @@ async def ensure_firewall_rule(
 async def test_block(
     connector_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Test adding and removing a block - uses a safe test IP (192.0.2.1 from TEST-NET-1)."""
@@ -248,6 +260,7 @@ async def test_block(
         details=f"Tested block/unblock on {connector.name} with IP {test_ip}",
     ))
     await db.commit()
+    await cache_delete_prefix("firewalls:")
 
     return {
         "success": True,
@@ -259,7 +272,7 @@ async def test_block(
 async def sync_blocklist(
     connector_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
@@ -301,6 +314,7 @@ async def sync_blocklist(
 
     connector.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
+    await cache_delete_prefix("firewalls:")
 
     return {
         "pushed": pushed,
@@ -341,7 +355,7 @@ async def list_blocklist(
 
 @router.post("/blocklist/deduplicate")
 async def deduplicate_blocklist(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove duplicate IP entries from the blocklist, keeping the newest entry per IP."""
@@ -372,4 +386,5 @@ async def deduplicate_blocklist(
             removed += 1
 
     await db.commit()
+    await cache_delete_prefix("firewalls:")
     return {"removed": removed, "duplicate_ips": len(dup_ips)}

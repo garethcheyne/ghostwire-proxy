@@ -1,7 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { usePageData } from '@/lib/use-page-data'
+import { useQueryClient } from '@tanstack/react-query'
+import { useProxyHosts } from '@/lib/queries/proxy-hosts'
+import { useCertificates } from '@/lib/queries/dashboard'
+import { useAccessLists, useAuthWalls } from '@/lib/queries/access'
+import { proxyHostKeys, certificateKeys, accessListKeys } from '@/lib/queries/keys'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Globe,
@@ -146,11 +150,38 @@ const defaultLocationData: LocationFormData = {
 
 export default function ProxyHostsPage() {
   const confirm = useConfirm()
-  const [hosts, setHosts] = useState<ProxyHost[]>([])
-  const [certificates, setCertificates] = useState<Certificate[]>([])
-  const [accessLists, setAccessLists] = useState<AccessList[]>([])
-  const [authWalls, setAuthWalls] = useState<AuthWall[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+
+  // React Query handles the four initial parallel fetches with caching, dedupe,
+  // and stale-while-revalidate. Mutations invalidate via `refetchAll()` below
+  // so the cache stays accurate without any manual state syncing.
+  const hostsQuery = useProxyHosts({ limit: 100 })
+  const certsQuery = useCertificates({ limit: 100 })
+  const accessListsQuery = useAccessLists({ limit: 100 })
+  const authWallsQuery = useAuthWalls()
+
+  const hosts = hostsQuery.data?.items ?? []
+  const certificates = certsQuery.data?.items ?? []
+  const accessLists = accessListsQuery.data?.items ?? []
+  const authWalls = authWallsQuery.data ?? []
+  const isLoading =
+    hostsQuery.isPending ||
+    certsQuery.isPending ||
+    accessListsQuery.isPending ||
+    authWallsQuery.isPending
+
+  const refetchAll = () => {
+    queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+    queryClient.invalidateQueries({ queryKey: certificateKeys.all })
+    queryClient.invalidateQueries({ queryKey: accessListKeys.all })
+    queryClient.invalidateQueries({ queryKey: ['auth-walls'] })
+  }
+
+  const fetchData = () => {
+    // Backwards-compat shim: every call site that used to refetch all four
+    // resources after a mutation now just bumps the React Query cache.
+    refetchAll()
+  }
   const [showDialog, setShowDialog] = useState(false)
   const [editingHost, setEditingHost] = useState<ProxyHost | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -171,27 +202,6 @@ export default function ProxyHostsPage() {
   const [showLocationDialog, setShowLocationDialog] = useState(false)
   const [editingLocation, setEditingLocation] = useState<ProxyLocation | null>(null)
   const [locationForm, setLocationForm] = useState<LocationFormData>(defaultLocationData)
-
-  usePageData(() => { fetchData() })
-
-  const fetchData = async () => {
-    try {
-      const [hostsRes, certsRes, accessRes, authRes] = await Promise.all([
-        api.get('/api/proxy-hosts'),
-        api.get('/api/certificates'),
-        api.get('/api/access-lists'),
-        api.get('/api/auth-walls'),
-      ])
-      setHosts(hostsRes.data)
-      setCertificates(certsRes.data)
-      setAccessLists(accessRes.data)
-      setAuthWalls(authRes.data)
-    } catch (error) {
-      console.error('Failed to fetch data:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Derive unique previous LE emails from existing certificates
   const previousLeEmails = Array.from(

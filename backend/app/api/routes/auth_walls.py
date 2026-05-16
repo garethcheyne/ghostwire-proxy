@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.security import get_password_hash, encrypt_data
 from app.core.utils import get_client_ip
 from app.models.user import User
@@ -28,19 +29,25 @@ async def list_auth_walls(
     db: AsyncSession = Depends(get_db),
 ):
     """List all auth walls"""
-    query = (
-        select(AuthWall)
-        .options(
-            selectinload(AuthWall.local_users),
-            selectinload(AuthWall.auth_providers),
-            selectinload(AuthWall.ldap_configs),
+    cache_key = f"auth_walls:list:{skip}:{limit}"
+
+    async def _compute():
+        query = (
+            select(AuthWall)
+            .options(
+                selectinload(AuthWall.local_users),
+                selectinload(AuthWall.auth_providers),
+                selectinload(AuthWall.ldap_configs),
+            )
+            .order_by(AuthWall.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
-        .order_by(AuthWall.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    result = await db.execute(query)
-    return result.scalars().all()
+        result = await db.execute(query)
+        return [AuthWallResponse.model_validate(w, from_attributes=True).model_dump(mode="json")
+                for w in result.scalars().all()]
+
+    return await cached_json(cache_key, ttl=30, producer=_compute)
 
 
 @router.post("/", response_model=AuthWallResponse, status_code=status.HTTP_201_CREATED)
@@ -121,6 +128,7 @@ async def create_auth_wall(
     )
     db.add(audit_log)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
 
     # Reload with relationships
     result = await db.execute(
@@ -201,6 +209,7 @@ async def update_auth_wall(
     )
     db.add(audit_log)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
     await db.refresh(auth_wall)
 
     return auth_wall
@@ -235,6 +244,7 @@ async def delete_auth_wall(
 
     await db.delete(auth_wall)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
 
 
 # Local users management
@@ -264,6 +274,7 @@ async def add_local_user(
     )
     db.add(local_user)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
     await db.refresh(local_user)
 
     return local_user
@@ -293,6 +304,7 @@ async def remove_local_user(
 
     await db.delete(local_user)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
 
 
 # Auth providers management
@@ -327,6 +339,7 @@ async def add_auth_provider(
     )
     db.add(provider)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
     await db.refresh(provider)
 
     return provider
@@ -356,6 +369,7 @@ async def remove_auth_provider(
 
     await db.delete(provider)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
 
 
 # LDAP configs management
@@ -394,6 +408,7 @@ async def add_ldap_config(
     )
     db.add(ldap_config)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")
     await db.refresh(ldap_config)
 
     return ldap_config
@@ -423,3 +438,4 @@ async def remove_ldap_config(
 
     await db.delete(ldap_config)
     await db.commit()
+    await cache_delete_prefix("auth_walls:")

@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { usePageData } from '@/lib/use-page-data'
+import { useMemo } from 'react'
 import {
   Globe,
   Shield,
@@ -16,59 +15,15 @@ import {
   ShieldX,
   KeyRound,
 } from 'lucide-react'
-import api from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import { IpAddress } from '@/components/ip-address'
-import type { ProxyHost, Certificate, TrafficStats } from '@/types'
-
-interface ThreatStats {
-  total_events: number
-  events_today: number
-  events_this_week: number
-  total_actors: number
-  blocked_actors: number
-  top_categories: { category: string; count: number }[]
-  top_actors: { ip: string; score: number; events: number; status: string }[]
-  severity_breakdown: Record<string, number>
-}
-
-interface AuthErrorSummary {
-  total_401: number
-  total_403: number
-  failed_logins: number
-}
-
-interface AuthErrorEvent {
-  timestamp: string
-  ip: string
-  status: number
-  method: string
-  uri: string
-  host: string
-  country: string | null
-}
-
-interface AuthErrorOffender {
-  ip: string
-  count: number
-  last_seen: string
-}
-
-interface FailedLogin {
-  timestamp: string
-  email: string
-  type: string
-  ip: string
-  details: string | null
-}
-
-interface AuthErrors {
-  summary: AuthErrorSummary
-  recent_events: AuthErrorEvent[]
-  top_offenders: AuthErrorOffender[]
-  top_hosts: { host: string; count: number }[]
-  failed_logins: FailedLogin[]
-}
+import { useProxyHosts } from '@/lib/queries/proxy-hosts'
+import {
+  useCertificates,
+  useTrafficStats,
+  useWafStats,
+  useAuthErrors,
+} from '@/lib/queries/dashboard'
 
 interface StatCardProps {
   title: string
@@ -111,60 +66,36 @@ function StatCard({ title, value, icon: Icon, description, trend, trendValue }: 
 }
 
 export default function DashboardPage() {
-  const [hosts, setHosts] = useState<ProxyHost[]>([])
-  const [certificates, setCertificates] = useState<Certificate[]>([])
-  const [trafficStats, setTrafficStats] = useState<TrafficStats | null>(null)
-  const [threatStats, setThreatStats] = useState<ThreatStats | null>(null)
-  const [authErrors, setAuthErrors] = useState<AuthErrors | null>(null)
-  // Per-section loading — render each card as soon as its data arrives
-  // instead of blocking the whole page on the slowest endpoint.
-  const [hostsLoading, setHostsLoading] = useState(true)
-  const [certsLoading, setCertsLoading] = useState(true)
-  const [trafficLoading, setTrafficLoading] = useState(true)
+  // Each query is independent — React Query handles caching, dedupe, retries,
+  // and stale-while-revalidate so slow endpoints never block fast ones.
+  const hostsQuery = useProxyHosts({ limit: 50 })
+  const certsQuery = useCertificates({ limit: 50 })
+  const trafficQuery = useTrafficStats()
+  const wafQuery = useWafStats()
+  const authErrorsQuery = useAuthErrors('24h')
 
-  usePageData(() => { fetchData() })
+  const hosts = hostsQuery.data?.items ?? []
+  const certificates = certsQuery.data?.items ?? []
+  const trafficStats = trafficQuery.data ?? null
+  const threatStats = wafQuery.data ?? null
+  const authErrors = authErrorsQuery.data ?? null
 
-  const fetchData = () => {
-    // Fire all requests in parallel but resolve each independently so a slow
-    // analytics query never holds up the proxy-host / certificate cards.
-    api.get('/api/proxy-hosts')
-      .then((r) => setHosts(r.data))
-      .catch((e) => console.error('proxy-hosts failed:', e))
-      .finally(() => setHostsLoading(false))
+  const { activeHosts, validCerts, expiringCerts } = useMemo(() => {
+    const active = hosts.filter((h) => h.enabled).length
+    const valid = certificates.filter((c) => c.status === 'valid').length
+    const expiring = certificates.filter((c) => {
+      if (!c.expires_at) return false
+      const days = Math.floor(
+        (new Date(c.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+      return days <= 30 && days > 0
+    }).length
+    return { activeHosts: active, validCerts: valid, expiringCerts: expiring }
+  }, [hosts, certificates])
 
-    api.get('/api/certificates')
-      .then((r) => setCertificates(r.data))
-      .catch((e) => console.error('certificates failed:', e))
-      .finally(() => setCertsLoading(false))
-
-    api.get('/api/traffic/stats')
-      .then((r) => setTrafficStats(r.data))
-      .catch((e) => console.error('traffic stats failed:', e))
-      .finally(() => setTrafficLoading(false))
-
-    // These two are best-effort enrichments — never block the UI on them.
-    api.get('/api/waf/stats')
-      .then((r) => setThreatStats(r.data))
-      .catch(() => {})
-
-    api.get('/api/analytics/auth-errors?period=24h')
-      .then((r) => setAuthErrors(r.data))
-      .catch(() => {})
-  }
-
-  const activeHosts = hosts.filter((h) => h.enabled).length
-  const validCerts = certificates.filter((c) => c.status === 'valid').length
-  const expiringCerts = certificates.filter((c) => {
-    if (!c.expires_at) return false
-    const daysUntilExpiry = Math.floor(
-      (new Date(c.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    )
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0
-  }).length
-
-  // Only show the full-page spinner while the *core* cards (hosts/certs/traffic)
-  // are still loading. Threat stats and auth errors are progressive enhancements.
-  const isLoading = hostsLoading && certsLoading && trafficLoading
+  // Only show the full-page spinner while *all three* core queries are pending.
+  // Once any one resolves we render the page so cards fill in progressively.
+  const isLoading = hostsQuery.isPending && certsQuery.isPending && trafficQuery.isPending
 
   if (isLoading) {
     return (

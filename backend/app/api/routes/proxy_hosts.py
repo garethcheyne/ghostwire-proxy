@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.proxy_host import ProxyHost, UpstreamServer, ProxyLocation
@@ -14,7 +15,7 @@ from app.schemas.proxy_host import (
     ProxyLocationCreate, ProxyLocationUpdate, ProxyLocationResponse,
     LocationReorderRequest
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.openresty_service import generate_all_configs, reload_nginx, remove_config, backup_configs, restore_configs
 
 router = APIRouter()
@@ -46,6 +47,10 @@ async def regenerate_and_reload(db: AsyncSession) -> tuple[bool, str]:
         if not success:
             return False, f"Config is valid but reload failed: {message}"
 
+        # Invalidate cached list responses so the UI sees fresh data
+        # without waiting for the 15s TTL.
+        await cache_delete_prefix("proxy_hosts:")
+
         return True, "Nginx reloaded successfully"
     except Exception as e:
         # If anything blew up, try to restore
@@ -55,6 +60,7 @@ async def regenerate_and_reload(db: AsyncSession) -> tuple[bool, str]:
 
 @router.get("/", response_model=list[ProxyHostResponse])
 async def list_proxy_hosts(
+    response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     enabled: bool | None = None,
@@ -62,29 +68,42 @@ async def list_proxy_hosts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all proxy hosts"""
-    query = select(ProxyHost).options(
-        selectinload(ProxyHost.upstream_servers),
-        selectinload(ProxyHost.locations)
-    )
+    """List all proxy hosts (15s Redis cache, invalidated on writes)."""
+    cache_key = f"proxy_hosts:list:{skip}:{limit}:{enabled}:{search or ''}"
 
-    if enabled is not None:
-        query = query.where(ProxyHost.enabled == enabled)
+    async def _compute() -> dict:
+        query = select(ProxyHost).options(
+            selectinload(ProxyHost.upstream_servers),
+            selectinload(ProxyHost.locations)
+        )
+        count_query = select(func.count()).select_from(ProxyHost)
 
-    if search:
-        # Search in domain_names JSON - SQLite JSON functions
-        query = query.where(ProxyHost.forward_host.ilike(f"%{search}%"))
+        if enabled is not None:
+            query = query.where(ProxyHost.enabled == enabled)
+            count_query = count_query.where(ProxyHost.enabled == enabled)
 
-    query = query.order_by(ProxyHost.created_at.desc()).offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+        if search:
+            query = query.where(ProxyHost.forward_host.ilike(f"%{search}%"))
+            count_query = count_query.where(ProxyHost.forward_host.ilike(f"%{search}%"))
+
+        query = query.order_by(ProxyHost.created_at.desc()).offset(skip).limit(limit)
+        items_result = await db.execute(query)
+        total_result = await db.execute(count_query)
+
+        items = [ProxyHostResponse.model_validate(h, from_attributes=True).model_dump(mode="json")
+                 for h in items_result.scalars().all()]
+        return {"items": items, "total": int(total_result.scalar() or 0)}
+
+    payload = await cached_json(cache_key, ttl=15, producer=_compute)
+    response.headers["X-Total-Count"] = str(payload["total"])
+    return payload["items"]
 
 
 @router.post("/", response_model=ProxyHostResponse, status_code=status.HTTP_201_CREATED)
 async def create_proxy_host(
     host_data: ProxyHostCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new proxy host"""
@@ -204,7 +223,7 @@ async def update_proxy_host(
     host_id: str,
     host_data: ProxyHostUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update proxy host"""
@@ -253,7 +272,7 @@ async def update_proxy_host(
 async def delete_proxy_host(
     host_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete proxy host"""
@@ -293,7 +312,7 @@ async def delete_proxy_host(
 async def enable_proxy_host(
     host_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Enable proxy host"""
@@ -339,7 +358,7 @@ async def enable_proxy_host(
 async def disable_proxy_host(
     host_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Disable proxy host"""
@@ -386,7 +405,7 @@ async def disable_proxy_host(
 async def add_upstream_server(
     host_id: str,
     server_data: UpstreamServerCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Add upstream server to proxy host"""
@@ -406,6 +425,7 @@ async def add_upstream_server(
     db.add(server)
     await db.commit()
     await db.refresh(server)
+    await cache_delete_prefix("proxy_hosts:")
 
     return server
 
@@ -414,7 +434,7 @@ async def add_upstream_server(
 async def remove_upstream_server(
     host_id: str,
     server_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove upstream server from proxy host"""
@@ -434,6 +454,7 @@ async def remove_upstream_server(
 
     await db.delete(server)
     await db.commit()
+    await cache_delete_prefix("proxy_hosts:")
 
 
 # ============================================================================
@@ -469,7 +490,7 @@ async def create_location(
     host_id: str,
     location_data: ProxyLocationCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new location for a proxy host"""
@@ -540,7 +561,7 @@ async def update_location(
     location_id: str,
     location_data: ProxyLocationUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a location"""
@@ -588,7 +609,7 @@ async def delete_location(
     host_id: str,
     location_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a location"""
@@ -631,7 +652,7 @@ async def reorder_locations(
     host_id: str,
     reorder_data: LocationReorderRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Reorder locations by updating their priorities"""

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { usePageData } from '@/lib/use-page-data'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCertificates } from '@/lib/queries/dashboard'
+import { certificateKeys } from '@/lib/queries/keys'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Shield,
@@ -22,8 +24,12 @@ import type { Certificate } from '@/types'
 
 export default function CertificatesPage() {
   const confirm = useConfirm()
-  const [certificates, setCertificates] = useState<Certificate[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: certificatesData, isPending } = useCertificates({ limit: 100 })
+  const certificates: Certificate[] = certificatesData?.items ?? []
+  const isLoading = isPending
+  const fetchCertificates = () =>
+    queryClient.invalidateQueries({ queryKey: certificateKeys.all })
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [createMode, setCreateMode] = useState<'upload' | 'letsencrypt'>('letsencrypt')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -41,19 +47,6 @@ export default function CertificatesPage() {
   const [uploadDomainInput, setUploadDomainInput] = useState('')
   const [uploadCert, setUploadCert] = useState('')
   const [uploadKey, setUploadKey] = useState('')
-
-  usePageData(() => { fetchCertificates() })
-
-  const fetchCertificates = async () => {
-    try {
-      const response = await api.get('/api/certificates')
-      setCertificates(response.data)
-    } catch (error) {
-      console.error('Failed to fetch certificates:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const resetForm = () => {
     setLeDomains([])
