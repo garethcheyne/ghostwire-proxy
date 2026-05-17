@@ -79,55 +79,7 @@ local function check_db_rules(uri, args, user_agent)
     return true, nil
 end
 
--- Fallback: check against hardcoded default patterns
-local function check_default_rules(uri, args, user_agent)
-    local request_data = uri .. "?" .. args
-    local defaults = init.default_waf_rules
-
-    for _, rule in ipairs(defaults) do
-        local target
-        if rule.category == "path_traversal" or rule.category == "probe" then
-            target = uri
-        else
-            target = request_data
-        end
-
-        local ok, match = pcall(ngx.re.match, target, rule.pattern, "ijo")
-        if not ok then
-            ngx.log(ngx.ERR, "Invalid default WAF rule regex [" .. (rule.name or "?") .. "]: " .. tostring(match))
-        elseif match then
-            return false, {
-                rule_id = rule.id,
-                rule_name = rule.name,
-                category = rule.category,
-                severity = rule.severity,
-                action = rule.action,
-                pattern = rule.pattern,
-                matched = target,
-            }
-        end
-    end
-
-    -- Check scanner signatures
-    local ua_lower = string.lower(user_agent)
-    for _, scanner in ipairs(init.default_scanner_sigs) do
-        if string.find(ua_lower, scanner, 1, true) then
-            return false, {
-                rule_id = "default-scanner",
-                rule_name = "Scanner - " .. scanner,
-                category = "scanner",
-                severity = "medium",
-                action = "block",
-                pattern = scanner,
-                matched = user_agent,
-            }
-        end
-    end
-
-    return true, nil
-end
-
--- Main check combining DB rules with fallback
+-- Main check — DB-driven only. All rules are managed in the UI (/dashboard/waf).
 function _M.check_request()
     if not init.config.waf_enabled then
         return true, nil
@@ -154,19 +106,8 @@ function _M.check_request()
         }
     end
 
-    -- Try database rules first
-    local allowed, threat_info = check_db_rules(uri, args, user_agent)
-    if not allowed then
-        return false, threat_info
-    end
-
-    -- Fall back to defaults if no DB rules were loaded
-    local db_rules = init.get_waf_rules()
-    if not db_rules or #db_rules == 0 then
-        return check_default_rules(uri, args, user_agent)
-    end
-
-    return true, nil
+    -- DB rules only. Empty DB = no WAF rules applied.
+    return check_db_rules(uri, args, user_agent)
 end
 
 -- Log threat event to backend API
