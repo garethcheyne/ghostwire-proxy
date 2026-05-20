@@ -46,26 +46,23 @@ cd "$PROJECT_DIR"
 
 log "Current version: v$CURRENT_VERSION"
 
-git fetch --tags --force --quiet
+git fetch --quiet
 
 USE_CURRENT_BRANCH=false
 if [ -z "$TARGET_VERSION" ]; then
-    LATEST_TAG=$(git tag --sort=-v:refname | head -1)
-    if [ -z "$LATEST_TAG" ]; then
-        warn "No release tags found; using current branch at v$CURRENT_VERSION"
+    # Check the VERSION file on the remote main branch to determine latest release
+    REMOTE_VERSION=$(git show origin/main:VERSION 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$REMOTE_VERSION" ]; then
+        warn "Could not read VERSION from remote; using current branch"
         USE_CURRENT_BRANCH=true
+    elif [ "$REMOTE_VERSION" = "$CURRENT_VERSION" ] && [ "$FORCE" = false ]; then
+        ok "Already on version v$CURRENT_VERSION. Nothing to do."
+        echo "  Use --force to rebuild containers without changing version."
+        exit 0
+    elif [ "$REMOTE_VERSION" = "$CURRENT_VERSION" ] && [ "$FORCE" = true ]; then
+        TARGET_VERSION="v$CURRENT_VERSION"
     else
-        LATEST_SEMVER="${LATEST_TAG#v}"
-        if [ "$CURRENT_VERSION" != "unknown" ] && printf '%s\n%s\n' "$CURRENT_VERSION" "$LATEST_SEMVER" | sort -V | tail -n1 | grep -qx "$CURRENT_VERSION"; then
-            if [ "$CURRENT_VERSION" != "$LATEST_SEMVER" ]; then
-                log "Current VERSION v$CURRENT_VERSION is newer than latest tag $LATEST_TAG; building current branch"
-                USE_CURRENT_BRANCH=true
-            else
-                TARGET_VERSION="$LATEST_TAG"
-            fi
-        else
-            TARGET_VERSION="$LATEST_TAG"
-        fi
+        TARGET_VERSION="v$REMOTE_VERSION"
     fi
 fi
 
@@ -74,16 +71,10 @@ if [ "$USE_CURRENT_BRANCH" = false ]; then
     [[ "$TARGET_VERSION" != v* ]] && TARGET_VERSION="v$TARGET_VERSION"
     TARGET_SEMVER="${TARGET_VERSION#v}"
 
-    if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ] && [ "$FORCE" = false ]; then
-        ok "Already on version $TARGET_VERSION. Nothing to do."
-        echo "  Use --force to rebuild containers without changing version."
-        exit 0
-    fi
-
     if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ] && [ "$FORCE" = true ]; then
         log "Force-rebuilding version $TARGET_VERSION..."
     else
-        log "Upgrading to: $TARGET_VERSION"
+        log "Upgrading to: $TARGET_VERSION (current: v$CURRENT_VERSION)"
     fi
 else
     TARGET_SEMVER="$CURRENT_VERSION"
@@ -173,9 +164,9 @@ if [ "$USE_CURRENT_BRANCH" = false ]; then
     log "Pulling version $TARGET_VERSION..."
 
     git stash --quiet 2>/dev/null || true
-    git checkout "$TARGET_VERSION" --quiet
+    git pull --ff-only --quiet
 
-    ok "Checked out $TARGET_VERSION"
+    ok "Pulled latest (VERSION: $TARGET_SEMVER)"
 else
     log "Using current branch commit"
 fi
