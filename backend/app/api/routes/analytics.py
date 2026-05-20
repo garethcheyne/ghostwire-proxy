@@ -262,20 +262,21 @@ async def get_analytics_dashboard(
             avg_response_time=round(float(row[5]), 2) if row[5] else None,
         ))
 
-    # === Status Breakdown ===
+    # === Status Breakdown (single query instead of 4) ===
 
-    status_counts = {}
-    for prefix in ['2', '3', '4', '5']:
-        status_filter = base_filter.copy()
-        status_filter.append(TrafficLog.status >= int(f"{prefix}00"))
-        status_filter.append(TrafficLog.status < int(f"{prefix}00") + 100)
-
-        count = (await db.execute(
-            select(func.count(TrafficLog.id)).where(and_(*status_filter))
-        )).scalar() or 0
-        status_counts[f"status_{prefix}xx"] = count
-
-    status_breakdown = StatusBreakdown(**status_counts)
+    status_breakdown_query = select(
+        func.sum(case((and_(TrafficLog.status >= 200, TrafficLog.status < 300), 1), else_=0)),
+        func.sum(case((and_(TrafficLog.status >= 300, TrafficLog.status < 400), 1), else_=0)),
+        func.sum(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1), else_=0)),
+        func.sum(case((TrafficLog.status >= 500, 1), else_=0)),
+    ).where(and_(*base_filter))
+    sb_result = (await db.execute(status_breakdown_query)).first()
+    status_breakdown = StatusBreakdown(
+        status_2xx=sb_result[0] or 0,
+        status_3xx=sb_result[1] or 0,
+        status_4xx=sb_result[2] or 0,
+        status_5xx=sb_result[3] or 0,
+    )
 
     # === Requests by Method ===
 
@@ -286,6 +287,15 @@ async def get_analytics_dashboard(
     )
     method_result = await db.execute(method_query)
     requests_by_method = {row[0]: row[1] for row in method_result.all()}
+
+    # === Pre-fetch all proxy hosts (avoids N+1 lookups later) ===
+
+    all_hosts_result = await db.execute(select(ProxyHost))
+    host_map = {h.id: h for h in all_hosts_result.scalars().all()}
+
+    def get_host_name(host_id):
+        h = host_map.get(host_id)
+        return h.domain_names[0] if h and h.domain_names else "Unknown"
 
     # === Top Hosts ===
 
@@ -307,17 +317,10 @@ async def get_analytics_dashboard(
 
     top_hosts = []
     for row in top_hosts_result.all():
-        # Get host name
-        host = (await db.execute(
-            select(ProxyHost).where(ProxyHost.id == row[0])
-        )).scalar_one_or_none()
-
-        host_name = host.domain_names[0] if host and host.domain_names else "Unknown"
         host_error_rate = (row[5] / row[1] * 100) if row[1] > 0 else 0
-
         top_hosts.append(HostStats(
             host_id=row[0],
-            host_name=host_name,
+            host_name=get_host_name(row[0]),
             requests=row[1],
             unique_visitors=row[2],
             bytes_sent=row[3],
@@ -483,12 +486,9 @@ async def get_analytics_dashboard(
     for row in errors_by_host_result.all():
         host_id = row[0]
         if host_id not in errors_by_host_raw:
-            host = (await db.execute(
-                select(ProxyHost).where(ProxyHost.id == host_id)
-            )).scalar_one_or_none()
             errors_by_host_raw[host_id] = {
                 "host_id": host_id,
-                "host_name": host.domain_names[0] if host and host.domain_names else "Unknown",
+                "host_name": get_host_name(host_id),
                 "total_errors": 0,
                 "status_codes": {},
             }
