@@ -46,7 +46,10 @@ cd "$PROJECT_DIR"
 
 log "Current version: v$CURRENT_VERSION"
 
-git fetch --quiet
+if ! git fetch origin main 2>&1 | tail -5; then
+    err "git fetch failed — check network or credentials"
+    exit 1
+fi
 
 USE_CURRENT_BRANCH=false
 if [ -z "$TARGET_VERSION" ]; then
