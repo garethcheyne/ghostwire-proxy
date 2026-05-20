@@ -46,6 +46,16 @@ cd "$PROJECT_DIR"
 
 log "Current version: v$CURRENT_VERSION"
 
+# Ensure we're on the main branch (may be detached HEAD from old tag-based upgrades)
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    warn "Not on main branch (currently: ${CURRENT_BRANCH:-detached HEAD}). Switching..."
+    git checkout main --quiet 2>/dev/null || {
+        err "Failed to checkout main branch"
+        exit 1
+    }
+fi
+
 if ! git fetch origin main 2>&1 | tail -5; then
     err "git fetch failed — check network or credentials"
     exit 1
