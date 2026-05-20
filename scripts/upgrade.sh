@@ -258,6 +258,14 @@ else
 fi
 
 # ─────────────────────────────────────────────
+# 8. Purge old backups
+# ─────────────────────────────────────────────
+if [ -x "$SCRIPT_DIR/purge-backups.sh" ]; then
+    log "Purging old backups (keeping last 5, removing >30 days)..."
+    "$SCRIPT_DIR/purge-backups.sh" --run --days 30 --keep 5 || true
+fi
+
+# ─────────────────────────────────────────────
 # Done
 # ─────────────────────────────────────────────
 echo ""
