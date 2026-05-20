@@ -265,26 +265,39 @@ async def lifespan(app: FastAPI):
 
     # GeoIP database auto-update (checks monthly)
     async def geoip_update_loop():
-        """Check and update GeoIP database on the 2nd of each month."""
+        """Check and update GeoIP database. Runs an immediate check on startup
+        (so fresh installs get a database without waiting 24 hours), then checks
+        every 24 hours afterwards."""
         from app.services.geoip_service import get_db_info, update_database
+
+        async def check_and_update():
+            now = datetime.now(timezone.utc)
+            info = get_db_info()
+            if not info["installed"]:
+                logger.info("GeoIP database not found, downloading...")
+                result = await update_database()
+                logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
+            elif info["last_modified"]:
+                last_mod = datetime.fromisoformat(info["last_modified"])
+                # If DB is older than 35 days, update it
+                if (now - last_mod).days > 35:
+                    logger.info("GeoIP database is outdated, updating...")
+                    result = await update_database()
+                    logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
+
+        # Run an initial check immediately on startup so that fresh deployments
+        # don't have to wait 24h for the first download (which causes nginx to
+        # log "GeoIP database not found" warnings until then).
+        try:
+            await check_and_update()
+        except Exception as e:
+            logger.error(f"Error in initial GeoIP check: {e}")
+
         while True:
             try:
                 # Check every 24 hours
                 await asyncio.sleep(86400)
-                now = datetime.now(timezone.utc)
-                # Update on the 2nd of each month (DB-IP publishes on the 1st)
-                info = get_db_info()
-                if not info["installed"]:
-                    logger.info("GeoIP database not found, downloading...")
-                    result = await update_database()
-                    logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
-                elif info["last_modified"]:
-                    last_mod = datetime.fromisoformat(info["last_modified"])
-                    # If DB is older than 35 days, update it
-                    if (now - last_mod).days > 35:
-                        logger.info("GeoIP database is outdated, updating...")
-                        result = await update_database()
-                        logger.info(f"GeoIP auto-update: {result['status']} - {result['message']}")
+                await check_and_update()
             except asyncio.CancelledError:
                 logger.info("GeoIP update task cancelled")
                 break

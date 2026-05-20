@@ -1,7 +1,27 @@
 import type { NextConfig } from 'next'
+import { execSync } from 'child_process'
+import { readFileSync } from 'fs'
+
+// Generate a stable build ID from VERSION file or git SHA.
+// This ensures server action IDs are consistent within a deployment
+// and stale clients get proper "needs reload" handling.
+function getBuildId(): string {
+  // Check /app/VERSION (Docker build) then ./VERSION (local)
+  for (const path of ['/app/VERSION', './VERSION', '../VERSION']) {
+    try {
+      const version = readFileSync(path, 'utf8').trim()
+      if (version && version !== 'unknown') return version.replace(/[^a-zA-Z0-9._-]/g, '-')
+    } catch {}
+  }
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  } catch {}
+  return Date.now().toString(36)
+}
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  generateBuildId: () => getBuildId(),
   reactStrictMode: true,
   poweredByHeader: false,
   images: {

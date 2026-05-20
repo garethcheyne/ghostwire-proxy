@@ -7,8 +7,12 @@ local init = require "init"
 
 -- Lookup country for IP
 function _M.lookup(ip)
-    if not init.config.geoip_enabled or not init.geoip_db then
-        return nil
+    if not init.geoip_db then
+        -- Try to lazily load the database (e.g. on fresh installs where the
+        -- API container downloads the DB after nginx has started).
+        if not init.try_init_geoip() then
+            return nil
+        end
     end
 
     local ok, result = pcall(init.geoip_db.lookup, ip)
@@ -74,7 +78,7 @@ end
 
 -- Access handler - loads rules from database, checks against configured rules
 function _M.access(rules)
-    if not init.config.geoip_enabled then
+    if not init.geoip_db and not init.try_init_geoip() then
         return
     end
 

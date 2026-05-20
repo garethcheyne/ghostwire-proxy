@@ -3,6 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ARG BUILD_VERSION=unknown
+
 # Copy package files
 COPY package*.json ./
 
@@ -11,6 +13,9 @@ RUN npm ci
 
 # Copy source files
 COPY . .
+
+# Write version file for generateBuildId in next.config.ts
+RUN echo "$BUILD_VERSION" > /app/VERSION
 
 # Build the application
 RUN npm run build

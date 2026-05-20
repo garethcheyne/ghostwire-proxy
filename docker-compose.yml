@@ -76,6 +76,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     container_name: ghostwire-proxy-ui
     restart: unless-stopped
     ports:

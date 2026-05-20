@@ -27,27 +27,53 @@ _M.config = {
 -- GeoIP Database Initialization
 -- ============================================================================
 
+-- Throttle lazy retries so we don't stat the filesystem on every request when
+-- the database has not yet been downloaded by the API container.
+local geoip_last_attempt = 0
+local GEOIP_RETRY_INTERVAL = 60  -- seconds
+
 local function init_geoip()
     local ok, geo = pcall(require, "resty.maxminddb")
-    if ok then
-        local geoip_path = "/data/geoip/GeoLite2-Country.mmdb"
-        local file = io.open(geoip_path, "r")
-        if file then
-            file:close()
-            local init_ok, err = pcall(geo.init, geoip_path)
-            if init_ok then
-                _M.geoip_db = geo
-                _M.config.geoip_enabled = true
-                ngx.log(ngx.INFO, "GeoIP database loaded: ", geoip_path)
-            else
-                ngx.log(ngx.WARN, "GeoIP init failed: ", err or "unknown error")
-            end
-        else
-            ngx.log(ngx.WARN, "GeoIP database not found: ", geoip_path)
-        end
-    else
+    if not ok then
         ngx.log(ngx.WARN, "MaxMindDB module not available: ", geo)
+        return false
     end
+
+    local geoip_path = "/data/geoip/GeoLite2-Country.mmdb"
+    local file = io.open(geoip_path, "r")
+    if not file then
+        -- Logged at INFO since the API container downloads this asynchronously
+        -- on first start; nginx will lazily pick it up via try_init_geoip().
+        ngx.log(ngx.INFO, "GeoIP database not found (will retry): ", geoip_path)
+        return false
+    end
+    file:close()
+
+    local init_ok, err = pcall(geo.init, geoip_path)
+    if not init_ok then
+        ngx.log(ngx.WARN, "GeoIP init failed: ", err or "unknown error")
+        return false
+    end
+
+    _M.geoip_db = geo
+    _M.config.geoip_enabled = true
+    ngx.log(ngx.INFO, "GeoIP database loaded: ", geoip_path)
+    return true
+end
+
+--- Lazily attempt to load the GeoIP database if it was not present at nginx
+-- startup. Throttled to one attempt per GEOIP_RETRY_INTERVAL seconds.
+-- Returns true if the database is now available.
+function _M.try_init_geoip()
+    if _M.geoip_db then
+        return true
+    end
+    local now = ngx.time()
+    if now - geoip_last_attempt < GEOIP_RETRY_INTERVAL then
+        return false
+    end
+    geoip_last_attempt = now
+    return init_geoip()
 end
 
 -- ============================================================================
@@ -71,7 +97,10 @@ function _M.load_waf_rules()
     local url = _M.config.api_url .. "/api/internal/waf/rules"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then
@@ -110,7 +139,10 @@ function _M.load_blocked_ips()
     local url = _M.config.api_url .. "/api/internal/blocked-ips"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then
@@ -137,7 +169,10 @@ function _M.load_geoip_rules()
     local url = _M.config.api_url .. "/api/internal/geoip/rules"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then
@@ -164,7 +199,10 @@ function _M.load_rate_limit_rules()
     local url = _M.config.api_url .. "/api/internal/rate-limits"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then
@@ -191,7 +229,10 @@ function _M.load_trusted_ips()
     local url = _M.config.api_url .. "/api/internal/trusted-ips"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then
@@ -218,7 +259,10 @@ function _M.load_honeypot_traps()
     local url = _M.config.api_url .. "/api/internal/honeypot/traps"
     local res, err = httpc:request_uri(url, {
         method = "GET",
-        headers = { ["Content-Type"] = "application/json" },
+        headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = _M.config.internal_auth_token,
+        },
     })
 
     if not res then

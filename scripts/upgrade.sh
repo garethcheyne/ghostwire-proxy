@@ -185,18 +185,47 @@ fi
 # ─────────────────────────────────────────────
 log "Building new container images..."
 
+# Export BUILD_VERSION so docker compose passes it as a build arg to the UI Dockerfile.
+# This ensures each deployment gets a unique Next.js build ID, preventing stale
+# server action errors when clients load cached JS from a previous build.
+export BUILD_VERSION="$TARGET_SEMVER"
+
 $COMPOSE build --parallel 2>&1 | tail -5
 
-ok "Images built"
+ok "Images built (BUILD_VERSION=$BUILD_VERSION)"
 
 # ─────────────────────────────────────────────
 # 6. Apply database migrations & restart services
 # ─────────────────────────────────────────────
 # Alembic migrations run automatically on container start via entrypoint.sh.
-# Rebuilding and restarting handles everything: new code + new schema.
-log "Restarting services (migrations run automatically on start)..."
+# Services are restarted in dependency order to avoid "Failed to find Server Action"
+# errors caused by the UI starting before the API is healthy (stale client requests
+# hit the new server before it has registered its action IDs).
+log "Restarting services in dependency order..."
 
-$COMPOSE up -d --build ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater
+# Phase 1: Backend API (runs migrations on start)
+log "  Phase 1: Restarting API..."
+$COMPOSE up -d --build ghostwire-proxy-api
+
+# Wait for API to become healthy before restarting frontend
+API_HEALTHY=false
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:8089/health >/dev/null 2>&1; then
+        API_HEALTHY=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$API_HEALTHY" = true ]; then
+    ok "  API is healthy"
+else
+    warn "  API health check timed out (60s) — continuing with UI restart"
+fi
+
+# Phase 2: Frontend UI (depends on API) + nginx + updater
+log "  Phase 2: Restarting UI, nginx, updater..."
+$COMPOSE up -d --build ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater
 
 ok "Services restarted"
 
