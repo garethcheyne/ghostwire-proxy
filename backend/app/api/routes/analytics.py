@@ -215,51 +215,52 @@ async def get_analytics_dashboard(
 
     # Determine grouping interval based on period
     if period == "24h":
-        interval_hours = 1
         time_format = "%Y-%m-%d %H:00"
+        trunc_expr = func.date_trunc('hour', TrafficLog.timestamp)
     elif period == "7d":
-        interval_hours = 6
         time_format = "%Y-%m-%d %H:00"
-    elif period == "30d":
-        interval_hours = 24
-        time_format = "%Y-%m-%d"
-    else:  # 90d
-        interval_hours = 24 * 7
-        time_format = "%Y-%m-%d"
-
-    # Generate time buckets and aggregate
-    time_series = []
-    current_bucket = start_time
-
-    while current_bucket < now:
-        bucket_end = current_bucket + timedelta(hours=interval_hours)
-
-        bucket_filter = base_filter.copy()
-        bucket_filter[0] = TrafficLog.timestamp >= current_bucket
-        bucket_filter.append(TrafficLog.timestamp < bucket_end)
-
-        # Requests and unique visitors for this bucket
-        bucket_stats = await db.execute(
-            select(
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.coalesce(func.sum(TrafficLog.bytes_received), 0),
-                func.avg(TrafficLog.response_time)
-            ).where(and_(*bucket_filter))
+        # Truncate to 6-hour blocks
+        trunc_expr = func.to_timestamp(
+            func.floor(func.extract('epoch', TrafficLog.timestamp) / 21600) * 21600
         )
-        stats = bucket_stats.first()
+    elif period == "30d":
+        time_format = "%Y-%m-%d"
+        trunc_expr = func.date_trunc('day', TrafficLog.timestamp)
+    else:  # 90d
+        time_format = "%Y-%m-%d"
+        trunc_expr = func.date_trunc('week', TrafficLog.timestamp)
 
+    # Single query for entire time series
+    ts_query = (
+        select(
+            trunc_expr.label('bucket'),
+            func.count(TrafficLog.id),
+            func.count(distinct(TrafficLog.client_ip)),
+            func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+            func.coalesce(func.sum(TrafficLog.bytes_received), 0),
+            func.avg(TrafficLog.response_time),
+        )
+        .where(and_(*base_filter))
+        .group_by(text('1'))
+        .order_by(text('1'))
+    )
+    ts_result = await db.execute(ts_query)
+
+    time_series = []
+    for row in ts_result.all():
+        bucket_ts = row[0]
+        if bucket_ts is None:
+            continue
+        if isinstance(bucket_ts, (int, float)):
+            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
         time_series.append(TimeSeriesPoint(
-            timestamp=current_bucket.strftime(time_format),
-            requests=stats[0] or 0,
-            unique_visitors=stats[1] or 0,
-            bytes_sent=stats[2] or 0,
-            bytes_received=stats[3] or 0,
-            avg_response_time=round(float(stats[4]), 2) if stats[4] else None
+            timestamp=bucket_ts.strftime(time_format),
+            requests=row[1] or 0,
+            unique_visitors=row[2] or 0,
+            bytes_sent=row[3] or 0,
+            bytes_received=row[4] or 0,
+            avg_response_time=round(float(row[5]), 2) if row[5] else None,
         ))
-
-        current_bucket = bucket_end
 
     # === Status Breakdown ===
 
@@ -386,16 +387,21 @@ async def get_analytics_dashboard(
 
     # === Hourly Distribution ===
 
-    # Get all logs for the period and bucket by hour of day
-    all_logs_query = (
-        select(TrafficLog.timestamp)
+    # Aggregate by hour-of-day in SQL instead of loading all rows
+    hourly_query = (
+        select(
+            func.extract('hour', TrafficLog.timestamp).label('hour'),
+            func.count(TrafficLog.id).label('requests'),
+        )
         .where(and_(*base_filter))
+        .group_by(text('1'))
+        .order_by(text('1'))
     )
-    all_logs = (await db.execute(all_logs_query)).scalars().all()
+    hourly_result = await db.execute(hourly_query)
 
     hourly_counts = {h: 0 for h in range(24)}
-    for ts in all_logs:
-        hourly_counts[ts.hour] += 1
+    for row in hourly_result.all():
+        hourly_counts[int(row[0])] = row[1]
 
     hourly_distribution = [
         HourlyDistribution(hour=h, requests=c)
@@ -404,26 +410,41 @@ async def get_analytics_dashboard(
 
     # === Browser Stats ===
 
-    ua_query = (
-        select(TrafficLog.user_agent)
+    # Classify user agents in SQL using CASE to avoid loading all rows
+    browser_case = case(
+        (TrafficLog.user_agent.ilike('%edg%'), 'Edge'),
+        (TrafficLog.user_agent.ilike('%chrome%'), 'Chrome'),
+        (TrafficLog.user_agent.ilike('%firefox%'), 'Firefox'),
+        (TrafficLog.user_agent.ilike('%safari%'), 'Safari'),
+        (TrafficLog.user_agent.ilike('%opera%'), 'Opera'),
+        (TrafficLog.user_agent.ilike('%opr%'), 'Opera'),
+        (TrafficLog.user_agent.ilike('%bot%'), 'Bot'),
+        (TrafficLog.user_agent.ilike('%crawl%'), 'Bot'),
+        (TrafficLog.user_agent.ilike('%spider%'), 'Bot'),
+        (TrafficLog.user_agent.ilike('%curl%'), 'curl'),
+        (TrafficLog.user_agent.ilike('%python%'), 'Python'),
+        (TrafficLog.user_agent.is_(None), 'Unknown'),
+        else_='Other',
+    ).label('browser')
+
+    browser_query = (
+        select(browser_case, func.count(TrafficLog.id).label('count'))
         .where(and_(*base_filter))
+        .group_by(text('1'))
+        .order_by(func.count(TrafficLog.id).desc())
+        .limit(8)
     )
-    ua_result = (await db.execute(ua_query)).scalars().all()
+    browser_result = await db.execute(browser_query)
 
-    browser_counts: dict[str, int] = {}
-    for ua in ua_result:
-        browser = parse_user_agent(ua)
-        browser_counts[browser] = browser_counts.get(browser, 0) + 1
-
-    total_ua = sum(browser_counts.values())
-    browser_stats = sorted([
+    total_ua = total_requests or 1
+    browser_stats = [
         BrowserStats(
-            browser=browser,
-            requests=count,
-            percentage=round(count / total_ua * 100, 1) if total_ua > 0 else 0
+            browser=row[0],
+            requests=row[1],
+            percentage=round(row[1] / total_ua * 100, 1)
         )
-        for browser, count in browser_counts.items()
-    ], key=lambda x: x.requests, reverse=True)[:8]
+        for row in browser_result.all()
+    ]
 
     # === Country Stats ===
 

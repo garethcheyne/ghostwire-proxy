@@ -24,10 +24,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '1.0'
+          memory: 2G
+          cpus: '2.0'
         reservations:
-          memory: 128M
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghostwire} -d ${POSTGRES_DB:-ghostwire_proxy}"]
       interval: 10s
