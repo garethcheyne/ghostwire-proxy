@@ -1,8 +1,9 @@
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, distinct, case, text
+from sqlalchemy import select, func, and_, distinct, case, text, cast, String
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from pydantic import BaseModel
@@ -692,7 +693,7 @@ async def get_auth_errors(
         top_hosts_result = await db.execute(
             select(
                 TrafficLog.proxy_host_id,
-                ProxyHost.domain_names,
+                func.max(cast(ProxyHost.domain_names, String)).label("domain_names"),
                 func.count(TrafficLog.id).label("count"),
             )
             .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
@@ -700,17 +701,20 @@ async def get_auth_errors(
                 TrafficLog.timestamp >= start_time,
                 TrafficLog.status.in_([401, 403]),
             ))
-            .group_by(TrafficLog.proxy_host_id, ProxyHost.domain_names)
+            .group_by(TrafficLog.proxy_host_id)
             .order_by(func.count(TrafficLog.id).desc())
             .limit(10)
         )
-        top_hosts = [
-            {
-                "host": (row[1][0] if row[1] else "Unknown"),
+        top_hosts = []
+        for row in top_hosts_result.all():
+            try:
+                names = json.loads(row[1]) if row[1] else []
+            except (TypeError, ValueError):
+                names = []
+            top_hosts.append({
+                "host": (names[0] if names else "Unknown"),
                 "count": row[2],
-            }
-            for row in top_hosts_result.all()
-        ]
+            })
 
         # --- Failed logins from AuditLog ---
         failed_logins_count = (await db.execute(
