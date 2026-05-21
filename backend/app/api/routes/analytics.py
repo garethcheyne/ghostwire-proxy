@@ -140,6 +140,21 @@ async def get_analytics_dashboard(
 ):
     """Get comprehensive analytics dashboard data."""
 
+    # Cache key based on period + optional host filter
+    cache_key = f"analytics:dashboard:{period}:{proxy_host_id or 'all'}"
+
+    async def _compute():
+        return await _compute_dashboard(db, period, proxy_host_id)
+
+    # Cache for 60 seconds — dashboard doesn't need real-time data
+    result = await cached_json(cache_key, ttl=60, producer=_compute)
+    return result
+
+
+async def _compute_dashboard(
+    db: AsyncSession, period: str, proxy_host_id: Optional[str]
+) -> AnalyticsDashboard:
+
     # Calculate time ranges
     now = datetime.now(timezone.utc)
 
@@ -162,45 +177,46 @@ async def get_analytics_dashboard(
         base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
         prev_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
 
-    # === Current Period Stats ===
+    # === Current Period Stats + Status Breakdown (single query) ===
 
-    # Total requests
-    total_query = select(func.count(TrafficLog.id)).where(and_(*base_filter))
-    total_requests = (await db.execute(total_query)).scalar() or 0
-
-    # Unique visitors (by IP)
-    unique_query = select(func.count(distinct(TrafficLog.client_ip))).where(and_(*base_filter))
-    total_unique_visitors = (await db.execute(unique_query)).scalar() or 0
-
-    # Total bytes
-    bytes_query = select(
+    overview_query = select(
+        func.count(TrafficLog.id),
+        func.count(distinct(TrafficLog.client_ip)),
         func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-        func.coalesce(func.sum(TrafficLog.bytes_received), 0)
+        func.coalesce(func.sum(TrafficLog.bytes_received), 0),
+        func.avg(TrafficLog.response_time),
+        func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
+        func.sum(case((and_(TrafficLog.status >= 200, TrafficLog.status < 300), 1), else_=0)),
+        func.sum(case((and_(TrafficLog.status >= 300, TrafficLog.status < 400), 1), else_=0)),
+        func.sum(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1), else_=0)),
+        func.sum(case((TrafficLog.status >= 500, 1), else_=0)),
     ).where(and_(*base_filter))
-    bytes_result = (await db.execute(bytes_query)).first()
-    total_bytes_sent = bytes_result[0] if bytes_result else 0
-    total_bytes_received = bytes_result[1] if bytes_result else 0
+    ov = (await db.execute(overview_query)).first()
 
-    # Average response time
-    avg_rt_query = select(func.avg(TrafficLog.response_time)).where(
-        and_(*base_filter, TrafficLog.response_time.isnot(None))
-    )
-    avg_response_time = (await db.execute(avg_rt_query)).scalar()
-
-    # Error rate (4xx + 5xx)
-    error_query = select(func.count(TrafficLog.id)).where(
-        and_(*base_filter, TrafficLog.status >= 400)
-    )
-    error_count = (await db.execute(error_query)).scalar() or 0
+    total_requests = ov[0] or 0
+    total_unique_visitors = ov[1] or 0
+    total_bytes_sent = ov[2] or 0
+    total_bytes_received = ov[3] or 0
+    avg_response_time = ov[4]
+    error_count = ov[5] or 0
     error_rate = (error_count / total_requests * 100) if total_requests > 0 else 0
 
-    # === Previous Period Stats (for comparison) ===
+    status_breakdown = StatusBreakdown(
+        status_2xx=ov[6] or 0,
+        status_3xx=ov[7] or 0,
+        status_4xx=ov[8] or 0,
+        status_5xx=ov[9] or 0,
+    )
 
-    prev_requests_query = select(func.count(TrafficLog.id)).where(and_(*prev_filter))
-    prev_requests = (await db.execute(prev_requests_query)).scalar() or 0
+    # === Previous Period Stats (single query for comparison) ===
 
-    prev_visitors_query = select(func.count(distinct(TrafficLog.client_ip))).where(and_(*prev_filter))
-    prev_visitors = (await db.execute(prev_visitors_query)).scalar() or 0
+    prev_query = select(
+        func.count(TrafficLog.id),
+        func.count(distinct(TrafficLog.client_ip)),
+    ).where(and_(*prev_filter))
+    pv = (await db.execute(prev_query)).first()
+    prev_requests = pv[0] or 0
+    prev_visitors = pv[1] or 0
 
     # Calculate change percentages
     requests_change = None
@@ -261,22 +277,6 @@ async def get_analytics_dashboard(
             bytes_received=row[4] or 0,
             avg_response_time=round(float(row[5]), 2) if row[5] else None,
         ))
-
-    # === Status Breakdown (single query instead of 4) ===
-
-    status_breakdown_query = select(
-        func.sum(case((and_(TrafficLog.status >= 200, TrafficLog.status < 300), 1), else_=0)),
-        func.sum(case((and_(TrafficLog.status >= 300, TrafficLog.status < 400), 1), else_=0)),
-        func.sum(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1), else_=0)),
-        func.sum(case((TrafficLog.status >= 500, 1), else_=0)),
-    ).where(and_(*base_filter))
-    sb_result = (await db.execute(status_breakdown_query)).first()
-    status_breakdown = StatusBreakdown(
-        status_2xx=sb_result[0] or 0,
-        status_3xx=sb_result[1] or 0,
-        status_4xx=sb_result[2] or 0,
-        status_5xx=sb_result[3] or 0,
-    )
 
     # === Requests by Method ===
 
