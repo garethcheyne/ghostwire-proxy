@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+import json
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, case, delete as sa_delete
+from sqlalchemy import select, func, and_, case, delete as sa_delete, cast, String
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -156,23 +157,26 @@ async def get_traffic_stats(
         top_hosts_result = await db.execute(
             select(
                 TrafficLog.proxy_host_id,
-                ProxyHost.domain_names,
+                func.max(cast(ProxyHost.domain_names, String)).label("domain_names"),
                 func.count(TrafficLog.id).label("count"),
             )
             .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
             .where(base_where)
-            .group_by(TrafficLog.proxy_host_id, ProxyHost.domain_names)
+            .group_by(TrafficLog.proxy_host_id)
             .order_by(func.count(TrafficLog.id).desc())
             .limit(10)
         )
-        top_hosts = [
-            {
+        top_hosts = []
+        for row in top_hosts_result.all():
+            try:
+                names = json.loads(row[1]) if row[1] else []
+            except (TypeError, ValueError):
+                names = []
+            top_hosts.append({
                 "host_id": row[0],
-                "name": (row[1][0] if row[1] else "Unknown"),
+                "name": (names[0] if names else "Unknown"),
                 "count": row[2],
-            }
-            for row in top_hosts_result.all()
-        ]
+            })
 
         return TrafficStatsResponse(
             total_requests=agg.total or 0,
