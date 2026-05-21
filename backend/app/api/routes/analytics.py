@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, distinct, case, text
@@ -5,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from pydantic import BaseModel
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.cache import cached_json
 from app.models.user import User
 from app.models.traffic_log import TrafficLog
@@ -177,7 +179,7 @@ async def _compute_dashboard(
         base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
         prev_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
 
-    # === Current Period Stats + Status Breakdown (single query) ===
+    # === Phase 1: Overview + Prev period + Hosts (needed by later queries) ===
 
     overview_query = select(
         func.count(TrafficLog.id),
@@ -191,7 +193,27 @@ async def _compute_dashboard(
         func.sum(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1), else_=0)),
         func.sum(case((TrafficLog.status >= 500, 1), else_=0)),
     ).where(and_(*base_filter))
-    ov = (await db.execute(overview_query)).first()
+
+    prev_query = select(
+        func.count(TrafficLog.id),
+        func.count(distinct(TrafficLog.client_ip)),
+    ).where(and_(*prev_filter))
+
+    # Run overview, prev_period, and host prefetch concurrently
+    async def _run_overview():
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(overview_query)).first()
+
+    async def _run_prev():
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(prev_query)).first()
+
+    async def _run_hosts():
+        async with AsyncSessionLocal() as s:
+            result = await s.execute(select(ProxyHost))
+            return {h.id: h for h in result.scalars().all()}
+
+    ov, pv, host_map = await asyncio.gather(_run_overview(), _run_prev(), _run_hosts())
 
     total_requests = ov[0] or 0
     total_unique_visitors = ov[1] or 0
@@ -208,17 +230,9 @@ async def _compute_dashboard(
         status_5xx=ov[9] or 0,
     )
 
-    # === Previous Period Stats (single query for comparison) ===
-
-    prev_query = select(
-        func.count(TrafficLog.id),
-        func.count(distinct(TrafficLog.client_ip)),
-    ).where(and_(*prev_filter))
-    pv = (await db.execute(prev_query)).first()
     prev_requests = pv[0] or 0
     prev_visitors = pv[1] or 0
 
-    # Calculate change percentages
     requests_change = None
     if prev_requests > 0:
         requests_change = ((total_requests - prev_requests) / prev_requests) * 100
@@ -227,15 +241,18 @@ async def _compute_dashboard(
     if prev_visitors > 0:
         visitors_change = ((total_unique_visitors - prev_visitors) / prev_visitors) * 100
 
-    # === Time Series ===
+    def get_host_name(host_id):
+        h = host_map.get(host_id)
+        return h.domain_names[0] if h and h.domain_names else "Unknown"
 
-    # Determine grouping interval based on period
+    # === Phase 2: Run all remaining queries concurrently ===
+
+    # Time series
     if period == "24h":
         time_format = "%Y-%m-%d %H:00"
         trunc_expr = func.date_trunc('hour', TrafficLog.timestamp)
     elif period == "7d":
         time_format = "%Y-%m-%d %H:00"
-        # Truncate to 6-hour blocks
         trunc_expr = func.to_timestamp(
             func.floor(func.extract('epoch', TrafficLog.timestamp) / 21600) * 21600
         )
@@ -246,7 +263,6 @@ async def _compute_dashboard(
         time_format = "%Y-%m-%d"
         trunc_expr = func.date_trunc('week', TrafficLog.timestamp)
 
-    # Single query for entire time series
     ts_query = (
         select(
             trunc_expr.label('bucket'),
@@ -260,44 +276,12 @@ async def _compute_dashboard(
         .group_by(text('1'))
         .order_by(text('1'))
     )
-    ts_result = await db.execute(ts_query)
-
-    time_series = []
-    for row in ts_result.all():
-        bucket_ts = row[0]
-        if bucket_ts is None:
-            continue
-        if isinstance(bucket_ts, (int, float)):
-            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
-        time_series.append(TimeSeriesPoint(
-            timestamp=bucket_ts.strftime(time_format),
-            requests=row[1] or 0,
-            unique_visitors=row[2] or 0,
-            bytes_sent=row[3] or 0,
-            bytes_received=row[4] or 0,
-            avg_response_time=round(float(row[5]), 2) if row[5] else None,
-        ))
-
-    # === Requests by Method ===
 
     method_query = (
         select(TrafficLog.request_method, func.count(TrafficLog.id))
         .where(and_(*base_filter))
         .group_by(TrafficLog.request_method)
     )
-    method_result = await db.execute(method_query)
-    requests_by_method = {row[0]: row[1] for row in method_result.all()}
-
-    # === Pre-fetch all proxy hosts (avoids N+1 lookups later) ===
-
-    all_hosts_result = await db.execute(select(ProxyHost))
-    host_map = {h.id: h for h in all_hosts_result.scalars().all()}
-
-    def get_host_name(host_id):
-        h = host_map.get(host_id)
-        return h.domain_names[0] if h and h.domain_names else "Unknown"
-
-    # === Top Hosts ===
 
     top_hosts_query = (
         select(
@@ -313,22 +297,6 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
     )
-    top_hosts_result = await db.execute(top_hosts_query)
-
-    top_hosts = []
-    for row in top_hosts_result.all():
-        host_error_rate = (row[5] / row[1] * 100) if row[1] > 0 else 0
-        top_hosts.append(HostStats(
-            host_id=row[0],
-            host_name=get_host_name(row[0]),
-            requests=row[1],
-            unique_visitors=row[2],
-            bytes_sent=row[3],
-            avg_response_time=round(float(row[4]), 2) if row[4] else None,
-            error_rate=round(host_error_rate, 2)
-        ))
-
-    # === Top Pages ===
 
     top_pages_query = (
         select(
@@ -341,18 +309,6 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
     )
-    top_pages_result = await db.execute(top_pages_query)
-
-    top_pages = [
-        TopPage(
-            uri=row[0][:100],  # Truncate long URIs
-            requests=row[1],
-            avg_response_time=round(float(row[2]), 2) if row[2] else None
-        )
-        for row in top_pages_result.all()
-    ]
-
-    # === Top Referrers ===
 
     top_referrers_query = (
         select(
@@ -364,14 +320,6 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
     )
-    top_referrers_result = await db.execute(top_referrers_query)
-
-    top_referrers = [
-        TopReferrer(referer=row[0][:100], requests=row[1])
-        for row in top_referrers_result.all()
-    ]
-
-    # === Top IPs ===
 
     top_ips_query = (
         select(
@@ -385,12 +333,7 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
     )
-    top_ips_result = await db.execute(top_ips_query)
-    top_ips = [{"ip": row[0], "requests": row[1], "country_code": row[2], "country_name": row[3]} for row in top_ips_result.all()]
 
-    # === Hourly Distribution ===
-
-    # Aggregate by hour-of-day in SQL instead of loading all rows
     hourly_query = (
         select(
             func.extract('hour', TrafficLog.timestamp).label('hour'),
@@ -400,20 +343,7 @@ async def _compute_dashboard(
         .group_by(text('1'))
         .order_by(text('1'))
     )
-    hourly_result = await db.execute(hourly_query)
 
-    hourly_counts = {h: 0 for h in range(24)}
-    for row in hourly_result.all():
-        hourly_counts[int(row[0])] = row[1]
-
-    hourly_distribution = [
-        HourlyDistribution(hour=h, requests=c)
-        for h, c in sorted(hourly_counts.items())
-    ]
-
-    # === Browser Stats ===
-
-    # Classify user agents in SQL using CASE to avoid loading all rows
     browser_case = case(
         (TrafficLog.user_agent.ilike('%edg%'), 'Edge'),
         (TrafficLog.user_agent.ilike('%chrome%'), 'Chrome'),
@@ -437,19 +367,6 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(8)
     )
-    browser_result = await db.execute(browser_query)
-
-    total_ua = total_requests or 1
-    browser_stats = [
-        BrowserStats(
-            browser=row[0],
-            requests=row[1],
-            percentage=round(row[1] / total_ua * 100, 1)
-        )
-        for row in browser_result.all()
-    ]
-
-    # === Country Stats ===
 
     country_query = (
         select(
@@ -461,13 +378,6 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(10)
     )
-    country_result = await db.execute(country_query)
-    country_stats = [
-        {"country": row[0], "requests": row[1]}
-        for row in country_result.all()
-    ]
-
-    # === Errors by Host ===
 
     errors_by_host_query = (
         select(
@@ -480,10 +390,124 @@ async def _compute_dashboard(
         .order_by(func.count(TrafficLog.id).desc())
         .limit(50)
     )
-    errors_by_host_result = await db.execute(errors_by_host_query)
 
+    errors_by_status_query = (
+        select(
+            TrafficLog.status,
+            func.count(TrafficLog.id).label('count'),
+        )
+        .where(and_(*base_filter, TrafficLog.status >= 400))
+        .group_by(TrafficLog.status)
+        .order_by(func.count(TrafficLog.id).desc())
+    )
+
+    # Execute all 10 queries concurrently using separate sessions from the pool
+    async def _exec(query):
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(query)).all()
+
+    (
+        ts_rows, method_rows, hosts_rows, pages_rows,
+        referrers_rows, ips_rows, hourly_rows, browser_rows,
+        country_rows, err_host_rows, err_status_rows,
+    ) = await asyncio.gather(
+        _exec(ts_query),
+        _exec(method_query),
+        _exec(top_hosts_query),
+        _exec(top_pages_query),
+        _exec(top_referrers_query),
+        _exec(top_ips_query),
+        _exec(hourly_query),
+        _exec(browser_query),
+        _exec(country_query),
+        _exec(errors_by_host_query),
+        _exec(errors_by_status_query),
+    )
+
+    # === Format results ===
+
+    # Time series
+    time_series = []
+    for row in ts_rows:
+        bucket_ts = row[0]
+        if bucket_ts is None:
+            continue
+        if isinstance(bucket_ts, (int, float)):
+            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+        time_series.append(TimeSeriesPoint(
+            timestamp=bucket_ts.strftime(time_format),
+            requests=row[1] or 0,
+            unique_visitors=row[2] or 0,
+            bytes_sent=row[3] or 0,
+            bytes_received=row[4] or 0,
+            avg_response_time=round(float(row[5]), 2) if row[5] else None,
+        ))
+
+    # Method breakdown
+    requests_by_method = {row[0]: row[1] for row in method_rows}
+
+    # Top hosts
+    top_hosts = []
+    for row in hosts_rows:
+        host_error_rate = (row[5] / row[1] * 100) if row[1] > 0 else 0
+        top_hosts.append(HostStats(
+            host_id=row[0],
+            host_name=get_host_name(row[0]),
+            requests=row[1],
+            unique_visitors=row[2],
+            bytes_sent=row[3],
+            avg_response_time=round(float(row[4]), 2) if row[4] else None,
+            error_rate=round(host_error_rate, 2)
+        ))
+
+    # Top pages
+    top_pages = [
+        TopPage(
+            uri=row[0][:100],
+            requests=row[1],
+            avg_response_time=round(float(row[2]), 2) if row[2] else None
+        )
+        for row in pages_rows
+    ]
+
+    # Top referrers
+    top_referrers = [
+        TopReferrer(referer=row[0][:100], requests=row[1])
+        for row in referrers_rows
+    ]
+
+    # Top IPs
+    top_ips = [{"ip": row[0], "requests": row[1], "country_code": row[2], "country_name": row[3]} for row in ips_rows]
+
+    # Hourly distribution
+    hourly_counts = {h: 0 for h in range(24)}
+    for row in hourly_rows:
+        hourly_counts[int(row[0])] = row[1]
+    hourly_distribution = [
+        HourlyDistribution(hour=h, requests=c)
+        for h, c in sorted(hourly_counts.items())
+    ]
+
+    # Browser stats
+    total_ua = total_requests or 1
+    browser_stats = [
+        BrowserStats(
+            browser=row[0],
+            requests=row[1],
+            percentage=round(row[1] / total_ua * 100, 1)
+        )
+        for row in browser_rows
+    ]
+
+    # Country stats
+    country_stats = [
+        {"country": row[0], "requests": row[1]}
+        for row in country_rows
+    ]
+
+    # Errors by host
     errors_by_host_raw: dict[str, dict] = {}
-    for row in errors_by_host_result.all():
+    for row in err_host_rows:
         host_id = row[0]
         if host_id not in errors_by_host_raw:
             errors_by_host_raw[host_id] = {
@@ -501,21 +525,10 @@ async def _compute_dashboard(
         reverse=True,
     )[:10]
 
-    # === Errors by Status Code ===
-
-    errors_by_status_query = (
-        select(
-            TrafficLog.status,
-            func.count(TrafficLog.id).label('count'),
-        )
-        .where(and_(*base_filter, TrafficLog.status >= 400))
-        .group_by(TrafficLog.status)
-        .order_by(func.count(TrafficLog.id).desc())
-    )
-    errors_by_status_result = await db.execute(errors_by_status_query)
+    # Errors by status
     errors_by_status = [
         {"status": row[0], "count": row[1]}
-        for row in errors_by_status_result.all()
+        for row in err_status_rows
     ]
 
     return AnalyticsDashboard(
