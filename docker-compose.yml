@@ -40,7 +40,7 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
     container_name: ghostwire-proxy-nginx
-    restart: unless-stopped
+    restart: always
     ports:
       - "80:80"
       - "443:443"
