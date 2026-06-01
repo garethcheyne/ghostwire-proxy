@@ -1,6 +1,6 @@
 {
   "name": "ghostwire-proxy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "<p align=\"center\">\r   <img src=\"frontend/public/logo-teal.png\" alt=\"Ghostwire Proxy\" width=\"120\" />\r </p>",
   "main": "index.js",
   "scripts": {

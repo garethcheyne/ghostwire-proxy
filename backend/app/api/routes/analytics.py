@@ -149,8 +149,9 @@ async def get_analytics_dashboard(
     async def _compute():
         return await _compute_dashboard(db, period, proxy_host_id)
 
-    # Cache for 60 seconds — dashboard doesn't need real-time data
-    result = await cached_json(cache_key, ttl=60, producer=_compute)
+    # Longer periods change slowly — scale TTL accordingly
+    ttl_map = {"24h": 60, "7d": 120, "30d": 300, "90d": 600}
+    result = await cached_json(cache_key, ttl=ttl_map.get(period, 60), producer=_compute)
     return result
 
 
@@ -558,45 +559,34 @@ async def _compute_dashboard(
 @router.get("/realtime")
 async def get_realtime_stats(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """Get real-time stats for the last 5 minutes."""
 
-    now = datetime.now(timezone.utc)
-    five_min_ago = now - timedelta(minutes=5)
-    one_min_ago = now - timedelta(minutes=1)
+    async def _compute():
+        now = datetime.now(timezone.utc)
+        five_min_ago = now - timedelta(minutes=5)
+        one_min_ago = now - timedelta(minutes=1)
 
-    # Requests in last 5 minutes
-    five_min_query = select(func.count(TrafficLog.id)).where(
-        TrafficLog.timestamp >= five_min_ago
-    )
-    requests_5min = (await db.execute(five_min_query)).scalar() or 0
+        async def _q(query):
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(query)).scalar() or 0
 
-    # Requests in last minute
-    one_min_query = select(func.count(TrafficLog.id)).where(
-        TrafficLog.timestamp >= one_min_ago
-    )
-    requests_1min = (await db.execute(one_min_query)).scalar() or 0
+        requests_5min, requests_1min, active_visitors, recent_errors = await asyncio.gather(
+            _q(select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= five_min_ago)),
+            _q(select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= one_min_ago)),
+            _q(select(func.count(distinct(TrafficLog.client_ip))).where(TrafficLog.timestamp >= five_min_ago)),
+            _q(select(func.count(TrafficLog.id)).where(and_(TrafficLog.timestamp >= five_min_ago, TrafficLog.status >= 400))),
+        )
 
-    # Active visitors (unique IPs in last 5 min)
-    active_query = select(func.count(distinct(TrafficLog.client_ip))).where(
-        TrafficLog.timestamp >= five_min_ago
-    )
-    active_visitors = (await db.execute(active_query)).scalar() or 0
+        return {
+            "requests_per_minute": requests_1min,
+            "requests_last_5min": requests_5min,
+            "active_visitors": active_visitors,
+            "recent_errors": recent_errors,
+            "timestamp": now.isoformat(),
+        }
 
-    # Recent errors
-    error_query = select(func.count(TrafficLog.id)).where(
-        and_(TrafficLog.timestamp >= five_min_ago, TrafficLog.status >= 400)
-    )
-    recent_errors = (await db.execute(error_query)).scalar() or 0
-
-    return {
-        "requests_per_minute": requests_1min,
-        "requests_last_5min": requests_5min,
-        "active_visitors": active_visitors,
-        "recent_errors": recent_errors,
-        "timestamp": now.isoformat(),
-    }
+    return await cached_json("analytics:realtime", ttl=10, producer=_compute)
 
 
 @router.get("/auth-errors")

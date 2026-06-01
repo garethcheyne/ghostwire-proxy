@@ -225,76 +225,78 @@ class SystemMonitorService:
 
     async def _get_container_info(self) -> list:
         """Get Docker container information."""
-        containers = []
-
         if not self.docker_client:
-            return containers
+            return []
 
+        loop = asyncio.get_event_loop()
         try:
-            # Filter for ghostwire-proxy containers
-            docker_containers = self.docker_client.containers.list(
-                all=True,
-                filters={"name": "ghostwire-proxy"}
+            docker_containers = await loop.run_in_executor(
+                None,
+                lambda: self.docker_client.containers.list(
+                    all=True, filters={"name": "ghostwire-proxy"}
+                ),
             )
 
-            for container in docker_containers:
-                try:
-                    # Get container stats
-                    stats = container.stats(stream=False)
-
-                    # Calculate CPU percentage
-                    cpu_percent = self._calculate_container_cpu(stats)
-
-                    # Calculate memory usage
-                    memory_stats = stats.get("memory_stats", {})
-                    memory_used = memory_stats.get("usage", 0)
-                    memory_limit = memory_stats.get("limit", 0)
-                    memory_percent = (memory_used / memory_limit * 100) if memory_limit > 0 else 0
-
-                    # Get network stats
-                    networks = stats.get("networks", {})
-                    network_rx = sum(n.get("rx_bytes", 0) for n in networks.values())
-                    network_tx = sum(n.get("tx_bytes", 0) for n in networks.values())
-
-                    # Parse started time
-                    started_at = None
-                    if container.attrs.get("State", {}).get("StartedAt"):
-                        try:
-                            started_str = container.attrs["State"]["StartedAt"]
-                            if started_str and started_str != "0001-01-01T00:00:00Z":
-                                # Handle nanoseconds in timestamp
-                                if "." in started_str:
-                                    started_str = started_str.split(".")[0] + "Z"
-                                started_at = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-                        except Exception:
-                            pass
-
-                    containers.append({
-                        "name": container.name,
-                        "id": container.short_id,
-                        "status": container.status,
-                        "cpu_percent": round(cpu_percent, 1),
-                        "memory_used": memory_used,
-                        "memory_limit": memory_limit,
-                        "memory_percent": round(memory_percent, 1),
-                        "network_rx_bytes": network_rx,
-                        "network_tx_bytes": network_tx,
-                        "started_at": started_at.isoformat() if started_at else None,
-                        "uptime": self._calculate_uptime(started_at) if started_at else None,
-                    })
-                except Exception as e:
-                    logger.debug(f"Error getting stats for container {container.name}: {e}")
-                    containers.append({
-                        "name": container.name,
-                        "id": container.short_id,
-                        "status": container.status,
-                        "error": str(e),
-                    })
+            # Fetch stats for all containers in parallel — each stats() call blocks ~1s
+            tasks = [
+                loop.run_in_executor(None, self._get_single_container_info, c)
+                for c in docker_containers
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return [r for r in results if not isinstance(r, Exception)]
 
         except Exception as e:
             logger.warning(f"Error listing containers: {e}")
+            return []
 
-        return containers
+    def _get_single_container_info(self, container) -> dict:
+        """Fetch stats for one container (runs in thread pool)."""
+        try:
+            stats = container.stats(stream=False)
+
+            cpu_percent = self._calculate_container_cpu(stats)
+
+            memory_stats = stats.get("memory_stats", {})
+            memory_used = memory_stats.get("usage", 0)
+            memory_limit = memory_stats.get("limit", 0)
+            memory_percent = (memory_used / memory_limit * 100) if memory_limit > 0 else 0
+
+            networks = stats.get("networks", {})
+            network_rx = sum(n.get("rx_bytes", 0) for n in networks.values())
+            network_tx = sum(n.get("tx_bytes", 0) for n in networks.values())
+
+            started_at = None
+            if container.attrs.get("State", {}).get("StartedAt"):
+                try:
+                    started_str = container.attrs["State"]["StartedAt"]
+                    if started_str and started_str != "0001-01-01T00:00:00Z":
+                        if "." in started_str:
+                            started_str = started_str.split(".")[0] + "Z"
+                        started_at = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+
+            return {
+                "name": container.name,
+                "id": container.short_id,
+                "status": container.status,
+                "cpu_percent": round(cpu_percent, 1),
+                "memory_used": memory_used,
+                "memory_limit": memory_limit,
+                "memory_percent": round(memory_percent, 1),
+                "network_rx_bytes": network_rx,
+                "network_tx_bytes": network_tx,
+                "started_at": started_at.isoformat() if started_at else None,
+                "uptime": self._calculate_uptime(started_at) if started_at else None,
+            }
+        except Exception as e:
+            logger.debug(f"Error getting stats for container {container.name}: {e}")
+            return {
+                "name": container.name,
+                "id": container.short_id,
+                "status": container.status,
+                "error": str(e),
+            }
 
     def _calculate_container_cpu(self, stats: dict) -> float:
         """Calculate container CPU percentage from Docker stats."""
@@ -449,38 +451,41 @@ class SystemMonitorService:
         self,
         db: AsyncSession,
         start_time: datetime,
-        interval: timedelta
+        interval: timedelta,
     ) -> list:
-        """Aggregate traffic logs into throughput data."""
-        now = datetime.now(timezone.utc)
-        throughput = []
-        current = start_time
+        """Aggregate traffic logs into throughput buckets using a single query."""
+        interval_seconds = int(interval.total_seconds())
 
-        while current < now:
-            bucket_end = current + interval
+        # One aggregated query using epoch arithmetic instead of N per-bucket queries
+        query = text("""
+            SELECT
+                to_timestamp(
+                    floor(extract(epoch FROM timestamp) / :interval) * :interval
+                ) AT TIME ZONE 'UTC' AS bucket,
+                count(*) AS requests,
+                coalesce(sum(bytes_sent), 0) AS bytes_sent,
+                coalesce(sum(bytes_received), 0) AS bytes_received
+            FROM traffic_logs
+            WHERE timestamp >= :start_time
+            GROUP BY bucket
+            ORDER BY bucket
+        """)
 
-            query = select(
-                func.count(TrafficLog.id),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.coalesce(func.sum(TrafficLog.bytes_received), 0),
-            ).where(
-                TrafficLog.timestamp >= current,
-                TrafficLog.timestamp < bucket_end
-            )
+        result = await db.execute(
+            query,
+            {"interval": interval_seconds, "start_time": start_time},
+        )
+        rows = result.fetchall()
 
-            result = await db.execute(query)
-            row = result.first()
-
-            throughput.append({
-                "timestamp": current.isoformat(),
-                "requests": row[0] or 0,
-                "bytes_sent": row[1] or 0,
-                "bytes_received": row[2] or 0,
-            })
-
-            current = bucket_end
-
-        return throughput
+        return [
+            {
+                "timestamp": row.bucket.isoformat(),
+                "requests": row.requests,
+                "bytes_sent": row.bytes_sent,
+                "bytes_received": row.bytes_received,
+            }
+            for row in rows
+        ]
 
     async def collect_and_store_metrics(self):
         """Collect current metrics and store in database."""
