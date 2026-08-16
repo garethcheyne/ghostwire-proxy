@@ -3,10 +3,21 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (postgresql-client for pg_dump/psql backup/restore)
+# Install system dependencies (postgresql-client for pg_dump/psql backup/restore).
+# Pinned to -16 to match the postgres:16-alpine server in docker-compose.yml —
+# Debian's default "postgresql-client" metapackage tracks whatever major version
+# is current for the base image's release (17 as of this writing), and a pg_dump
+# from a newer major version writes an archive format the server's own pg_restore
+# can't read. Pulled from the official PGDG apt repo since Debian's default repos
+# only carry one (the newest) major version.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    postgresql-client \
+    gnupg \
+    ca-certificates \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client-16 \
     gosu \
     && rm -rf /var/lib/apt/lists/*
 
