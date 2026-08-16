@@ -476,6 +476,55 @@ async def lifespan(app: FastAPI):
     retention_task = asyncio.create_task(data_retention_loop())
     logger.info("Started data retention cleanup task")
 
+    # Certificate auto-renewal — checks for Let's Encrypt certs nearing expiry
+    # and renews + deploys (writes cert files, regenerates nginx configs,
+    # reloads nginx) them automatically. Previously renewal only happened if
+    # someone clicked "Renew" in the UI, which is why certs were quietly
+    # expiring despite "auto renew" being on.
+    from app.services.certificate_service import check_expiring_certificates, renew_and_deploy_certificate
+
+    async def certificate_renewal_loop():
+        """Periodically renew Let's Encrypt certificates approaching expiry."""
+        # Wait 2 minutes on startup before first check
+        await asyncio.sleep(120)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    due = await check_expiring_certificates(
+                        session, days_before_expiry=30, send_notifications=True,
+                    )
+
+                if due:
+                    logger.info(
+                        "Certificate auto-renewal: %d certificate(s) due for renewal",
+                        len(due),
+                    )
+                    for cert in due:
+                        domain = cert.domain_names[0] if cert.domain_names else cert.id
+                        try:
+                            success, message = await renew_and_deploy_certificate(cert.id)
+                            if success:
+                                logger.info("Certificate auto-renewal: renewed %s", domain)
+                            else:
+                                logger.warning(
+                                    "Certificate auto-renewal: failed to renew %s: %s",
+                                    domain, message,
+                                )
+                        except Exception as e:
+                            logger.error("Certificate auto-renewal: error renewing %s: %s", domain, e)
+                else:
+                    logger.debug("Certificate auto-renewal: nothing due")
+            except asyncio.CancelledError:
+                logger.info("Certificate auto-renewal task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in certificate auto-renewal: {e}")
+            # Re-check every 12 hours
+            await asyncio.sleep(43200)
+
+    certificate_renewal_task = asyncio.create_task(certificate_renewal_loop())
+    logger.info("Started certificate auto-renewal task")
+
     yield
 
     # Cancel background tasks
@@ -485,6 +534,7 @@ async def lifespan(app: FastAPI):
     update_check_task.cancel()
     enrichment_backfill_task.cancel()
     retention_task.cancel()
+    certificate_renewal_task.cancel()
     try:
         await metrics_task
     except asyncio.CancelledError:
@@ -507,6 +557,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await retention_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await certificate_renewal_task
     except asyncio.CancelledError:
         pass
 

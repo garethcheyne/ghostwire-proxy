@@ -164,24 +164,20 @@ services:
       timeout: 10s
       retries: 3
 
-  # Certbot for Let's Encrypt (runs renewal check every 12 hours)
-  ghostwire-proxy-certbot:
-    build:
-      context: ./certbot
-      dockerfile: Dockerfile
-    container_name: ghostwire-proxy-certbot
-    restart: unless-stopped
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
-    volumes:
-      - ./data/letsencrypt:/etc/letsencrypt
-      - certbot-webroot:/var/www/certbot
-    networks:
-      - ghostwire-proxy-network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
+  # NOTE: there used to be a standalone `ghostwire-proxy-certbot` container here
+  # running its own independent `certbot renew` loop every 12h against the same
+  # ./data/letsencrypt volume. It worked (it kept the underlying Let's Encrypt
+  # certs renewed), but it never deployed the renewed cert anywhere — no deploy
+  # hook, no API/DB update, no nginx reload — so nginx kept serving the
+  # original cert until it expired, while a fresh renewed one sat unused right
+  # next to it. It also risked racing with the API container's own certbot
+  # calls against the same on-disk config/lock directory.
+  #
+  # The API container already bundles the `certbot` binary and mounts the same
+  # /etc/letsencrypt + certbot-webroot volumes, and now runs its own
+  # certificate_renewal_loop (see backend/app/main.py) that renews AND deploys
+  # (writes cert files, regenerates nginx configs, reloads nginx) on a 12h
+  # cycle. That replaces this container entirely — see enhancement/01.
 
   # Redis for caching and queues (hardened — no external access)
   ghostwire-proxy-redis:
