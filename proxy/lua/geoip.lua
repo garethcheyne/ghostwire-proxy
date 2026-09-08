@@ -119,7 +119,7 @@ function _M.access(rules)
 
     for _, rule in ipairs(db_rules) do
         -- Apply global rules (no proxy_host_id) or host-specific rules
-        local applies = (rule.proxy_host_id == nil or rule.proxy_host_id == ngx.var.proxy_host_id)
+        local applies = init.rule_applies_to_host(rule.proxy_host_id, ngx.var.proxy_host_id)
 
         if applies then
             local allowed = true

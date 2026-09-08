@@ -139,6 +139,8 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
                   stroke={COLORS[0]} fill={COLORS[0]} fillOpacity={0.2} />
             <Area yAxisId="right" type="monotone" dataKey="unique_visitors" name="Unique visitors"
                   stroke={COLORS[1]} fill={COLORS[1]} fillOpacity={0.2} />
+            <Area yAxisId="left" type="monotone" dataKey="bot_requests" name="Bot requests"
+                  stroke={COLORS[5]} fill={COLORS[5]} fillOpacity={0.15} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

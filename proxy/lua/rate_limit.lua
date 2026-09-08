@@ -28,7 +28,7 @@ local function get_limits_for_host(host)
     local global_rule = nil
     local host_rule = nil
     for _, rule in ipairs(db_rules) do
-        if rule.proxy_host_id == nil then
+        if init.is_global_rule(rule.proxy_host_id) then
             global_rule = rule
         elseif host_id and rule.proxy_host_id == host_id then
             host_rule = rule

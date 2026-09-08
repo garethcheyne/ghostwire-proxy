@@ -47,6 +47,12 @@ local log_data = {
     -- validated this request (set by auth_wall.lua). nil for public traffic.
     auth_user = ngx.ctx.auth_user,
 
+    -- Lets the API separate long-lived connections (websocket upgrades, SSE)
+    -- from genuinely slow requests. A stream that stays open for ten minutes is
+    -- not a ten-minute response time.
+    upgrade = ngx.var.upstream_http_upgrade or ngx.var.http_upgrade,
+    content_type = ngx.var.sent_http_content_type,
+
     -- Response info
     status_code = ngx.status,
     response_time_ms = (tonumber(ngx.var.request_time) or 0) * 1000,

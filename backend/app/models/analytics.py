@@ -16,6 +16,12 @@ class AnalyticsHourly(Base):
     bytes_sent = Column(Integer, default=0)
     bytes_received = Column(Integer, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
+    # Percentiles, because a mean hides the tail: a host whose typical request
+    # is 30ms but whose p95 is the 60s proxy timeout looks "13s average" and
+    # tells you nothing useful.
+    p95_response_time_ms = Column(Integer, nullable=True)
+    p99_response_time_ms = Column(Integer, nullable=True)
+    bot_requests = Column(Integer, default=0)
     status_2xx = Column(Integer, default=0)
     status_3xx = Column(Integer, default=0)
     status_4xx = Column(Integer, default=0)
@@ -39,6 +45,9 @@ class AnalyticsDaily(Base):
     bytes_sent = Column(Integer, default=0)
     bytes_received = Column(Integer, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
+    p95_response_time_ms = Column(Integer, nullable=True)
+    p99_response_time_ms = Column(Integer, nullable=True)
+    bot_requests = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
     top_countries = Column(String, nullable=True)  # JSON
     top_ips = Column(String, nullable=True)  # JSON

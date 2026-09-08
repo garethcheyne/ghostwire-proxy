@@ -770,6 +770,9 @@ class TrendPoint(BaseModel):
     bytes_sent: int
     bytes_received: int
     avg_response_time: Optional[int] = None
+    p95_response_time: Optional[int] = None
+    p99_response_time: Optional[int] = None
+    bot_requests: int = 0
 
 
 class HostTrendSeries(BaseModel):
@@ -822,6 +825,7 @@ async def get_trends(
             t = totals.setdefault(r.date, {
                 "date": r.date, "requests": 0, "unique_visitors": 0, "blocked": 0,
                 "threats": 0, "bytes_sent": 0, "bytes_received": 0,
+                "bot_requests": 0, "p95_response_time": None, "p99_response_time": None,
                 "_rt_weighted": 0, "_rt_requests": 0,
             })
             t["requests"] += r.total_requests or 0
@@ -830,6 +834,13 @@ async def get_trends(
             t["bytes_sent"] += r.bytes_sent or 0
             t["bytes_received"] += r.bytes_received or 0
             t["unique_visitors"] = max(t["unique_visitors"], r.unique_ips or 0)
+            t["bot_requests"] += r.bot_requests or 0
+            # Percentiles can't be averaged across hosts, so the fleet figure is
+            # the worst host that day — which is the one you'd want to act on.
+            for key, value in (("p95_response_time", r.p95_response_time_ms),
+                               ("p99_response_time", r.p99_response_time_ms)):
+                if value is not None:
+                    t[key] = value if t[key] is None else max(t[key], value)
             if r.avg_response_time_ms and r.total_requests:
                 t["_rt_weighted"] += r.avg_response_time_ms * r.total_requests
                 t["_rt_requests"] += r.total_requests
@@ -843,6 +854,9 @@ async def get_trends(
                 "bytes_sent": r.bytes_sent or 0,
                 "bytes_received": r.bytes_received or 0,
                 "avg_response_time": r.avg_response_time_ms,
+                "p95_response_time": r.p95_response_time_ms,
+                "p99_response_time": r.p99_response_time_ms,
+                "bot_requests": r.bot_requests or 0,
             })
 
         totals_list = []

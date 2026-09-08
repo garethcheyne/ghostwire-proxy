@@ -290,6 +290,26 @@ function _M.reload_all_rules()
     _M.load_honeypot_traps()
 end
 
+--- Does a host-scoped rule apply to the current request?
+---
+--- The API serialises a global rule's proxy_host_id as JSON null, and cjson
+--- decodes null to cjson.null -- a sentinel userdata, NOT Lua nil. So the
+--- obvious `rule.proxy_host_id == nil` test is false for every global rule,
+--- which silently skipped all of them: the WAF, GeoIP rules, rate limits and
+--- honeypot traps each evaluated nothing at all while appearing configured.
+--- Always route host-scope checks through here.
+function _M.rule_applies_to_host(rule_host_id, current_host_id)
+    if rule_host_id == nil or rule_host_id == cjson.null or rule_host_id == "" then
+        return true  -- global rule: applies everywhere
+    end
+    return rule_host_id == current_host_id
+end
+
+--- Is this a global (all-hosts) rule?
+function _M.is_global_rule(rule_host_id)
+    return rule_host_id == nil or rule_host_id == cjson.null or rule_host_id == ""
+end
+
 --- Get WAF rules from shared dict (returns parsed table or nil).
 function _M.get_waf_rules()
     local json = waf_cache and waf_cache:get("waf_rules")

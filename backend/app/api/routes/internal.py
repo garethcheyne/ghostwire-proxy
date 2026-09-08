@@ -84,6 +84,10 @@ class TrafficLogRequest(BaseModel):
     # authenticated, so traffic can be attributed to a person rather than an
     # address. NULL for anonymous/public requests.
     auth_user: Optional[str] = None
+    # Set by the Lua logger when the response was a websocket upgrade or an
+    # SSE stream, so latency stats can exclude connection lifetime.
+    upgrade: Optional[str] = None
+    content_type: Optional[str] = None
 
 
 @router.post("/traffic/log")
@@ -121,6 +125,17 @@ async def log_traffic(
         except (ValueError, IndexError):
             pass
 
+    # Classify the client once, at write time, so every later query and rollup
+    # can filter on it without re-parsing user agents.
+    from app.services.client_classifier import classify_bot, is_streaming_response
+
+    is_bot, _bot_name = classify_bot(data.user_agent)
+    is_streaming = is_streaming_response(
+        status=data.status_code,
+        upgrade_header=data.upgrade,
+        content_type=data.content_type,
+    )
+
     # Create traffic log entry
     log = TrafficLog(
         id=str(uuid.uuid4()),
@@ -143,6 +158,8 @@ async def log_traffic(
         country_code=data.country_code,
         country_name=data.country_name,
         auth_user=data.auth_user,
+        is_bot=is_bot,
+        is_streaming=is_streaming,
     )
 
     db.add(log)

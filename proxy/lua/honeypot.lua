@@ -181,7 +181,7 @@ function _M.check(client_ip)
 
     for _, trap in ipairs(traps) do
         -- Only match traps that are global (no proxy_host_id) or assigned to this host
-        if trap.proxy_host_id == nil or trap.proxy_host_id == host_id then
+        if init.rule_applies_to_host(trap.proxy_host_id, host_id) then
             -- Exact path match (case-insensitive) or prefix match for paths ending with /
             local trap_path = trap.path
             local matched = false
