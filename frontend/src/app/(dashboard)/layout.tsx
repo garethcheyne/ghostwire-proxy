@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
 import { UpdateBanner } from '@/components/layout/update-banner'
+import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { clearSession, setSessionActive } from '@/lib/session'
@@ -87,8 +88,16 @@ export default function DashboardLayout({
           <UpdateBanner />
           <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-muted/30">
             {children}
+            {/* Clears the fixed bottom tab bar (and the home indicator below
+                it) so the last element on a page is never unreachable. */}
+            <div
+              aria-hidden
+              className="md:hidden h-[calc(56px+env(safe-area-inset-bottom))]"
+            />
           </main>
         </div>
+
+        <MobileTabBar />
       </div>
       </ConfirmDialogProvider>
     </SidebarContext.Provider>

@@ -30,7 +30,14 @@ export function Toaster() {
   if (toasts.length === 0) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+    <div className={
+        // On phones the bottom tab bar owns the bottom of the screen, so toasts
+        // sit above it and span the width instead of being pinned to a corner
+        // that a 360px screen cannot fit.
+        'fixed z-[100] flex flex-col gap-2 ' +
+        'left-4 right-4 bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] ' +
+        'md:left-auto md:right-4 md:bottom-4 md:max-w-sm'
+      }>
       {toasts.map(t => {
         const Icon = icons[t.type]
         return (
