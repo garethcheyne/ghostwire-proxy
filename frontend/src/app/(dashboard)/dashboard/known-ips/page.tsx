@@ -5,6 +5,10 @@ import { Tag, Plus, Pencil, Trash2, Search, BarChart3, ShieldCheck } from 'lucid
 
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Textarea } from '@/components/ui/textarea'
+import { ComboboxCreatable } from '@/components/ui/combobox-creatable'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { useConfirm } from '@/components/confirm-dialog'
 import { useDebounced } from '@/lib/use-debounced'
 import {
@@ -140,19 +144,22 @@ export default function KnownIpsPage() {
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-input bg-background text-sm"
           />
         </div>
-        <select
-          value={groupFilter}
-          onChange={(e) => setGroupFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
-          aria-label="Filter by group"
+        <Select
+          value={groupFilter || '__all__'}
+          onValueChange={(v) => setGroupFilter(v === '__all__' ? '' : v)}
         >
-          <option value="">All groups</option>
-          {groups?.map((g) => (
-            <option key={g.group_name} value={g.group_name}>
-              {g.group_name} ({g.count})
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-full sm:w-[220px]" aria-label="Filter by group">
+            <SelectValue placeholder="All groups" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All groups</SelectItem>
+            {groups?.map((g) => (
+              <SelectItem key={g.group_name} value={g.group_name}>
+                {g.group_name} ({g.count})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -268,16 +275,13 @@ export default function KnownIpsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Group</label>
-            <input
+            <ComboboxCreatable
               value={form.group_name}
-              onChange={(e) => setForm({ ...form, group_name: e.target.value })}
-              list="known-ip-groups"
-              placeholder="e.g. Microsoft Dataverse"
-              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+              onChange={(v) => setForm({ ...form, group_name: v })}
+              options={(groups ?? []).map((g) => ({ value: g.group_name, hint: String(g.count) }))}
+              placeholder="No group"
+              searchPlaceholder="Search or type a new group…"
             />
-            <datalist id="known-ip-groups">
-              {groups?.map((g) => <option key={g.group_name} value={g.group_name} />)}
-            </datalist>
             <p className="text-xs text-muted-foreground mt-1">
               Ties related addresses together — a service published across many
               ranges reads as one thing instead of dozens of unrelated rows.
@@ -285,14 +289,16 @@ export default function KnownIpsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+            <Select
+              value={form.category || '__none__'}
+              onValueChange={(v) => setForm({ ...form, category: v === '__none__' ? '' : v })}
             >
-              <option value="">None</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Notes</label>

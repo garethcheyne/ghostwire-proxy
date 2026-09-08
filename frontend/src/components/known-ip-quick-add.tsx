@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react'
 
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Textarea } from '@/components/ui/textarea'
+import { ComboboxCreatable } from '@/components/ui/combobox-creatable'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import {
   useCreateKnownIp,
   useUpdateKnownIp,
@@ -93,27 +97,26 @@ export function KnownIpQuickAdd({ ip, existing, open, onOpenChange }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium mb-1">Group</label>
-            <input
+            <ComboboxCreatable
               value={form.group_name}
-              onChange={(e) => setForm({ ...form, group_name: e.target.value })}
-              list="quick-add-groups"
-              placeholder="e.g. Microsoft Dataverse"
-              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+              onChange={(v) => setForm({ ...form, group_name: v })}
+              options={(groups ?? []).map((g) => ({ value: g.group_name, hint: String(g.count) }))}
+              placeholder="No group"
+              searchPlaceholder="Search or type a new group…"
             />
-            <datalist id="quick-add-groups">
-              {groups?.map((g) => <option key={g.group_name} value={g.group_name} />)}
-            </datalist>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+            <Select
+              value={form.category || '__none__'}
+              onValueChange={(v) => setForm({ ...form, category: v === '__none__' ? '' : v })}
             >
-              <option value="">None</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div>
