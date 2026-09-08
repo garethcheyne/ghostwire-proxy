@@ -197,13 +197,13 @@ export default function UsersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Last Login
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -233,7 +233,7 @@ export default function UsersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden md:table-cell">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(
                           user.role
@@ -254,7 +254,7 @@ export default function UsersPage() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                    <td className="px-6 py-4 text-sm text-muted-foreground hidden md:table-cell">
                       {user.last_login
                         ? new Date(user.last_login).toLocaleString()
                         : 'Never'}

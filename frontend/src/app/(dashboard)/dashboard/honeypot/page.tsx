@@ -563,11 +563,11 @@ export default function HoneypotPage() {
                           <th className="text-left px-4 py-3 font-medium">Time</th>
                           <th className="text-left px-4 py-3 font-medium">IP Address</th>
                           <th className="text-left px-4 py-3 font-medium">Trap</th>
-                          <th className="text-left px-4 py-3 font-medium">Method</th>
-                          <th className="text-left px-4 py-3 font-medium">Country</th>
-                          <th className="text-left px-4 py-3 font-medium">User Agent</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Method</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Country</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">User Agent</th>
                           <th className="text-left px-4 py-3 font-medium">Action</th>
-                          <th className="text-left px-4 py-3 font-medium">Intel</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Intel</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -582,13 +582,13 @@ export default function HoneypotPage() {
                             <td className="px-4 py-2">
                               <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{hit.trap_path}</code>
                             </td>
-                            <td className="px-4 py-2 text-xs">{hit.request_method || '-'}</td>
-                            <td className="px-4 py-2 text-xs">
+                            <td className="px-4 py-2 text-xs hidden md:table-cell">{hit.request_method || '-'}</td>
+                            <td className="px-4 py-2 text-xs hidden md:table-cell">
                               {hit.country_code ? (
                                 <CountryBadge code={hit.country_code} name={hit.country_name} />
                               ) : '-'}
                             </td>
-                            <td className="px-4 py-2 text-xs max-w-[200px] truncate text-muted-foreground" title={hit.user_agent || ''}>
+                            <td className="px-4 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={hit.user_agent || ''}>
                               {hit.user_agent || '-'}
                             </td>
                             <td className="px-4 py-2">
@@ -600,7 +600,7 @@ export default function HoneypotPage() {
                                 {hit.action_taken}
                               </span>
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-4 py-2 hidden md:table-cell">
                               <Button
                                 variant="ghost"
                                 size="icon"

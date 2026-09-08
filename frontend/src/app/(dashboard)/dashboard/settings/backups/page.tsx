@@ -404,13 +404,13 @@ export default function BackupsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Backup
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Size
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Includes
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -430,10 +430,10 @@ export default function BackupsPage() {
                   <td className="px-4 py-3">
                     <span className="font-mono text-sm">{backup.filename}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-3 text-sm hidden md:table-cell">
                     {formatBytes(backup.file_size)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                       backup.backup_type === 'scheduled'
                         ? 'bg-blue-500/10 text-blue-500'
@@ -444,7 +444,7 @@ export default function BackupsPage() {
                       {backup.backup_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <div className="flex items-center gap-1">
                       {backup.includes_database && (
                         <span title="Database" className="p-1 rounded bg-muted">

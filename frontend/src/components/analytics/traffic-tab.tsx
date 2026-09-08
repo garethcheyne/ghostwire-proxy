@@ -115,9 +115,9 @@ export function TrafficTab({
               <tr className="border-b border-border">
                 <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Host</th>
                 <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Requests</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Visitors</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Bandwidth</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Response</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Visitors</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Bandwidth</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Avg Response</th>
                 <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Error Rate</th>
               </tr>
             </thead>
@@ -146,9 +146,9 @@ export function TrafficTab({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{formatNumber(host.requests)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatNumber(host.unique_visitors)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatBytes(host.bytes_sent)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatResponseTime(host.avg_response_time)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatNumber(host.unique_visitors)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatBytes(host.bytes_sent)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatResponseTime(host.avg_response_time)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={`font-mono ${
                       host.error_rate > 5 ? 'text-red-500' : host.error_rate > 1 ? 'text-yellow-500' : 'text-green-500'

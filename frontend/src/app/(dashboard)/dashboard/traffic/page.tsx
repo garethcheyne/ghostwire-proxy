@@ -227,10 +227,10 @@ export default function TrafficPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Time
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Host
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Method
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -239,18 +239,21 @@ export default function TrafficPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Client IP
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Response Time
+                </th>
+                <th className="px-4 py-3">
+                  <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
                     <Activity className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p>No traffic logs found</p>
                   </td>
@@ -268,13 +271,13 @@ export default function TrafficPage() {
                         {new Date(log.timestamp).toLocaleString()}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td className="px-4 py-3 text-sm hidden md:table-cell">
                       <div className="flex items-center gap-1">
                         <Globe className="h-3 w-3 text-muted-foreground" />
                         <span className="font-medium" data-private="domain">{log.host_name || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                           log.request_method === 'GET'
@@ -303,7 +306,7 @@ export default function TrafficPage() {
                         {log.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-mono">
+                    <td className="px-4 py-3 text-sm font-mono hidden md:table-cell">
                       <div className="flex items-center gap-1.5">
                         <IpAddress ip={log.client_ip} countryCode={log.country_code} countryName={log.country_name} />
                         {log.city && (
@@ -313,7 +316,7 @@ export default function TrafficPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                    <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
                       {log.response_time ? formatResponseTime(log.response_time) : '-'}
                     </td>
                     <td className="px-4 py-3">

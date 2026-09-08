@@ -478,10 +478,10 @@ export function SecurityTab({ period }: SecurityTabProps) {
                 <tr className="border-b border-border">
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Time</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">IP</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Category</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Category</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Severity</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Host</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Request</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Host</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Request</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Action</th>
                 </tr>
               </thead>
@@ -496,7 +496,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                     <td className="px-3 py-2">
                       <IpAddress ip={event.client_ip} />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 hidden md:table-cell">
                       <span className="text-xs px-1.5 py-0.5 rounded" style={{
                         backgroundColor: `${CATEGORY_COLORS[event.category] || '#6b7280'}15`,
                         color: CATEGORY_COLORS[event.category] || '#6b7280',
@@ -512,10 +512,10 @@ export function SecurityTab({ period }: SecurityTabProps) {
                         {event.severity}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 hidden md:table-cell">
                       <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">{event.host}</span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 hidden md:table-cell">
                       <code className="text-xs font-mono text-muted-foreground truncate max-w-[200px] block">
                         {event.request_method} {event.request_uri}
                       </code>
