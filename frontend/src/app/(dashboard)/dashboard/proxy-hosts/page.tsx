@@ -538,7 +538,7 @@ export default function ProxyHostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Proxy Hosts</h1>
           <p className="text-muted-foreground">
@@ -892,7 +892,7 @@ export default function ProxyHostsPage() {
                   </div>
 
                   {/* Forward Settings */}
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Scheme</label>
                       <select
@@ -1008,7 +1008,7 @@ export default function ProxyHostsPage() {
                         </p>
                         <div>
                           <label className="block text-sm font-medium mb-2">Email for Let&apos;s Encrypt</label>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <input
                               type="email"
                               value={leEmail}
@@ -1218,7 +1218,7 @@ export default function ProxyHostsPage() {
                               priority: {loc.priority}
                             </span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => handleEditLocation(loc)}
                               className="p-1.5 rounded hover:bg-muted"
@@ -1318,7 +1318,7 @@ export default function ProxyHostsPage() {
                         Custom locations carry their own timeouts, set per location on the
                         Locations tab.
                       </p>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <label className="block text-sm mb-1">Connect</label>
                           <input
@@ -1430,7 +1430,7 @@ export default function ProxyHostsPage() {
                         <span className="text-sm">Enable Rate Limiting</span>
                       </label>
                       {formData.rate_limit_enabled && (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm mb-1">Requests</label>
                             <input
@@ -1599,7 +1599,7 @@ export default function ProxyHostsPage() {
                 <p className="text-xs text-muted-foreground mt-1">Higher priority = processed first</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Scheme</label>
                   <select
@@ -1686,7 +1686,7 @@ export default function ProxyHostsPage() {
                   Seconds, for this location only. Raise the read timeout for upstreams
                   that can take longer than 60s to respond.
                 </p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm mb-1">Connect</label>
                     <input

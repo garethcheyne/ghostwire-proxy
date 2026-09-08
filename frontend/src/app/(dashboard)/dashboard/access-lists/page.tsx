@@ -157,7 +157,7 @@ export default function AccessListsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Access Lists</h1>
           <p className="text-muted-foreground">
@@ -342,7 +342,7 @@ export default function AccessListsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Entries</label>
-                <div className="flex gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-3">
                   <input
                     type="text"
                     value={newEntryIp}

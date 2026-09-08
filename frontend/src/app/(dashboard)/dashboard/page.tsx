@@ -388,7 +388,7 @@ export default function DashboardPage() {
       {authErrors && (authErrors.summary.total_403 > 0 || authErrors.summary.total_401 > 0 || authErrors.summary.failed_logins > 0) && (
         <>
           {/* Auth Error Summary */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-2.5 sm:p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] sm:text-sm font-medium text-muted-foreground">403</p>

@@ -355,7 +355,7 @@ export default function HoneypotPage() {
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Bug className="h-6 w-6 text-amber-500" />
@@ -365,7 +365,7 @@ export default function HoneypotPage() {
             Fake endpoints that catch scanners and gather attacker intelligence
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={installDefaults} disabled={installingDefaults}>
             {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
             Install Defaults
@@ -624,7 +624,7 @@ export default function HoneypotPage() {
           {/* ── IP Intel Tab ── */}
           {activeTab === 'intel' && (
             <div className="space-y-6">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Input
                   placeholder="Enter IP address to investigate..."
                   value={lookupIp}

@@ -793,7 +793,7 @@ export default function RulesPage() {
                   </Button>
                 </div>
                 {geoDbInfo && (
-                  <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-4">
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                     <div className="rounded-lg border border-border p-2 sm:p-3">
                       <p className="text-xs text-muted-foreground">Status</p>
                       <div className="flex items-center gap-1 mt-1">
@@ -877,7 +877,7 @@ export default function RulesPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
-                  <form onSubmit={handleGeoLookup} className="flex gap-2 sm:gap-3 mb-6">
+                  <form onSubmit={handleGeoLookup} className="flex flex-wrap gap-2 sm:gap-3 mb-6">
                     <input
                       type="text"
                       value={lookupIp}
@@ -1070,7 +1070,7 @@ export default function RulesPage() {
                 <label className="block text-sm font-medium mb-2">Name</label>
                 <input type="text" value={wafForm.name} onChange={e => setWafForm({ ...wafForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder="SQL Injection - UNION SELECT" required />
               </div>
-              <div className="grid grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Category</label>
                   <select value={wafForm.category} onChange={e => setWafForm({ ...wafForm, category: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm">
@@ -1210,7 +1210,7 @@ export default function RulesPage() {
                 <label className="block text-sm font-medium mb-2">Name</label>
                 <input type="text" value={rateLimitForm.name} onChange={e => setRateLimitForm({ ...rateLimitForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder="API rate limit" required />
               </div>
-              <div className="grid grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Per Second</label>
                   <input type="number" value={rateLimitForm.rps} onChange={e => setRateLimitForm({ ...rateLimitForm, rps: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm" placeholder="—" min="1" />

@@ -289,7 +289,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-border px-3 sm:px-4 py-2 sm:py-3">
             <p className="text-xs sm:text-sm text-muted-foreground">Page {page} of {totalPages}</p>
-            <div className="flex gap-1 sm:gap-2">
+            <div className="flex flex-wrap gap-1 sm:gap-2">
               <button onClick={() => setPage(page - 1)} disabled={page === 1} className="rounded-lg p-1.5 sm:p-2 hover:bg-muted disabled:opacity-50">
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -352,7 +352,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
                 <p className="text-xs sm:text-sm text-muted-foreground mb-1">URI</p>
                 <code className="block p-2 sm:p-3 rounded-lg bg-muted text-xs sm:text-sm break-all">{selectedLog.request_uri}</code>
               </div>
-              <div className="grid grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <p className="text-xs sm:text-sm text-muted-foreground">Response Time</p>
                   <p className="font-medium text-sm">{selectedLog.response_time ? formatTime(selectedLog.response_time) : '-'}</p>

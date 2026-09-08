@@ -277,7 +277,7 @@ export default function GeoIPPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">GeoIP Blocking</h1>
           <p className="text-muted-foreground">
@@ -334,7 +334,7 @@ export default function GeoIPPage() {
           </button>
         </div>
         {dbInfo && (
-          <div className="mt-4 grid grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs text-muted-foreground">Status</p>
               <div className="flex items-center gap-1.5 mt-1">
@@ -469,7 +469,7 @@ export default function GeoIPPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
-          <form onSubmit={handleLookup} className="flex gap-3 mb-6">
+          <form onSubmit={handleLookup} className="flex flex-wrap gap-3 mb-6">
             <input
               type="text"
               value={lookupIp}

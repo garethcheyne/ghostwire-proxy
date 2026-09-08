@@ -289,7 +289,7 @@ export default function FirewallsPage() {
           <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">&times;</button>
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Firewall Integration</h1>
           <p className="text-muted-foreground">

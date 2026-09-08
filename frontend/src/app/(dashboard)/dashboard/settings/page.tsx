@@ -283,14 +283,14 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">System Settings</h1>
           <p className="text-muted-foreground">
             Configure system-wide settings for your proxy (admin only)
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handleReloadNginx}
             disabled={isReloading}
@@ -636,7 +636,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">API Key</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <div className="relative flex-1 max-w-md">
                 <input
                   type={showAbuseKey ? 'text' : 'password'}
@@ -716,7 +716,7 @@ export default function SettingsPage() {
           Supports individual IPs and CIDR notation (e.g. 10.0.0.0/24).
         </p>
         <div className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="text"
               value={newTrustedIp}

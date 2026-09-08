@@ -178,7 +178,7 @@ export default function PresetsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+        <h1 className="text-2xl font-bold flex items-center gap-3">
           <Sparkles className="h-8 w-8 text-cyan-400" />
           Security Presets
         </h1>
@@ -221,7 +221,7 @@ export default function PresetsPage() {
         const CatIcon = config.icon
         return (
           <div key={category} className="space-y-3">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <CatIcon className={`h-5 w-5 ${config.color}`} />
               {config.label}
             </h2>
@@ -251,7 +251,7 @@ export default function PresetsPage() {
                         )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-white">{preset.name}</span>
+                            <span className="font-medium text-foreground">{preset.name}</span>
                             <Badge
                               variant="outline"
                               className={severityColors[preset.severity] || ''}

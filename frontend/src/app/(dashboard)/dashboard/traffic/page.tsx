@@ -121,7 +121,7 @@ export default function TrafficPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Traffic Logs</h1>
           <p className="text-muted-foreground">
@@ -338,7 +338,7 @@ export default function TrafficPage() {
             <p className="text-sm text-muted-foreground">
               Page {page} of {totalPages}
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setPage(page - 1)}
                 disabled={page === 1}
@@ -420,7 +420,7 @@ export default function TrafficPage() {
                 </code>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Response Time</p>
                   <p className="font-medium">{selectedLog.response_time ? formatResponseTime(selectedLog.response_time) : '-'}</p>

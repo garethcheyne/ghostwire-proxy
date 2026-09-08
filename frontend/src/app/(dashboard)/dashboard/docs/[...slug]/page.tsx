@@ -17,7 +17,7 @@ export default async function DocsSlugPage({ params }: DocsPageProps) {
     <div>
       {/* Title */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">{page.title}</h1>
+        <h1 className="text-2xl font-bold">{page.title}</h1>
         {page.excerpt && (
           <p className="text-lg text-muted-foreground mt-2">{page.excerpt}</p>
         )}
