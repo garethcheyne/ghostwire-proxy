@@ -91,3 +91,10 @@ export const authWallKeys = {
   list: (params: ListParams = {}) => [...authWallKeys.all, 'list', params] as const,
   detail: (id: string) => [...authWallKeys.all, 'detail', id] as const,
 }
+
+export const knownIpKeys = {
+  all: ['known-ips'] as const,
+  list: (params: Record<string, unknown> = {}) => [...knownIpKeys.all, 'list', params] as const,
+  lookup: (ips: string[]) => [...knownIpKeys.all, 'lookup', [...ips].sort()] as const,
+  report: (ip: string, days: number) => [...knownIpKeys.all, 'report', ip, days] as const,
+}

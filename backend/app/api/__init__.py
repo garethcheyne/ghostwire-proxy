@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search
+from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips
 
 router = APIRouter()
 
@@ -34,3 +34,4 @@ router.include_router(presets.router, prefix="/presets", tags=["Security Presets
 router.include_router(updates.router, prefix="/updates", tags=["Updates"])
 router.include_router(honeypot.router, prefix="/honeypot", tags=["Honeypot"])
 router.include_router(search.router, prefix="/search", tags=["Search"])
+router.include_router(known_ips.router, prefix="/known-ips", tags=["Known IPs"])

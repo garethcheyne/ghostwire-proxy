@@ -8,6 +8,7 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import api from '@/lib/api'
+import { useKnownIpMap } from '@/lib/queries/known-ips'
 
 interface IpAddressProps {
   ip: string
@@ -43,6 +44,9 @@ export function CountryBadge({ code, name }: { code: string; name?: string | nul
  *   <IpAddress ip="1.2.3.4" countryCode="US" countryName="United States" />
  */
 export function IpAddress({ ip, countryCode, countryName, className }: IpAddressProps) {
+  // One shared, cached fetch of the operator's labels — not a request per row.
+  const knownIps = useKnownIpMap()
+  const known = knownIps[ip]
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
@@ -78,6 +82,18 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
           data-private="ip"
         >
           {countryCode && <CountryBadge code={countryCode} name={countryName} />}
+          {known && (
+            <span
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${
+                known.trusted
+                  ? 'bg-green-500/10 text-green-500'
+                  : 'bg-blue-500/10 text-blue-500'
+              }`}
+              title={known.category ? `${known.label} (${known.category})` : known.label}
+            >
+              {known.label}
+            </span>
+          )}
           <span data-private="ip">{ip}</span>
         </button>
       </HoverCardTrigger>
