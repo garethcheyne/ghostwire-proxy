@@ -49,4 +49,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Entrypoint fixes permissions then drops to appuser
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]
+# --proxy-headers makes uvicorn honour X-Forwarded-Proto/Host from the reverse
+# proxy. Without it, any redirect FastAPI generates (a missing trailing slash
+# is the common one) points at http://<internal-host>, which a browser on an
+# HTTPS page refuses to follow — the request just fails.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--no-server-header", "--proxy-headers", "--forwarded-allow-ips", "*"]

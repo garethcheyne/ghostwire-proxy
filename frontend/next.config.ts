@@ -58,6 +58,9 @@ const nextConfig: NextConfig = {
         { source: '/api/firewalls', destination: `${backendUrl}/api/firewalls` },
         { source: '/api/users', destination: `${backendUrl}/api/users/` },
         { source: '/api/backups', destination: `${backendUrl}/api/backups/` },
+        { source: '/api/known-ips', destination: `${backendUrl}/api/known-ips/` },
+        { source: '/api/settings', destination: `${backendUrl}/api/settings/` },
+        { source: '/api/search', destination: `${backendUrl}/api/search/` },
         // WAF and System endpoints don't use trailing slash routes
         { source: '/api/waf/rules', destination: `${backendUrl}/api/waf/rules` },
         { source: '/api/waf/rules/sets', destination: `${backendUrl}/api/waf/rules/sets` },
