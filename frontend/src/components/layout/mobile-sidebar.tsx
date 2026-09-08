@@ -102,9 +102,9 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="left"
-        className="w-[280px] p-0 bg-slate-900/98 border-slate-700/50 backdrop-blur-xl"
+        className="w-[280px] p-0 bg-card/98 border-border backdrop-blur-xl"
       >
-        <SheetHeader className="flex h-16 items-center justify-between border-b border-slate-700/50 px-4">
+        <SheetHeader className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2" onClick={() => onOpenChange(false)}>
             <div className="relative h-8 w-8">
               <Image
@@ -119,7 +119,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
               <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent leading-tight">
                 Ghostwire
               </span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-normal">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-normal">
                 Reverse Proxy Manager
               </span>
             </SheetTitle>
@@ -130,7 +130,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
           <nav className="space-y-6 px-3">
             {navigation.map((group, groupIdx) => (
               <div key={group.title}>
-                <h4 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <h4 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.title}
                 </h4>
                 <div className="space-y-1">
@@ -146,7 +146,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                             'w-full justify-start transition-all duration-200 h-11',
                             isActive
                               ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                              : 'hover:bg-slate-800 hover:text-cyan-400 text-slate-400'
+                              : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
                           )}
                         >
                           <Icon className="mr-3 h-5 w-5" />
@@ -157,7 +157,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                   })}
                 </div>
                 {groupIdx < navigation.length - 1 && (
-                  <Separator className="my-4 bg-slate-700/50" />
+                  <Separator className="my-4 bg-border" />
                 )}
               </div>
             ))}

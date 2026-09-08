@@ -119,12 +119,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     <TooltipProvider delayDuration={0} key={isCollapsed ? 'collapsed' : 'expanded'}>
       <div
         className={cn(
-          'relative flex h-full flex-col border-r border-slate-700/50 bg-slate-900/95 backdrop-blur transition-all duration-300',
+          'relative flex h-full flex-col border-r border-border bg-card/95 backdrop-blur transition-all duration-300',
           isCollapsed ? 'w-16' : 'w-64'
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-700/50 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="relative h-8 w-8">
               <Image
@@ -140,7 +140,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent leading-tight">
                   Ghostwire
                 </span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
                   Reverse Proxy Manager
                 </span>
               </div>
@@ -154,7 +154,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             {navigation.map((group, groupIdx) => (
               <div key={group.title}>
                 {!isCollapsed && (
-                  <h4 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <h4 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {group.title}
                   </h4>
                 )}
@@ -175,7 +175,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                                   'w-full relative transition-all duration-200',
                                   isActive
                                     ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                                    : 'hover:bg-slate-800 hover:text-cyan-400 text-slate-400'
+                                    : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
                                 )}
                               >
                                 <Icon className="h-5 w-5" />
@@ -197,7 +197,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                             'w-full justify-start transition-all duration-200',
                             isActive
                               ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                              : 'hover:bg-slate-800 hover:text-cyan-400 text-slate-400'
+                              : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
                           )}
                         >
                           <Icon className="mr-2 h-5 w-5" />
@@ -208,7 +208,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   })}
                 </div>
                 {!isCollapsed && groupIdx < navigation.length - 1 && (
-                  <Separator className="my-4 bg-slate-700/50" />
+                  <Separator className="my-4 bg-border/50" />
                 )}
               </div>
             ))}
@@ -217,12 +217,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
         {/* Version Footer */}
         {version && (
-          <div className="border-t border-slate-700/50 px-4 py-3">
+          <div className="border-t border-border px-4 py-3">
             {isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link href="/dashboard/about" className="block text-center">
-                    <span className="text-[10px] font-mono text-slate-500 hover:text-cyan-400 transition-colors">
+                    <span className="text-[10px] font-mono text-muted-foreground hover:text-cyan-400 transition-colors">
                       v{version.split('.').pop()}
                     </span>
                   </Link>
@@ -234,8 +234,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             ) : (
               <Link href="/dashboard/about" className="group block">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">Version</span>
-                  <span className="text-[10px] font-mono text-slate-400 group-hover:text-cyan-400 transition-colors">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Version</span>
+                  <span className="text-[10px] font-mono text-muted-foreground group-hover:text-cyan-400 transition-colors">
                     {version}
                   </span>
                 </div>
@@ -249,7 +249,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           variant="ghost"
           size="icon"
           onClick={onToggle}
-          className="absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border border-slate-600 bg-slate-800 shadow-md hover:bg-slate-700 hover:border-cyan-500/50"
+          className="absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border border-border bg-muted shadow-md hover:bg-accent hover:border-cyan-500/50"
         >
           {isCollapsed ? (
             <ChevronRight className="h-4 w-4" />

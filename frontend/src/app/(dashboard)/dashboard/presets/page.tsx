@@ -236,11 +236,11 @@ export default function PresetsPage() {
                 return (
                   <div
                     key={preset.id}
-                    className="border border-slate-700 rounded-lg bg-slate-800/50 overflow-hidden"
+                    className="border border-border rounded-lg bg-muted/50 overflow-hidden"
                   >
                     {/* Preset Header */}
                     <div
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-800/80 transition-colors"
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/80 transition-colors"
                       onClick={() => toggleExpand(preset.id)}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -325,7 +325,7 @@ export default function PresetsPage() {
 
                     {/* Expanded Detail */}
                     {isExpanded && (
-                      <div className="border-t border-slate-700 bg-slate-900/50 p-4">
+                      <div className="border-t border-border bg-muted/30 p-4">
                         {detailLoading ? (
                           <div className="flex items-center justify-center py-4">
                             <Loader2 className="h-5 w-5 animate-spin text-cyan-500" />
@@ -348,7 +348,7 @@ export default function PresetsPage() {
                                 (rule, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-start gap-2 pl-4 py-1.5 border-l-2 border-slate-700"
+                                    className="flex items-start gap-2 pl-4 py-1.5 border-l-2 border-border"
                                   >
                                     <Info className="h-3.5 w-3.5 text-slate-500 mt-0.5 shrink-0" />
                                     <div className="text-sm">

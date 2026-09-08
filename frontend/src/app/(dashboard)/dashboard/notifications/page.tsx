@@ -401,11 +401,11 @@ export default function NotificationsPage() {
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       ) : isEnabled ? (
                         <div className="w-11 h-6 bg-primary rounded-full relative transition-colors">
-                          <div className="absolute top-0.5 right-[2px] bg-white rounded-full h-5 w-5 transition-all" />
+                          <div className="absolute top-0.5 right-[2px] bg-background rounded-full h-5 w-5 transition-all" />
                         </div>
                       ) : (
                         <div className="w-11 h-6 bg-muted rounded-full relative transition-colors">
-                          <div className="absolute top-0.5 left-[2px] bg-white rounded-full h-5 w-5 transition-all" />
+                          <div className="absolute top-0.5 left-[2px] bg-background rounded-full h-5 w-5 transition-all" />
                         </div>
                       )}
                     </button>

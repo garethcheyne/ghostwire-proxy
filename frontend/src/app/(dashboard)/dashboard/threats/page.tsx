@@ -1,5 +1,6 @@
 'use client'
 
+import { createPortal } from 'react-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { RowSelectionState } from '@tanstack/react-table'
 import { usePageData } from '@/lib/use-page-data'
@@ -752,7 +753,9 @@ export default function ThreatsPage() {
       ) : null}
 
       {/* ── IP Intel Slide-out Panel ── */}
-      {intelIp && (
+      {/* Portalled to document.body: rendered in place, an ancestor's containing block
+          left this fixed panel offset from the top of the window instead of filling it. */}
+      {intelIp && typeof document !== 'undefined' && createPortal((
         <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-2xl overflow-y-auto">
           <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between z-10">
             <h3 className="font-semibold flex items-center gap-2">
@@ -857,7 +860,7 @@ export default function ThreatsPage() {
             )}
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   )
 }
