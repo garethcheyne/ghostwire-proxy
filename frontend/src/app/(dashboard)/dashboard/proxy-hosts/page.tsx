@@ -799,10 +799,12 @@ export default function ProxyHostsPage() {
 
             {/* Tabs */}
             <div className="shrink-0 border-b border-border px-6">
-              <div className="flex gap-4">
+              {/* Scrolls rather than wraps: a wrapped tab strip inside a
+                  fixed-height row is what broke the Analytics tabs. */}
+              <div className="flex gap-4 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('details')}
-                  className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'details'
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -816,7 +818,7 @@ export default function ProxyHostsPage() {
                 {editingHost && (
                   <button
                     onClick={() => setActiveTab('locations')}
-                    className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === 'locations'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -830,7 +832,7 @@ export default function ProxyHostsPage() {
                 )}
                 <button
                   onClick={() => setActiveTab('advanced')}
-                  className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'advanced'
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'

@@ -35,7 +35,7 @@ export function Toaster() {
         // sit above it and span the width instead of being pinned to a corner
         // that a 360px screen cannot fit.
         'fixed z-[100] flex flex-col gap-2 ' +
-        'left-4 right-4 bottom-[calc(56px+env(safe-area-inset-bottom)+1rem)] ' +
+        'left-4 right-4 bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] ' +
         'md:left-auto md:right-4 md:bottom-4 md:max-w-sm'
       }>
       {toasts.map(t => {

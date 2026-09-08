@@ -317,30 +317,30 @@ export default function AnalyticsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:w-auto lg:inline-grid">
-          <TabsTrigger value="overview" className="gap-1.5">
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto lg:w-auto lg:inline-flex">
+          <TabsTrigger value="overview" className="shrink-0 gap-1.5">
             <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Overview</span>
+            <span>Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="trends" className="gap-1.5">
+          <TabsTrigger value="trends" className="shrink-0 gap-1.5">
             <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Trends</span>
+            <span>Trends</span>
           </TabsTrigger>
-          <TabsTrigger value="traffic" className="gap-1.5">
+          <TabsTrigger value="traffic" className="shrink-0 gap-1.5">
             <Activity className="h-4 w-4" />
-            <span className="hidden sm:inline">Traffic</span>
+            <span>Traffic</span>
           </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-1.5">
+          <TabsTrigger value="logs" className="shrink-0 gap-1.5">
             <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Logs</span>
+            <span>Logs</span>
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-1.5">
+          <TabsTrigger value="security" className="shrink-0 gap-1.5">
             <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Security</span>
+            <span>Security</span>
           </TabsTrigger>
-          <TabsTrigger value="performance" className="gap-1.5">
+          <TabsTrigger value="performance" className="shrink-0 gap-1.5">
             <Gauge className="h-4 w-4" />
-            <span className="hidden sm:inline">Performance</span>
+            <span>Performance</span>
           </TabsTrigger>
         </TabsList>
 

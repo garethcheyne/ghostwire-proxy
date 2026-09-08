@@ -92,7 +92,7 @@ export default function DashboardLayout({
                 it) so the last element on a page is never unreachable. */}
             <div
               aria-hidden
-              className="md:hidden h-[calc(56px+env(safe-area-inset-bottom))]"
+              className="md:hidden h-[calc(64px+env(safe-area-inset-bottom))]"
             />
           </main>
         </div>

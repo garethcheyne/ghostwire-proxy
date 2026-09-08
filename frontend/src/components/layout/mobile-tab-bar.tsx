@@ -23,6 +23,10 @@ import { useSidebar } from '@/app/(dashboard)/layout'
  * "More", which opens the same sheet the hamburger does.
  *
  * Hidden from md upwards, where the persistent sidebar already does this job.
+ *
+ * Sizing: 64px of bar plus the safe-area inset. The layout spacer and the
+ * toast offset both assume that height — change one and you must change all
+ * three, or content ends up trapped behind the bar.
  */
 
 interface Tab {
@@ -72,14 +76,14 @@ export function MobileTabBar() {
               aria-current={active ? 'page' : undefined}
               className={cn(
                 // min-h keeps every tap target comfortably above 44px.
-                'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] px-1 py-2',
-                'text-[11px] font-medium transition-colors',
+                'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
+                'text-xs font-medium transition-colors',
                 active
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground active:text-foreground',
               )}
             >
-              <Icon className={cn('h-5 w-5', active && 'stroke-[2.5]')} />
+              <Icon className={cn('h-6 w-6', active && 'stroke-[2.5]')} />
               <span className="leading-none">{title}</span>
             </Link>
           )
@@ -90,14 +94,14 @@ export function MobileTabBar() {
           onClick={() => setIsMobileOpen(true)}
           aria-label="Open navigation menu"
           className={cn(
-            'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] px-1 py-2',
-            'text-[11px] font-medium transition-colors',
+            'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
+            'text-xs font-medium transition-colors',
             !onNamedTab
               ? 'text-primary'
               : 'text-muted-foreground hover:text-foreground active:text-foreground',
           )}
         >
-          <Menu className={cn('h-5 w-5', !onNamedTab && 'stroke-[2.5]')} />
+          <Menu className={cn('h-6 w-6', !onNamedTab && 'stroke-[2.5]')} />
           <span className="leading-none">More</span>
         </button>
       </div>
