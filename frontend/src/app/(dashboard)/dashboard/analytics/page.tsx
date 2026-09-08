@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Zap,
   BarChart3,
+  TrendingUp,
   Shield,
   Gauge,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import { TrafficTab } from '@/components/analytics/traffic-tab'
 import { SecurityTab } from '@/components/analytics/security-tab'
 import { PerformanceTab } from '@/components/analytics/performance-tab'
 import { LogsTab } from '@/components/analytics/logs-tab'
+import { TrendsTab, type TrendsData } from '@/components/analytics/trends-tab'
 import { FileText } from 'lucide-react'
 
 interface AnalyticsDashboard {
@@ -85,6 +87,8 @@ export default function AnalyticsPage() {
   // '' = all hosts. The dashboard endpoint has always accepted proxy_host_id;
   // the UI just never sent it, so every figure was fleet-wide.
   const [selectedHost, setSelectedHost] = useState('')
+  const [trends, setTrends] = useState<TrendsData | null>(null)
+  const [trendsLoading, setTrendsLoading] = useState(true)
   const { data: hostsData } = useProxyHosts({ limit: 100 })
   const hosts = hostsData?.items ?? []
   const selectedHostName =
@@ -108,6 +112,26 @@ export default function AnalyticsPage() {
       setIsRefreshing(false)
     }
   }, [period, selectedHost])
+
+  // Trends come from the analytics_* rollups, not traffic_logs, so this reaches
+  // past the retention window. Its own fetch because it has a different range
+  // (90 days) and a much cheaper cache than the live dashboard.
+  const fetchTrends = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ days: '90' })
+      if (selectedHost) params.set('proxy_host_id', selectedHost)
+      const response = await api.get(`/api/analytics/trends?${params}`)
+      setTrends(response.data)
+    } catch (error) {
+      console.error('Failed to fetch trends:', error)
+    } finally {
+      setTrendsLoading(false)
+    }
+  }, [selectedHost])
+
+  useEffect(() => {
+    fetchTrends()
+  }, [fetchTrends])
 
   const fetchRealtime = useCallback(async () => {
     try {
@@ -293,10 +317,14 @@ export default function AnalyticsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview" className="gap-1.5">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="trends" className="gap-1.5">
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Trends</span>
           </TabsTrigger>
           <TabsTrigger value="traffic" className="gap-1.5">
             <Activity className="h-4 w-4" />
@@ -332,6 +360,15 @@ export default function AnalyticsPage() {
             formatBytes={formatBytes}
             formatResponseTime={formatResponseTime}
             onSelectHost={setSelectedHost}
+          />
+        </TabsContent>
+
+        <TabsContent value="trends" className="space-y-6">
+          <TrendsTab
+            data={trends}
+            isLoading={trendsLoading}
+            formatNumber={formatNumber}
+            formatBytes={formatBytes}
           />
         </TabsContent>
 
