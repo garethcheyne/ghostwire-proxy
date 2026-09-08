@@ -25,8 +25,14 @@ class KnownIp(Base):
 
     # What to show instead of the bare address.
     label = Column(String(255), nullable=False)
-    # Free-form grouping: office, staff, vendor, monitoring, cdn, scanner...
+    # What kind of thing this is: office, staff, vendor, monitoring, cdn, scanner...
     category = Column(String(50), nullable=True, index=True)
+
+    # Which set it belongs to, e.g. "Microsoft Dataverse". Distinct from
+    # category: a category says what an address is, a group ties many addresses
+    # together so a service published across dozens of ranges reads as one thing.
+    # Named group_name because "group" is a reserved word in SQL.
+    group_name = Column(String(100), nullable=True, index=True)
     notes = Column(Text, nullable=True)
 
     # Marks an address you recognise as benign. Purely informational — it does

@@ -27,6 +27,7 @@ class KnownIpBase(BaseModel):
     ip_address: str
     label: str
     category: Optional[str] = None
+    group_name: Optional[str] = None
     notes: Optional[str] = None
     trusted: bool = False
 
@@ -57,6 +58,7 @@ class KnownIpCreate(KnownIpBase):
 class KnownIpUpdate(BaseModel):
     label: Optional[str] = None
     category: Optional[str] = None
+    group_name: Optional[str] = None
     notes: Optional[str] = None
     trusted: Optional[bool] = None
 
@@ -79,6 +81,7 @@ async def list_known_ips(
     limit: int = Query(100, ge=1, le=500),
     search: Optional[str] = None,
     category: Optional[str] = None,
+    group_name: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -86,11 +89,14 @@ async def list_known_ips(
     filters = []
     if category:
         filters.append(KnownIp.category == category)
+    if group_name:
+        filters.append(KnownIp.group_name == group_name)
     if search:
         term = f"%{search.strip()}%"
         filters.append(or_(
             KnownIp.ip_address.ilike(term),
             KnownIp.label.ilike(term),
+            KnownIp.group_name.ilike(term),
             KnownIp.notes.ilike(term),
         ))
 
@@ -102,7 +108,9 @@ async def list_known_ips(
 
     total = (await db.execute(count_query)).scalar() or 0
     rows = (await db.execute(
-        query.order_by(KnownIp.created_at.desc()).offset(skip).limit(limit)
+        query.order_by(
+            KnownIp.group_name.nulls_first(), KnownIp.label, KnownIp.ip_address
+        ).offset(skip).limit(limit)
     )).scalars().all()
 
     response.headers["X-Total-Count"] = str(int(total))
@@ -208,9 +216,25 @@ async def lookup_known_ips(
 
     rows = (await db.execute(select(KnownIp).where(KnownIp.ip_address.in_(ips)))).scalars().all()
     return {
-        r.ip_address: {"label": r.label, "category": r.category, "trusted": r.trusted, "id": r.id}
+        r.ip_address: {"label": r.label, "category": r.category,
+                       "group_name": r.group_name, "trusted": r.trusted, "id": r.id}
         for r in rows
     }
+
+
+@router.get("/groups")
+async def list_groups(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Distinct groups with a count, for filtering."""
+    rows = (await db.execute(
+        select(KnownIp.group_name, func.count(KnownIp.id).label("count"))
+        .where(KnownIp.group_name.isnot(None))
+        .group_by(KnownIp.group_name)
+        .order_by(KnownIp.group_name)
+    )).all()
+    return [{"group_name": r.group_name, "count": int(r.count)} for r in rows]
 
 
 # ── Per-IP traffic report ────────────────────────────────────────────────────
@@ -325,7 +349,8 @@ async def get_ip_report(
         "days": days,
         "known": (
             {"id": known.id, "label": known.label, "category": known.category,
-             "notes": known.notes, "trusted": known.trusted}
+             "group_name": known.group_name, "notes": known.notes,
+             "trusted": known.trusted}
             if known else None
         ),
         "enrichment": (

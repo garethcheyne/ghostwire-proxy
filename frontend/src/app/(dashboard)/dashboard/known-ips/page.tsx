@@ -12,13 +12,14 @@ import {
   useCreateKnownIp,
   useUpdateKnownIp,
   useDeleteKnownIp,
+  useKnownIpGroups,
   type KnownIp,
 } from '@/lib/queries/known-ips'
 import { IpReport } from '@/components/ip-report'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']
 
-const EMPTY = { ip_address: '', label: '', category: '', notes: '', trusted: false }
+const EMPTY = { ip_address: '', label: '', category: '', group_name: '', notes: '', trusted: false }
 
 export default function KnownIpsPage() {
   const confirm = useConfirm()
@@ -27,10 +28,16 @@ export default function KnownIpsPage() {
   const [showDialog, setShowDialog] = useState(false)
   const [editing, setEditing] = useState<KnownIp | null>(null)
   const [form, setForm] = useState(EMPTY)
+  const [groupFilter, setGroupFilter] = useState('')
   const [reportIp, setReportIp] = useState<string | null>(null)
   const [lookupIp, setLookupIp] = useState('')
 
-  const { data, isPending } = useKnownIps({ search: debouncedSearch || undefined, limit: 200 })
+  const { data, isPending } = useKnownIps({
+    search: debouncedSearch || undefined,
+    group_name: groupFilter || undefined,
+    limit: 500,
+  })
+  const { data: groups } = useKnownIpGroups()
   const create = useCreateKnownIp()
   const update = useUpdateKnownIp()
   const remove = useDeleteKnownIp()
@@ -49,6 +56,7 @@ export default function KnownIpsPage() {
       ip_address: k.ip_address,
       label: k.label,
       category: k.category ?? '',
+      group_name: k.group_name ?? '',
       notes: k.notes ?? '',
       trusted: k.trusted,
     })
@@ -59,6 +67,7 @@ export default function KnownIpsPage() {
     const payload = {
       label: form.label.trim(),
       category: form.category || null,
+      group_name: form.group_name.trim() || null,
       notes: form.notes.trim() || null,
       trusted: form.trusted,
     }
@@ -127,10 +136,23 @@ export default function KnownIpsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search labels, addresses or notes..."
+            placeholder="Search labels, addresses, groups or notes..."
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-input bg-background text-sm"
           />
         </div>
+        <select
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
+          aria-label="Filter by group"
+        >
+          <option value="">All groups</option>
+          {groups?.map((g) => (
+            <option key={g.group_name} value={g.group_name}>
+              {g.group_name} ({g.count})
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -140,6 +162,7 @@ export default function KnownIpsPage() {
               <tr className="border-b border-border">
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Label</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">IP Address</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Group</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Notes</th>
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -149,10 +172,10 @@ export default function KnownIpsPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {isPending ? (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">Loading…</td></tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                     <Tag className="h-8 w-8 mx-auto mb-3 opacity-30" />
                     No labelled addresses yet.
                   </td>
@@ -169,6 +192,17 @@ export default function KnownIpsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-sm" data-private="ip">{k.ip_address}</td>
+                    <td className="px-4 py-3">
+                      {k.group_name && (
+                        <button
+                          onClick={() => setGroupFilter(k.group_name!)}
+                          className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20"
+                          title={`Show only ${k.group_name}`}
+                        >
+                          {k.group_name}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {k.category && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
@@ -231,6 +265,23 @@ export default function KnownIpsPage() {
               placeholder="Head office"
               className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Group</label>
+            <input
+              value={form.group_name}
+              onChange={(e) => setForm({ ...form, group_name: e.target.value })}
+              list="known-ip-groups"
+              placeholder="e.g. Microsoft Dataverse"
+              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+            />
+            <datalist id="known-ip-groups">
+              {groups?.map((g) => <option key={g.group_name} value={g.group_name} />)}
+            </datalist>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ties related addresses together — a service published across many
+              ranges reads as one thing instead of dozens of unrelated rows.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>

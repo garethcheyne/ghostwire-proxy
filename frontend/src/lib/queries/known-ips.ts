@@ -11,6 +11,7 @@ export interface KnownIp {
   ip_address: string
   label: string
   category: string | null
+  group_name: string | null
   notes: string | null
   trusted: boolean
   created_at?: string | null
@@ -22,7 +23,7 @@ export interface KnownIpListResult {
   total: number
 }
 
-export function useKnownIps(params: { skip?: number; limit?: number; search?: string; category?: string } = {}) {
+export function useKnownIps(params: { skip?: number; limit?: number; search?: string; category?: string; group_name?: string } = {}) {
   return useQuery({
     queryKey: knownIpKeys.list(params),
     queryFn: async (): Promise<KnownIpListResult> => {
@@ -39,6 +40,7 @@ export interface KnownIpLabel {
   id: string
   label: string
   category: string | null
+  group_name: string | null
   trusted: boolean
 }
 
@@ -57,7 +59,8 @@ export function useKnownIpMap() {
       const response = await api.get<KnownIp[]>('/api/known-ips', { params: { limit: 500 } })
       return Object.fromEntries(
         response.data.map((k) => [k.ip_address, {
-          id: k.id, label: k.label, category: k.category, trusted: k.trusted,
+          id: k.id, label: k.label, category: k.category,
+          group_name: k.group_name, trusted: k.trusted,
         }]),
       )
     },
@@ -134,5 +137,19 @@ export function useDeleteKnownIp() {
     onSuccess: () => { invalidate(); toastSuccess('Label removed') },
     onError: (e: Error & { response?: { data?: { detail?: string } } }) =>
       toastError(e.response?.data?.detail || 'Failed to remove label'),
+  })
+}
+
+export interface KnownIpGroup {
+  group_name: string
+  count: number
+}
+
+export function useKnownIpGroups() {
+  return useQuery({
+    queryKey: [...knownIpKeys.all, 'groups'],
+    queryFn: async (): Promise<KnownIpGroup[]> =>
+      (await api.get('/api/known-ips/groups')).data,
+    staleTime: 60_000,
   })
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Globe, Shield, AlertTriangle, Crosshair, Loader2 } from 'lucide-react'
+import { Globe, Shield, AlertTriangle, Crosshair, Loader2, Tag, BarChart3 } from 'lucide-react'
 import {
   HoverCard,
   HoverCardContent,
@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/hover-card'
 import api from '@/lib/api'
 import { useKnownIpMap } from '@/lib/queries/known-ips'
+import { KnownIpQuickAdd } from '@/components/known-ip-quick-add'
+import { IpReport } from '@/components/ip-report'
 
 interface IpAddressProps {
   ip: string
@@ -50,6 +52,8 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const [labelling, setLabelling] = useState(false)
+  const [reporting, setReporting] = useState(false)
 
   const fetchEnrichment = useCallback(async () => {
     // Check cache
@@ -184,7 +188,31 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
             </div>
           </div>
         )}
+        <div className="p-2 border-t bg-muted/30 flex gap-2">
+          <button
+            onClick={() => setLabelling(true)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
+          >
+            <Tag className="h-3 w-3" />
+            {known ? 'Edit label' : 'Label this IP'}
+          </button>
+          <button
+            onClick={() => setReporting(true)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
+          >
+            <BarChart3 className="h-3 w-3" />
+            View traffic
+          </button>
+        </div>
       </HoverCardContent>
+
+      <KnownIpQuickAdd
+        ip={ip}
+        existing={known}
+        open={labelling}
+        onOpenChange={setLabelling}
+      />
+      {reporting && <IpReport ip={ip} onClose={() => setReporting(false)} />}
     </HoverCard>
   )
 }
