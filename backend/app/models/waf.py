@@ -83,6 +83,11 @@ class ThreatActor(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    # Set when this actor was last submitted to AbuseIPDB via bulk-report.
+    # Re-reported if last_seen advances past this (continued abuse), not on
+    # every sync run.
+    abuseipdb_reported_at = Column(DateTime(timezone=True), nullable=True)
+
 
 class ThreatThreshold(Base):
     __tablename__ = "threat_thresholds"

@@ -19,6 +19,8 @@ import {
   Clock,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
 import type { Certificate } from '@/types'
 
@@ -302,9 +304,13 @@ export default function CertificatesPage() {
       </div>
 
       {/* Create Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Certificates — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Add Certificate</h2>
             </div>
@@ -466,10 +472,10 @@ export default function CertificatesPage() {
                     <label className="block text-sm font-medium mb-2">
                       Certificate (PEM)
                     </label>
-                    <textarea
+                    <Textarea
                       value={uploadCert}
                       onChange={(e) => setUploadCert(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs"
+                      className="w-full rounded-lg bg-background font-mono text-xs"
                       rows={6}
                       placeholder="-----BEGIN CERTIFICATE-----"
                       required
@@ -479,10 +485,10 @@ export default function CertificatesPage() {
                     <label className="block text-sm font-medium mb-2">
                       Private Key (PEM)
                     </label>
-                    <textarea
+                    <Textarea
                       value={uploadKey}
                       onChange={(e) => setUploadKey(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs"
+                      className="w-full rounded-lg bg-background font-mono text-xs"
                       rows={6}
                       placeholder="-----BEGIN PRIVATE KEY-----"
                       required
@@ -515,9 +521,8 @@ export default function CertificatesPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Click outside to close dropdown */}
       {activeDropdown && (

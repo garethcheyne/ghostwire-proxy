@@ -33,6 +33,7 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { IpAddress } from '@/components/ip-address'
 import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
@@ -1054,9 +1055,13 @@ export default function RulesPage() {
       {/* ═══════════════════════════════════════════════════════════════ */}
 
       {/* WAF Dialog */}
-      {showWafDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showWafDialog}
+        onOpenChange={setShowWafDialog}
+        size="lg"
+        srTitle="Rules — Waf"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-4 sm:p-6">
               <h2 className="text-lg sm:text-xl font-semibold">{editingWafRule ? 'Edit WAF Rule' : 'Add WAF Rule'}</h2>
             </div>
@@ -1111,14 +1116,17 @@ export default function RulesPage() {
                 <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}{editingWafRule ? 'Save' : 'Create'}</Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* GeoIP Dialog */}
-      {showGeoDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showGeoDialog}
+        onOpenChange={setShowGeoDialog}
+        size="lg"
+        srTitle="Rules — Geo"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-4 sm:p-6">
               <h2 className="text-lg sm:text-xl font-semibold">{editingGeoRule ? 'Edit GeoIP Rule' : 'Add GeoIP Rule'}</h2>
             </div>
@@ -1183,14 +1191,17 @@ export default function RulesPage() {
                 <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}{editingGeoRule ? 'Save' : 'Create'}</Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Rate Limit Dialog */}
-      {showRateLimitDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showRateLimitDialog}
+        onOpenChange={setShowRateLimitDialog}
+        size="lg"
+        srTitle="Rules — Rate limit"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-4 sm:p-6">
               <h2 className="text-lg sm:text-xl font-semibold">{editingRateLimitRule ? 'Edit Rate Limit Rule' : 'Add Rate Limit Rule'}</h2>
             </div>
@@ -1237,9 +1248,8 @@ export default function RulesPage() {
                 <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}{editingRateLimitRule ? 'Save' : 'Create'}</Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Click outside to close dropdowns */}
       {activeDropdown && <div className="fixed inset-0 z-0" onClick={() => setActiveDropdown(null)} />}

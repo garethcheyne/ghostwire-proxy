@@ -21,6 +21,31 @@ from app.models.certificate import Certificate
 from app.models.auth_wall import AuthWall
 
 
+# Which request header carries the true client IP for each front-facing service.
+# nginx only honours these from addresses listed in set_real_ip_from (see
+# proxy/nginx.conf), so a header from anyone else is ignored rather than trusted.
+CDN_REAL_IP_HEADERS = {
+    "cloudflare": "CF-Connecting-IP",
+    "imperva": "Incap-Client-IP",
+    # A plain reverse proxy / load balancer in front of us.
+    "generic": "X-Forwarded-For",
+    # Reached directly. X-Forwarded-For is still the right header for a LAN load
+    # balancer, and is only honoured from the trusted ranges anyway.
+    "none": "X-Forwarded-For",
+}
+
+
+# Populated by generate_all_configs() before rendering, from
+# trusted_proxy_service. Module-level because generate_server_block() is sync
+# and can't await a lookup mid-render.
+_TRUSTED_PROXY_RANGES: dict[str, list[str]] = {}
+
+
+def set_trusted_proxy_ranges(ranges: dict) -> None:
+    global _TRUSTED_PROXY_RANGES
+    _TRUSTED_PROXY_RANGES = ranges or {}
+
+
 def _safe_id(id_str: str) -> str:
     """Convert UUID to nginx-safe identifier"""
     return id_str.replace('-', '_')
@@ -249,9 +274,9 @@ def _generate_default_location(
 
     # Timeouts
     lines.append("")
-    lines.append(f"{indent}    proxy_connect_timeout 60s;")
-    lines.append(f"{indent}    proxy_send_timeout 60s;")
-    lines.append(f"{indent}    proxy_read_timeout 60s;")
+    lines.append(f"{indent}    proxy_connect_timeout {host.proxy_connect_timeout}s;")
+    lines.append(f"{indent}    proxy_send_timeout {host.proxy_send_timeout}s;")
+    lines.append(f"{indent}    proxy_read_timeout {host.proxy_read_timeout}s;")
 
     # Advanced config for default location
     if host.advanced_config:
@@ -273,6 +298,28 @@ def _generate_server_block_content(
 ) -> list[str]:
     """Generate server block content (shared between HTTP and HTTPS)"""
     lines = []
+
+    # Recover the true visitor IP from whatever sits in front of this host.
+    # Without the right header here, every request would be logged, geo-located,
+    # rate-limited and threat-scored against the CDN's edge address instead of
+    # the actual client.
+    real_ip_header = CDN_REAL_IP_HEADERS.get(
+        getattr(host, "cdn_provider", None) or "none",
+        CDN_REAL_IP_HEADERS["none"],
+    )
+    cdn_provider = getattr(host, "cdn_provider", None) or "none"
+    provider_ranges = _TRUSTED_PROXY_RANGES.get(cdn_provider) or []
+    if provider_ranges:
+        # Defining set_real_ip_from here overrides the inherited http-level list
+        # entirely, which is what we want: a Cloudflare-fronted host should trust
+        # a CF-Connecting-IP header from Cloudflare's edge and nobody else --
+        # not from every other CDN's range, and not from the LAN.
+        lines.append(f"{indent}# Trusted {cdn_provider} edge ranges")
+        for cidr in provider_ranges:
+            lines.append(f"{indent}set_real_ip_from {cidr};")
+    lines.append(f"{indent}real_ip_header {real_ip_header};")
+    lines.append(f"{indent}real_ip_recursive on;")
+    lines.append("")
 
     # Server-level settings
     lines.append(f"{indent}client_max_body_size {host.client_max_body_size};")
@@ -624,6 +671,14 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
     )
     hosts = result.scalars().all()
 
+    # Load the CDN edge ranges once per generation run so each server block can
+    # scope its own trust list.
+    try:
+        from app.services.trusted_proxy_service import get_ranges
+        set_trusted_proxy_ranges(await get_ranges(db))
+    except Exception as e:
+        logger.warning(f"Could not load trusted proxy ranges: {e}")
+
     generated_files = []
 
     # Generate default site config
@@ -671,6 +726,8 @@ async def remove_config(host_id: str) -> bool:
 logger = logging.getLogger(__name__)
 
 BACKUP_DIR = "/data/backups/nginx-configs"
+NGINX_CONTAINER = "ghostwire-proxy-nginx"
+DOCKER_SOCKET = "/var/run/docker.sock"
 
 
 def backup_configs() -> bool:
@@ -708,103 +765,141 @@ def restore_configs() -> bool:
         return False
 
 
+def _docker_api(request: bytes, read_timeout: float = 20.0) -> bytes:
+    """Send a raw HTTP request to the Docker socket and read the whole response.
+
+    Every caller sends `Connection: close`, so reading to EOF returns the full
+    response without having to parse Content-Length or handle keep-alive.
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(read_timeout)
+    try:
+        sock.connect(DOCKER_SOCKET)
+        sock.sendall(request)
+        chunks = []
+        while True:
+            try:
+                data = sock.recv(65536)
+            except socket.timeout:
+                break
+            if not data:
+                break
+            chunks.append(data)
+        return b"".join(chunks)
+    finally:
+        sock.close()
+
+
+def _http_body(raw: bytes) -> bytes:
+    """Strip HTTP headers, de-chunking the body if it came back chunked."""
+    split = raw.find(b"\r\n\r\n")
+    if split == -1:
+        return b""
+    headers, body = raw[:split].lower(), raw[split + 4:]
+    if b"transfer-encoding: chunked" not in headers:
+        return body
+
+    decoded = bytearray()
+    while True:
+        line_end = body.find(b"\r\n")
+        if line_end == -1:
+            break
+        try:
+            size = int(body[:line_end].split(b";")[0], 16)
+        except ValueError:
+            break
+        if size == 0:
+            break
+        decoded += body[line_end + 2:line_end + 2 + size]
+        body = body[line_end + 2 + size + 2:]
+    return bytes(decoded)
+
+
+def _demux_docker_stream(body: bytes) -> str:
+    """Decode Docker's multiplexed exec stream (8-byte header per frame)."""
+    out = []
+    i = 0
+    while i + 8 <= len(body):
+        if body[i] not in (0, 1, 2) or body[i + 1:i + 4] != b"\x00\x00\x00":
+            # Not multiplexed (TTY mode) — the remainder is plain output.
+            return body[i:].decode("utf-8", "replace")
+        size = int.from_bytes(body[i + 4:i + 8], "big")
+        i += 8
+        out.append(body[i:i + size].decode("utf-8", "replace"))
+        i += size
+    return "".join(out)
+
+
 def test_nginx_config() -> tuple[bool, str]:
-    """Test nginx configuration via Docker exec in the nginx container"""
-    docker_socket = "/var/run/docker.sock"
-    if not os.path.exists(docker_socket):
-        # Fallback: try local nginx -t (works if running outside Docker)
+    """Run `nginx -t` and return (passed, nginx's own output).
+
+    The output is the point: on failure nginx names the offending file, line
+    number and directive, and that message is what gets shown to the admin.
+    """
+    if not os.path.exists(DOCKER_SOCKET):
+        # Fallback: local nginx -t (works when running outside Docker)
         try:
             result = subprocess.run(
                 ["nginx", "-t"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=15,
             )
-            return result.returncode == 0, result.stderr
+            output = (result.stderr or result.stdout).strip()
+            return result.returncode == 0, output or "nginx -t produced no output"
         except Exception as e:
             return False, str(e)
 
     try:
         import json as _json
-        import time as _time
 
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(docker_socket)
-
-        # Create exec instance
-        exec_body = _json.dumps({"Cmd": ["nginx", "-t"], "AttachStdout": True, "AttachStderr": True})
-        request = (
-            f"POST /containers/ghostwire-proxy-nginx/exec HTTP/1.1\r\n"
+        # Create the exec instance, attached so its output can be read back.
+        exec_body = _json.dumps({
+            "Cmd": ["nginx", "-t"],
+            "AttachStdout": True,
+            "AttachStderr": True,
+        })
+        created = _http_body(_docker_api(
+            f"POST /containers/{NGINX_CONTAINER}/exec HTTP/1.1\r\n"
             f"Host: localhost\r\n"
             f"Content-Type: application/json\r\n"
+            f"Connection: close\r\n"
             f"Content-Length: {len(exec_body)}\r\n\r\n"
-            f"{exec_body}"
-        )
-        sock.sendall(request.encode())
-        response = sock.recv(4096).decode()
-        sock.close()
-
-        # Parse exec ID from response body (handle chunked encoding)
-        body_start = response.find("\r\n\r\n")
-        if body_start == -1:
-            return False, "Invalid Docker API response"
-        body = response[body_start + 4:].strip()
-        if body and body[0] != "{":
-            lines = body.split("\n", 1)
-            body = lines[1] if len(lines) > 1 else body
-        exec_data = _json.loads(body)
-        exec_id = exec_data.get("Id")
+            f"{exec_body}".encode(),
+            read_timeout=10.0,
+        ))
+        exec_id = _json.loads(created or b"{}").get("Id")
         if not exec_id:
-            return False, f"Failed to create exec: {body}"
+            detail = created[:200].decode("utf-8", "replace")
+            return False, f"Failed to create nginx -t exec: {detail}"
 
-        # Start exec (Detach=True so it runs asynchronously)
-        sock2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock2.connect(docker_socket)
-        start_body = _json.dumps({"Detach": True})
-        request2 = (
+        # Start it attached (Detach=False) and read the multiplexed stream to
+        # completion — this blocks until nginx -t has actually finished.
+        start_body = _json.dumps({"Detach": False, "Tty": False})
+        started = _docker_api(
             f"POST /exec/{exec_id}/start HTTP/1.1\r\n"
             f"Host: localhost\r\n"
             f"Content-Type: application/json\r\n"
+            f"Connection: close\r\n"
             f"Content-Length: {len(start_body)}\r\n\r\n"
-            f"{start_body}"
+            f"{start_body}".encode()
         )
-        sock2.sendall(request2.encode())
-        sock2.recv(4096)
-        sock2.close()
+        output = _demux_docker_stream(_http_body(started)).strip()
 
-        # Poll exec inspect until it finishes (up to 10s)
-        for _ in range(20):
-            _time.sleep(0.5)
-            sock3 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock3.connect(docker_socket)
-            request3 = (
-                f"GET /exec/{exec_id}/json HTTP/1.1\r\n"
-                f"Host: localhost\r\n\r\n"
-            )
-            sock3.sendall(request3.encode())
-            response3 = sock3.recv(4096).decode()
-            sock3.close()
+        # The exec has exited by now, so its exit code is available.
+        inspected = _http_body(_docker_api(
+            "GET /exec/{}/json HTTP/1.1\r\n"
+            "Host: localhost\r\n"
+            "Connection: close\r\n\r\n".format(exec_id).encode(),
+            read_timeout=10.0,
+        ))
+        exit_code = _json.loads(inspected or b"{}").get("ExitCode")
 
-            body3_start = response3.find("\r\n\r\n")
-            body3 = response3[body3_start + 4:].strip() if body3_start != -1 else ""
-            if body3 and body3[0] != "{":
-                lines = body3.split("\n", 1)
-                body3 = lines[1] if len(lines) > 1 else body3
-
-            try:
-                exec_info = _json.loads(body3)
-                running = exec_info.get("Running", False)
-                if running:
-                    continue
-                exit_code = exec_info.get("ExitCode", -1)
-                if exit_code == 0:
-                    return True, "nginx config test passed"
-                else:
-                    return False, f"nginx -t failed (exit code {exit_code})"
-            except _json.JSONDecodeError:
-                continue
-
-        return False, "nginx -t timed out"
+        if exit_code == 0:
+            return True, output or "nginx config test passed"
+        if exit_code is None:
+            return False, f"nginx -t did not report an exit code. Output: {output}"
+        return False, output or f"nginx -t failed (exit code {exit_code})"
 
     except Exception as e:
         return False, str(e)
@@ -812,7 +907,7 @@ def test_nginx_config() -> tuple[bool, str]:
 
 def reload_nginx() -> tuple[bool, str]:
     """Reload nginx configuration via Docker socket SIGHUP"""
-    docker_socket = "/var/run/docker.sock"
+    docker_socket = DOCKER_SOCKET
     if not os.path.exists(docker_socket):
         return False, "Docker socket not available — mount /var/run/docker.sock in the API container"
 
@@ -820,7 +915,7 @@ def reload_nginx() -> tuple[bool, str]:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(docker_socket)
         request = (
-            "POST /containers/ghostwire-proxy-nginx/kill?signal=HUP HTTP/1.1\r\n"
+            f"POST /containers/{NGINX_CONTAINER}/kill?signal=HUP HTTP/1.1\r\n"
             "Host: localhost\r\n"
             "Content-Length: 0\r\n\r\n"
         )
@@ -832,7 +927,7 @@ def reload_nginx() -> tuple[bool, str]:
         if "204" in response[:30] or "200" in response[:30]:
             return True, "Nginx reloaded successfully"
         elif "404" in response[:30]:
-            return False, "Nginx container 'ghostwire-proxy-nginx' not found"
+            return False, f"Nginx container '{NGINX_CONTAINER}' not found"
         else:
             status_line = response.split("\r\n", 1)[0] if response else "empty response"
             return False, f"Docker API returned: {status_line}"

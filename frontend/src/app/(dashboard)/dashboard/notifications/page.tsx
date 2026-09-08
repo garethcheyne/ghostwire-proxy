@@ -20,6 +20,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
 import PushSubscriptionManager from '@/components/notifications/push-subscription'
 
@@ -507,9 +509,13 @@ export default function NotificationsPage() {
       )}
 
       {/* Channel Dialog */}
-      {showChannelDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showChannelDialog}
+        onOpenChange={setShowChannelDialog}
+        size="lg"
+        srTitle="Notifications — Channel"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingChannel ? 'Edit Channel' : 'Add Delivery Channel'}
@@ -550,10 +556,10 @@ export default function NotificationsPage() {
               {formType !== 'push' && (
                 <div>
                   <label className="block text-sm font-medium mb-2">Configuration (JSON)</label>
-                  <textarea
+                  <Textarea
                     value={formConfig}
                     onChange={(e) => setFormConfig(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full rounded-lg bg-background font-mono text-sm"
                     rows={4}
                     placeholder={getConfigPlaceholder()}
                   />
@@ -595,9 +601,8 @@ export default function NotificationsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
     </div>
   )
 }

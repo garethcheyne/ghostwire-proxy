@@ -80,6 +80,10 @@ class TrafficLogRequest(BaseModel):
     ssl_cipher: Optional[str] = None
     country_code: Optional[str] = None
     country_name: Optional[str] = None
+    # Username from the host's auth wall session when the request was
+    # authenticated, so traffic can be attributed to a person rather than an
+    # address. NULL for anonymous/public requests.
+    auth_user: Optional[str] = None
 
 
 @router.post("/traffic/log")
@@ -138,6 +142,7 @@ async def log_traffic(
         referer=data.referer,
         country_code=data.country_code,
         country_name=data.country_name,
+        auth_user=data.auth_user,
     )
 
     db.add(log)

@@ -9,7 +9,16 @@ from datetime import datetime, timezone
 # Override settings BEFORE importing app modules
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-testing-only")
 os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key-for-testing-only")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://ghostwire:GhostwireProxy2024Secure@ghostwire-proxy-postgres:5432/ghostwire_proxy_test")
+# NOTE: DATABASE_URL is deliberately NOT set from the ambient environment here.
+#
+# This suite calls Base.metadata.drop_all() after every single test. It used to
+# do os.environ.setdefault("DATABASE_URL", <test db>), which only applies when
+# the variable is unset — so anywhere it was already set (inside the API
+# container, where it points at production) the safe default was silently
+# skipped and the tests dropped the live schema. That is what happened on
+# 2026-09-08, and almost certainly on 2026-08-16 before that.
+#
+# The target now comes from its own variable and is validated below.
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Fast rounds for tests
 
@@ -20,8 +29,25 @@ from app.core.database import Base, get_db
 from app.core.security import get_password_hash, create_access_token
 from app.models.user import User
 
-# Test database URL — uses dedicated test database in the docker Postgres container
-TEST_DATABASE_URL = os.environ["DATABASE_URL"]
+# Test database URL — a dedicated throwaway database, never the ambient one.
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://ghostwire:GhostwireProxy2024Secure@ghostwire-proxy-postgres:5432/ghostwire_proxy_test",
+)
+
+# Hard stop rather than a silent fallback: the cost of getting this wrong is the
+# entire database.
+_target_db = TEST_DATABASE_URL.rsplit("/", 1)[-1].split("?")[0]
+if not _target_db.endswith("_test"):
+    raise RuntimeError(
+        f"Refusing to run the test suite against database {_target_db!r}.\n"
+        "Every test calls Base.metadata.drop_all(), so the target database name "
+        "must end in '_test'. Set TEST_DATABASE_URL to a throwaway database."
+    )
+
+# Point application code that reads DATABASE_URL at the same throwaway database,
+# so nothing under test can reach the real one.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 test_engine = create_async_engine(
     TEST_DATABASE_URL,

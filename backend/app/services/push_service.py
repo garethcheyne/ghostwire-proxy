@@ -282,6 +282,63 @@ class PushService:
             db=db,
         )
 
+    async def notify_host_down(
+        self,
+        domain: str,
+        upstream: str,
+        error: Optional[str] = None,
+        host_id: Optional[str] = None,
+        db: Optional[AsyncSession] = None,
+    ) -> dict:
+        """Notify that a proxy host's upstream stopped responding."""
+        body = f"{upstream} is not responding"
+        if error:
+            body += f" ({error})"
+
+        return await self.notify_all(
+            title=f"Host Down - {domain}",
+            body=body,
+            notification_type="host_down",
+            data={
+                "domain": domain,
+                "upstream": upstream,
+                "error": error,
+                "host_id": host_id,
+            },
+            actions=[
+                {"action": "view", "title": "View Host"},
+            ],
+            # An outage should stay on screen until it is acknowledged.
+            require_interaction=True,
+            db=db,
+        )
+
+    async def notify_host_recovered(
+        self,
+        domain: str,
+        upstream: str,
+        downtime: Optional[str] = None,
+        host_id: Optional[str] = None,
+        db: Optional[AsyncSession] = None,
+    ) -> dict:
+        """Notify that a previously-down proxy host is answering again."""
+        body = f"{upstream} is responding again"
+        if downtime:
+            body += f" (down for {downtime})"
+
+        return await self.notify_all(
+            title=f"Host Recovered - {domain}",
+            body=body,
+            notification_type="host_up",
+            data={
+                "domain": domain,
+                "upstream": upstream,
+                "downtime": downtime,
+                "host_id": host_id,
+            },
+            db=db,
+        )
+
     async def notify_ip_blocked(
         self,
         ip: str,

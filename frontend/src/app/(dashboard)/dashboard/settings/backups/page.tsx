@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -391,6 +392,9 @@ export default function BackupsPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Inner scroller: the rounded wrapper clips, so without this the
+              table is cut off on narrow screens instead of scrolling. */}
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -503,13 +507,18 @@ export default function BackupsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {/* Create Backup Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="md"
+        srTitle="Backups — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Create Backup</h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -603,14 +612,17 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Restore Dialog */}
-      {showRestoreDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showRestoreDialog}
+        onOpenChange={setShowRestoreDialog}
+        size="md"
+        srTitle="Backups — Restore"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Restore Backup</h2>
               <p className="text-sm text-destructive mt-1">
@@ -688,14 +700,18 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Settings Dialog */}
-      {showSettingsDialog && editedSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showSettingsDialog}
+        onOpenChange={setShowSettingsDialog}
+        size="lg"
+        srTitle="Backups — Settings"
+      >
+        {editedSettings && (
+          <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Backup Settings</h2>
             </div>
@@ -798,9 +814,9 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+        )}
+      </Modal>
     </div>
   )
 }

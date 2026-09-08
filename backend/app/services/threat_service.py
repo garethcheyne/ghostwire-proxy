@@ -58,6 +58,14 @@ def _send_push_notification_background(coro):
     except Exception as e:
         logger.debug(f"Could not send push notification: {e}")
 
+# An "under attack" alert is about volume across the whole fleet, not any one
+# actor: this many threat events inside the window trips it.
+UNDER_ATTACK_EVENTS_PER_MINUTE = 60
+# Don't re-announce the same ongoing attack every few seconds.
+UNDER_ATTACK_COOLDOWN_SECONDS = 900
+_last_under_attack_alert: Optional[datetime] = None
+
+
 # Severity score mapping
 SEVERITY_SCORES = {
     "low": 10,
@@ -166,7 +174,70 @@ async def record_threat_event(
         except Exception as e:
             logger.debug(f"Push notification skipped: {e}")
 
+    await _maybe_notify_under_attack(db)
+
     return event
+
+
+async def _maybe_notify_under_attack(db: AsyncSession) -> None:
+    """Raise a fleet-wide "under attack" alert when event volume spikes.
+
+    Per-event notifications answer "who did this"; this one answers "is the
+    whole site being hit right now", which is a different question and the one
+    worth waking someone up for.
+    """
+    global _last_under_attack_alert
+
+    now = datetime.now(timezone.utc)
+    if (
+        _last_under_attack_alert
+        and (now - _last_under_attack_alert).total_seconds() < UNDER_ATTACK_COOLDOWN_SECONDS
+    ):
+        return
+
+    window_start = now - timedelta(minutes=1)
+    try:
+        count_result = await db.execute(
+            select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= window_start)
+        )
+        events_per_minute = int(count_result.scalar() or 0)
+        if events_per_minute < UNDER_ATTACK_EVENTS_PER_MINUTE:
+            return
+
+        ip_result = await db.execute(
+            select(ThreatEvent.client_ip)
+            .where(ThreatEvent.timestamp >= window_start)
+            .group_by(ThreatEvent.client_ip)
+            .order_by(func.count(ThreatEvent.id).desc())
+            .limit(10)
+        )
+        source_ips = [row[0] for row in ip_result.all()]
+
+        category_result = await db.execute(
+            select(ThreatEvent.category)
+            .where(ThreatEvent.timestamp >= window_start)
+            .group_by(ThreatEvent.category)
+            .order_by(func.count(ThreatEvent.id).desc())
+            .limit(1)
+        )
+        top_category = category_result.scalar() or "mixed"
+
+        _last_under_attack_alert = now
+        logger.warning(
+            f"Under attack: {events_per_minute} threat events/min, "
+            f"top category={top_category}, sources={source_ips[:3]}"
+        )
+
+        from app.services.push_service import push_service
+        _send_push_notification_background(
+            push_service.notify_under_attack(
+                attack_type=top_category,
+                requests_per_minute=events_per_minute,
+                source_ips=source_ips,
+            )
+        )
+    except Exception as e:
+        logger.debug(f"Under-attack check skipped: {e}")
 
 
 async def evaluate_thresholds(db: AsyncSession, actor: ThreatActor) -> None:

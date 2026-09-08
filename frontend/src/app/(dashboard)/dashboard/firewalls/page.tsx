@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError, toastInfo } from '@/lib/toast'
 import {
@@ -474,9 +475,14 @@ export default function FirewallsPage() {
       )}
 
       {/* Test Findings Dialog */}
-      {findingsDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={findingsDialog !== null}
+        onOpenChange={(open) => { if (!open) setFindingsDialog(null) }}
+        size="lg"
+        srTitle="Firewalls — Test results"
+      >
+        {findingsDialog && (
+          <ModalBody className="p-0">
             <div className="border-b border-border p-6 flex items-center justify-between">
               <h2 className="text-xl font-semibold">
                 Test Results — {findingsDialog.connectorName}
@@ -522,14 +528,18 @@ export default function FirewallsPage() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+        )}
+      </Modal>
 
       {/* Create/Edit Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Firewalls — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingConnector ? 'Edit Connector' : 'Add Firewall Connector'}
@@ -755,9 +765,8 @@ export default function FirewallsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
     </div>
   )
 }

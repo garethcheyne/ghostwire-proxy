@@ -20,6 +20,7 @@ import {
   Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -366,9 +367,13 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
         )}
 
         {/* Create/Edit Dialog */}
-        {showDialog && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowDialog(false)}>
-            <div className="bg-background border rounded-lg p-4 sm:p-6 w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+        <Modal
+          open={showDialog}
+          onOpenChange={setShowDialog}
+          size="lg"
+          srTitle="Honeypot — Trap"
+        >
+            <ModalBody className="p-4 sm:p-6">
               <h2 className="text-lg font-bold mb-4">{editingTrap ? 'Edit' : 'Create'} Trap</h2>
               {error && <div className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
               <div className="space-y-3">
@@ -419,9 +424,8 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                   {editingTrap ? 'Save' : 'Create'}
                 </Button>
               </div>
-            </div>
-          </div>
-        )}
+            </ModalBody>
+        </Modal>
       </div>
     )
   }

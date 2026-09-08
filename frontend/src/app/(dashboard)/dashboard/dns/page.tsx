@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -478,9 +479,13 @@ export default function DnsPage() {
       )}
 
       {/* Add Provider Dialog */}
-      {showProviderDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showProviderDialog}
+        onOpenChange={setShowProviderDialog}
+        size="md"
+        srTitle="Dns — Provider"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Add DNS Provider</h2>
             </div>
@@ -561,14 +566,17 @@ export default function DnsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Add/Edit Record Dialog */}
-      {showRecordDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showRecordDialog}
+        onOpenChange={setShowRecordDialog}
+        size="md"
+        srTitle="Dns — Record"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingRecord ? 'Edit DNS Record' : 'Add DNS Record'}
@@ -692,9 +700,8 @@ export default function DnsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
     </div>
   )
 }

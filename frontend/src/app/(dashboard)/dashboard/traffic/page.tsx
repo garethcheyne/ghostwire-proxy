@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useProxyHosts } from '@/lib/queries/proxy-hosts'
 import { useTrafficStats } from '@/lib/queries/dashboard'
+import { useTrafficLogs } from '@/lib/queries/traffic'
+import { useDebounced } from '@/lib/use-debounced'
 import { proxyHostKeys, trafficKeys } from '@/lib/queries/keys'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -21,6 +23,7 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
+import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { TrafficLog, ProxyHost } from '@/types'
 
 export default function TrafficPage() {
@@ -29,17 +32,28 @@ export default function TrafficPage() {
   const { data: hostsData } = useProxyHosts({ limit: 100 })
   const { data: stats } = useTrafficStats()
   const hosts: ProxyHost[] = hostsData?.items ?? []
-  const [logs, setLogs] = useState<TrafficLog[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearch = useDebounced(searchQuery)
   const [selectedHost, setSelectedHost] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('')
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const limit = 50
+
+  const {
+    data: logsData,
+    isPending: isLoading,
+    isFetching: isRefreshing,
+  } = useTrafficLogs({
+    page,
+    limit,
+    proxyHostId: selectedHost || undefined,
+    statusClass: selectedStatus || undefined,
+    search: debouncedSearch || undefined,
+  })
+  const logs: TrafficLog[] = logsData?.items ?? []
+  const totalPages = Math.max(1, Math.ceil((logsData?.total ?? 0) / limit))
 
   // Detail view
   const [selectedLog, setSelectedLog] = useState<TrafficLog | null>(null)
@@ -49,33 +63,7 @@ export default function TrafficPage() {
     queryClient.invalidateQueries({ queryKey: trafficKeys.all })
   }
 
-  const fetchLogs = useCallback(async () => {
-    setIsRefreshing(true)
-    try {
-      const params = new URLSearchParams({
-        skip: ((page - 1) * limit).toString(),
-        limit: limit.toString(),
-      })
-      if (selectedHost) params.append('proxy_host_id', selectedHost)
-      if (selectedStatus) params.append('status_code', selectedStatus)
-
-      const response = await api.get(`/api/traffic?${params}`)
-      setLogs(response.data.items || response.data)
-      setTotalPages(Math.ceil((response.data.total || response.data.length) / limit))
-    } catch (error) {
-      console.error('Failed to fetch logs:', error)
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }, [page, selectedHost, selectedStatus])
-
-  useEffect(() => {
-    fetchLogs()
-  }, [fetchLogs])
-
   const handleRefresh = () => {
-    fetchLogs()
     fetchData()
   }
 
@@ -83,7 +71,6 @@ export default function TrafficPage() {
     if (!(await confirm({ description: 'Are you sure you want to purge ALL traffic logs? This cannot be undone.', variant: 'destructive' }))) return
     try {
       await api.delete('/api/traffic')
-      setLogs([])
       fetchData()
       toastSuccess('Traffic logs purged')
     } catch (error) {
@@ -95,7 +82,7 @@ export default function TrafficPage() {
   const handleDeleteLog = async (logId: string) => {
     try {
       await api.delete(`/api/traffic/${logId}`)
-      setLogs(logs.filter(l => l.id !== logId))
+      queryClient.invalidateQueries({ queryKey: trafficKeys.all })
       toastSuccess('Log entry deleted')
     } catch (error) {
       console.error('Failed to delete log:', error)
@@ -191,7 +178,11 @@ export default function TrafficPage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              // A new term changes the result set; page 2 of the old one is meaningless.
+              setPage(1)
+            }}
             className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="Search by URI or IP..."
           />
@@ -368,22 +359,18 @@ export default function TrafficPage() {
       </div>
 
       {/* Log Detail Modal */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
-            <div className="border-b border-border p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Request Details</h2>
-                <button
-                  onClick={() => setSelectedLog(null)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
+      <Modal
+        open={selectedLog !== null}
+        onOpenChange={(open) => { if (!open) setSelectedLog(null) }}
+        size="2xl"
+      >
+        {selectedLog && (
+          <>
+            <ModalHeader className="p-6">
+              <ModalTitle className="text-xl">Request Details</ModalTitle>
+            </ModalHeader>
 
-            <div className="p-6 space-y-4">
+            <ModalBody className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Timestamp</p>
@@ -465,19 +452,19 @@ export default function TrafficPage() {
                   </code>
                 </div>
               )}
-            </div>
+            </ModalBody>
 
-            <div className="border-t border-border p-4 flex justify-end">
+            <ModalFooter className="p-4">
               <button
                 onClick={() => setSelectedLog(null)}
                 className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
               >
                 Close
               </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalFooter>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

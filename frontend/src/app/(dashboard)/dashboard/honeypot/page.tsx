@@ -22,6 +22,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -757,9 +758,13 @@ export default function HoneypotPage() {
       )}
 
       {/* ── Create/Edit Dialog ── */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setShowCreateDialog(false)}>
-          <div className="bg-background border rounded-lg p-6 w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Honeypot — Trap"
+      >
+          <ModalBody className="p-6">
             <h2 className="text-lg font-bold mb-4">{editingTrap ? 'Edit' : 'Create'} Honeypot Trap</h2>
 
             {error && <div className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
@@ -874,9 +879,8 @@ export default function HoneypotPage() {
                 {editingTrap ? 'Save' : 'Create'}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+      </Modal>
     </div>
   )
 }

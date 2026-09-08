@@ -24,6 +24,9 @@ const nextConfig: NextConfig = {
   generateBuildId: () => getBuildId(),
   reactStrictMode: true,
   poweredByHeader: false,
+  // Dev-server only (ignored by `next build`): allow `npm run dev` to be reached
+  // over the LAN rather than just localhost.
+  allowedDevOrigins: ['192.168.0.13'],
   images: {
     remotePatterns: [
       {

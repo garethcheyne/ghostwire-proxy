@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "default_site_redirect_url": "",
     "trusted_ips": "[]",
     "abuseipdb_api_key": "",
+    "abuseipdb_auto_report_enabled": "false",
 }
 
 

@@ -1,0 +1,17 @@
+# Nginx log rotation. See enhancement/02-disk-pressure-and-log-rotation.md —
+# these files had never been rotated and reached 2.3 GB / 155 MB, which filled
+# the disk and made Postgres VACUUM fail during the nightly retention job.
+#
+# maxsize means "rotate daily, or sooner if it gets big", which matters because
+# a single busy day can produce hundreds of MB.
+/var/log/nginx/*.log {
+    daily
+    maxsize 100M
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+}

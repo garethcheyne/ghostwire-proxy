@@ -103,3 +103,21 @@ class IpEnrichment(Base):
     enriched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+
+
+class AbuseIPDBBlacklistEntry(Base):
+    """Local cache of AbuseIPDB's /blacklist endpoint (confidenceMinimum-filtered IPs).
+
+    That endpoint has its own, much tighter rate limit than /check (as low as 5 req/day
+    on some plans), so it's synced at most once a day by a background task rather than
+    called per-request. Real-time enrichment (enrich_ip) checks this table before ever
+    spending a metered /check call - most honeypot-hitting IPs are already known-bad and
+    show up here for free.
+    """
+    __tablename__ = "abuseipdb_blacklist"
+
+    ip_address = Column(String(45), primary_key=True)
+    abuse_confidence_score = Column(Integer, nullable=False)
+    country_code = Column(String(5), nullable=True)
+    last_reported_at = Column(DateTime(timezone=True), nullable=True)
+    synced_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

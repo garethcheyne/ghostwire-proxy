@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import api from '@/lib/api'
+import { useProxyHosts } from '@/lib/queries/proxy-hosts'
 import { OverviewTab } from '@/components/analytics/overview-tab'
 import { TrafficTab } from '@/components/analytics/traffic-tab'
 import { SecurityTab } from '@/components/analytics/security-tab'
@@ -81,6 +82,13 @@ export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
+  // '' = all hosts. The dashboard endpoint has always accepted proxy_host_id;
+  // the UI just never sent it, so every figure was fleet-wide.
+  const [selectedHost, setSelectedHost] = useState('')
+  const { data: hostsData } = useProxyHosts({ limit: 100 })
+  const hosts = hostsData?.items ?? []
+  const selectedHostName =
+    hosts.find((h) => h.id === selectedHost)?.domain_names?.[0] ?? null
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [refreshInterval, setRefreshInterval] = useState(30)
   const [countdown, setCountdown] = useState(30)
@@ -89,7 +97,9 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true)
     try {
-      const response = await api.get(`/api/analytics/dashboard?period=${period}`)
+      const params = new URLSearchParams({ period })
+      if (selectedHost) params.set('proxy_host_id', selectedHost)
+      const response = await api.get(`/api/analytics/dashboard?${params}`)
       setData(response.data)
     } catch (error) {
       console.error('Failed to fetch analytics:', error)
@@ -97,7 +107,7 @@ export default function AnalyticsPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [period])
+  }, [period, selectedHost])
 
   const fetchRealtime = useCallback(async () => {
     try {
@@ -180,10 +190,25 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>
           <p className="text-muted-foreground">
-            Traffic, security, and performance insights
+            {selectedHostName
+              ? `Traffic, security, and performance for ${selectedHostName}`
+              : 'Traffic, security, and performance across all hosts'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedHost}
+            onChange={(e) => setSelectedHost(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-input bg-background text-sm"
+            aria-label="Filter analytics by host"
+          >
+            <option value="">All hosts</option>
+            {hosts.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.domain_names?.[0] ?? h.id}
+              </option>
+            ))}
+          </select>
           <div className="flex rounded-lg border border-input overflow-hidden">
             {(['24h', '7d', '30d', '90d'] as const).map((p) => (
               <button
@@ -306,6 +331,7 @@ export default function AnalyticsPage() {
             formatNumber={formatNumber}
             formatBytes={formatBytes}
             formatResponseTime={formatResponseTime}
+            onSelectHost={setSelectedHost}
           />
         </TabsContent>
 

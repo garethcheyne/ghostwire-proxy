@@ -15,6 +15,13 @@ speculation. Ordered by severity/impact.
 | [03](03-traffic-logger-connection-pool-corruption.md) | Traffic logger corrupts its own HTTP keepalive pool | **High** | "can't see web traffic" |
 | [04](04-rule-reload-resilience-and-visibility.md) | Silent WAF/rate-limit/GeoIP rule reload failures | **Medium** | "can't tell why things don't work" |
 | [05](05-global-ip-blocking-not-per-host.md) | Automatic IP blocking is global, not per-host | **Medium** | "rules are global not per-host" |
+| [06](06-location-dialog-missing-timeout-and-advanced-fields.md) | Location dialog has no timeout/advanced-config fields | **High** | "ghostwire proxy timing out" / "UI not wired up properly" |
+| [07](07-analytics-rollups-never-scheduled.md) | Analytics rollups never scheduled — retention destroys history | **High** | "analytics slow" / "can't compare periods" |
+| [08](08-no-visitor-identity-in-traffic-logs.md) | `auth_user` never written — no visitor identity | Medium | "track a unique user, not just the IP" |
+| [09](09-analytics-has-no-per-host-drilldown.md) | Analytics has no per-host drill-down | Medium | "click a host and see its traffic / popular pages" |
+| [10](10-deploys-do-not-gate-on-ci.md) | Deploys don't gate on CI; `COPY . .` ships the working tree | Medium | "the UI broke right after a deploy" |
+| [11](11-backup-failure-is-silent.md) | A failing scheduled backup is silent | Medium | "how would we know if backups stopped?" |
+| [12](12-test-suite-could-drop-the-production-database.md) | Test suite could drop the production database | **Critical** | "how did the database get purged?" |
 
 ## Quick summary
 
@@ -46,6 +53,13 @@ speculation. Ordered by severity/impact.
   (`ThreatActor`, driven by threat thresholds) — it has no host concept at all, so an IP that
   trips a threshold on one site gets blocked on *every* proxied host. See
   [05](05-global-ip-blocking-not-per-host.md).
+- **Location tuning is invisible in the UI**: the `ProxyLocation` model, API, and nginx
+  generator all correctly support per-location timeouts and a per-location advanced-config
+  block, but the Add/Edit Location dialog never renders inputs for any of it — the only
+  "Advanced" box on the page belongs to the *host* dialog and renders into the default `/`
+  location instead. This directly caused `wingman.err403.com`'s `/api/chat` to keep timing
+  out at 60s for weeks — a fix aimed at `/api` had nowhere to go but the wrong field. See
+  [06](06-location-dialog-missing-timeout-and-advanced-fields.md).
 
 ## Suggested immediate remediation (no code changes)
 
@@ -58,3 +72,24 @@ These can be done today, independent of the code fixes below:
 3. Manually trigger a certificate renewal from the UI for the near-term-expiring hosts (or
    run `process_certificate_renewal` for each) until [01](01-certificate-renewal-not-deployed.md)
    is fixed, so the site doesn't serve expired certs in the meantime.
+4. For `wingman.err403.com` specifically: delete the dead nested-`location /api/` snippet
+   from the host's Advanced tab, and `PUT` real `proxy_read_timeout`/`proxy_send_timeout`
+   (300) + `advanced_config` (`client_max_body_size 25m;\nproxy_buffering off;`) onto its
+   `/api` location via the API directly, then regenerate + reload nginx. See
+   [06](06-location-dialog-missing-timeout-and-advanced-fields.md).
+
+
+## Status (2026-09-08)
+
+Fixed and deployed: **01** (cert renewal), **03** (traffic-logger keepalive
+corruption), **06** (location dialog fields), plus a spoofable-client-IP flaw
+found while working on 06 — every IP-based control trusted request headers
+instead of nginx's validated `remote_addr`, so any visitor could choose their own
+source address and, by naming a trusted IP, skip the WAF entirely.
+
+Also landed alongside: per-host CDN awareness (`cdn_provider`, with Cloudflare and
+Imperva edge ranges refreshed daily from the providers), upstream health
+monitoring with host-down/recovered alerts, `notify_under_attack` wiring, a shared
+`Modal` for all 21 dialogs, and PWA service-worker registration on load.
+
+Still open: **02** (log rotation — disk at 84%), **04**, **05**.

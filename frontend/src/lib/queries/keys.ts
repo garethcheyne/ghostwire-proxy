@@ -36,7 +36,10 @@ export const accessListKeys = {
 
 export const trafficKeys = {
   all: ['traffic'] as const,
-  stats: () => [...trafficKeys.all, 'stats'] as const,
+  stats: (proxyHostId?: string | null) =>
+    [...trafficKeys.all, 'stats', proxyHostId ?? null] as const,
+  logs: (params: Record<string, unknown> = {}) =>
+    [...trafficKeys.all, 'logs', params] as const,
 }
 
 export const wafKeys = {

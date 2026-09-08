@@ -13,6 +13,37 @@ from app.services.certificate_service import (
 from app.models.certificate import Certificate
 
 
+def _self_signed_pem(days_valid: int = 90) -> str:
+    """A real, parseable PEM certificate for tests.
+
+    The service reads the actual notAfter date out of the issued certificate
+    (see `_parse_certificate_expiry`, added so a no-op `certbot renew` stops
+    stamping a fresh 90-day expiry onto an unchanged cert). A placeholder string
+    therefore no longer round-trips — these tests need a genuine certificate.
+    """
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, "test.example.com"),
+    ])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=days_valid))
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
 class TestRequestLetsEncryptCertificate:
     """Tests for requesting Let's Encrypt certificates."""
 
@@ -60,7 +91,7 @@ class TestRequestLetsEncryptCertificate:
         with patch("subprocess.run", return_value=mock_result), \
              patch("os.path.exists", return_value=True), \
              patch("builtins.open", MagicMock(side_effect=[
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="CERT_PEM"))),
+                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))),
                            __exit__=MagicMock(return_value=False)),
                  MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="KEY_PEM"))),
                            __exit__=MagicMock(return_value=False)),
@@ -156,7 +187,7 @@ class TestRenewCertificate:
 
         with patch("subprocess.run", return_value=mock_result), \
              patch("builtins.open", MagicMock(side_effect=[
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="NEW_CERT"))),
+                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))),
                            __exit__=MagicMock(return_value=False)),
                  MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="NEW_KEY"))),
                            __exit__=MagicMock(return_value=False)),

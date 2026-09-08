@@ -240,7 +240,7 @@ async def lifespan(app: FastAPI):
                     if abs((next_run - now).total_seconds()) < 60:
                         logger.info("Running scheduled backup...")
                         try:
-                            await backup_service.create_backup(
+                            created_backup = await backup_service.create_backup(
                                 db=session,
                                 backup_type="scheduled",
                                 include_database=True,
@@ -252,8 +252,34 @@ async def lifespan(app: FastAPI):
                             # Run cleanup after scheduled backup
                             await backup_service.cleanup_old_backups(session)
                             logger.info("Scheduled backup completed successfully")
+                            try:
+                                from app.services.push_service import push_service
+                                await push_service.notify_backup_completed(
+                                    backup_id=created_backup.id,
+                                    size_mb=round((created_backup.file_size or 0) / 1048576, 1),
+                                    db=session,
+                                )
+                            except Exception as notify_err:
+                                logger.debug(f"Backup success notification skipped: {notify_err}")
                         except Exception as e:
                             logger.error(f"Scheduled backup failed: {e}")
+                            # A silent backup failure is how the August purge became
+                            # unrecoverable. Make it loud on every channel.
+                            try:
+                                from app.services.push_service import push_service
+                                from app.services.alert_service import dispatch_alert
+                                await push_service.notify_backup_failed(error=str(e), db=session)
+                                await dispatch_alert(
+                                    db=session,
+                                    alert_type="backup_failed",
+                                    severity="critical",
+                                    title="Backup Failed",
+                                    message=f"The scheduled backup did not complete: {e}",
+                                    data={"error": str(e)},
+                                    skip_push=True,
+                                )
+                            except Exception as notify_err:
+                                logger.error(f"Could not raise backup-failure alert: {notify_err}")
             except asyncio.CancelledError:
                 logger.info("Scheduled backup task cancelled")
                 break
@@ -262,6 +288,60 @@ async def lifespan(app: FastAPI):
 
     backup_task = asyncio.create_task(scheduled_backup_loop())
     logger.info("Started scheduled backup task")
+
+    # Upstream health monitoring — notifies when a proxy host goes down or recovers
+    from app.services.health_service import run_health_checks
+
+    async def health_check_loop():
+        """Probe every enabled host's upstream and alert on state changes."""
+        # Let nginx and the upstreams settle after a restart before the first
+        # probe, so a slow-starting backend isn't reported as an outage.
+        await asyncio.sleep(90)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    await run_health_checks(session)
+            except asyncio.CancelledError:
+                logger.info("Health check task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in health check loop: {e}")
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                logger.info("Health check task cancelled")
+                break
+
+    health_task = asyncio.create_task(health_check_loop())
+    logger.info("Started upstream health monitoring task")
+
+    # Refresh the CDN edge ranges nginx trusts for real-client-IP headers
+    from app.services.trusted_proxy_service import refresh_ranges
+
+    async def trusted_proxy_refresh_loop():
+        """Keep Cloudflare/Imperva edge ranges current (checked daily).
+
+        A stale list means either the CDN's own address gets logged and blocked
+        as if it were the visitor, or a range we should no longer trust still is.
+        """
+        await asyncio.sleep(30)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    await refresh_ranges(session)
+            except asyncio.CancelledError:
+                logger.info("Trusted proxy refresh task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error refreshing trusted proxy ranges: {e}")
+            try:
+                await asyncio.sleep(86400)
+            except asyncio.CancelledError:
+                logger.info("Trusted proxy refresh task cancelled")
+                break
+
+    trusted_proxy_task = asyncio.create_task(trusted_proxy_refresh_loop())
+    logger.info("Started trusted proxy range refresh task")
 
     # GeoIP database auto-update (checks monthly)
     async def geoip_update_loop():
@@ -450,14 +530,126 @@ async def lifespan(app: FastAPI):
     enrichment_backfill_task = asyncio.create_task(enrichment_backfill_loop())
     logger.info("Started IP enrichment backfill task")
 
+    # AbuseIPDB blacklist sync — pulls the confidenceMinimum=75 blacklist into a
+    # local table so per-IP enrichment can check known-bad IPs for free instead
+    # of spending a metered /check call on every honeypot hit. sync_abuseipdb_blacklist()
+    # itself no-ops if synced within BLACKLIST_SYNC_MIN_INTERVAL, so it's safe to
+    # just check every hour and let it decide - that endpoint's own rate limit
+    # is far tighter than /check (as low as 5 req/day on some plans).
+    from app.services.enrichment_service import sync_abuseipdb_blacklist
+
+    async def abuseipdb_blacklist_sync_loop():
+        """Periodically refresh the local AbuseIPDB blacklist cache."""
+        await asyncio.sleep(45)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting
+                    setting_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_api_key")
+                    )
+                    setting = setting_result.scalar_one_or_none()
+                    if setting and setting.value:
+                        result = await sync_abuseipdb_blacklist(session, setting.value)
+                        if result["status"] == "synced":
+                            logger.info(
+                                "AbuseIPDB blacklist sync: cached %d known-bad IPs",
+                                result["count"],
+                            )
+            except asyncio.CancelledError:
+                logger.info("AbuseIPDB blacklist sync task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in AbuseIPDB blacklist sync: %s", e)
+            await asyncio.sleep(3600)  # check hourly; sync itself is rate-limited internally
+
+    abuseipdb_blacklist_task = asyncio.create_task(abuseipdb_blacklist_sync_loop())
+    logger.info("Started AbuseIPDB blacklist sync task")
+
+    # AbuseIPDB reporting — submits confirmed attackers (ThreatActor rows that
+    # escalated to temp_blocked+) back to AbuseIPDB via /bulk-report. Opt-in:
+    # gated on the `abuseipdb_auto_report_enabled` setting (default off,
+    # toggle lives in Settings next to the API key). Trusted IPs are always
+    # excluded so testing from an admin's own IP never gets reported.
+    from app.services.abuseipdb_report_service import submit_bulk_reports
+
+    async def abuseipdb_report_loop():
+        """Periodically report newly-escalated threat actors to AbuseIPDB."""
+        await asyncio.sleep(60)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting
+                    key_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_api_key")
+                    )
+                    key_setting = key_result.scalar_one_or_none()
+                    enabled_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_auto_report_enabled")
+                    )
+                    enabled_setting = enabled_result.scalar_one_or_none()
+
+                    if (
+                        key_setting and key_setting.value
+                        and enabled_setting and enabled_setting.value == "true"
+                    ):
+                        result = await submit_bulk_reports(session, key_setting.value)
+                        if result["status"] == "reported":
+                            logger.info(
+                                "AbuseIPDB report: submitted %d IPs (%d accepted, %d rejected, %d skipped as trusted)",
+                                result["submitted"], result["accepted"], result["rejected"], result["skipped_trusted"],
+                            )
+            except asyncio.CancelledError:
+                logger.info("AbuseIPDB report task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in AbuseIPDB report loop: %s", e)
+            await asyncio.sleep(3600)  # check hourly; sync itself is rate-limited internally
+
+    abuseipdb_report_task = asyncio.create_task(abuseipdb_report_loop())
+    logger.info("Started AbuseIPDB report task")
+
     # Data retention cleanup — prune old traffic_logs, threat_events, audit_logs daily
     from app.services.retention_service import run_retention_cleanup
+    from app.services.analytics_service import (
+        aggregate_hourly, aggregate_daily, aggregate_geo,
+    )
+
+    async def roll_up_analytics(hours_back: int = 3, days_back: int = 2) -> None:
+        """Summarise traffic_logs into the analytics_* tables.
+
+        Deliberately called from inside the retention loop, immediately before the
+        prune: rolling up has to happen before rows are deleted, and making that
+        ordering structural is safer than running two loops that merely happen to
+        be scheduled apart.
+        """
+        async with AsyncSessionLocal() as session:
+            h = await aggregate_hourly(session, hours_back=hours_back)
+            d = await aggregate_daily(session, days_back=days_back)
+            g = await aggregate_geo(session, days_back=days_back)
+        logger.info(f"Analytics rollup: {h} hourly, {d} daily, {g} geo rows")
 
     async def data_retention_loop():
-        """Run data retention cleanup once per hour."""
+        """Roll traffic up into analytics, then prune, once per hour."""
         # Wait 5 minutes on startup before first run
         await asyncio.sleep(300)
+
+        # One-time backfill so traffic already sitting in the table is summarised
+        # before the first prune ever removes it.
+        try:
+            await roll_up_analytics(hours_back=72, days_back=90)
+        except Exception as e:
+            logger.error(f"Initial analytics backfill failed: {e}")
+
         while True:
+            try:
+                # Summarise first — anything pruned below is gone for good.
+                await roll_up_analytics()
+            except asyncio.CancelledError:
+                logger.info("Data retention task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in analytics rollup: {e}")
             try:
                 summary = await run_retention_cleanup()
                 total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
@@ -533,8 +725,20 @@ async def lifespan(app: FastAPI):
     geoip_task.cancel()
     update_check_task.cancel()
     enrichment_backfill_task.cancel()
+    abuseipdb_blacklist_task.cancel()
+    abuseipdb_report_task.cancel()
     retention_task.cancel()
     certificate_renewal_task.cancel()
+    health_task.cancel()
+    trusted_proxy_task.cancel()
+    try:
+        await trusted_proxy_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
     try:
         await metrics_task
     except asyncio.CancelledError:
@@ -553,6 +757,14 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await enrichment_backfill_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await abuseipdb_blacklist_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await abuseipdb_report_task
     except asyncio.CancelledError:
         pass
     try:
@@ -589,6 +801,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Pagination totals travel in this header; without exposing it the browser
+    # cannot read it on a genuinely cross-origin request.
+    expose_headers=["X-Total-Count"],
 )
 
 

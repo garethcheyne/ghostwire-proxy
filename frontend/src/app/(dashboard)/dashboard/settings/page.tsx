@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
+import { Switch } from '@/components/ui/switch'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -62,8 +63,10 @@ export default function SettingsPage() {
   const [abuseIpDbKeyHasValue, setAbuseIpDbKeyHasValue] = useState(false)
   const [isSavingAbuseKey, setIsSavingAbuseKey] = useState(false)
   const [showAbuseKey, setShowAbuseKey] = useState(false)
+  const [abuseIpDbAutoReport, setAbuseIpDbAutoReport] = useState(false)
+  const [isSavingAutoReport, setIsSavingAutoReport] = useState(false)
 
-  usePageData(() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey() })
+  usePageData(() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey(); fetchAbuseIpDbAutoReport() })
 
   const fetchSettings = async () => {
     try {
@@ -184,6 +187,30 @@ export default function SettingsPage() {
     }
   }
 
+  const fetchAbuseIpDbAutoReport = async () => {
+    try {
+      const { data } = await api.get('/api/settings/abuseipdb_auto_report_enabled')
+      setAbuseIpDbAutoReport(data.value === 'true')
+    } catch {
+      setAbuseIpDbAutoReport(false)
+    }
+  }
+
+  const toggleAbuseIpDbAutoReport = async (enabled: boolean) => {
+    setIsSavingAutoReport(true)
+    const previous = abuseIpDbAutoReport
+    setAbuseIpDbAutoReport(enabled)
+    try {
+      await api.put('/api/settings/abuseipdb_auto_report_enabled', { value: enabled ? 'true' : 'false' })
+      toastSuccess(enabled ? 'AbuseIPDB reporting enabled' : 'AbuseIPDB reporting disabled')
+    } catch {
+      setAbuseIpDbAutoReport(previous)
+      toastError('Failed to update AbuseIPDB reporting setting')
+    } finally {
+      setIsSavingAutoReport(false)
+    }
+  }
+
   const saveTrustedIps = async (ips: string[]) => {
     setIsSavingTrusted(true)
     setMessage(null)
@@ -203,12 +230,36 @@ export default function SettingsPage() {
   const addTrustedIp = () => {
     const ip = newTrustedIp.trim()
     if (!ip) return
-    // Basic validation: IPv4, IPv4/CIDR
-    const ipv4 = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
-    if (!ipv4.test(ip)) {
-      setMessage({ type: 'error', text: 'Invalid IP address or CIDR format (e.g. 192.168.1.1 or 10.0.0.0/24)' })
+
+    // Basic validation only - the real enforcement (and full RFC-correct
+    // parsing) happens Lua-side in the proxy. This just catches obviously
+    // malformed input before it's saved.
+    const ipv4 = /^(\d{1,3}\.){3}\d{1,3}(\/(\d{1,2}))?$/
+    const ipv6 = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(\/(\d{1,3}))?$/
+
+    const ipv4Match = ip.match(ipv4)
+    const ipv6Match = ip.match(ipv6)
+
+    if (ipv4Match) {
+      const prefix = ipv4Match[3] ? parseInt(ipv4Match[3], 10) : null
+      if (prefix !== null && prefix > 32) {
+        setMessage({ type: 'error', text: 'IPv4 CIDR prefix must be between 0 and 32' })
+        return
+      }
+    } else if (ipv6Match) {
+      const prefix = ipv6Match[3] ? parseInt(ipv6Match[3], 10) : null
+      if (prefix !== null && prefix > 128) {
+        setMessage({ type: 'error', text: 'IPv6 CIDR prefix must be between 0 and 128' })
+        return
+      }
+    } else {
+      setMessage({
+        type: 'error',
+        text: 'Invalid IP address or CIDR format (e.g. 192.168.1.1, 10.0.0.0/24, 2001:db8::1, or 2001:db8::/32)',
+      })
       return
     }
+
     if (trustedIps.includes(ip)) {
       setMessage({ type: 'error', text: 'This IP is already in the trusted list' })
       return
@@ -632,6 +683,23 @@ export default function SettingsPage() {
               </p>
             )}
           </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border p-4">
+            <div className="pr-4">
+              <p className="text-sm font-medium">Report confirmed attackers to AbuseIPDB</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Once a day, submits threat actors that escalated to temp-blocked or worse back to AbuseIPDB
+                via bulk-report — separate quota from lookups above, strengthens both your future lookups and
+                the community&apos;s. IPs on your Trusted IPs list below are always excluded, so testing never
+                gets reported.
+              </p>
+            </div>
+            <Switch
+              checked={abuseIpDbAutoReport}
+              onCheckedChange={toggleAbuseIpDbAutoReport}
+              disabled={isSavingAutoReport || !abuseIpDbKeyHasValue}
+            />
+          </div>
         </div>
       </div>
 
@@ -654,7 +722,7 @@ export default function SettingsPage() {
               value={newTrustedIp}
               onChange={(e) => setNewTrustedIp(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addTrustedIp()}
-              placeholder="e.g. 203.86.201.144 or 10.0.0.0/8"
+              placeholder="e.g. 203.86.201.144, 10.0.0.0/8, or 2001:db8::1"
               className="flex-1 max-w-sm px-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
             <button

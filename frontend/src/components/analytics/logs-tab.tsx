@@ -1,6 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useProxyHosts } from '@/lib/queries/proxy-hosts'
+import { useTrafficStats } from '@/lib/queries/dashboard'
+import { useTrafficLogs } from '@/lib/queries/traffic'
+import { useDebounced } from '@/lib/use-debounced'
+import { trafficKeys, proxyHostKeys } from '@/lib/queries/keys'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Activity,
@@ -17,6 +23,7 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { Button } from '@/components/ui/button'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import type { TrafficLog, ProxyHost } from '@/types'
 
 interface TrafficStats {
@@ -34,76 +41,51 @@ interface LogsTabProps {
 
 export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
   const confirm = useConfirm()
-  const [logs, setLogs] = useState<TrafficLog[]>([])
-  const [hosts, setHosts] = useState<ProxyHost[]>([])
-  const [stats, setStats] = useState<TrafficStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const queryClient = useQueryClient()
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearch = useDebounced(searchQuery)
   const [selectedHost, setSelectedHost] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('')
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const limit = 50
 
   // Detail view
   const [selectedLog, setSelectedLog] = useState<TrafficLog | null>(null)
 
-  const fetchInitialData = useCallback(async () => {
-    try {
-      const [hostsRes, statsRes] = await Promise.all([
-        api.get('/api/proxy-hosts'),
-        api.get('/api/traffic/stats'),
-      ])
-      setHosts(hostsRes.data)
-      setStats(statsRes.data)
-    } catch (error) {
-      console.error('Failed to fetch data:', error)
-    }
-  }, [])
+  const { data: hostsData } = useProxyHosts({ limit: 100 })
+  const hosts: ProxyHost[] = hostsData?.items ?? []
+  const { data: stats } = useTrafficStats() as { data: TrafficStats | undefined }
 
-  const fetchLogs = useCallback(async () => {
-    setIsRefreshing(true)
-    try {
-      const params = new URLSearchParams({
-        skip: ((page - 1) * limit).toString(),
-        limit: limit.toString(),
-      })
-      if (selectedHost) params.append('proxy_host_id', selectedHost)
-      if (selectedStatus) params.append('status_code', selectedStatus)
+  const {
+    data: logsData,
+    isPending: isLoading,
+    isFetching: isRefreshing,
+  } = useTrafficLogs({
+    page,
+    limit,
+    proxyHostId: selectedHost || undefined,
+    statusClass: selectedStatus || undefined,
+    search: debouncedSearch || undefined,
+  })
+  const logs: TrafficLog[] = logsData?.items ?? []
+  const totalPages = Math.max(1, Math.ceil((logsData?.total ?? 0) / limit))
 
-      const response = await api.get(`/api/traffic?${params}`)
-      setLogs(response.data.items || response.data)
-      setTotalPages(Math.ceil((response.data.total || response.data.length) / limit))
-    } catch (error) {
-      console.error('Failed to fetch logs:', error)
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }, [page, selectedHost, selectedStatus])
-
-  useEffect(() => {
-    fetchInitialData()
-  }, [fetchInitialData])
-
-  useEffect(() => {
-    fetchLogs()
-  }, [fetchLogs])
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: trafficKeys.all })
+    queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+  }
 
   const handleRefresh = () => {
-    fetchLogs()
-    fetchInitialData()
+    refreshAll()
   }
 
   const handlePurgeLogs = async () => {
     if (!(await confirm({ description: 'Are you sure you want to purge ALL traffic logs? This cannot be undone.', variant: 'destructive' }))) return
     try {
       await api.delete('/api/traffic')
-      setLogs([])
-      fetchInitialData()
+      refreshAll()
       toastSuccess('Traffic logs purged')
     } catch (error) {
       toastError('Failed to purge traffic logs')
@@ -113,7 +95,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
   const handleDeleteLog = async (logId: string) => {
     try {
       await api.delete(`/api/traffic/${logId}`)
-      setLogs(logs.filter(l => l.id !== logId))
+      queryClient.invalidateQueries({ queryKey: trafficKeys.all })
       toastSuccess('Log entry deleted')
     } catch (error) {
       toastError('Failed to delete log')
@@ -181,7 +163,11 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              // A new term changes the result set; page 2 of the old one is meaningless.
+              setPage(1)
+            }}
             className="flex-1 px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             placeholder="Search URI or IP..."
           />
@@ -316,9 +302,14 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
       </div>
 
       {/* Log Detail Modal */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={selectedLog !== null}
+        onOpenChange={(open) => { if (!open) setSelectedLog(null) }}
+        size="2xl"
+        srTitle="Analytics — Request details"
+      >
+        {selectedLog && (
+          <ModalBody className="p-0">
             <div className="border-b border-border p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
@@ -391,9 +382,9 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
             <div className="border-t border-border p-3 sm:p-4 flex justify-end">
               <Button variant="outline" onClick={() => setSelectedLog(null)}>Close</Button>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+        )}
+      </Modal>
     </div>
   )
 }

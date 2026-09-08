@@ -19,8 +19,18 @@ async def dispatch_alert(
     title: str,
     message: str,
     data: Optional[dict] = None,
+    skip_push: bool = False,
 ) -> dict:
-    """Dispatch an alert to all configured channels based on user preferences."""
+    """Dispatch an alert to all configured channels based on user preferences.
+
+    skip_push: for callers that have already sent a richer push notification
+    themselves (with action buttons and the right urgency) and only want this to
+    fan the alert out to the remaining channels.
+
+    If no preference matches, the alert is still delivered to every push
+    subscriber rather than dropped. Alerting has to work before anyone has
+    configured channels and preferences, not after.
+    """
     severity_levels = {"low": 0, "medium": 1, "high": 2, "critical": 3}
     severity_level = severity_levels.get(severity, 1)
 
@@ -64,6 +74,8 @@ async def dispatch_alert(
             channels = ch_result.scalars().all()
 
         for channel in channels:
+            if skip_push and channel.channel_type == "push":
+                continue
             try:
                 success = await _send_to_channel(db, channel, title, message, data)
                 if success:
@@ -73,6 +85,25 @@ async def dispatch_alert(
             except Exception as e:
                 logger.error(f"Failed to send alert to channel {channel.id}: {e}")
                 error_count += 1
+
+    if sent_count == 0 and error_count == 0 and not skip_push:
+        # Nothing was configured to receive this. Fall back to every registered
+        # push subscriber so a fresh install still gets told about outages and
+        # attacks without first having to build a channel/preference matrix.
+        try:
+            from app.services.push_service import push_service
+
+            result = await push_service.notify_all(
+                title=title,
+                body=message,
+                notification_type=alert_type,
+                data=data,
+                db=db,
+            )
+            sent_count = int(result.get("sent", 0) or 0)
+        except Exception as e:
+            logger.error(f"Fallback push for '{alert_type}' failed: {e}")
+            error_count += 1
 
     return {"sent": sent_count, "errors": error_count}
 

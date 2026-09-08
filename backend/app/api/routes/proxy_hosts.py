@@ -16,46 +16,70 @@ from app.schemas.proxy_host import (
     LocationReorderRequest
 )
 from app.api.deps import get_current_user, get_current_admin_user
-from app.services.openresty_service import generate_all_configs, reload_nginx, remove_config, backup_configs, restore_configs
+from app.services.openresty_service import (
+    generate_all_configs, reload_nginx, remove_config,
+    backup_configs, restore_configs, test_nginx_config,
+)
 
 router = APIRouter()
 
 
-async def regenerate_and_reload(db: AsyncSession) -> tuple[bool, str]:
-    """Regenerate all nginx configs, test, and reload nginx.
-    
-    If the new config is invalid, automatically rolls back to the
-    previous working config so nginx keeps running.
+async def validate_and_apply(
+    db: AsyncSession,
+    remove_config_ids: list[str] | None = None,
+) -> tuple[bool, str]:
+    """Apply pending changes to nginx, committing them only if the config is valid.
+
+    Pending changes are flushed so the generated config reflects them, but they
+    are not committed until `nginx -t` has passed and nginx has reloaded. If any
+    step fails, both the database and the on-disk config are rolled back, so the
+    UI never shows a change as saved that nginx isn't actually running.
     """
     try:
-        # 1. Backup current working configs
-        backup_configs()
-
-        # 2. Generate new configs from DB
-        await generate_all_configs(db)
-
-        # 3. Test config before reloading
-        from app.services.openresty_service import test_nginx_config
-        test_ok, test_msg = test_nginx_config()
-        if not test_ok:
-            # Roll back to the last working config
-            restore_configs()
-            return False, f"Config validation failed — rolled back to previous working config. Error: {test_msg}"
-
-        # 4. Config is valid — reload nginx
-        success, message = reload_nginx()
-        if not success:
-            return False, f"Config is valid but reload failed: {message}"
-
-        # Invalidate cached list responses so the UI sees fresh data
-        # without waiting for the 15s TTL.
-        await cache_delete_prefix("proxy_hosts:")
-
-        return True, "Nginx reloaded successfully"
+        await db.flush()
     except Exception as e:
-        # If anything blew up, try to restore
+        await db.rollback()
+        return False, f"Could not save changes: {e}"
+
+    # 1. Back up the current working configs so a bad config can be undone
+    backup_configs()
+
+    # 2. Generate the candidate config from the flushed (uncommitted) state
+    try:
+        await generate_all_configs(db)
+        for host_id in remove_config_ids or []:
+            await remove_config(host_id)
+    except Exception as e:
         restore_configs()
-        return False, f"Error during config generation — rolled back. Detail: {str(e)}"
+        await db.rollback()
+        return False, f"Error generating nginx config — nothing was saved. Detail: {e}"
+
+    # 3. Validate it. test_nginx_config returns nginx's own output, which names
+    #    the offending file, line and directive — pass it straight through.
+    test_ok, test_msg = test_nginx_config()
+    if not test_ok:
+        restore_configs()
+        await db.rollback()
+        return False, (
+            "Config validation failed — nothing was saved and nginx is unchanged.\n\n"
+            f"{test_msg}"
+        )
+
+    # 4. Config is valid — reload nginx
+    reload_ok, reload_msg = reload_nginx()
+    if not reload_ok:
+        restore_configs()
+        await db.rollback()
+        return False, f"Config is valid but nginx reload failed — nothing was saved. {reload_msg}"
+
+    # 5. Only now is the change real
+    await db.commit()
+
+    # Invalidate cached list responses so the UI sees fresh data
+    # without waiting for the 15s TTL.
+    await cache_delete_prefix("proxy_hosts:")
+
+    return True, "Configuration validated and applied"
 
 
 @router.get("/", response_model=list[ProxyHostResponse])
@@ -171,7 +195,11 @@ async def create_proxy_host(
         details=f"Created proxy host: {', '.join(host_data.domain_names)}",
     )
     db.add(audit_log)
-    await db.commit()
+
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     # Reload with relationships
     result = await db.execute(
@@ -183,11 +211,6 @@ async def create_proxy_host(
         .where(ProxyHost.id == host.id)
     )
     host = result.scalar_one()
-
-    # Generate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return host
 
@@ -257,13 +280,13 @@ async def update_proxy_host(
         details=f"Updated proxy host: {host_id}",
     )
     db.add(audit_log)
-    await db.commit()
-    await db.refresh(host)
 
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(host)
 
     return host
 
@@ -296,14 +319,11 @@ async def delete_proxy_host(
     )
     db.add(audit_log)
 
-    # Remove the config file for this host
-    await remove_config(host_id)
-
     await db.delete(host)
-    await db.commit()
 
-    # Reload nginx
-    ok, msg = await regenerate_and_reload(db)
+    # The regenerated set already excludes this host; its stale .conf file is
+    # removed as part of the same validated, all-or-nothing apply.
+    ok, msg = await validate_and_apply(db, remove_config_ids=[host_id])
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
@@ -343,13 +363,13 @@ async def enable_proxy_host(
         details=f"Enabled proxy host: {host_id}",
     )
     db.add(audit_log)
-    await db.commit()
-    await db.refresh(host)
 
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(host)
 
     return host
 
@@ -389,13 +409,13 @@ async def disable_proxy_host(
         details=f"Disabled proxy host: {host_id}",
     )
     db.add(audit_log)
-    await db.commit()
-    await db.refresh(host)
 
-    # Regenerate nginx config and reload (disabled hosts won't be included)
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(host)
 
     return host
 
@@ -423,10 +443,14 @@ async def add_upstream_server(
         **server_data.model_dump()
     )
     db.add(server)
-    await db.commit()
-    await db.refresh(server)
-    await cache_delete_prefix("proxy_hosts:")
 
+    # Upstream changes alter the generated upstream block, so they go through
+    # the same validate-then-commit path as every other config change.
+    ok, msg = await validate_and_apply(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(server)
     return server
 
 
@@ -453,8 +477,12 @@ async def remove_upstream_server(
         )
 
     await db.delete(server)
-    await db.commit()
-    await cache_delete_prefix("proxy_hosts:")
+
+    # Upstream changes alter the generated upstream block, so they go through
+    # the same validate-then-commit path as every other config change.
+    ok, msg = await validate_and_apply(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
 
 # ============================================================================
@@ -519,13 +547,13 @@ async def create_location(
         details=f"Created location '{location_data.path}' for host {host_id}",
     )
     db.add(audit_log)
-    await db.commit()
-    await db.refresh(location)
 
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(location)
 
     return location
 
@@ -593,13 +621,13 @@ async def update_location(
         details=f"Updated location {location_id} for host {host_id}",
     )
     db.add(audit_log)
-    await db.commit()
-    await db.refresh(location)
 
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(location)
 
     return location
 
@@ -639,10 +667,9 @@ async def delete_location(
     db.add(audit_log)
 
     await db.delete(location)
-    await db.commit()
 
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
@@ -677,7 +704,10 @@ async def reorder_locations(
         if location:
             location.priority = item.priority
 
-    await db.commit()
+    # Nothing is committed unless the generated config passes nginx -t
+    ok, msg = await validate_and_apply(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     # Fetch updated locations
     result = await db.execute(
@@ -686,10 +716,5 @@ async def reorder_locations(
         .order_by(ProxyLocation.priority.desc())
     )
     locations = result.scalars().all()
-
-    # Regenerate nginx config and reload
-    ok, msg = await regenerate_and_reload(db)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
     return locations
