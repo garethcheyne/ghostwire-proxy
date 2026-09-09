@@ -284,6 +284,54 @@ async def _send_email(
     message: str,
     data: Optional[dict] = None,
 ) -> bool:
-    """Send email notification (placeholder - requires SMTP config)."""
-    logger.info(f"Email alert: {title} - {message}")
-    return True
+    """Send an alert by email via the configured SMTP server.
+
+    This used to log and return True, which meant every email alert was recorded
+    as delivered while nothing was ever sent. It now reports real success.
+    """
+    from app.core.database import AsyncSessionLocal
+    from app.services.email_service import send_email, EmailNotConfigured
+
+    try:
+        config = json.loads(channel.config) if isinstance(channel.config, str) else (channel.config or {})
+    except (json.JSONDecodeError, TypeError):
+        logger.error("Email channel %s has unreadable config", channel.id)
+        return False
+
+    recipients = config.get("recipients") or []
+    if isinstance(recipients, str):
+        recipients = [r.strip() for r in recipients.split(",") if r.strip()]
+
+    if not recipients:
+        logger.error("Email channel %s has no recipients configured", channel.id)
+        return False
+
+    detail = ""
+    if data:
+        rows = "".join(
+            f"<tr><td style='padding:4px 12px 4px 0;color:#666'>{k}</td>"
+            f"<td style='padding:4px 0'>{v}</td></tr>"
+            for k, v in data.items()
+        )
+        detail = f"<table style='margin-top:16px;font-size:14px'>{rows}</table>"
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await send_email(
+                db,
+                to=recipients,
+                subject=f"[Ghostwire Proxy] {title}",
+                text_body=f"{title}\n\n{message}\n",
+                html_body=(
+                    f"<h2 style='margin:0 0 8px;font-family:sans-serif'>{title}</h2>"
+                    f"<p style='font-family:sans-serif;font-size:15px'>{message}</p>"
+                    f"{detail}"
+                ),
+            )
+        return True
+    except EmailNotConfigured as e:
+        logger.error("Email alert not sent: %s", e)
+        return False
+    except Exception as e:
+        logger.error("Email alert failed: %s", e)
+        return False
