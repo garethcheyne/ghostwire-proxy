@@ -1,6 +1,7 @@
 # 12 — The test suite could drop the production database
 
 **Severity:** Critical
+**Status:** **Partial** (2026-09-09) — conftest guard done; committed password and the CI `DATABASE_URL` mismatch still open. See [README](README.md#partial).
 **Answers:** "how did the database get purged?"
 
 ## TL;DR

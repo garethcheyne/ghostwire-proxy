@@ -1,6 +1,7 @@
 # 02 — No log rotation → disk pressure → DB vacuum failures → slow stats
 
 **Severity:** Critical
+**Status:** **Partial** (2026-09-09) — logrotate shipped; prune schedule, vacuum-failure surfacing and low-disk guard still open. See [README](README.md#partial).
 **Answers:** "statistics taking too long to load"
 
 ## TL;DR

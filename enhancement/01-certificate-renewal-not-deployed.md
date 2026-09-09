@@ -1,6 +1,7 @@
 # 01 — Renewed certificates never get deployed to nginx
 
 **Severity:** Critical
+**Status:** **Done** (2026-09-09) — see [README](README.md#done).
 **Answers:** "on the certificate pages, many of them say expired, did they not self renew?"
 
 ## TL;DR

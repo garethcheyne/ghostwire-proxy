@@ -1,6 +1,7 @@
 # 08 — `TrafficLog.auth_user` is never written, so there is no visitor identity
 
 **Severity:** Medium
+**Status:** **Partial** (2026-09-09) — authenticated hosts done; public-host opt-in still open. See [README](README.md#partial).
 **Answers:** "is there a way to track a unique user, not just the IP address?"
 
 ## TL;DR

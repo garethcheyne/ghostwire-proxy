@@ -1,6 +1,7 @@
 # 09 — Analytics has no per-host drill-down, though the backend already supports it
 
 **Severity:** Medium
+**Status:** **Done** (2026-09-09) — see [README](README.md#done).
 **Answers:** "I want to click on a host and view all its traffic, popular pages etc"
 
 ## TL;DR

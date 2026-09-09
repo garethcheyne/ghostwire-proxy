@@ -1,6 +1,7 @@
 # 05 — Automatic IP blocking is global, not per-host
 
 **Severity:** Medium
+**Status:** **Not started** (2026-09-09) — see [README](README.md#not-started).
 **Answers:** "rules being global and not per host"
 
 ## TL;DR

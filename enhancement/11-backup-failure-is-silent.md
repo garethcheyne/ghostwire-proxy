@@ -1,6 +1,7 @@
 # 11 — A failing scheduled backup is silent
 
 **Severity:** Medium
+**Status:** **Done** (2026-09-09) — per-run alerts plus a 26h stale-backup watchdog. Offsite copy still not implemented. See [README](README.md#done).
 **Answers:** "how would we know if backups stopped working?"
 
 ## TL;DR

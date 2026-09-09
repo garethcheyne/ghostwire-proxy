@@ -1,6 +1,7 @@
 # 06 — Add/Edit Location dialog has no fields for per-location timeouts or advanced config
 
 **Severity:** High
+**Status:** **Done** (2026-09-09) — see [README](README.md#done).
 **Answers:** "why is ghostwire proxy timing out [for wingman.err403.com]" / "the UI in ghostwire is not wired up properly then"
 
 ## TL;DR

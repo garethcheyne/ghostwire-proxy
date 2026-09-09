@@ -8,20 +8,21 @@ the certs nginx is actually serving; and the relevant backend/Lua source.
 Every item below is backed by direct evidence (log lines, file paths, line numbers), not
 speculation. Ordered by severity/impact.
 
-| # | Title | Severity | Explains |
-|---|-------|----------|----------|
-| [01](01-certificate-renewal-not-deployed.md) | Renewed certs never reach nginx | **Critical** | "certs say expired" |
-| [02](02-disk-pressure-and-log-rotation.md) | No log rotation → disk pressure → DB vacuum failures | **Critical** | "stats slow to load" |
-| [03](03-traffic-logger-connection-pool-corruption.md) | Traffic logger corrupts its own HTTP keepalive pool | **High** | "can't see web traffic" |
-| [04](04-rule-reload-resilience-and-visibility.md) | Silent WAF/rate-limit/GeoIP rule reload failures | **Medium** | "can't tell why things don't work" |
-| [05](05-global-ip-blocking-not-per-host.md) | Automatic IP blocking is global, not per-host | **Medium** | "rules are global not per-host" |
-| [06](06-location-dialog-missing-timeout-and-advanced-fields.md) | Location dialog has no timeout/advanced-config fields | **High** | "ghostwire proxy timing out" / "UI not wired up properly" |
-| [07](07-analytics-rollups-never-scheduled.md) | Analytics rollups never scheduled — retention destroys history | **High** | "analytics slow" / "can't compare periods" |
-| [08](08-no-visitor-identity-in-traffic-logs.md) | `auth_user` never written — no visitor identity | Medium | "track a unique user, not just the IP" |
-| [09](09-analytics-has-no-per-host-drilldown.md) | Analytics has no per-host drill-down | Medium | "click a host and see its traffic / popular pages" |
-| [10](10-deploys-do-not-gate-on-ci.md) | Deploys don't gate on CI; `COPY . .` ships the working tree | Medium | "the UI broke right after a deploy" |
-| [11](11-backup-failure-is-silent.md) | A failing scheduled backup is silent | Medium | "how would we know if backups stopped?" |
-| [12](12-test-suite-could-drop-the-production-database.md) | Test suite could drop the production database | **Critical** | "how did the database get purged?" |
+| # | Title | Severity | Status | Explains |
+|---|-------|----------|--------|----------|
+| [01](01-certificate-renewal-not-deployed.md) | Renewed certs never reach nginx | **Critical** | **Done** | "certs say expired" |
+| [02](02-disk-pressure-and-log-rotation.md) | No log rotation → disk pressure → DB vacuum failures | **Critical** | Partial | "stats slow to load" |
+| [03](03-traffic-logger-connection-pool-corruption.md) | Traffic logger corrupts its own HTTP keepalive pool | **High** | **Done** | "can't see web traffic" |
+| [04](04-rule-reload-resilience-and-visibility.md) | Silent WAF/rate-limit/GeoIP rule reload failures | **Medium** | Not started | "can't tell why things don't work" |
+| [05](05-global-ip-blocking-not-per-host.md) | Automatic IP blocking is global, not per-host | **Medium** | Not started | "rules are global not per-host" |
+| [06](06-location-dialog-missing-timeout-and-advanced-fields.md) | Location dialog has no timeout/advanced-config fields | **High** | **Done** | "ghostwire proxy timing out" / "UI not wired up properly" |
+| [07](07-analytics-rollups-never-scheduled.md) | Analytics rollups never scheduled — retention destroys history | **High** | **Done** | "analytics slow" / "can't compare periods" |
+| [08](08-no-visitor-identity-in-traffic-logs.md) | `auth_user` never written — no visitor identity | Medium | Partial | "track a unique user, not just the IP" |
+| [09](09-analytics-has-no-per-host-drilldown.md) | Analytics has no per-host drill-down | Medium | **Done** | "click a host and see its traffic / popular pages" |
+| [10](10-deploys-do-not-gate-on-ci.md) | Deploys don't gate on CI; `COPY . .` ships the working tree | Medium | Partial | "the UI broke right after a deploy" |
+| [11](11-backup-failure-is-silent.md) | A failing scheduled backup is silent | Medium | **Done** | "how would we know if backups stopped?" |
+| [12](12-test-suite-could-drop-the-production-database.md) | Test suite could drop the production database | **Critical** | Partial | "how did the database get purged?" |
+| [13](13-fresh-install-cannot-run-migrations.md) | A fresh install cannot run its own migrations | **High** | Not started | "would a new deployment even come up?" |
 
 ## Quick summary
 
@@ -79,17 +80,86 @@ These can be done today, independent of the code fixes below:
    [06](06-location-dialog-missing-timeout-and-advanced-fields.md).
 
 
-## Status (2026-09-08)
+## Status (2026-09-09)
 
-Fixed and deployed: **01** (cert renewal), **03** (traffic-logger keepalive
-corruption), **06** (location dialog fields), plus a spoofable-client-IP flaw
-found while working on 06 — every IP-based control trusted request headers
-instead of nginx's validated `remote_addr`, so any visitor could choose their own
-source address and, by naming a trusted IP, skip the WAF entirely.
+Verified against the code, not against the previous status note. "Done" means the
+recommended fix in that file is present in the tree; "Partial" lists what is still
+missing.
 
-Also landed alongside: per-host CDN awareness (`cdn_provider`, with Cloudflare and
-Imperva edge ranges refreshed daily from the providers), upstream health
-monitoring with host-down/recovered alerts, `notify_under_attack` wiring, a shared
-`Modal` for all 21 dialogs, and PWA service-worker registration on load.
+### Done
 
-Still open: **02** (log rotation — disk at 84%), **04**, **05**.
+- **01 — Renewed certs never reach nginx.** `certificate_service.py` now deploys the
+  renewed PEMs via `write_certificate_files()` + `reload_nginx()` and records real
+  expiry dates (`c0325f3`).
+- **03 — Traffic-logger keepalive corruption.** `traffic_logger.lua` drains the body
+  with `res:read_body()` before `set_keepalive()`, and `close()`s the socket on any
+  failure path rather than returning an unknown-state connection to the pool.
+- **06 — Location dialog fields.** The Add/Edit Location dialog renders
+  `proxy_connect_timeout` / `proxy_send_timeout` / `proxy_read_timeout` and a
+  per-location `advanced_config` textarea, and round-trips them through
+  `handleEditLocation` / `handleSaveLocation`.
+- **07 — Analytics rollups never scheduled.** `main.py` runs a rollup loop calling
+  `aggregate_hourly()` / `aggregate_daily()` / `aggregate_geo()`.
+- **09 — Per-host analytics drill-down.** The Analytics page has a host selector that
+  passes `proxy_host_id` to the dashboard and logs queries, with an "All hosts" reset
+  and the host name in the heading. Now superseded in depth by the dedicated per-host
+  report at `/dashboard/proxy-hosts/<id>/report`.
+- **11 — Silent backup failure.** `notify_backup_completed()` on success and
+  `notify_backup_failed()` + a critical `backup_failed` alert on failure, plus a
+  watchdog loop in `main.py` that raises `backup_stale` when no successful backup has
+  completed in 26 hours — which catches the scheduler dying entirely, not just an
+  individual run failing. An offsite copy is still not implemented, and remains the
+  one real gap: these backups protect against a logical purge, not loss of the host.
+
+### Partial
+
+- **02 — Log rotation / disk pressure.** Rotation is done: the proxy image installs
+  `logrotate`, ships `/etc/logrotate.d/nginx` (daily, `maxsize`, keep 7, `copytruncate`)
+  and runs it hourly from cron in `entrypoint.sh`.
+  Still open: no scheduled `docker builder prune`; `VACUUM ANALYZE` failures are still
+  only a log warning with nothing on the System page; no low-disk guard.
+- **08 — Visitor identity.** Authenticated hosts are done: `auth_wall.lua` stashes
+  `ngx.ctx.auth_user`, `traffic_logger.lua` sends it, and `internal.py` persists it.
+  Bot classification landed too (`client_classifier.classify_bot`, `TrafficLog.is_bot`).
+  Still open: the per-host `visitor_tracking_enabled` opt-in for public hosts.
+- **10 — Deploys don't gate on CI.** Both `backend/.dockerignore` and
+  `frontend/.dockerignore` now exclude host artefacts, so `COPY . .` can no longer ship
+  `.env.local` / `.next` / `node_modules` / `.git`.
+  Still open: `scripts/upgrade.sh` neither runs nor waits on CI, still builds from the
+  working tree rather than `git archive HEAD`, refuses nothing on a dirty tree, stamps no
+  commit SHA into the image, and does not verify the deployed UI by its baked
+  `routes-manifest.json` rewrite target.
+- **12 — Test suite could drop the production database.** The `conftest.py` guard is in
+  place: `TEST_DATABASE_URL` only, a hard `RuntimeError` unless the database name ends in
+  `_test`, and `DATABASE_URL` overwritten with the test URL.
+  Still open: the real Postgres password is still a committed literal at
+  `backend/tests/conftest.py:35`. Also note `.github/workflows/ci.yml` still passes
+  `DATABASE_URL` to pytest — conftest ignores it, so CI falls back to the hardcoded
+  `ghostwire-proxy-postgres` host and cannot reach its own Postgres service container.
+
+### Not started
+
+- **04 — Silent rule-reload failures.** `init.lua` still only `ngx.log(ngx.ERR, ...)` on
+  each fetch failure: no per-rule-type `*_synced_at` timestamp in the shared dict, no
+  consecutive-failure counter or escalation, no in-tick retry for the DNS blip, and
+  nothing surfaced in the admin UI.
+- **13 — A fresh install cannot run its own migrations.** `0001` builds the baseline with
+  `Base.metadata.create_all()` against the live models, so on an empty database it creates
+  columns that later migrations then fail to add (`0004` onwards). Existing deployments are
+  unaffected; only new installs and clean-database restores hit it. Migrations 0011 and 0012
+  are written with inspector guards so they survive both paths, but the underlying fault
+  remains.
+- **05 — Global-only automatic IP blocking.** `ThreatActor` still has no `proxy_host_id`
+  (and there is no `ThreatActorHostStatus` table), and `waf.lua:is_ip_blocked(client_ip)`
+  still takes no host argument, so a threshold tripped on one host still blocks the IP
+  everywhere.
+
+### Landed alongside (not in this backlog)
+
+A spoofable-client-IP flaw found while working on 06 — every IP-based control trusted
+request headers instead of nginx's validated `remote_addr`, so any visitor could choose
+their own source address and, by naming a trusted IP, skip the WAF entirely. Plus
+per-host CDN awareness (`cdn_provider`, Cloudflare/Imperva ranges refreshed daily),
+upstream health monitoring with host-down/recovered alerts, `notify_under_attack` wiring,
+a shared `Modal` for all 21 dialogs, PWA service-worker registration, WAF enforcement
+fixes, mobile layout work, and the known-IPs feature.

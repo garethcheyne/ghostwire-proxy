@@ -1,6 +1,7 @@
 # 10 — Deploys don't gate on CI, and `COPY . .` ships the working tree
 
 **Severity:** Medium
+**Status:** **Partial** (2026-09-09) — `.dockerignore` done; CI gating, SHA stamping and deploy verification still open. See [README](README.md#partial).
 **Answers:** "the admin UI filled with 'Server error' after a deploy"
 
 ## TL;DR

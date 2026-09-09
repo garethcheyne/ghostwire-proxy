@@ -1,6 +1,7 @@
 # 04 — Silent WAF/rate-limit/GeoIP rule reload failures
 
 **Severity:** Medium
+**Status:** **Not started** (2026-09-09) — see [README](README.md#not-started).
 **Answers:** "not being able to see [the] reason why things may not work"
 
 ## TL;DR

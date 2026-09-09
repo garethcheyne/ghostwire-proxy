@@ -1,6 +1,7 @@
 # 07 — Analytics rollups are never scheduled, so retention destroys history
 
 **Severity:** High
+**Status:** **Done** (2026-09-09) — see [README](README.md#done).
 **Answers:** "analytics are slow" / "why can't I compare this month to last quarter"
 
 ## TL;DR

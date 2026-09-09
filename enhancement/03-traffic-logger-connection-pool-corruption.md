@@ -1,6 +1,7 @@
 # 03 — Traffic logger corrupts its own HTTP keepalive pool
 
 **Severity:** High
+**Status:** **Done** (2026-09-09) — see [README](README.md#done).
 **Answers:** "not being able to see [why the] webtraffic view [of] the proxy [isn't complete]"
 
 ## TL;DR
