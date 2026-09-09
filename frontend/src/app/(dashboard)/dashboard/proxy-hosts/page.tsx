@@ -582,7 +582,11 @@ export default function ProxyHostsPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleEnabled(host)}
-                      className="shrink-0 mt-1.5"
+                      /* The dot is 12px. This toggles a host on or off, so it
+                         needs a finger-sized hit area — the negative margin
+                         grows it without shifting the dot or the domain name
+                         beside it. */
+                      className="shrink-0 mt-1.5 -m-3 p-3 flex items-center justify-center"
                       title={host.enabled ? 'Disable host' : 'Enable host'}
                     >
                       {host.enabled ? (

@@ -396,7 +396,7 @@ export default function SettingsPage() {
                   className="sr-only"
                 />
                 {defaultSite.behavior === opt.value && (
-                  <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
                     <CheckCircle className="h-3 w-3" />
                     Active
                   </span>

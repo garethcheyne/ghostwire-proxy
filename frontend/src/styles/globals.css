@@ -237,9 +237,9 @@
   /* Inline links in prose are not tap targets in the same sense — forcing
      44px on them would wreck paragraph line spacing. */
   p a[href],
-  li a[href],
   td a[href],
-  span a[href] {
+  span a[href],
+  li a[href]:not(:only-child) {
     min-height: 0;
   }
 }
