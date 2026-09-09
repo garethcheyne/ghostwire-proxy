@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
+import { closeAllModals } from '@/components/ui/modal'
 import { KnownIpQuickAdd } from '@/components/known-ip-quick-add'
 import { IpReport } from '@/components/ip-report'
 import { useKnownIpMap, type KnownIpLabel } from '@/lib/queries/known-ips'
@@ -30,14 +31,25 @@ export function IpActionsProvider({ children }: { children: React.ReactNode }) {
   const [reportIp, setReportIp] = useState<string | null>(null)
   const knownIps = useKnownIpMap()
 
+  // These are reached from the IP hover card, which is often itself inside a
+  // dialog (a request-details view, say). Close whatever is open first so the
+  // label dialog replaces it rather than stacking on top of it.
   const labelIp = useCallback((ip: string) => {
-    setReportIp(null)          // never show both at once
+    closeAllModals()
+    setReportIp(null)
     setLabellingIp(ip)
   }, [])
 
   const showReport = useCallback((ip: string) => {
+    closeAllModals()
     setLabellingIp(null)
     setReportIp(ip)
+  }, [])
+
+  // Stable identity: Modal keys its close registry on this function, so a new
+  // one each render would add and remove the entry on every render.
+  const handleLabelOpenChange = useCallback((open: boolean) => {
+    if (!open) setLabellingIp(null)
   }, [])
 
   const value = useMemo(() => ({ labelIp, showReport }), [labelIp, showReport])
@@ -52,7 +64,7 @@ export function IpActionsProvider({ children }: { children: React.ReactNode }) {
           ip={labellingIp}
           existing={existing}
           open
-          onOpenChange={(open) => { if (!open) setLabellingIp(null) }}
+          onOpenChange={handleLabelOpenChange}
         />
       )}
       {reportIp && <IpReport ip={reportIp} onClose={() => setReportIp(null)} />}

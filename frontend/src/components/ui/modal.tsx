@@ -31,6 +31,23 @@ const sizes = {
 
 export type ModalSize = keyof typeof sizes
 
+/**
+ * Every currently-open modal's close handler.
+ *
+ * Needed because an action inside one dialog can open another — labelling an IP
+ * you spotted in a request-details dialog, say. Radix will happily stack them,
+ * but two dialogs with two close buttons is not what anyone means by "label
+ * this"; the second should replace the first. A component that opens a dialog
+ * from inside another calls closeAllModals() first.
+ */
+const openModals = new Set<(open: boolean) => void>()
+
+export function closeAllModals() {
+  for (const close of Array.from(openModals)) {
+    close(false)
+  }
+}
+
 interface ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -62,6 +79,15 @@ export function Modal({
   const block = (e: Event | React.SyntheticEvent) => {
     if (!dismissible) e.preventDefault()
   }
+
+  // Register while open so another component can ask us to stand down.
+  React.useEffect(() => {
+    if (!open) return
+    openModals.add(onOpenChange)
+    return () => {
+      openModals.delete(onOpenChange)
+    }
+  }, [open, onOpenChange])
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
