@@ -195,10 +195,16 @@ export default function ContainersPage() {
 
           return (
             <div key={c.name} className="rounded-xl border border-border bg-card overflow-hidden">
+              {/* One button wraps the whole summary, including the reasons
+                  line. It used to sit outside as a sibling, so the hover
+                  highlight stopped short of the bottom of the card and that
+                  line was not clickable even though everything around it
+                  was. */}
               <button
                 onClick={() => setExpanded(open ? null : c.name)}
-                className="w-full p-4 flex flex-wrap items-center gap-3 text-left hover:bg-accent/50 transition-colors"
+                className="w-full px-4 pt-4 pb-3 text-left hover:bg-accent/50 transition-colors"
               >
+                <div className="flex flex-wrap items-center gap-3">
                 {open ? (
                   <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 ) : (
@@ -256,13 +262,12 @@ export default function ContainersPage() {
                     {level}
                   </span>
                 </div>
-              </button>
+                </div>
 
-              <div className="px-4 pb-3 -mt-1">
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-1.5 text-xs text-muted-foreground">
                   {(c.risk?.reasons || []).join(' · ')}
                 </p>
-              </div>
+              </button>
 
               {open && (
                 <div className="border-t border-border p-4 space-y-4 bg-muted/20">
