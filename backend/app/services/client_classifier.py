@@ -103,3 +103,108 @@ def is_streaming_response(
     if content_type and "text/event-stream" in content_type.lower():
         return True
     return False
+
+
+# Ordered longest-marker-first, because the short names are substrings of the
+# long ones: every Edge UA also contains "chrome", and every Chrome UA also
+# contains "safari". Checking in this order is the whole trick.
+_BROWSERS = (
+    ("edg/", "Edge"),
+    ("edga/", "Edge"),
+    ("edgios/", "Edge"),
+    ("opr/", "Opera"),
+    ("opera", "Opera"),
+    ("vivaldi", "Vivaldi"),
+    ("brave", "Brave"),
+    ("samsungbrowser", "Samsung Internet"),
+    ("yabrowser", "Yandex Browser"),
+    ("ucbrowser", "UC Browser"),
+    ("firefox/", "Firefox"),
+    ("fxios/", "Firefox"),
+    ("crios/", "Chrome"),
+    ("chrome/", "Chrome"),
+    ("chromium/", "Chromium"),
+    ("safari/", "Safari"),
+    ("msie ", "Internet Explorer"),
+    ("trident/", "Internet Explorer"),
+)
+
+_OPERATING_SYSTEMS = (
+    ("windows nt 10", "Windows 10/11"),
+    ("windows nt 6.3", "Windows 8.1"),
+    ("windows nt 6.1", "Windows 7"),
+    ("windows phone", "Windows Phone"),
+    ("windows", "Windows"),
+    ("android", "Android"),
+    ("iphone", "iOS"),
+    ("ipad", "iPadOS"),
+    ("ipod", "iOS"),
+    ("mac os x", "macOS"),
+    ("macintosh", "macOS"),
+    ("cros", "ChromeOS"),
+    ("ubuntu", "Ubuntu"),
+    ("fedora", "Fedora"),
+    ("debian", "Debian"),
+    ("linux", "Linux"),
+    ("freebsd", "FreeBSD"),
+)
+
+# Tablets must be tested before phones: an iPad UA contains neither "mobile"
+# nor "iphone", but an Android tablet UA contains "android" without "mobile".
+_TABLET_MARKERS = ("ipad", "tablet", "kindle", "playbook", "silk")
+_MOBILE_MARKERS = ("mobile", "iphone", "ipod", "android", "windows phone", "blackberry", "opera mini")
+
+
+def parse_browser(user_agent: Optional[str]) -> str:
+    """Best-effort browser family name for reporting."""
+    if not user_agent or not user_agent.strip():
+        return "Unknown"
+
+    ua = user_agent.lower()
+
+    # A bot that borrows a browser UA should still be reported as a bot, not as
+    # inflated Chrome traffic.
+    is_bot, bot_name = classify_bot(user_agent)
+    if is_bot:
+        return bot_name or "Bot"
+
+    for marker, name in _BROWSERS:
+        if marker in ua:
+            return name
+
+    return "Other"
+
+
+def parse_os(user_agent: Optional[str]) -> str:
+    """Best-effort operating system name for reporting."""
+    if not user_agent or not user_agent.strip():
+        return "Unknown"
+
+    ua = user_agent.lower()
+    for marker, name in _OPERATING_SYSTEMS:
+        if marker in ua:
+            return name
+
+    return "Other"
+
+
+def parse_device_type(user_agent: Optional[str]) -> str:
+    """Desktop / Mobile / Tablet / Bot."""
+    if not user_agent or not user_agent.strip():
+        return "Bot"
+
+    is_bot, _ = classify_bot(user_agent)
+    if is_bot:
+        return "Bot"
+
+    ua = user_agent.lower()
+
+    for marker in _TABLET_MARKERS:
+        if marker in ua:
+            return "Tablet"
+
+    for marker in _MOBILE_MARKERS:
+        if marker in ua:
+            return "Mobile"
+
+    return "Desktop"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { useProxyHosts } from '@/lib/queries/proxy-hosts'
 import { useCertificates } from '@/lib/queries/dashboard'
@@ -11,6 +12,7 @@ import {
   Globe,
   Plus,
   MoreHorizontal,
+  FileBarChart,
   Shield,
 
   Pencil,
@@ -652,6 +654,12 @@ export default function ProxyHostsPage() {
                         <DropdownMenuItem onClick={() => handleEdit(host)}>
                           <Pencil className="h-4 w-4" />
                           Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/proxy-hosts/${host.id}/report`}>
+                            <FileBarChart className="h-4 w-4" />
+                            Traffic Report
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleToggleEnabled(host)}>
                           {host.enabled ? (
