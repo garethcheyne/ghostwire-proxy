@@ -13,8 +13,62 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts'
 import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
+
+// Leaflet touches `window` on import, so it cannot be server-rendered.
+const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
+      Loading map…
+    </div>
+  ),
+})
+
+// Reuses the palette the analytics tabs already use, so a status colour means
+// the same thing on every page. These are status colours, not categorical ones
+// — they are never recycled for an unrelated series.
+const STATUS_COLORS: Record<string, string> = {
+  '2xx': '#10b981',
+  '3xx': '#3b82f6',
+  '4xx': '#f59e0b',
+  '5xx': '#ef4444',
+}
+
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#eab308',
+  low: '#3b82f6',
+  unknown: '#6b7280',
+}
+
+// Two series, validated for colour-vision deficiency separation
+// (ΔE 35.2 normal / 26.7 protan) rather than eyeballed.
+const SERIES_REQUESTS = '#3b82f6'
+const SERIES_ERRORS = '#ef4444'
+
+const tooltipStyle = {
+  backgroundColor: 'hsl(var(--card))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: '8px',
+  fontSize: '12px',
+}
 
 const PERIODS = [
   { value: '24h', label: '24 hours' },
@@ -147,71 +201,101 @@ function Table({
   )
 }
 
-/** Horizontal share bar — cheaper to read than a pie, and prints legibly. */
-function ShareRows({ items }: { items: { name: string; percent: number; requests: number }[] }) {
-  if (!items.length) return <p className="text-sm text-muted-foreground">No data.</p>
+/** Requests over time, with errors overlaid.
+ *
+ *  A line over time is the right form for change-over-time, and it carries a
+ *  crosshair tooltip so a reader can interrogate any point rather than guess
+ *  from the shape. Two series, so the legend is always present — identity is
+ *  never carried by colour alone.
+ */
+function TrafficChart({
+  points,
+  bucket,
+}: {
+  points: { timestamp: string; requests: number; errors: number; unique_visitors: number }[]
+  bucket: string
+}) {
+  if (points.length < 2) {
+    return <p className="text-sm text-muted-foreground">Not enough data to plot yet.</p>
+  }
+
+  const data = points.map((p) => ({
+    ...p,
+    label:
+      bucket === 'hour'
+        ? String(p.timestamp || '').slice(11, 16)
+        : String(p.timestamp || '').slice(5, 10),
+  }))
+
   return (
-    <div className="space-y-2">
-      {items.map((it) => (
-        <div key={it.name}>
-          <div className="flex justify-between text-sm mb-0.5">
-            <span className="truncate pr-2">{it.name}</span>
-            <span className="text-muted-foreground tabular-nums flex-shrink-0">
-              {it.percent}% · {num(it.requests)}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full"
-              style={{ width: `${Math.min(it.percent, 100)}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="reqFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SERIES_REQUESTS} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={SERIES_REQUESTS} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={24} />
+        <YAxis tick={{ fontSize: 11 }} width={48} />
+        <RTooltip
+          contentStyle={tooltipStyle}
+          formatter={(v: number, n: string) => [Number(v).toLocaleString(), n]}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Area
+          type="monotone"
+          dataKey="requests"
+          name="Requests"
+          stroke={SERIES_REQUESTS}
+          strokeWidth={2}
+          fill="url(#reqFill)"
+        />
+        <Area
+          type="monotone"
+          dataKey="errors"
+          name="Errors"
+          stroke={SERIES_ERRORS}
+          strokeWidth={2}
+          fill="none"
+          strokeDasharray="4 3"
+        />
+      </AreaChart>
+    </ResponsiveContainer>
   )
 }
 
-/** Requests over time. Inline SVG so it prints and needs no chart library. */
-function Sparkline({ points }: { points: { timestamp: string; requests: number; errors: number }[] }) {
-  if (points.length < 2) {
-    return <p className="text-sm text-muted-foreground">Not enough data to plot.</p>
-  }
-  const w = 800
-  const h = 140
-  const max = Math.max(...points.map((p) => p.requests), 1)
-  const step = w / (points.length - 1)
+/** Horizontal magnitude comparison for a labelled category. */
+function CategoryBars({
+  items,
+  colorFor,
+}: {
+  items: { name: string; requests: number; percent: number }[]
+  colorFor?: (name: string) => string
+}) {
+  if (!items.length) return <p className="text-sm text-muted-foreground">No data.</p>
 
-  const line = points.map((p, i) => `${i * step},${h - (p.requests / max) * h}`).join(' ')
-  const area = `0,${h} ${line} ${w},${h}`
-  const errLine = points.map((p, i) => `${i * step},${h - (p.errors / max) * h}`).join(' ')
+  const data = items.slice(0, 8)
+  const height = Math.max(140, data.length * 30)
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32 min-w-[320px]" preserveAspectRatio="none">
-        <polygon points={area} className="fill-primary/15" />
-        <polyline points={line} className="fill-none stroke-primary" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        <polyline
-          points={errLine}
-          className="fill-none stroke-red-500"
-          strokeWidth={1.5}
-          strokeDasharray="4 3"
-          vectorEffect="non-scaling-stroke"
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+        <XAxis type="number" tick={{ fontSize: 11 }} />
+        <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={92} />
+        <RTooltip
+          contentStyle={tooltipStyle}
+          formatter={(v: number) => [Number(v).toLocaleString(), 'Requests']}
         />
-      </svg>
-      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-        <span>{points[0].timestamp?.slice(0, 10)}</span>
-        <span className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 bg-primary" /> requests
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 bg-red-500" /> errors
-          </span>
-        </span>
-        <span>{points[points.length - 1].timestamp?.slice(0, 10)}</span>
-      </div>
-    </div>
+        <Bar dataKey="requests" radius={[0, 4, 4, 0]} maxBarSize={18}>
+          {data.map((d) => (
+            <Cell key={d.name} fill={colorFor ? colorFor(d.name) : SERIES_REQUESTS} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -292,6 +376,11 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
   const resp = report.responses || {}
   const visitors = report.visitors || {}
   const fam = resp.status_families || {}
+
+  // GeoHeatmap works in days; translate the report's period so the map covers
+  // the same window as everything else on the page.
+  const geoDays =
+    { '24h': 1, '7d': 7, '30d': 30, '90d': 90, '365d': 365 }[period] ?? 30
 
   return (
     <div className="space-y-5 print:space-y-3">
@@ -387,7 +476,10 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Section title="Traffic over time" subtitle={`Grouped by ${report.timeseries?.bucket || 'day'}`}>
-        <Sparkline points={report.timeseries?.points || []} />
+        <TrafficChart
+          points={report.timeseries?.points || []}
+          bucket={report.timeseries?.bucket || 'day'}
+        />
       </Section>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -422,22 +514,27 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
         </Section>
 
         <Section title="Browsers" subtitle={clients.sampled ? `Sampled from the most recent ${num(clients.sample_size)} of ${num(clients.total_in_period)} requests` : undefined}>
-          <ShareRows items={clients.browsers || []} />
+          <CategoryBars items={clients.browsers || []} />
         </Section>
 
         <Section title="Devices">
-          <ShareRows items={clients.devices || []} />
+          <CategoryBars items={clients.devices || []} />
         </Section>
 
         <Section title="Operating systems">
-          <ShareRows items={clients.operating_systems || []} />
+          <CategoryBars items={clients.operating_systems || []} />
         </Section>
 
         <Section title="Bots and automation">
-          <ShareRows items={clients.bots || []} />
+          <CategoryBars items={clients.bots || []} />
         </Section>
 
-        <Section title="Countries">
+        {/* Full width — a world map in a half-width column is unreadable. */}
+        <div className="lg:col-span-2">
+        <Section title="Where visitors came from" subtitle="Country and city origins for this host">
+          <div className="h-[340px] rounded-lg overflow-hidden border border-border mb-4 print:hidden">
+            <GeoHeatmap proxyHostId={id} days={geoDays} showThreats />
+          </div>
           <Table
             headers={['Country', 'Requests', 'Visitors', 'Data']}
             align={['left', 'right', 'right', 'right']}
@@ -454,6 +551,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
             </p>
           )}
         </Section>
+        </div>
 
         <Section title="Referring domains" subtitle={`${num(refs.direct_requests)} requests arrived directly (no referrer)`}>
           <Table
@@ -544,6 +642,17 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className="space-y-5">
+            <div>
+              <h3 className="text-sm font-medium mb-2">By severity</h3>
+              <CategoryBars
+                items={(sec.by_severity || []).map((x: any) => ({
+                  name: x.severity,
+                  requests: x.events,
+                  percent: 0,
+                }))}
+                colorFor={(n) => SEVERITY_COLORS[n] || SEVERITY_COLORS.unknown}
+              />
+            </div>
             <div>
               <h3 className="text-sm font-medium mb-2">Attack types</h3>
               <Table

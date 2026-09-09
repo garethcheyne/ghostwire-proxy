@@ -6,6 +6,16 @@ import 'leaflet/dist/leaflet.css'
 import api from '@/lib/api'
 import { CountryBadge } from '@/components/ip-address'
 
+const TILE_URL =
+  process.env.NEXT_PUBLIC_MAP_TILE_URL ||
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+
+const TILE_ATTRIBUTION =
+  process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors'
+
+// Only invert when we are serving the light OSM style.
+const TILE_NEEDS_DARKENING = process.env.NEXT_PUBLIC_MAP_TILE_DARK !== 'false'
+
 interface GeoData {
   country_code: string
   country_name: string
@@ -97,8 +107,20 @@ function MapContent({ data, threatData, cityData, showCountry, showCity, showThr
       scrollWheelZoom={true}
       attributionControl={false}
     >
+      {/* CARTO's basemaps began requiring an API key and now stamp
+          "API KEY REQUIRED" across every tile, which showed up on this map and
+          on the analytics page. OpenStreetMap's standard tiles need no key; the
+          `map-tiles-dark` filter in globals.css inverts them to match the dark
+          UI, since OSM only publishes a light style.
+
+          Point NEXT_PUBLIC_MAP_TILE_URL at another provider (CARTO with a key,
+          Stadia, an internal tile server) to override — set
+          NEXT_PUBLIC_MAP_TILE_DARK=false too if that provider is already dark,
+          so the inversion is not applied twice. */}
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        url={TILE_URL}
+        attribution={TILE_ATTRIBUTION}
+        className={TILE_NEEDS_DARKENING ? 'map-tiles-dark' : undefined}
       />
       {/* Traffic circles (cyan) */}
       {showCountry && data.map((item) => {

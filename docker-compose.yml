@@ -11,6 +11,15 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
       - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    labels:
+      # Watchtower runs with WATCHTOWER_LABEL_ENABLE=true, so it only touches
+      # containers that opt in. Only postgres and redis are worth opting in:
+      # the other four services are built locally from this repo and have no
+      # registry behind them, so watchtower could never pull a newer image for
+      # them — those update by rebuilding, not by watchtower.
+      # The tag is pinned to a major (16-alpine / 7-alpine), so this picks up
+      # patch and minor releases, never a major upgrade.
+      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -186,6 +195,10 @@ services:
     restart: unless-stopped
     # No ports exposed — only reachable from internal network
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    labels:
+      # See the note on ghostwire-proxy-postgres. Pinned to redis:7-alpine, so
+      # patch/minor only.
+      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - redis-data:/data
     networks:

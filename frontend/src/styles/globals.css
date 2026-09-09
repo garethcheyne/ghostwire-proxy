@@ -243,3 +243,63 @@
     min-height: 0;
   }
 }
+
+/* --- Printing --- */
+
+/*
+ * The app shell is a fixed-height, overflow-hidden flex column with the
+ * scrolling delegated to <main>. Correct on screen, fatal on paper: the printer
+ * only ever received the first viewport, so "Print / PDF" on the host report
+ * produced a single clipped page out of ~5000px of content and looked like the
+ * button did nothing.
+ *
+ * Releasing the height and overflow up the chain lets the document flow across
+ * pages. Everything here is print-only; the screen layout is untouched.
+ */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* The shell, the column beside the sidebar, and the scrolling main. */
+  body div[class*="h-screen"],
+  body div[class*="overflow-hidden"],
+  main {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Chrome that should never reach paper. */
+  aside,
+  header,
+  nav[aria-label="Primary"],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Keep a card from being split across a page break mid-table. */
+  section,
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+
+  /* Recharts sizes its SVG from the container's measured width. Print re-lays
+     out at paper width, so pin the wrapper to full width or the chart renders
+     at its stale pixel width and overflows the page. */
+  .recharts-responsive-container,
+  .recharts-wrapper {
+    width: 100% !important;
+  }
+}
+
+/* OpenStreetMap only publishes a light basemap. Inverting and rotating the hue
+   yields a dark map that sits correctly in this UI, without needing a keyed
+   tile provider. Applied only to the tile layer, never the markers drawn over
+   it — those keep their true colours. */
+.map-tiles-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.7);
+}
