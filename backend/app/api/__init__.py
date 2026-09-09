@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips
+from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers
 
 router = APIRouter()
 
@@ -14,6 +14,7 @@ router.include_router(auth_portal.router, prefix="/auth-portal", tags=["Auth Por
 
 # Include all route modules
 router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+router.include_router(mfa.router, prefix="/auth/mfa", tags=["Two-Factor Auth"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(proxy_hosts.router, prefix="/proxy-hosts", tags=["Proxy Hosts"])
 router.include_router(certificates.router, prefix="/certificates", tags=["Certificates"])
@@ -35,3 +36,5 @@ router.include_router(updates.router, prefix="/updates", tags=["Updates"])
 router.include_router(honeypot.router, prefix="/honeypot", tags=["Honeypot"])
 router.include_router(search.router, prefix="/search", tags=["Search"])
 router.include_router(known_ips.router, prefix="/known-ips", tags=["Known IPs"])
+router.include_router(reports.router, prefix="/reports", tags=["Reports"])
+router.include_router(containers.router, prefix="/containers", tags=["Container Security"])

@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Flame,
   Monitor,
+  Boxes,
   Info,
   Bell,
   BookOpen,
@@ -72,6 +73,7 @@ const navigation: NavGroup[] = [
       { title: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
       { title: 'Alerts', href: '/dashboard/alerts', icon: Bell },
       { title: 'System', href: '/dashboard/system', icon: Monitor },
+      { title: 'Containers', href: '/dashboard/containers', icon: Boxes },
     ],
   },
   {

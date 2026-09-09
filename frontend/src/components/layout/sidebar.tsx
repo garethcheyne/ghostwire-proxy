@@ -33,6 +33,7 @@ import {
   Map,
   Gauge,
   Monitor,
+  Boxes,
   Sparkles,
   Download,
   Bug,
@@ -86,6 +87,7 @@ const navigation: NavGroup[] = [
       { title: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
       { title: 'Alerts', href: '/dashboard/alerts', icon: Bell },
       { title: 'System', href: '/dashboard/system', icon: Monitor },
+      { title: 'Containers', href: '/dashboard/containers', icon: Boxes },
     ],
   },
   {

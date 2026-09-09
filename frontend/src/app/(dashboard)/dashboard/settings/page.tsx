@@ -24,6 +24,8 @@ import {
 import Link from 'next/link'
 import api from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
+import { MfaCard } from '@/components/settings/mfa-card'
+import { SmtpCard } from '@/components/settings/smtp-card'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -598,6 +600,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
+
+      <MfaCard />
+
+      <SmtpCard />
 
       {/* IP Intelligence — AbuseIPDB */}
       <div className="rounded-xl border border-border bg-card p-6">

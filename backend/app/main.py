@@ -668,6 +668,84 @@ async def lifespan(app: FastAPI):
     retention_task = asyncio.create_task(data_retention_loop())
     logger.info("Started data retention cleanup task")
 
+    # Scheduled report emails — per-host traffic reports on a daily/weekly/monthly
+    # cadence. Checked hourly; each schedule tracks its own last_sent_at, so a
+    # restart or a missed tick doesn't skip a report.
+    from app.services.report_scheduler import run_due_schedules
+
+    async def report_schedule_loop():
+        # Let the app settle before the first check; reports are never urgent.
+        await asyncio.sleep(180)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    sent = await run_due_schedules(session)
+                if sent:
+                    logger.info("Scheduled reports: sent %d", sent)
+            except asyncio.CancelledError:
+                logger.info("Report schedule task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in report scheduler: {e}")
+            await asyncio.sleep(3600)
+
+    report_task = asyncio.create_task(report_schedule_loop())
+    logger.info("Started scheduled report task")
+
+    # Backup watchdog — a backup loop that dies is otherwise invisible: the
+    # per-run failure alert only fires if a run actually happens. This notices
+    # the absence of runs, which is how the August purge became unrecoverable.
+    from app.models.backup import Backup
+
+    async def backup_watchdog_loop():
+        await asyncio.sleep(600)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from sqlalchemy import select as _select, func as _func
+
+                    last = (await session.execute(
+                        _select(_func.max(Backup.created_at)).where(Backup.status == "completed")
+                    )).scalar()
+
+                    now = datetime.now(timezone.utc)
+                    if last is not None:
+                        if last.tzinfo is None:
+                            last = last.replace(tzinfo=timezone.utc)
+                        age_hours = (now - last).total_seconds() / 3600
+                    else:
+                        age_hours = None
+
+                    # 26h rather than 24h so a daily backup running slightly late
+                    # doesn't cry wolf every morning.
+                    if age_hours is None or age_hours > 26:
+                        from app.services.alert_service import dispatch_alert
+
+                        detail = (
+                            "No successful backup has ever completed."
+                            if age_hours is None
+                            else f"The last successful backup was {age_hours:.0f} hours ago."
+                        )
+                        await dispatch_alert(
+                            db=session,
+                            alert_type="backup_stale",
+                            severity="critical",
+                            title="Backups Have Stopped",
+                            message=f"{detail} The scheduled backup may have stopped running.",
+                            data={"last_successful_backup_hours_ago": round(age_hours, 1) if age_hours else None},
+                        )
+                        logger.error("Backup watchdog: %s", detail)
+            except asyncio.CancelledError:
+                logger.info("Backup watchdog cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in backup watchdog: {e}")
+            # Once every 6 hours is enough to catch a stalled backup loop.
+            await asyncio.sleep(21600)
+
+    backup_watchdog_task = asyncio.create_task(backup_watchdog_loop())
+    logger.info("Started backup watchdog task")
+
     # Certificate auto-renewal — checks for Let's Encrypt certs nearing expiry
     # and renews + deploys (writes cert files, regenerates nginx configs,
     # reloads nginx) them automatically. Previously renewal only happened if
@@ -731,6 +809,13 @@ async def lifespan(app: FastAPI):
     certificate_renewal_task.cancel()
     health_task.cancel()
     trusted_proxy_task.cancel()
+    report_task.cancel()
+    backup_watchdog_task.cancel()
+    for _task in (report_task, backup_watchdog_task):
+        try:
+            await _task
+        except asyncio.CancelledError:
+            pass
     try:
         await trusted_proxy_task
     except asyncio.CancelledError:
