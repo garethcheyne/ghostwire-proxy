@@ -8,6 +8,7 @@ import { Header } from '@/components/layout/header'
 import { UpdateBanner } from '@/components/layout/update-banner'
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
+import { IpActionsProvider } from '@/components/ip-actions-provider'
 import { cn } from '@/lib/utils'
 import { clearSession, setSessionActive } from '@/lib/session'
 
@@ -73,6 +74,7 @@ export default function DashboardLayout({
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
       <ConfirmDialogProvider>
+      <IpActionsProvider>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden md:block">
@@ -99,6 +101,7 @@ export default function DashboardLayout({
 
         <MobileTabBar />
       </div>
+      </IpActionsProvider>
       </ConfirmDialogProvider>
     </SidebarContext.Provider>
   )

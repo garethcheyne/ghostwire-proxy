@@ -19,7 +19,7 @@ import {
   useKnownIpGroups,
   type KnownIp,
 } from '@/lib/queries/known-ips'
-import { IpReport } from '@/components/ip-report'
+import { useIpActions } from '@/components/ip-actions-provider'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']
 
@@ -33,8 +33,8 @@ export default function KnownIpsPage() {
   const [editing, setEditing] = useState<KnownIp | null>(null)
   const [form, setForm] = useState(EMPTY)
   const [groupFilter, setGroupFilter] = useState('')
-  const [reportIp, setReportIp] = useState<string | null>(null)
   const [lookupIp, setLookupIp] = useState('')
+  const { showReport } = useIpActions()
 
   const { data, isPending } = useKnownIps({
     search: debouncedSearch || undefined,
@@ -117,12 +117,12 @@ export default function KnownIpsPage() {
           <input
             value={lookupIp}
             onChange={(e) => setLookupIp(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && lookupIp.trim()) setReportIp(lookupIp.trim()) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && lookupIp.trim()) showReport(lookupIp.trim()) }}
             placeholder="e.g. 94.154.43.158"
             className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
           />
           <button
-            onClick={() => lookupIp.trim() && setReportIp(lookupIp.trim())}
+            onClick={() => lookupIp.trim() && showReport(lookupIp.trim())}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm"
           >
             <Search className="h-4 w-4" />
@@ -222,7 +222,7 @@ export default function KnownIpsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setReportIp(k.ip_address)} title="View traffic"
+                        <button onClick={() => showReport(k.ip_address)} title="View traffic"
                           className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground">
                           <BarChart3 className="h-4 w-4" />
                         </button>
@@ -341,7 +341,6 @@ export default function KnownIpsPage() {
         </ModalFooter>
       </Modal>
 
-      <IpReport ip={reportIp} onClose={() => setReportIp(null)} />
     </div>
   )
 }

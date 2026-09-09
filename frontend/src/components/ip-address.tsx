@@ -9,8 +9,7 @@ import {
 } from '@/components/ui/hover-card'
 import api from '@/lib/api'
 import { useKnownIpMap } from '@/lib/queries/known-ips'
-import { KnownIpQuickAdd } from '@/components/known-ip-quick-add'
-import { IpReport } from '@/components/ip-report'
+import { useIpActions } from '@/components/ip-actions-provider'
 
 interface IpAddressProps {
   ip: string
@@ -52,8 +51,7 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
-  const [labelling, setLabelling] = useState(false)
-  const [reporting, setReporting] = useState(false)
+  const { labelIp, showReport } = useIpActions()
 
   const fetchEnrichment = useCallback(async () => {
     // Check cache
@@ -83,6 +81,12 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
           className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold hover:text-blue-400 transition-colors cursor-pointer ${className || ''}`}
           onMouseEnter={fetchEnrichment}
           onFocus={fetchEnrichment}
+          onClick={(e) => {
+            // Rows around this are often clickable; without this the row's own
+            // handler fires too and opens a second dialog behind ours.
+            e.stopPropagation()
+            e.preventDefault()
+          }}
           data-private="ip"
         >
           {countryCode && <CountryBadge code={countryCode} name={countryName} />}
@@ -190,14 +194,14 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
         )}
         <div className="p-2 border-t bg-muted/30 flex gap-2">
           <button
-            onClick={() => setLabelling(true)}
+            onClick={() => labelIp(ip)}
             className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
           >
             <Tag className="h-3 w-3" />
             {known ? 'Edit label' : 'Label this IP'}
           </button>
           <button
-            onClick={() => setReporting(true)}
+            onClick={() => showReport(ip)}
             className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
           >
             <BarChart3 className="h-3 w-3" />
@@ -206,13 +210,6 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
         </div>
       </HoverCardContent>
 
-      <KnownIpQuickAdd
-        ip={ip}
-        existing={known}
-        open={labelling}
-        onOpenChange={setLabelling}
-      />
-      {reporting && <IpReport ip={ip} onClose={() => setReporting(false)} />}
     </HoverCard>
   )
 }

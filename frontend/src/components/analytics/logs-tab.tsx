@@ -316,7 +316,6 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
                   <FileText className="h-5 w-5" />
                   Request Details
                 </h2>
-                <button onClick={() => setSelectedLog(null)} className="text-muted-foreground hover:text-foreground text-xl">&times;</button>
               </div>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
