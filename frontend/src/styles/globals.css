@@ -185,3 +185,61 @@
 .docs-step-content h3 {
   @apply mt-0 mb-2;
 }
+
+/* --- Mobile: stop wide content from dragging the whole page sideways --- */
+
+/*
+ * A horizontal scroll container should keep its overflow to itself. It does
+ * not, on its own: an over-wide table inside `overflow-x: auto` still expands
+ * the document's scroll area, so the entire page — sticky header and fixed
+ * bottom tab bar included — could be dragged 100px+ to the left on a phone.
+ * Measured on /dashboard/known-ips (page 498px wide in a 375px viewport) and
+ * /dashboard/traffic (426px).
+ *
+ * Paint containment is the minimal fix that works. Nothing else did — not
+ * `overflow-x: hidden` on html/body, not `overflow-x: clip` on the shell or
+ * main, not max-width on the wrapper. It is also visually a no-op here,
+ * because a scroll container already clips painting to its padding box; it
+ * only additionally stops descendants from affecting layout outside the box,
+ * which is exactly the bug.
+ *
+ * The inner scrollbar keeps working — the table still scrolls within its own
+ * container, which is the intended behaviour.
+ */
+@layer utilities {
+  .overflow-x-auto,
+  .overflow-auto {
+    contain: paint;
+  }
+}
+
+/*
+ * Touch targets. Pointer-coarse only, so the mouse-driven desktop UI keeps its
+ * denser 36px controls while a finger gets the 44px minimum that iOS and
+ * Android both ask for. min-height rather than height, so nothing that is
+ * already large shrinks.
+ */
+@media (pointer: coarse) {
+  button:not([data-slot="tab"]),
+  [role="button"],
+  a[href]:not(.docs-content a),
+  select,
+  summary {
+    min-height: 44px;
+  }
+
+  /* Icon-only controls need width too, or they stay 36px wide and 44 tall. */
+  button:has(> svg:only-child),
+  a[href]:has(> svg:only-child) {
+    min-width: 44px;
+  }
+
+  /* Inline links in prose are not tap targets in the same sense — forcing
+     44px on them would wreck paragraph line spacing. */
+  p a[href],
+  li a[href],
+  td a[href],
+  span a[href] {
+    min-height: 0;
+  }
+}

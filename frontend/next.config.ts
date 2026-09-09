@@ -68,6 +68,11 @@ const nextConfig: NextConfig = {
         { source: '/api/system/metrics', destination: `${backendUrl}/api/system/metrics` },
         { source: '/api/system/throughput', destination: `${backendUrl}/api/system/throughput` },
         { source: '/api/system/containers', destination: `${backendUrl}/api/system/containers` },
+        // The API serves /version at its root rather than under /api, so the
+        // generic /api/:path* fallback never reached it. The sidebar and the
+        // About page both call it and both swallow the error, so the version
+        // just silently rendered blank while every page logged a 404.
+        { source: '/version', destination: `${backendUrl}/version` },
       ],
       fallback: [
         // Generic fallback for API routes not handled by Next.js route handlers

@@ -310,7 +310,7 @@ export default function TrafficPage() {
                       <div className="flex items-center gap-1.5">
                         <IpAddress ip={log.client_ip} countryCode={log.country_code} countryName={log.country_name} />
                         {log.city && (
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[100px]" title={log.city}>
+                          <span className="text-xs text-muted-foreground truncate max-w-[100px]" title={log.city}>
                             {log.city}
                           </span>
                         )}

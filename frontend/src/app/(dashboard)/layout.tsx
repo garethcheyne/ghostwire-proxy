@@ -75,7 +75,12 @@ export default function DashboardLayout({
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
       <ConfirmDialogProvider>
       <IpActionsProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      {/* h-screen is 100vh, which on a phone is the viewport *with browser
+          chrome hidden* — taller than what you can actually see. Combined with
+          overflow-hidden that pushes the bottom of the shell under the URL bar
+          and makes it unreachable. dvh tracks the visible height instead;
+          h-screen stays as the fallback for browsers without dvh. */}
+      <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-background">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden md:block">
           <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />

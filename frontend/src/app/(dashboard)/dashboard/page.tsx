@@ -36,31 +36,46 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon: Icon, description, trend, trendValue }: StatCardProps) {
   return (
+    // Title and icon share the top row; the value gets the card's full width
+    // underneath. Previously the icon sat beside the value in a two-column
+    // grid, leaving ~70px for it at text-2xl — so on a phone "5.57 GB"
+    // rendered as "5.57 …" and "honeypot" as "hone…". A truncated *label* is
+    // untidy; a truncated *number* is wrong, so nothing here truncates now.
     <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
+      {/* Row 1: label + icon. The label wraps rather than truncating — two
+          short lines beat "SSL Certifica…". */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">{title}</p>
-          <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold truncate">{value}</p>
-          {description && (
-            <p className="mt-1 text-xs sm:text-sm text-muted-foreground truncate">{description}</p>
-          )}
-          {trend && trendValue && (
-            <div className="mt-2 flex items-center gap-1 text-xs sm:text-sm">
-              {trend === 'up' ? (
-                <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
-              ) : (
-                <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
-              )}
-              <span className={trend === 'up' ? 'text-green-500' : 'text-red-500'}>
-                {trendValue}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="rounded-lg bg-primary/10 p-2 sm:p-3 shrink-0">
-          <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+        <p className="min-w-0 flex-1 text-xs sm:text-sm font-medium text-muted-foreground leading-tight">
+          {title}
+        </p>
+        <div className="rounded-lg bg-primary/10 p-1.5 sm:p-3 shrink-0">
+          <Icon className="h-4 w-4 sm:h-6 sm:w-6 text-primary" />
         </div>
       </div>
+
+      {/* Row 2: the number, across the card's full width. */}
+      <p className="mt-1.5 sm:mt-2 text-xl sm:text-3xl font-bold leading-tight break-words tabular-nums">
+        {value}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-tight">
+          {description}
+        </p>
+      )}
+
+      {trend && trendValue && (
+        <div className="mt-2 flex items-center gap-1 text-xs sm:text-sm">
+          {trend === 'up' ? (
+            <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 shrink-0" />
+          ) : (
+            <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4 text-red-500 shrink-0" />
+          )}
+          <span className={trend === 'up' ? 'text-green-500' : 'text-red-500'}>
+            {trendValue}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -391,7 +406,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 md:gap-6">
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-2.5 sm:p-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] sm:text-sm font-medium text-muted-foreground">403</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">403</p>
                 <ShieldX className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />
               </div>
               <p className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 text-orange-500">{authErrors.summary.total_403}</p>
@@ -399,7 +414,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-2.5 sm:p-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] sm:text-sm font-medium text-muted-foreground">401</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">401</p>
                 <Ban className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />
               </div>
               <p className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 text-yellow-500">{authErrors.summary.total_401}</p>
@@ -407,7 +422,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-2.5 sm:p-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] sm:text-sm font-medium text-muted-foreground">Failed</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Failed</p>
                 <KeyRound className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
               </div>
               <p className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 text-red-500">{authErrors.summary.failed_logins}</p>
@@ -447,7 +462,7 @@ export default function DashboardPage() {
                             {evt.method} {evt.uri}
                           </code>
                         </div>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                           {new Date(evt.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
@@ -501,7 +516,7 @@ export default function DashboardPage() {
                       {authErrors.failed_logins.slice(0, 8).map((login, idx) => (
                         <div key={idx} className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm">
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            <span className={`text-[11px] sm:text-xs px-1.5 py-0.5 rounded-full ${
                               login.type === 'admin' ? 'bg-red-500/10 text-red-500' : 'bg-yellow-500/10 text-yellow-500'
                             }`}>
                               {login.type}
@@ -511,7 +526,7 @@ export default function DashboardPage() {
                               <span className="text-xs text-muted-foreground ml-2 inline-flex items-center gap-1">from <IpAddress ip={login.ip || '?'} /></span>
                             </div>
                           </div>
-                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
                             {new Date(login.timestamp).toLocaleTimeString()}
                           </span>
                         </div>

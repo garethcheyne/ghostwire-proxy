@@ -464,7 +464,9 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
         </Section>
 
         <Section title="Response codes">
-          <div className="grid grid-cols-4 gap-2 mb-3">
+          {/* Two columns on a phone: at four, a six-figure count overflows
+              its ~64px tile. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
             {[
               ['2xx', fam['2xx'], 'text-emerald-600 dark:text-emerald-400'],
               ['3xx', fam['3xx'], 'text-blue-600 dark:text-blue-400'],
@@ -472,7 +474,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
               ['5xx', fam['5xx'], 'text-red-600 dark:text-red-400'],
             ].map(([label, value, cls]) => (
               <div key={label as string} className="rounded-lg border border-border p-2 text-center">
-                <p className={`text-lg font-semibold ${cls}`}>{num(value as number)}</p>
+                <p className={`text-base sm:text-lg font-semibold tabular-nums ${cls}`}>{num(value as number)}</p>
                 <p className="text-xs text-muted-foreground">{label as string}</p>
               </div>
             ))}

@@ -76,15 +76,15 @@ export function MobileTabBar() {
               aria-current={active ? 'page' : undefined}
               className={cn(
                 // min-h keeps every tap target comfortably above 44px.
-                'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
+                'flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
                 'text-xs font-medium transition-colors',
                 active
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground active:text-foreground',
               )}
             >
-              <Icon className={cn('h-6 w-6', active && 'stroke-[2.5]')} />
-              <span className="leading-none">{title}</span>
+              <Icon className={cn('h-6 w-6 shrink-0', active && 'stroke-[2.5]')} />
+              <span className="max-w-full truncate leading-none">{title}</span>
             </Link>
           )
         })}
@@ -94,15 +94,15 @@ export function MobileTabBar() {
           onClick={() => setIsMobileOpen(true)}
           aria-label="Open navigation menu"
           className={cn(
-            'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
+            'flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2.5',
             'text-xs font-medium transition-colors',
             !onNamedTab
               ? 'text-primary'
               : 'text-muted-foreground hover:text-foreground active:text-foreground',
           )}
         >
-          <Menu className={cn('h-6 w-6', !onNamedTab && 'stroke-[2.5]')} />
-          <span className="leading-none">More</span>
+          <Menu className={cn('h-6 w-6 shrink-0', !onNamedTab && 'stroke-[2.5]')} />
+          <span className="max-w-full truncate leading-none">More</span>
         </button>
       </div>
     </nav>

@@ -27,6 +27,7 @@ import {
   Flame,
   Monitor,
   Boxes,
+  Tag,
   Info,
   Bell,
   BookOpen,
@@ -64,6 +65,7 @@ const navigation: NavGroup[] = [
       { title: 'Threats', href: '/dashboard/threats', icon: AlertTriangle },
       { title: 'Rules', href: '/dashboard/rules', icon: ShieldAlert },
       { title: 'Access Control', href: '/dashboard/access-control', icon: Key },
+      { title: 'Known IPs', href: '/dashboard/known-ips', icon: Tag },
       { title: 'Firewalls', href: '/dashboard/firewalls', icon: Flame },
     ],
   },
@@ -102,11 +104,18 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      {/* Flex column, not fixed heights. The scroll region below sizes itself
+          from whatever the sheet actually is, which is the only thing that
+          works on a phone: the sheet is `fixed`, so it gets the *small*
+          viewport (visible area), while `100vh` resolves to the *large* one
+          (as if the browser chrome were hidden). Sizing the scroll region in
+          vh made it taller than its own parent, so the last ~100px of the menu
+          was clipped with no scrollbar — the bottom entries were unreachable. */}
       <SheetContent
         side="left"
-        className="w-[280px] p-0 bg-card/98 border-border backdrop-blur-xl"
+        className="flex w-[280px] max-w-[85vw] flex-col p-0 bg-card/98 border-border backdrop-blur-xl"
       >
-        <SheetHeader className="flex h-16 items-center justify-between border-b border-border px-4">
+        <SheetHeader className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2" onClick={() => onOpenChange(false)}>
             <div className="relative h-8 w-8">
               <Image
@@ -128,8 +137,13 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
           </Link>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-4rem)] py-4">
-          <nav className="space-y-6 px-3">
+        {/* min-h-0 is load-bearing: without it a flex child refuses to shrink
+            below its content height and the scroll region grows past the sheet
+            again. */}
+        <ScrollArea className="min-h-0 flex-1 py-4">
+          {/* Bottom padding clears the home indicator so the last entry is
+              both readable and tappable. */}
+          <nav className="space-y-6 px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
             {navigation.map((group, groupIdx) => (
               <div key={group.title}>
                 <h4 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
