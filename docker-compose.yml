@@ -109,6 +109,13 @@ services:
     restart: unless-stopped
     ports:
       - "88:3000"
+    # Publishes a port, so it is an edge container by the same definition the
+    # container scanner uses. Already runs as the unprivileged `nextjs` user on
+    # port 3000, so it needs no capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - ./docs:/app/docs:ro
     environment:
@@ -144,6 +151,20 @@ services:
     restart: unless-stopped
     ports:
       - "8089:8000"
+    # Also edge-facing. The entrypoint starts as root and hands off with
+    # `gosu appuser`, so it keeps only the capabilities that handover needs —
+    # verified that gosu still drops to uid 1000 under no-new-privileges, and
+    # that the Docker socket stays usable for the container update feature.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
     environment:
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -255,6 +276,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock  # Write access for updates
       - .:/app/project:ro                          # Project source (read-only)
       - ./data/backups:/data/backups               # For pre-update backups
+    # Not edge-facing, but it holds write access to the Docker socket,
+    # so it should not be able to gain privileges either. Capabilities
+    # are left alone: it recreates containers as part of upgrades.
+    security_opt:
+      - no-new-privileges:true
     networks:
       - ghostwire-proxy-network
     depends_on:
