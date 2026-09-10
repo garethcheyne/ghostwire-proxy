@@ -291,6 +291,40 @@ class ContainerSecurityScanner:
         status["detail"] = "No automatic update mechanism detected"
         return status
 
+    def _stale_process_count(self, container) -> Optional[int]:
+        """How many running processes still map libraries that have been
+        replaced on disk.
+
+        This is the difference between "patched" and "protected". Upgrading a
+        package rewrites the file; every process that already had the old copy
+        mapped keeps using it until it restarts, so a container can report zero
+        pending updates while still executing the vulnerable code.
+
+        Only real on-disk files count. A plain grep for "(deleted)" is wrong:
+        nginx's shared-memory zones show up as `/dev/zero (deleted)` from the
+        moment it starts, so every freshly restarted container would look like
+        it needed restarting again — an endless restart loop. Anonymous and
+        pseudo-file mappings are therefore excluded, leaving only paths that
+        a package manager could actually have replaced.
+
+        Returns None when it cannot be determined (no /proc, no shell).
+        """
+        code, out = self._exec(
+            container,
+            "c=0; for p in /proc/[0-9]*; do "
+            "n=$(grep '(deleted)' $p/maps 2>/dev/null "
+            "| grep -vE ' (/dev/|/memfd:|/SYSV|/anon|/drm|/i915)' "
+            "| grep -cE ' /(usr|lib|bin|sbin|opt|etc)' ); "
+            "case \"$n\" in ''|*[!0-9]*) n=0 ;; esac; "
+            "[ \"$n\" -gt 0 ] && c=$((c+1)); done; echo $c",
+        )
+        if code != 0:
+            return None
+        try:
+            return int((out or "0").strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return None
+
     def _image_info(self, container) -> dict:
         """Image identity and age. A stale image is the real risk in a container."""
         info = {
@@ -378,11 +412,16 @@ class ContainerSecurityScanner:
         pending = self._pending_updates(container, manager)
         auto_update = self._auto_update_status(container, manager)
 
+        stale = self._stale_process_count(container)
         result.update({
             "scannable": True,
             "installed_count": installed_count,
             "pending": pending,
             "auto_update": auto_update,
+            "stale_processes": stale,
+            # Patched on disk but still running the old code — a restart is the
+            # only thing that closes it.
+            "restart_required": bool(stale),
         })
 
         if include_packages:
@@ -420,6 +459,16 @@ class ContainerSecurityScanner:
             elif age > 90:
                 reasons.append(f"image is {age} days old")
                 level = max_level(level, "medium")
+
+        if scan.get("restart_required"):
+            reasons.append(
+                f"{scan.get('stale_processes')} process(es) still running pre-upgrade libraries "
+                "— restart required"
+            )
+            # On an internet-facing container this is the live exposure, not a
+            # tidiness issue: the patched file is on disk and the vulnerable
+            # code is still executing.
+            level = "critical" if edge else max_level(level, "high")
 
         if edge and level in ("medium", "high", "critical"):
             reasons.append("internet-facing")
@@ -490,3 +539,216 @@ def max_level(a: str, b: str) -> str:
 
 
 scanner = ContainerSecurityScanner()
+
+
+# ── Applying updates ─────────────────────────────────────────────────────
+
+# Upgrading takes far longer than inspecting: an apt or apk transaction has to
+# download and unpack. Kept separate from EXEC_TIMEOUT_SECONDS so tightening the
+# scan timeout never silently truncates an upgrade half-way through.
+UPGRADE_TIMEOUT_SECONDS = 600
+
+# Containers that must never be upgraded in place. Postgres is the one that
+# matters: swapping its libraries under a running server risks the database
+# itself, and it is a registry image that watchtower already keeps current by
+# replacing the whole image — which is the correct mechanism for it.
+DEFAULT_EXCLUDED = ("ghostwire-proxy-postgres",)
+
+
+class UpgradeResult(dict):
+    """Plain dict; named for readability at call sites."""
+
+
+def _apply_command(manager: str, security_only: bool) -> Optional[str]:
+    """The upgrade command for a package manager.
+
+    Non-interactive throughout — an upgrade that stops to ask a question inside
+    a container nobody is watching would hang until the timeout.
+    """
+    if manager == "apk":
+        # apk has no notion of a security-only subset; everything or nothing.
+        return "apk update && apk upgrade --no-cache"
+
+    if manager == "apt-get":
+        base = (
+            "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && "
+            "apt-get -y -qq -o Dpkg::Options::=--force-confold "
+            "-o Dpkg::Options::=--force-confdef "
+        )
+        if security_only:
+            # Restrict to the security suites so a routine patch run cannot
+            # drag in unrelated version churn.
+            return base + (
+                "-t $(. /etc/os-release; echo ${VERSION_CODENAME}-security) upgrade"
+            )
+        return base + "upgrade"
+
+    if manager in ("dnf", "yum"):
+        return f"{manager} -y {'update --security' if security_only else 'update'}"
+
+    return None
+
+
+def apply_updates_sync(
+    container,
+    manager: Optional[str] = None,
+    security_only: bool = True,
+) -> dict:
+    """Upgrade OS packages inside one running container. Blocking."""
+    name = container.name
+    result: dict = {
+        "container": name,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "applied": False,
+        "manager": manager,
+    }
+
+    if container.status != "running":
+        result["error"] = f"Container is {container.status}"
+        return result
+
+    if name in DEFAULT_EXCLUDED:
+        result["error"] = "Excluded from in-place upgrades"
+        return result
+
+    manager = manager or scanner._detect_package_manager(container)
+    result["manager"] = manager
+    if not manager:
+        result["error"] = "No package manager (distroless or scratch image)"
+        return result
+
+    command = _apply_command(manager, security_only)
+    if not command:
+        result["error"] = f"Unsupported package manager: {manager}"
+        return result
+
+    before = scanner._pending_updates(container, manager).get("count", 0)
+
+    try:
+        exec_result = container.exec_run(["/bin/sh", "-c", command], stdout=True, stderr=True)
+        output = (exec_result.output or b"").decode("utf-8", errors="replace")
+        code = exec_result.exit_code
+    except Exception as e:
+        result["error"] = f"Upgrade failed to run: {e}"
+        return result
+
+    after = scanner._pending_updates(container, manager).get("count", 0)
+
+    result.update({
+        "applied": code == 0,
+        "exit_code": code,
+        "pending_before": before,
+        "pending_after": after,
+        "upgraded": max(0, before - after),
+        "stale_processes": scanner._stale_process_count(container),
+        # The tail is what a human needs to see when it goes wrong; the whole
+        # transcript of an apt run is noise in an alert.
+        "output_tail": output.strip().splitlines()[-15:] if output.strip() else [],
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+    })
+    if code != 0:
+        result["error"] = f"Package manager exited {code}"
+
+    return result
+
+
+async def apply_updates(
+    container_name: str,
+    security_only: bool = True,
+    excluded: Optional[set[str]] = None,
+    restart_if_needed: bool = True,
+) -> dict:
+    """Upgrade one container by name, and restart it if it is still running
+    pre-upgrade libraries.
+
+    The restart is the point. Upgrading rewrites the package on disk; every
+    process that already mapped the old shared object keeps executing it until
+    it is replaced. Without this step an internet-facing container reports
+    "0 pending updates" while still running the vulnerable code.
+    """
+    if scanner.client is None:
+        return {"container": container_name, "applied": False, "error": "Docker unavailable"}
+
+    excluded = excluded or set()
+    if container_name in excluded:
+        return {"container": container_name, "applied": False, "error": "Excluded by policy"}
+
+    try:
+        container = scanner.client.containers.get(container_name)
+    except Exception as e:
+        return {"container": container_name, "applied": False, "error": f"Not found: {e}"}
+
+    loop = asyncio.get_event_loop()
+    result = await asyncio.wait_for(
+        loop.run_in_executor(None, apply_updates_sync, container, None, security_only),
+        timeout=UPGRADE_TIMEOUT_SECONDS,
+    )
+
+    result["restarted"] = False
+    if restart_if_needed and result.get("applied") and result.get("stale_processes"):
+        try:
+            await loop.run_in_executor(None, lambda: container.restart(timeout=30))
+            # Re-read: a healthy restart should clear every stale mapping.
+            await asyncio.sleep(3)
+            container.reload()
+            remaining = await loop.run_in_executor(
+                None, scanner._stale_process_count, container
+            )
+            result["restarted"] = True
+            result["stale_processes_after_restart"] = remaining
+            if remaining:
+                result["warning"] = (
+                    f"{remaining} process(es) still map replaced libraries after restart"
+                )
+            logger.info("Restarted %s to load upgraded libraries", container_name)
+        except Exception as e:
+            result["restart_error"] = str(e)
+            logger.error("Could not restart %s after upgrade: %s", container_name, e)
+
+    return result
+
+
+async def apply_updates_all(
+    name_filter: str = "ghostwire-proxy",
+    security_only: bool = True,
+    excluded: Optional[set[str]] = None,
+    restart_if_needed: bool = True,
+) -> list[dict]:
+    """Upgrade every matching container, one at a time.
+
+    Deliberately sequential. Upgrading the whole stack at once means every
+    service is mid-transaction simultaneously, and if something breaks there is
+    no healthy container left to serve while it is sorted out.
+    """
+    if scanner.client is None:
+        return []
+
+    excluded = set(excluded or ()) | set(DEFAULT_EXCLUDED)
+
+    try:
+        containers = scanner.client.containers.list(filters={"name": name_filter} if name_filter else None)
+    except Exception as e:
+        logger.warning("Could not list containers for upgrade: %s", e)
+        return []
+
+    results = []
+    for container in containers:
+        if container.name in excluded:
+            results.append({
+                "container": container.name, "applied": False, "skipped": True,
+                "error": "Excluded by policy",
+            })
+            continue
+        try:
+            results.append(
+                await apply_updates(container.name, security_only, excluded, restart_if_needed)
+            )
+        except asyncio.TimeoutError:
+            results.append({
+                "container": container.name, "applied": False,
+                "error": f"Timed out after {UPGRADE_TIMEOUT_SECONDS}s",
+            })
+        except Exception as e:
+            results.append({"container": container.name, "applied": False, "error": str(e)})
+
+    return results

@@ -795,6 +795,93 @@ async def lifespan(app: FastAPI):
     backup_watchdog_task = asyncio.create_task(backup_watchdog_loop())
     logger.info("Started backup watchdog task")
 
+    # Automatic OS package updates inside the containers.
+    #
+    # Deliberately centralised here rather than as a crontab inside each image.
+    # Two of the six containers are official images (postgres, redis) that we
+    # do not build, so an in-image cron entry could never cover them, and three
+    # more would need cron installed purely for this. The API already holds the
+    # Docker socket and the exec plumbing the scanner uses, so one scheduler
+    # covers everything and the result is visible, alertable and switchable
+    # from the UI instead of buried in an image.
+    #
+    # Off by default, security-only, and postgres is never upgraded in place —
+    # swapping libraries under a running database is not worth the risk when
+    # watchtower already replaces that image wholesale.
+    async def container_auto_update_loop():
+        from app.api.routes.containers import get_auto_update_policy, _set_setting
+        from app.services.container_security_service import apply_updates_all
+
+        last_fired_slot: datetime | None = None
+        await asyncio.sleep(120)
+
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    policy = await get_auto_update_policy(session)
+                    if not policy["enabled"]:
+                        await asyncio.sleep(300)
+                        continue
+
+                    now = datetime.now(timezone.utc)
+                    try:
+                        slot = croniter(policy["cron"], now).get_prev(datetime)
+                    except (ValueError, KeyError):
+                        logger.error("Invalid container update cron: %s", policy["cron"])
+                        await asyncio.sleep(300)
+                        continue
+
+                    if not (0 <= (now - slot).total_seconds() < 600) or slot == last_fired_slot:
+                        await asyncio.sleep(60)
+                        continue
+
+                    last_fired_slot = slot
+                    excluded = set(policy["excluded"]) | set(policy["always_excluded"])
+                    logger.info("Running scheduled container package update...")
+
+                    results = await apply_updates_all(
+                        security_only=policy["security_only"], excluded=excluded,
+                    )
+                    upgraded = sum(r.get("upgraded", 0) or 0 for r in results)
+                    failures = [r for r in results if r.get("error") and not r.get("skipped")]
+
+                    await _set_setting(session, "container_auto_update_last_run", now.isoformat())
+                    await _set_setting(
+                        session, "container_auto_update_last_result",
+                        json.dumps({
+                            "upgraded": upgraded,
+                            "failed": [f["container"] for f in failures],
+                            "containers": len(results),
+                        }),
+                    )
+                    logger.info(
+                        "Container update run: %d packages upgraded across %d containers, %d failed",
+                        upgraded, len(results), len(failures),
+                    )
+
+                    if failures:
+                        from app.services.alert_service import dispatch_alert
+                        await dispatch_alert(
+                            db=session,
+                            alert_type="container_update_failed",
+                            severity="warning",
+                            title="Container Package Update Failed",
+                            message=(
+                                f"{len(failures)} container(s) could not be updated: "
+                                + ", ".join(f["container"] for f in failures)
+                            ),
+                            data={f["container"]: f.get("error") for f in failures},
+                        )
+            except asyncio.CancelledError:
+                logger.info("Container auto-update task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in container auto-update: %s", e)
+                await asyncio.sleep(300)
+
+    container_update_task = asyncio.create_task(container_auto_update_loop())
+    logger.info("Started container auto-update task")
+
     # Certificate auto-renewal — checks for Let's Encrypt certs nearing expiry
     # and renews + deploys (writes cert files, regenerates nginx configs,
     # reloads nginx) them automatically. Previously renewal only happened if
@@ -860,7 +947,8 @@ async def lifespan(app: FastAPI):
     trusted_proxy_task.cancel()
     report_task.cancel()
     backup_watchdog_task.cancel()
-    for _task in (report_task, backup_watchdog_task):
+    container_update_task.cancel()
+    for _task in (report_task, backup_watchdog_task, container_update_task):
         try:
             await _task
         except asyncio.CancelledError:

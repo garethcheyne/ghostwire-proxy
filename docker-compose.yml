@@ -59,6 +59,24 @@ services:
       nofile:
         soft: 8192
         hard: 8192
+    # This is the only container reachable from the internet, so it gets the
+    # tightest profile the workload allows. It was previously the *least*
+    # hardened service in the stack — postgres and redis already had
+    # no-new-privileges and a read-only root, while the edge had neither.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Bind 80/443 without running the workers as root.
+      - NET_BIND_SERVICE
+      # The master starts as root and drops each worker to `nobody`; without
+      # these the workers cannot be spawned.
+      - SETUID
+      - SETGID
+      # The entrypoint fixes ownership on the log and cache directories.
+      - CHOWN
+      - DAC_OVERRIDE
     volumes:
       - ./data/certificates:/etc/nginx/certs:ro
       - ./data/nginx-configs:/etc/nginx/conf.d/proxy-hosts:ro

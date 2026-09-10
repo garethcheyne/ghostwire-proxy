@@ -45,6 +45,16 @@ interface Scan {
   risk?: { level: string; reasons: string[] }
 }
 
+interface AutoUpdatePolicy {
+  enabled: boolean
+  cron: string
+  security_only: boolean
+  excluded: string[]
+  always_excluded: string[]
+  last_run?: string | null
+  last_result?: string | null
+}
+
 interface Summary {
   total_containers: number
   by_level: Record<string, number>
@@ -70,6 +80,10 @@ export default function ContainersPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [policy, setPolicy] = useState<AutoUpdatePolicy | null>(null)
+  const [savingPolicy, setSavingPolicy] = useState(false)
+  const [updating, setUpdating] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true)
@@ -83,6 +97,12 @@ export default function ContainersPage() {
       })
       setScans(data.containers || [])
       setSummary(data.summary || null)
+      try {
+        const p = await api.get('/api/containers/auto-update')
+        setPolicy(p.data)
+      } catch {
+        // Policy is admin-only; a non-admin still gets the scan.
+      }
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Could not scan containers')
     } finally {
@@ -94,6 +114,43 @@ export default function ContainersPage() {
   useEffect(() => {
     load()
   }, [])
+
+  const savePolicy = async (patch: Partial<AutoUpdatePolicy>) => {
+    setSavingPolicy(true)
+    setError('')
+    try {
+      const { data } = await api.put('/api/containers/auto-update', patch)
+      setPolicy(data)
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Could not save the update policy')
+    } finally {
+      setSavingPolicy(false)
+    }
+  }
+
+  const runUpdate = async (container?: string) => {
+    setUpdating(container || 'all')
+    setError('')
+    setNotice('')
+    try {
+      const { data } = await api.post(
+        '/api/containers/auto-update/run',
+        container ? { container } : {},
+        // Upgrading the whole stack sequentially takes minutes.
+        { timeout: 900000 }
+      )
+      const failed = data.failed || []
+      setNotice(
+        `${data.packages_upgraded} package(s) upgraded` +
+          (failed.length ? ` — failed: ${failed.join(', ')}` : '')
+      )
+      await load(true)
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Update run failed')
+    } finally {
+      setUpdating(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -148,6 +205,112 @@ export default function ContainersPage() {
           rebuild is durable.
         </p>
       </div>
+
+      {notice && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm">
+          <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
+
+      {/* Automatic updates */}
+      {policy && (
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-semibold flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Automatic OS package updates
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+                Runs <code className="text-xs">apk upgrade</code> /{' '}
+                <code className="text-xs">apt-get upgrade</code> inside each container on a
+                schedule. Containers are updated one at a time, so a failure never leaves the
+                whole stack mid-transaction.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={policy.enabled}
+                disabled={savingPolicy}
+                onChange={(e) => savePolicy({ enabled: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-primary peer-disabled:opacity-50 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-background after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 mt-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Schedule (cron, UTC)</label>
+              <input
+                value={policy.cron}
+                onChange={(e) => setPolicy({ ...policy, cron: e.target.value })}
+                onBlur={(e) => savePolicy({ cron: e.target.value })}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                Default <code>0 4 * * 0</code> — Sundays at 04:00 UTC.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Never update in place</label>
+              <input
+                value={policy.excluded.join(', ')}
+                onChange={(e) =>
+                  setPolicy({ ...policy, excluded: e.target.value.split(',').map((v) => v.trim()) })
+                }
+                onBlur={(e) => savePolicy({ excluded: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
+                placeholder="container-name, another-container"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                Always excluded: {policy.always_excluded.join(', ')} — swapping libraries under a
+                running database is not worth the risk, and watchtower replaces that image whole.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-border">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={policy.security_only}
+                disabled={savingPolicy}
+                onChange={(e) => savePolicy({ security_only: e.target.checked })}
+              />
+              <span>
+                Security updates only
+                <span className="text-muted-foreground">
+                  {' '}— Alpine has no security-only subset, so apk containers always take everything
+                </span>
+              </span>
+            </label>
+
+            <button
+              onClick={() => runUpdate()}
+              disabled={updating !== null}
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {updating === 'all' ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {updating === 'all' ? 'Updating…' : 'Update all now'}
+            </button>
+          </div>
+
+          {policy.last_run && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Last run {String(policy.last_run).slice(0, 16).replace('T', ' ')} UTC
+              {policy.last_result ? ` — ${policy.last_result}` : ''}
+            </p>
+          )}
+        </div>
+      )}
 
       {summary && (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
@@ -306,6 +469,37 @@ export default function ContainersPage() {
 
                   {c.scannable === false && (
                     <p className="text-sm text-muted-foreground">{c.reason}</p>
+                  )}
+
+                  {c.scannable !== false && c.status === 'running' && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => runUpdate(c.name)}
+                        disabled={
+                          updating !== null ||
+                          (policy?.always_excluded || []).includes(c.name) ||
+                          (policy?.excluded || []).includes(c.name)
+                        }
+                        title={
+                          (policy?.always_excluded || []).includes(c.name)
+                            ? 'This container is never updated in place'
+                            : undefined
+                        }
+                        className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {updating === c.name ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        {updating === c.name ? 'Updating…' : 'Update now'}
+                      </button>
+                      {(policy?.always_excluded || []).includes(c.name) && (
+                        <span className="text-xs text-muted-foreground">
+                          Excluded — updated by replacing the image, not in place.
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {c.pending?.error && (
