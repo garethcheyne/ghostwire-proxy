@@ -218,7 +218,18 @@ async def lifespan(app: FastAPI):
     from croniter import croniter
 
     async def scheduled_backup_loop():
-        """Check and run scheduled backups based on cron settings."""
+        """Check and run scheduled backups based on cron settings.
+
+        `last_fired_slot` records which cron occurrence has already been served.
+        Without it the same slot fired twice: the loop ticks every 60s and the
+        window test used abs(), so a 02:00 backup matched at 01:59:47 (13s
+        before the slot) and again at 02:00:56 (56s after it) — two full
+        backups a minute apart, which also burned through the retention count
+        at twice the intended rate. Observed on 2026-09-10 at 01:59:47 and
+        02:00:56.
+        """
+        last_fired_slot: datetime | None = None
+
         while True:
             try:
                 await asyncio.sleep(60)  # Check every minute
@@ -227,17 +238,27 @@ async def lifespan(app: FastAPI):
                     if not settings_obj.auto_backup_enabled:
                         continue
 
-                    # Calculate next run time from cron expression
+                    # Work from the most recent scheduled occurrence at or
+                    # before now, rather than the next one. Seeding croniter
+                    # from `now - 1 minute` and taking get_next() only works
+                    # while a tick lands inside that minute — the loop sleeps
+                    # 60s *plus* however long the previous backup took, so
+                    # drift eventually pushes every tick past the window and
+                    # the backup is skipped for the day. get_prev() has no such
+                    # edge.
                     now = datetime.now(timezone.utc)
                     try:
-                        cron = croniter(settings_obj.schedule_cron, now - timedelta(minutes=1))
-                        next_run = cron.get_next(datetime)
+                        slot = croniter(settings_obj.schedule_cron, now).get_prev(datetime)
                     except (ValueError, KeyError):
                         logger.error(f"Invalid cron expression: {settings_obj.schedule_cron}")
                         continue
 
-                    # Check if we're within the current minute window
-                    if abs((next_run - now).total_seconds()) < 60:
+                    # Fire once per occurrence, only after it has arrived, and
+                    # only if it is still recent (so a restart does not replay
+                    # an occurrence from hours ago).
+                    age = (now - slot).total_seconds()
+                    if 0 <= age < 600 and slot != last_fired_slot:
+                        last_fired_slot = slot
                         logger.info("Running scheduled backup...")
                         try:
                             created_backup = await backup_service.create_backup(
@@ -493,13 +514,41 @@ async def lifespan(app: FastAPI):
     from app.services.enrichment_service import backfill_enrichment, cleanup_stale_enrichments
 
     async def enrichment_backfill_loop():
-        """Periodically backfill IP enrichment for traffic log IPs."""
-        # Wait 30 seconds on startup before first batch
+        """Periodically backfill IP enrichment for traffic log IPs.
+
+        Off by default. It walked every distinct client_ip in traffic_logs in
+        batches of 40 every 5 minutes — around 480 AbuseIPDB /check calls an
+        hour against a free tier of roughly 1,000 a day, which is why 641
+        lookups in one day came back HTTP 429 and enrichment stopped working
+        at all. Enrichment still happens on demand when an IP is actually
+        looked at, which is the traffic that matters.
+
+        Set the `enrichment_backfill_enabled` setting to "true" to turn the
+        sweep back on — worth doing only with a paid AbuseIPDB plan, or with no
+        AbuseIPDB key at all (ip-api.com is free and separately rate-limited).
+        """
         await asyncio.sleep(30)
         cleanup_counter = 0
         while True:
             try:
                 async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting as _Setting
+                    from sqlalchemy import select as _select
+
+                    _row = (await session.execute(
+                        _select(_Setting).where(_Setting.key == "enrichment_backfill_enabled")
+                    )).scalar_one_or_none()
+                    _enabled = bool(_row and str(_row.value).strip().lower() in ("true", "1", "yes", "on"))
+
+                    if not _enabled:
+                        # Still run the stale-record cleanup; it costs no API calls.
+                        cleanup_counter += 1
+                        if cleanup_counter >= 72:
+                            cleanup_counter = 0
+                            await cleanup_stale_enrichments(session)
+                        await asyncio.sleep(300)
+                        continue
+
                     result = await backfill_enrichment(session)
                     if result["enriched"] > 0:
                         logger.info(

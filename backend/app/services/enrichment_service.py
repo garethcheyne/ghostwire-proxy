@@ -69,8 +69,31 @@ async def _reverse_dns(ip: str) -> Optional[str]:
         return None
 
 
-async def _lookup_abuseipdb(ip: str, api_key: str) -> dict:
-    """Query AbuseIPDB for reputation data (requires API key)."""
+# When AbuseIPDB answers 429 the daily quota is gone; nothing is achieved by
+# continuing to ask, and each rejected call still counts against some plans.
+# One global cooldown, rather than a per-IP backoff, so a quota exhaustion is
+# not multiplied by the number of addresses we happen to see next.
+_ABUSE_RATE_LIMITED_UNTIL: Optional[datetime] = None
+ABUSE_RATE_LIMIT_COOLDOWN = timedelta(hours=6)
+
+
+def _abuse_is_rate_limited() -> bool:
+    return bool(_ABUSE_RATE_LIMITED_UNTIL and datetime.now(timezone.utc) < _ABUSE_RATE_LIMITED_UNTIL)
+
+
+async def _lookup_abuseipdb(ip: str, api_key: str) -> tuple[dict, bool]:
+    """Query AbuseIPDB for reputation data.
+
+    Returns (data, answered). `answered` is True only when AbuseIPDB actually
+    responded about this IP — the caller uses it to decide whether the result is
+    worth recording permanently. Previously this returned {} for both "clean IP"
+    and "rate limited", so a 429 looked identical to a real answer of nothing.
+    """
+    global _ABUSE_RATE_LIMITED_UNTIL
+
+    if _abuse_is_rate_limited():
+        return {}, False
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
@@ -82,12 +105,18 @@ async def _lookup_abuseipdb(ip: str, api_key: str) -> dict:
                 },
             )
             if resp.status_code == 200:
-                data = resp.json().get("data", {})
-                return data
+                return resp.json().get("data", {}), True
+            if resp.status_code == 429:
+                _ABUSE_RATE_LIMITED_UNTIL = datetime.now(timezone.utc) + ABUSE_RATE_LIMIT_COOLDOWN
+                logger.warning(
+                    "AbuseIPDB daily quota exhausted (HTTP 429) — pausing lookups until %s",
+                    _ABUSE_RATE_LIMITED_UNTIL.isoformat(timespec="minutes"),
+                )
+                return {}, False
             logger.warning("AbuseIPDB lookup failed for %s: HTTP %d", ip, resp.status_code)
     except Exception as e:
         logger.warning("AbuseIPDB request failed for %s: %s", ip, e)
-    return {}
+    return {}, False
 
 
 # Minimum time between /blacklist syncs. That endpoint has its own, much
@@ -195,8 +224,14 @@ async def enrich_ip(
         #     through the daily quota in the first place, so this only
         #     becomes eligible again after a backoff window, same as any
         #     other cached field.
+        # An IP we have already had an answer about is never asked again — that
+        # is the whole point of storing it. abuse_checked_at records the answer
+        # itself, so a legitimate score of 0 no longer looks like a cache miss.
         abuse_worth_retrying = (
-            abuseipdb_key and existing.abuse_score is None and age >= ABUSE_CHECK_RETRY_BACKOFF
+            abuseipdb_key
+            and existing.abuse_checked_at is None
+            and not _abuse_is_rate_limited()
+            and age >= ABUSE_CHECK_RETRY_BACKOFF
         )
         if age < ENRICHMENT_TTL and not abuse_worth_retrying:
             return existing
@@ -205,7 +240,15 @@ async def enrich_ip(
     # metered /check call - most honeypot-hitting IPs are already known-bad
     # and show up here (confidenceMinimum=75) at zero API cost.
     local_blacklist_hit = await check_local_blacklist(db, ip) if abuseipdb_key else None
-    call_abuseipdb_live = bool(abuseipdb_key) and local_blacklist_hit is None
+    # Ask AbuseIPDB only when every cheaper source has been exhausted: a key
+    # exists, the free local blacklist does not already cover this IP, we have
+    # never had an answer about it before, and we are not in a quota cooldown.
+    call_abuseipdb_live = (
+        bool(abuseipdb_key)
+        and local_blacklist_hit is None
+        and (existing is None or existing.abuse_checked_at is None)
+        and not _abuse_is_rate_limited()
+    )
 
     # Gather data from all sources in parallel
     tasks = [_lookup_ip_api(ip), _reverse_dns(ip)]
@@ -217,8 +260,9 @@ async def enrich_ip(
     ip_api_data = results[0] if not isinstance(results[0], Exception) else {}
     rdns = results[1] if not isinstance(results[1], Exception) else None
     abuse_data = {}
+    abuse_answered = False
     if call_abuseipdb_live and len(results) > 2 and not isinstance(results[2], Exception):
-        abuse_data = results[2]
+        abuse_data, abuse_answered = results[2]
     elif local_blacklist_hit is not None:
         abuse_data = {
             "abuseConfidenceScore": local_blacklist_hit.abuse_confidence_score,
@@ -229,6 +273,7 @@ async def enrich_ip(
             ),
             "isTor": None,
         }
+        abuse_answered = True
 
     # Build enrichment record
     now = datetime.now(timezone.utc)
@@ -264,6 +309,7 @@ async def enrich_ip(
             else None
         ),
         "is_tor": abuse_data.get("isTor"),
+        "abuse_checked_at": now if abuse_answered else (existing.abuse_checked_at if existing else None),
         "is_crawler": None,  # Could be populated by user-agent analysis
         "raw_data": json.dumps(raw_combined, default=str),
         "enriched_at": now,
@@ -271,9 +317,22 @@ async def enrich_ip(
     }
 
     if existing:
+        # Geo and rDNS are free to refresh. The AbuseIPDB-derived fields are
+        # not: when this refresh did not include a live lookup, abuse_data is
+        # empty, and blindly copying it wiped a score we had already paid for.
+        # The blank record then looked like a cache miss on the next pass and
+        # spent another metered call — the loop behind 641 rejected requests in
+        # a single day.
+        abuse_fields = {
+            "abuse_score", "abuse_reports", "abuse_last_reported",
+            "is_tor", "abuse_checked_at",
+        }
         for field, value in enrichment_data.items():
-            if field != "ip_address":
-                setattr(existing, field, value)
+            if field == "ip_address":
+                continue
+            if field in abuse_fields and not abuse_answered:
+                continue
+            setattr(existing, field, value)
         await db.commit()
         await db.refresh(existing)
         return existing

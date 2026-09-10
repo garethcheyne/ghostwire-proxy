@@ -6,7 +6,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+
 from sqlalchemy import select, func, and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models.waf import ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.firewall import FirewallBlocklist
@@ -118,30 +121,37 @@ async def record_threat_event(
         await db.commit()
         return event
 
-    # Update or create threat actor
+    # Update or create the threat actor, atomically.
+    #
+    # This used to SELECT, then INSERT when nothing came back. Two threat events
+    # for the same not-yet-seen IP arriving together both saw "no row" and both
+    # inserted, so one lost the race on ix_threat_actors_ip_address, the request
+    # 500'd, and that threat event was silently dropped — a request the WAF had
+    # blocked went unrecorded. Observed at roughly 1 in 12 calls to
+    # /api/internal/threats/log, which is exactly the shape of traffic that
+    # produces concurrent hits: an attacker sending several probes at once.
+    #
+    # ON CONFLICT DO UPDATE lets Postgres settle it: whoever gets there second
+    # increments the existing row instead of failing. The counters are computed
+    # from the stored column rather than a value read earlier, so no update is
+    # lost either.
     result = await db.execute(
         select(ThreatActor).where(ThreatActor.ip_address == client_ip)
     )
-    actor = result.scalar_one_or_none()
+    existing = result.scalar_one_or_none()
 
     now = datetime.now(timezone.utc)
     score_delta = SEVERITY_SCORES.get(severity, 25)
 
     # Resolve country: prefer passed-in values from Lua GeoIP, fall back to local lookup
     cc, cn = country_code, country_name
-    if not cc and (not actor or not actor.country_code):
+    if not cc and (not existing or not existing.country_code):
         cc, cn = lookup_country(client_ip)
 
-    if actor:
-        actor.total_events = (actor.total_events or 0) + 1
-        actor.threat_score = (actor.threat_score or 0) + score_delta
-        actor.last_seen = now
-        actor.updated_at = now
-        if cc and not actor.country_code:
-            actor.country_code = cc
-            actor.country_name = cn
-    else:
-        actor = ThreatActor(
+    stmt = (
+        pg_insert(ThreatActor)
+        .values(
+            id=str(uuid.uuid4()),
             ip_address=client_ip,
             total_events=1,
             threat_score=score_delta,
@@ -149,10 +159,32 @@ async def record_threat_event(
             last_seen=now,
             country_code=cc,
             country_name=cn,
+            current_status="monitored",
+            created_at=now,
+            updated_at=now,
         )
-        db.add(actor)
-
+        .on_conflict_do_update(
+            index_elements=["ip_address"],
+            set_={
+                "total_events": func.coalesce(ThreatActor.total_events, 0) + 1,
+                "threat_score": func.coalesce(ThreatActor.threat_score, 0) + score_delta,
+                "last_seen": now,
+                "updated_at": now,
+                # Only fill the country in; never overwrite one already known.
+                "country_code": func.coalesce(ThreatActor.country_code, cc),
+                "country_name": func.coalesce(ThreatActor.country_name, cn),
+            },
+        )
+    )
+    await db.execute(stmt)
     await db.flush()
+
+    # Re-read so threshold evaluation sees the committed counters, including
+    # any increment applied concurrently by another request.
+    actor = (
+        await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))
+    ).scalar_one()
+    await db.refresh(actor)
 
     # Evaluate thresholds
     await evaluate_thresholds(db, actor)

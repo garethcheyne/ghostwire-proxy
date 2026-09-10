@@ -99,6 +99,12 @@ class IpEnrichment(Base):
     # Raw data
     raw_data = Column(Text, nullable=True)  # JSON dump of all enrichment sources
 
+    # Set the first time AbuseIPDB answered for this IP, and never cleared.
+    # Its presence is what stops us re-spending a metered /check call on an
+    # address whose reputation we already hold — a NULL abuse_score is
+    # otherwise indistinguishable from "never asked".
+    abuse_checked_at = Column(DateTime(timezone=True), nullable=True)
+
     # Meta
     enriched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
