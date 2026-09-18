@@ -155,6 +155,7 @@ class TestRenewCertificate:
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result), \
+             patch("app.services.certificate_service.os.path.exists", return_value=True), \
              patch("builtins.open", MagicMock(side_effect=[
                  MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="NEW_CERT"))),
                            __exit__=MagicMock(return_value=False)),
@@ -165,6 +166,31 @@ class TestRenewCertificate:
 
         assert success is True
         assert "renewed" in msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_renew_never_issued_requests_instead(self, db_session):
+        """A cert whose first request failed has no renewal config; Renew issues it."""
+        cert = Certificate(
+            id="test-renew-3",
+            name="LE Cert",
+            domain_names=["new.example.com"],
+            is_letsencrypt=True,
+            letsencrypt_email="test@example.com",
+            status="error",
+        )
+        db_session.add(cert)
+        await db_session.commit()
+
+        request = AsyncMock(return_value=(True, "Certificate issued"))
+        with patch("app.services.certificate_service.os.path.exists", return_value=False) as exists, \
+             patch("app.services.certificate_service.request_letsencrypt_certificate", request), \
+             patch("subprocess.run") as run:
+            success, msg = await renew_certificate(db_session, "test-renew-3")
+
+        assert (success, msg) == (True, "Certificate issued")
+        exists.assert_called_once_with("/etc/letsencrypt/renewal/new.example.com.conf")
+        request.assert_awaited_once_with(db_session, "test-renew-3")
+        run.assert_not_called()
 
 
 class TestCheckExpiringCertificates:

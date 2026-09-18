@@ -554,20 +554,33 @@ async def generate_default_site_config(db: AsyncSession) -> str:
         "    ssl_certificate /etc/nginx/certs/default.crt;",
         "    ssl_certificate_key /etc/nginx/certs/default.key;",
         "",
+        "    # Serve ACME challenges for hosts that don't have a server block yet",
+        "    location /.well-known/acme-challenge/ {",
+        "        root /var/www/certbot;",
+        "    }",
+        "",
     ]
 
+    # The behaviours below live inside `location /`: a server-level `return` runs before nginx
+    # picks a location, so it would also answer the ACME challenge above.
     if behavior == "redirect" and redirect_url:
         lines.extend([
-            f"    return 301 {redirect_url};",
+            "    location / {",
+            f"        return 301 {redirect_url};",
+            "    }",
         ])
     elif behavior == "404":
         lines.extend([
-            "    return 404;",
+            "    location / {",
+            "        return 404;",
+            "    }",
         ])
     elif behavior == "444":
         lines.extend([
-            "    # Drop connection — send no response",
-            "    return 444;",
+            "    location / {",
+            "        # Drop connection — send no response",
+            "        return 444;",
+            "    }",
         ])
     else:
         # congratulations (default) — show welcome page

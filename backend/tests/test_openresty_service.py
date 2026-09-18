@@ -162,6 +162,22 @@ class TestGenerateDefaultSiteConfig:
         config = await generate_default_site_config(db_session)
         assert "444" in config
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("behavior", ["congratulations", "redirect", "404", "444"])
+    async def test_acme_challenges_served_for_every_behavior(self, db_session, behavior):
+        """Certs for hosts without a server block are validated through the default site, so no
+        behaviour may answer /.well-known/acme-challenge/ itself."""
+        import re
+
+        db_session.add(Setting(key="default_site_behavior", value=behavior))
+        db_session.add(Setting(key="default_site_redirect_url", value="https://google.com"))
+        await db_session.commit()
+
+        config = await generate_default_site_config(db_session)
+        assert "location /.well-known/acme-challenge/ {\n        root /var/www/certbot;" in config
+        # A server-level `return` runs before location matching and would win.
+        assert not re.search(r"^    return ", config, re.MULTILINE)
+
 
 class TestNginxOperations:
     """Tests for nginx test and reload."""

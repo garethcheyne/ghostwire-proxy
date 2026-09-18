@@ -131,9 +131,15 @@ async def renew_certificate(
     if not cert.is_letsencrypt:
         return False, "Not a Let's Encrypt certificate"
 
+    domain = cert.domain_names[0]
+
+    # Never issued (the first request failed): certbot has nothing to renew and would only say
+    # "No certificate found", hiding the real cause. Request it instead.
+    if not os.path.exists(f"/etc/letsencrypt/renewal/{domain}.conf"):
+        return await request_letsencrypt_certificate(db, cert_id)
+
     try:
         # Run certbot renew
-        domain = cert.domain_names[0]
         cmd = [
             "certbot", "renew",
             "--cert-name", domain,
