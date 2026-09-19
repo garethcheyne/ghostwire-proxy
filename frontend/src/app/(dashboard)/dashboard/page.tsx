@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Globe,
   Shield,
@@ -97,18 +97,21 @@ export default function DashboardPage() {
   const threatStats = wafQuery.data ?? null
   const authErrors = authErrorsQuery.data ?? null
 
+  // Read the clock once per mount: rendering must not call Date.now() (React purity rule).
+  const [now] = useState(Date.now)
+
   const { activeHosts, validCerts, expiringCerts } = useMemo(() => {
     const active = hosts.filter((h) => h.enabled).length
     const valid = certificates.filter((c) => c.status === 'valid').length
     const expiring = certificates.filter((c) => {
       if (!c.expires_at) return false
       const days = Math.floor(
-        (new Date(c.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        (new Date(c.expires_at).getTime() - now) / (1000 * 60 * 60 * 24)
       )
       return days <= 30 && days > 0
     }).length
     return { activeHosts: active, validCerts: valid, expiringCerts: expiring }
-  }, [hosts, certificates])
+  }, [hosts, certificates, now])
 
   // Only show the full-page spinner while *all three* core queries are pending.
   // Once any one resolves we render the page so cards fill in progressively.
@@ -264,7 +267,7 @@ export default function DashboardPage() {
                 {certificates.slice(0, 5).map((cert) => {
                   const daysUntilExpiry = cert.expires_at
                     ? Math.floor(
-                        (new Date(cert.expires_at).getTime() - Date.now()) /
+                        (new Date(cert.expires_at).getTime() - now) /
                           (1000 * 60 * 60 * 24)
                       )
                     : null

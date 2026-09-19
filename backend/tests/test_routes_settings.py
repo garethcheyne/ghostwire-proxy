@@ -66,14 +66,39 @@ class TestDefaultSiteSettings:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_update_default_site(self, client, admin_user, auth_headers):
-        response = await client.put(
-            "/api/settings/default-site",
-            headers=auth_headers,
-            json={"behavior": "404"},
-        )
-        # May succeed or fail depending on nginx availability
-        assert response.status_code in (200, 500)
+    async def test_update_default_site(self, client, admin_user, auth_headers, tmp_path):
+        """Writes _default.conf and reloads nginx (nginx itself is mocked: CI has none)."""
+        from unittest.mock import patch
+        from app.core.config import settings as app_settings
+
+        with patch.object(app_settings, "nginx_config_path", str(tmp_path)),              patch("app.services.openresty_service.backup_configs"),              patch("app.services.openresty_service.restore_configs") as restore,              patch("app.services.openresty_service.test_nginx_config", return_value=(True, "ok")),              patch("app.services.openresty_service.reload_nginx", return_value=(True, "ok")):
+            response = await client.put(
+                "/api/settings/default-site",
+                headers=auth_headers,
+                json={"behavior": "404"},
+            )
+
+        assert response.status_code == 200
+        config = (tmp_path / "_default.conf").read_text()
+        assert "return 404;" in config
+        assert "location /.well-known/acme-challenge/" in config
+        restore.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_default_site_rolls_back_bad_config(self, client, admin_user, auth_headers, tmp_path):
+        from unittest.mock import patch
+        from app.core.config import settings as app_settings
+
+        with patch.object(app_settings, "nginx_config_path", str(tmp_path)),              patch("app.services.openresty_service.backup_configs"),              patch("app.services.openresty_service.restore_configs") as restore,              patch("app.services.openresty_service.test_nginx_config", return_value=(False, "syntax error")),              patch("app.services.openresty_service.reload_nginx") as reload:
+            response = await client.put(
+                "/api/settings/default-site",
+                headers=auth_headers,
+                json={"behavior": "404"},
+            )
+
+        assert response.status_code == 400
+        restore.assert_called_once()
+        reload.assert_not_called()
 
 
 class TestReloadNginx:

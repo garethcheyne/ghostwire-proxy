@@ -12,7 +12,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   # ─────────────────────────────────────────────
@@ -67,6 +67,8 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://ghostwire:testpassword@localhost:5432/ghostwire_test
+          # conftest.py only uses TEST_DATABASE_URL (it drops every table after each test).
+          TEST_DATABASE_URL: postgresql+asyncpg://ghostwire:testpassword@localhost:5432/ghostwire_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-jwt-secret-ci
           ENCRYPTION_KEY: test-encryption-key-32-chars-min!!
