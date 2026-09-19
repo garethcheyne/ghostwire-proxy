@@ -18,6 +18,13 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface SystemUser {
   id: string
@@ -26,7 +33,7 @@ interface SystemUser {
   role: 'admin' | 'user' | 'viewer'
   is_active: boolean
   created_at: string
-  last_login: string | null
+  last_signin_at: string | null
 }
 
 export default function UsersPage() {
@@ -36,7 +43,6 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -79,7 +85,6 @@ export default function UsersPage() {
     setFormRole(user.role)
     setEditingUser(user)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,7 +136,6 @@ export default function UsersPage() {
       console.error('Failed to delete user:', error)
       toastError('Failed to delete user')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggleActive = async (user: SystemUser) => {
@@ -146,7 +150,6 @@ export default function UsersPage() {
       console.error('Failed to update user:', error)
       toastError('Failed to update user')
     }
-    setActiveDropdown(null)
   }
 
   const getRoleBadgeColor = (role: string) => {
@@ -255,49 +258,36 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground hidden md:table-cell">
-                      {user.last_login
-                        ? new Date(user.last_login).toLocaleString()
+                      {user.last_signin_at
+                        ? new Date(user.last_signin_at).toLocaleString()
                         : 'Never'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="relative">
-                        <button
-                          onClick={() =>
-                            setActiveDropdown(activeDropdown === user.id ? null : user.id)
-                          }
-                          className="rounded-lg p-2 hover:bg-muted"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-
-                        {activeDropdown === user.id && (
-                          <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                            <div className="p-1">
-                              <button
-                                onClick={() => handleEdit(user)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleToggleActive(user)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                              >
-                                {user.is_active ? 'Deactivate' : 'Activate'}
-                              </button>
-                              <hr className="my-1 border-border" />
-                              <button
-                                onClick={() => handleDelete(user)}
-                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      {/* Rendered in a portal, so the table's scroll container can't clip it. */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="rounded-lg p-2 hover:bg-muted" aria-label={`Actions for ${user.name}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onSelect={() => handleEdit(user)} className="gap-2">
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => handleToggleActive(user)}>
+                            {user.is_active ? 'Deactivate' : 'Activate'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => handleDelete(user)}
+                            className="gap-2 text-red-500 focus:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))
@@ -401,13 +391,6 @@ export default function UsersPage() {
         </ModalBody>
       </Modal>
 
-      {/* Click outside to close dropdown */}
-      {activeDropdown && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setActiveDropdown(null)}
-        />
-      )}
     </div>
   )
 }
