@@ -36,7 +36,10 @@ export const accessListKeys = {
 
 export const trafficKeys = {
   all: ['traffic'] as const,
-  stats: () => [...trafficKeys.all, 'stats'] as const,
+  stats: (proxyHostId?: string | null) =>
+    [...trafficKeys.all, 'stats', proxyHostId ?? null] as const,
+  logs: (params: Record<string, unknown> = {}) =>
+    [...trafficKeys.all, 'logs', params] as const,
 }
 
 export const wafKeys = {
@@ -87,4 +90,11 @@ export const authWallKeys = {
   all: ['auth-walls'] as const,
   list: (params: ListParams = {}) => [...authWallKeys.all, 'list', params] as const,
   detail: (id: string) => [...authWallKeys.all, 'detail', id] as const,
+}
+
+export const knownIpKeys = {
+  all: ['known-ips'] as const,
+  list: (params: Record<string, unknown> = {}) => [...knownIpKeys.all, 'list', params] as const,
+  lookup: (ips: string[]) => [...knownIpKeys.all, 'lookup', [...ips].sort()] as const,
+  report: (ip: string, days: number) => [...knownIpKeys.all, 'report', ip, days] as const,
 }

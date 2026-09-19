@@ -15,15 +15,22 @@ from typing import Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete, insert
 
-from app.models.honeypot import IpEnrichment
+from app.models.honeypot import IpEnrichment, AbuseIPDBBlacklistEntry
 from app.models.traffic_log import TrafficLog
 
 logger = logging.getLogger(__name__)
 
 # Cache enrichment for 24 hours before re-fetching
 ENRICHMENT_TTL = timedelta(hours=24)
+
+# If a previous AbuseIPDB /check attempt left abuse_score unset (no key was
+# configured yet at the time, or the call failed/was rate-limited), don't
+# retry it on every single hit - wait at least this long between attempts.
+# Without this, one AbuseIPDB failure permanently exempts that IP from the
+# 24h cache and it gets re-queried on every future lookup.
+ABUSE_CHECK_RETRY_BACKOFF = timedelta(hours=6)
 
 # ip-api.com rate limit: 45 requests per minute
 _IP_API_SEMAPHORE = asyncio.Semaphore(5)
@@ -62,8 +69,31 @@ async def _reverse_dns(ip: str) -> Optional[str]:
         return None
 
 
-async def _lookup_abuseipdb(ip: str, api_key: str) -> dict:
-    """Query AbuseIPDB for reputation data (requires API key)."""
+# When AbuseIPDB answers 429 the daily quota is gone; nothing is achieved by
+# continuing to ask, and each rejected call still counts against some plans.
+# One global cooldown, rather than a per-IP backoff, so a quota exhaustion is
+# not multiplied by the number of addresses we happen to see next.
+_ABUSE_RATE_LIMITED_UNTIL: Optional[datetime] = None
+ABUSE_RATE_LIMIT_COOLDOWN = timedelta(hours=6)
+
+
+def _abuse_is_rate_limited() -> bool:
+    return bool(_ABUSE_RATE_LIMITED_UNTIL and datetime.now(timezone.utc) < _ABUSE_RATE_LIMITED_UNTIL)
+
+
+async def _lookup_abuseipdb(ip: str, api_key: str) -> tuple[dict, bool]:
+    """Query AbuseIPDB for reputation data.
+
+    Returns (data, answered). `answered` is True only when AbuseIPDB actually
+    responded about this IP — the caller uses it to decide whether the result is
+    worth recording permanently. Previously this returned {} for both "clean IP"
+    and "rate limited", so a 429 looked identical to a real answer of nothing.
+    """
+    global _ABUSE_RATE_LIMITED_UNTIL
+
+    if _abuse_is_rate_limited():
+        return {}, False
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
@@ -75,12 +105,97 @@ async def _lookup_abuseipdb(ip: str, api_key: str) -> dict:
                 },
             )
             if resp.status_code == 200:
-                data = resp.json().get("data", {})
-                return data
+                return resp.json().get("data", {}), True
+            if resp.status_code == 429:
+                _ABUSE_RATE_LIMITED_UNTIL = datetime.now(timezone.utc) + ABUSE_RATE_LIMIT_COOLDOWN
+                logger.warning(
+                    "AbuseIPDB daily quota exhausted (HTTP 429) — pausing lookups until %s",
+                    _ABUSE_RATE_LIMITED_UNTIL.isoformat(timespec="minutes"),
+                )
+                return {}, False
             logger.warning("AbuseIPDB lookup failed for %s: HTTP %d", ip, resp.status_code)
     except Exception as e:
         logger.warning("AbuseIPDB request failed for %s: %s", ip, e)
-    return {}
+    return {}, False
+
+
+# Minimum time between /blacklist syncs. That endpoint has its own, much
+# tighter rate limit than /check (as low as 5 req/day on some plans) - this
+# stays well under that even accounting for a manual force-sync or two.
+BLACKLIST_SYNC_MIN_INTERVAL = timedelta(hours=20)
+
+# AbuseIPDB's own default/max for a single /blacklist call without a
+# higher-tier subscription; asking for more than the plan allows doesn't
+# error, it just gets capped, so it's safe to always ask for this many.
+BLACKLIST_FETCH_LIMIT = 10000
+
+
+async def sync_abuseipdb_blacklist(
+    db: AsyncSession,
+    api_key: str,
+    confidence_minimum: int = 75,
+    force: bool = False,
+) -> dict:
+    """Refresh the local AbuseIPDB blacklist cache, at most once every
+    BLACKLIST_SYNC_MIN_INTERVAL (unless force=True). One API call regardless
+    of how many IPs come back, since /blacklist is rate-limited by request
+    count, not by items requested.
+    """
+    result = await db.execute(select(func.max(AbuseIPDBBlacklistEntry.synced_at)))
+    last_synced = result.scalar()
+    if not force and last_synced:
+        age = datetime.now(timezone.utc) - last_synced
+        if age < BLACKLIST_SYNC_MIN_INTERVAL:
+            return {"status": "skipped", "reason": "synced recently", "last_synced_at": last_synced}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                "https://api.abuseipdb.com/api/v2/blacklist",
+                params={"confidenceMinimum": str(confidence_minimum), "limit": str(BLACKLIST_FETCH_LIMIT)},
+                headers={"Key": api_key, "Accept": "application/json"},
+            )
+            if resp.status_code != 200:
+                logger.warning("AbuseIPDB blacklist sync failed: HTTP %d %s", resp.status_code, resp.text[:200])
+                return {"status": "failed", "http_status": resp.status_code}
+            entries = resp.json().get("data", [])
+    except Exception as e:
+        logger.warning("AbuseIPDB blacklist sync failed: %s", e)
+        return {"status": "failed", "error": str(e)}
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "ip_address": item["ipAddress"],
+            "abuse_confidence_score": item.get("abuseConfidenceScore", confidence_minimum),
+            "country_code": item.get("countryCode"),
+            "last_reported_at": (
+                datetime.fromisoformat(item["lastReportedAt"].replace("Z", "+00:00"))
+                if item.get("lastReportedAt") else None
+            ),
+            "synced_at": now,
+        }
+        for item in entries
+        if item.get("ipAddress")
+    ]
+
+    # Replace wholesale in one transaction - other sessions never see a
+    # partial/empty table, just the old set until this commits, then the new one.
+    await db.execute(delete(AbuseIPDBBlacklistEntry))
+    if rows:
+        await db.execute(insert(AbuseIPDBBlacklistEntry.__table__), rows)
+    await db.commit()
+
+    logger.info("AbuseIPDB blacklist synced: %d IPs (confidenceMinimum=%d)", len(rows), confidence_minimum)
+    return {"status": "synced", "count": len(rows), "synced_at": now}
+
+
+async def check_local_blacklist(db: AsyncSession, ip: str) -> Optional[AbuseIPDBBlacklistEntry]:
+    """Look up an IP in the local AbuseIPDB blacklist cache - free, no API call."""
+    result = await db.execute(
+        select(AbuseIPDBBlacklistEntry).where(AbuseIPDBBlacklistEntry.ip_address == ip)
+    )
+    return result.scalar_one_or_none()
 
 
 async def enrich_ip(
@@ -101,14 +216,43 @@ async def enrich_ip(
 
     if existing and not force:
         age = datetime.now(timezone.utc) - (existing.updated_at or existing.enriched_at)
-        # Re-fetch if AbuseIPDB key is now available but cached record has no abuse data
-        abuse_missing = abuseipdb_key and existing.abuse_score is None
-        if age < ENRICHMENT_TTL and not abuse_missing:
+        # abuse_score can be legitimately None for two very different reasons:
+        # (a) no AbuseIPDB key was configured yet when this record was first
+        #     enriched - worth catching up on once a key shows up, or
+        # (b) a /check attempt was already made and failed (rate-limited,
+        #     network error) - retrying on every single hit is what blew
+        #     through the daily quota in the first place, so this only
+        #     becomes eligible again after a backoff window, same as any
+        #     other cached field.
+        # An IP we have already had an answer about is never asked again — that
+        # is the whole point of storing it. abuse_checked_at records the answer
+        # itself, so a legitimate score of 0 no longer looks like a cache miss.
+        abuse_worth_retrying = (
+            abuseipdb_key
+            and existing.abuse_checked_at is None
+            and not _abuse_is_rate_limited()
+            and age >= ABUSE_CHECK_RETRY_BACKOFF
+        )
+        if age < ENRICHMENT_TTL and not abuse_worth_retrying:
             return existing
+
+    # Check the free local AbuseIPDB blacklist cache before ever spending a
+    # metered /check call - most honeypot-hitting IPs are already known-bad
+    # and show up here (confidenceMinimum=75) at zero API cost.
+    local_blacklist_hit = await check_local_blacklist(db, ip) if abuseipdb_key else None
+    # Ask AbuseIPDB only when every cheaper source has been exhausted: a key
+    # exists, the free local blacklist does not already cover this IP, we have
+    # never had an answer about it before, and we are not in a quota cooldown.
+    call_abuseipdb_live = (
+        bool(abuseipdb_key)
+        and local_blacklist_hit is None
+        and (existing is None or existing.abuse_checked_at is None)
+        and not _abuse_is_rate_limited()
+    )
 
     # Gather data from all sources in parallel
     tasks = [_lookup_ip_api(ip), _reverse_dns(ip)]
-    if abuseipdb_key:
+    if call_abuseipdb_live:
         tasks.append(_lookup_abuseipdb(ip, abuseipdb_key))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -116,8 +260,20 @@ async def enrich_ip(
     ip_api_data = results[0] if not isinstance(results[0], Exception) else {}
     rdns = results[1] if not isinstance(results[1], Exception) else None
     abuse_data = {}
-    if abuseipdb_key and len(results) > 2 and not isinstance(results[2], Exception):
-        abuse_data = results[2]
+    abuse_answered = False
+    if call_abuseipdb_live and len(results) > 2 and not isinstance(results[2], Exception):
+        abuse_data, abuse_answered = results[2]
+    elif local_blacklist_hit is not None:
+        abuse_data = {
+            "abuseConfidenceScore": local_blacklist_hit.abuse_confidence_score,
+            "totalReports": None,
+            "lastReportedAt": (
+                local_blacklist_hit.last_reported_at.isoformat()
+                if local_blacklist_hit.last_reported_at else None
+            ),
+            "isTor": None,
+        }
+        abuse_answered = True
 
     # Build enrichment record
     now = datetime.now(timezone.utc)
@@ -153,6 +309,7 @@ async def enrich_ip(
             else None
         ),
         "is_tor": abuse_data.get("isTor"),
+        "abuse_checked_at": now if abuse_answered else (existing.abuse_checked_at if existing else None),
         "is_crawler": None,  # Could be populated by user-agent analysis
         "raw_data": json.dumps(raw_combined, default=str),
         "enriched_at": now,
@@ -160,9 +317,22 @@ async def enrich_ip(
     }
 
     if existing:
+        # Geo and rDNS are free to refresh. The AbuseIPDB-derived fields are
+        # not: when this refresh did not include a live lookup, abuse_data is
+        # empty, and blindly copying it wiped a score we had already paid for.
+        # The blank record then looked like a cache miss on the next pass and
+        # spent another metered call — the loop behind 641 rejected requests in
+        # a single day.
+        abuse_fields = {
+            "abuse_score", "abuse_reports", "abuse_last_reported",
+            "is_tor", "abuse_checked_at",
+        }
         for field, value in enrichment_data.items():
-            if field != "ip_address":
-                setattr(existing, field, value)
+            if field == "ip_address":
+                continue
+            if field in abuse_fields and not abuse_answered:
+                continue
+            setattr(existing, field, value)
         await db.commit()
         await db.refresh(existing)
         return existing

@@ -22,6 +22,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -354,7 +355,7 @@ export default function HoneypotPage() {
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Bug className="h-6 w-6 text-amber-500" />
@@ -364,7 +365,7 @@ export default function HoneypotPage() {
             Fake endpoints that catch scanners and gather attacker intelligence
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={installDefaults} disabled={installingDefaults}>
             {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
             Install Defaults
@@ -562,11 +563,11 @@ export default function HoneypotPage() {
                           <th className="text-left px-4 py-3 font-medium">Time</th>
                           <th className="text-left px-4 py-3 font-medium">IP Address</th>
                           <th className="text-left px-4 py-3 font-medium">Trap</th>
-                          <th className="text-left px-4 py-3 font-medium">Method</th>
-                          <th className="text-left px-4 py-3 font-medium">Country</th>
-                          <th className="text-left px-4 py-3 font-medium">User Agent</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Method</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Country</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">User Agent</th>
                           <th className="text-left px-4 py-3 font-medium">Action</th>
-                          <th className="text-left px-4 py-3 font-medium">Intel</th>
+                          <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Intel</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -581,13 +582,13 @@ export default function HoneypotPage() {
                             <td className="px-4 py-2">
                               <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{hit.trap_path}</code>
                             </td>
-                            <td className="px-4 py-2 text-xs">{hit.request_method || '-'}</td>
-                            <td className="px-4 py-2 text-xs">
+                            <td className="px-4 py-2 text-xs hidden md:table-cell">{hit.request_method || '-'}</td>
+                            <td className="px-4 py-2 text-xs hidden md:table-cell">
                               {hit.country_code ? (
                                 <CountryBadge code={hit.country_code} name={hit.country_name} />
                               ) : '-'}
                             </td>
-                            <td className="px-4 py-2 text-xs max-w-[200px] truncate text-muted-foreground" title={hit.user_agent || ''}>
+                            <td className="px-4 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={hit.user_agent || ''}>
                               {hit.user_agent || '-'}
                             </td>
                             <td className="px-4 py-2">
@@ -599,7 +600,7 @@ export default function HoneypotPage() {
                                 {hit.action_taken}
                               </span>
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-4 py-2 hidden md:table-cell">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -623,7 +624,7 @@ export default function HoneypotPage() {
           {/* ── IP Intel Tab ── */}
           {activeTab === 'intel' && (
             <div className="space-y-6">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Input
                   placeholder="Enter IP address to investigate..."
                   value={lookupIp}
@@ -757,9 +758,13 @@ export default function HoneypotPage() {
       )}
 
       {/* ── Create/Edit Dialog ── */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setShowCreateDialog(false)}>
-          <div className="bg-background border rounded-lg p-6 w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Honeypot — Trap"
+      >
+          <ModalBody className="p-6">
             <h2 className="text-lg font-bold mb-4">{editingTrap ? 'Edit' : 'Create'} Honeypot Trap</h2>
 
             {error && <div className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
@@ -874,9 +879,8 @@ export default function HoneypotPage() {
                 {editingTrap ? 'Save' : 'Create'}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+      </Modal>
     </div>
   )
 }

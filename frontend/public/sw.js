@@ -1,12 +1,17 @@
 // Ghostwire Proxy Service Worker
 // Handles offline caching and push notifications
 
-const CACHE_NAME = 'ghostwire-proxy-v1';
-const STATIC_CACHE = 'ghostwire-static-v1';
+const CACHE_NAME = 'ghostwire-proxy-v2';
+const STATIC_CACHE = 'ghostwire-static-v2';
 
-// Assets to cache for offline use
+// Assets to cache for offline use.
+//
+// Deliberately no HTML here. Caching '/dashboard' meant a client kept being
+// served the HTML of an older build, which references JS chunk filenames that
+// no longer exist after a redeploy -- producing "Failed to load chunk ..." on
+// every visit, unfixable by reloading because the reload was served from cache
+// too.
 const STATIC_ASSETS = [
-  '/dashboard',
   '/logo.png',
   '/logo-teal.png',
   '/favicon.ico',
@@ -96,7 +101,57 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets - cache first, fall back to network
+  // HTML documents - always network first.
+  //
+  // A cached document pins the client to one build's chunk filenames; after a
+  // redeploy those 404 and the app dies on load. Cache is only a fallback for
+  // being genuinely offline.
+  const isDocument =
+    event.request.mode === 'navigate' ||
+    event.request.destination === 'document' ||
+    (event.request.headers.get('accept') || '').includes('text/html');
+
+  if (isDocument) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Build output under /_next/static is content-hashed, so a given URL's bytes
+  // never change and cache-first is both safe and the whole point.
+  const isImmutableBuildAsset = url.pathname.startsWith('/_next/static/');
+
+  if (!isImmutableBuildAsset) {
+    // Everything else (icons, manifest, images): network first so a redeploy
+    // isn't invisible, falling back to cache when offline.
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Immutable build assets - cache first, fall back to network
   event.respondWith(
     caches.match(event.request)
       .then((cachedResponse) => {

@@ -47,6 +47,11 @@ class ProxyHost(Base):
     proxy_buffer_size = Column(String(20), default="4k", nullable=False)
     proxy_buffers = Column(String(20), default="8 4k", nullable=False)
 
+    # Timeouts for the default ("/") location
+    proxy_connect_timeout = Column(Integer, default=60, nullable=False)
+    proxy_send_timeout = Column(Integer, default=60, nullable=False)
+    proxy_read_timeout = Column(Integer, default=60, nullable=False)
+
     # Caching configuration
     cache_enabled = Column(Boolean, default=False, nullable=False)
     cache_valid = Column(String(100), nullable=True)  # e.g., "200 302 10m"
@@ -66,6 +71,17 @@ class ProxyHost(Base):
 
     # Traffic logging
     traffic_logging_enabled = Column(Boolean, default=False, nullable=False)
+
+    # Which CDN/WAF sits in front of this host, if any. Decides which header
+    # nginx's real_ip module reads to recover the true visitor IP.
+    # none, cloudflare, imperva, generic
+    cdn_provider = Column(String(20), default="none", nullable=False)
+
+    # Upstream health monitoring
+    health_check_enabled = Column(Boolean, default=True, nullable=False)
+    health_status = Column(String(20), default="unknown", nullable=False)  # unknown, up, down
+    health_checked_at = Column(DateTime(timezone=True), nullable=True)
+    health_error = Column(Text, nullable=True)
 
     # Status
     enabled = Column(Boolean, default=True, nullable=False)

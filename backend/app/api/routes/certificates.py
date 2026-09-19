@@ -16,7 +16,7 @@ from app.api.deps import get_current_user, get_current_admin_user
 from app.core.utils import get_client_ip
 from app.services.certificate_service import (
     request_letsencrypt_certificate,
-    renew_certificate,
+    renew_and_deploy_certificate,
     validate_certificate_pem,
 )
 from app.services.openresty_service import generate_all_configs, write_certificate_files, reload_nginx
@@ -209,25 +209,6 @@ async def delete_certificate(
     await cache_delete_prefix("certificates:")
 
 
-async def process_certificate_renewal(cert_id: str):
-    """Background task to process certificate renewal"""
-    from app.core.database import async_session_maker
-
-    async with async_session_maker() as db:
-        success, message = await renew_certificate(db, cert_id)
-
-        if success:
-            # Write certificate files to disk for nginx
-            result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
-            cert = result.scalar_one_or_none()
-            if cert and cert.certificate:
-                await write_certificate_files(cert)
-                await generate_all_configs(db)
-
-                # Reload nginx
-                reload_nginx()
-
-
 @router.post("/{cert_id}/renew", response_model=CertificateResponse)
 async def renew_cert(
     cert_id: str,
@@ -270,6 +251,6 @@ async def renew_cert(
     await db.refresh(cert)
 
     # Queue renewal in background
-    background_tasks.add_task(process_certificate_renewal, cert.id)
+    background_tasks.add_task(renew_and_deploy_certificate, cert.id)
 
     return cert

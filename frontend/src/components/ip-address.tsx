@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Globe, Shield, AlertTriangle, Crosshair, Loader2 } from 'lucide-react'
+import { Globe, Shield, AlertTriangle, Crosshair, Loader2, Tag, BarChart3 } from 'lucide-react'
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import api from '@/lib/api'
+import { useKnownIpMap } from '@/lib/queries/known-ips'
+import { useIpActions } from '@/components/ip-actions-provider'
 
 interface IpAddressProps {
   ip: string
@@ -43,9 +45,13 @@ export function CountryBadge({ code, name }: { code: string; name?: string | nul
  *   <IpAddress ip="1.2.3.4" countryCode="US" countryName="United States" />
  */
 export function IpAddress({ ip, countryCode, countryName, className }: IpAddressProps) {
+  // One shared, cached fetch of the operator's labels — not a request per row.
+  const knownIps = useKnownIpMap()
+  const known = knownIps[ip]
   const [data, setData] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const { labelIp, showReport } = useIpActions()
 
   const fetchEnrichment = useCallback(async () => {
     // Check cache
@@ -75,9 +81,27 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
           className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold hover:text-blue-400 transition-colors cursor-pointer ${className || ''}`}
           onMouseEnter={fetchEnrichment}
           onFocus={fetchEnrichment}
+          onClick={(e) => {
+            // Rows around this are often clickable; without this the row's own
+            // handler fires too and opens a second dialog behind ours.
+            e.stopPropagation()
+            e.preventDefault()
+          }}
           data-private="ip"
         >
           {countryCode && <CountryBadge code={countryCode} name={countryName} />}
+          {known && (
+            <span
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${
+                known.trusted
+                  ? 'bg-green-500/10 text-green-500'
+                  : 'bg-blue-500/10 text-blue-500'
+              }`}
+              title={known.category ? `${known.label} (${known.category})` : known.label}
+            >
+              {known.label}
+            </span>
+          )}
           <span data-private="ip">{ip}</span>
         </button>
       </HoverCardTrigger>
@@ -168,7 +192,24 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
             </div>
           </div>
         )}
+        <div className="p-2 border-t bg-muted/30 flex gap-2">
+          <button
+            onClick={() => labelIp(ip)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
+          >
+            <Tag className="h-3 w-3" />
+            {known ? 'Edit label' : 'Label this IP'}
+          </button>
+          <button
+            onClick={() => showReport(ip)}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
+          >
+            <BarChart3 className="h-3 w-3" />
+            View traffic
+          </button>
+        </div>
       </HoverCardContent>
+
     </HoverCard>
   )
 }

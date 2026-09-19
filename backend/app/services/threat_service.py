@@ -6,7 +6,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+
 from sqlalchemy import select, func, and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models.waf import ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.firewall import FirewallBlocklist
@@ -57,6 +60,14 @@ def _send_push_notification_background(coro):
             loop.run_until_complete(coro)
     except Exception as e:
         logger.debug(f"Could not send push notification: {e}")
+
+# An "under attack" alert is about volume across the whole fleet, not any one
+# actor: this many threat events inside the window trips it.
+UNDER_ATTACK_EVENTS_PER_MINUTE = 60
+# Don't re-announce the same ongoing attack every few seconds.
+UNDER_ATTACK_COOLDOWN_SECONDS = 900
+_last_under_attack_alert: Optional[datetime] = None
+
 
 # Severity score mapping
 SEVERITY_SCORES = {
@@ -110,30 +121,37 @@ async def record_threat_event(
         await db.commit()
         return event
 
-    # Update or create threat actor
+    # Update or create the threat actor, atomically.
+    #
+    # This used to SELECT, then INSERT when nothing came back. Two threat events
+    # for the same not-yet-seen IP arriving together both saw "no row" and both
+    # inserted, so one lost the race on ix_threat_actors_ip_address, the request
+    # 500'd, and that threat event was silently dropped — a request the WAF had
+    # blocked went unrecorded. Observed at roughly 1 in 12 calls to
+    # /api/internal/threats/log, which is exactly the shape of traffic that
+    # produces concurrent hits: an attacker sending several probes at once.
+    #
+    # ON CONFLICT DO UPDATE lets Postgres settle it: whoever gets there second
+    # increments the existing row instead of failing. The counters are computed
+    # from the stored column rather than a value read earlier, so no update is
+    # lost either.
     result = await db.execute(
         select(ThreatActor).where(ThreatActor.ip_address == client_ip)
     )
-    actor = result.scalar_one_or_none()
+    existing = result.scalar_one_or_none()
 
     now = datetime.now(timezone.utc)
     score_delta = SEVERITY_SCORES.get(severity, 25)
 
     # Resolve country: prefer passed-in values from Lua GeoIP, fall back to local lookup
     cc, cn = country_code, country_name
-    if not cc and (not actor or not actor.country_code):
+    if not cc and (not existing or not existing.country_code):
         cc, cn = lookup_country(client_ip)
 
-    if actor:
-        actor.total_events = (actor.total_events or 0) + 1
-        actor.threat_score = (actor.threat_score or 0) + score_delta
-        actor.last_seen = now
-        actor.updated_at = now
-        if cc and not actor.country_code:
-            actor.country_code = cc
-            actor.country_name = cn
-    else:
-        actor = ThreatActor(
+    stmt = (
+        pg_insert(ThreatActor)
+        .values(
+            id=str(uuid.uuid4()),
             ip_address=client_ip,
             total_events=1,
             threat_score=score_delta,
@@ -141,10 +159,32 @@ async def record_threat_event(
             last_seen=now,
             country_code=cc,
             country_name=cn,
+            current_status="monitored",
+            created_at=now,
+            updated_at=now,
         )
-        db.add(actor)
-
+        .on_conflict_do_update(
+            index_elements=["ip_address"],
+            set_={
+                "total_events": func.coalesce(ThreatActor.total_events, 0) + 1,
+                "threat_score": func.coalesce(ThreatActor.threat_score, 0) + score_delta,
+                "last_seen": now,
+                "updated_at": now,
+                # Only fill the country in; never overwrite one already known.
+                "country_code": func.coalesce(ThreatActor.country_code, cc),
+                "country_name": func.coalesce(ThreatActor.country_name, cn),
+            },
+        )
+    )
+    await db.execute(stmt)
     await db.flush()
+
+    # Re-read so threshold evaluation sees the committed counters, including
+    # any increment applied concurrently by another request.
+    actor = (
+        await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))
+    ).scalar_one()
+    await db.refresh(actor)
 
     # Evaluate thresholds
     await evaluate_thresholds(db, actor)
@@ -166,7 +206,70 @@ async def record_threat_event(
         except Exception as e:
             logger.debug(f"Push notification skipped: {e}")
 
+    await _maybe_notify_under_attack(db)
+
     return event
+
+
+async def _maybe_notify_under_attack(db: AsyncSession) -> None:
+    """Raise a fleet-wide "under attack" alert when event volume spikes.
+
+    Per-event notifications answer "who did this"; this one answers "is the
+    whole site being hit right now", which is a different question and the one
+    worth waking someone up for.
+    """
+    global _last_under_attack_alert
+
+    now = datetime.now(timezone.utc)
+    if (
+        _last_under_attack_alert
+        and (now - _last_under_attack_alert).total_seconds() < UNDER_ATTACK_COOLDOWN_SECONDS
+    ):
+        return
+
+    window_start = now - timedelta(minutes=1)
+    try:
+        count_result = await db.execute(
+            select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= window_start)
+        )
+        events_per_minute = int(count_result.scalar() or 0)
+        if events_per_minute < UNDER_ATTACK_EVENTS_PER_MINUTE:
+            return
+
+        ip_result = await db.execute(
+            select(ThreatEvent.client_ip)
+            .where(ThreatEvent.timestamp >= window_start)
+            .group_by(ThreatEvent.client_ip)
+            .order_by(func.count(ThreatEvent.id).desc())
+            .limit(10)
+        )
+        source_ips = [row[0] for row in ip_result.all()]
+
+        category_result = await db.execute(
+            select(ThreatEvent.category)
+            .where(ThreatEvent.timestamp >= window_start)
+            .group_by(ThreatEvent.category)
+            .order_by(func.count(ThreatEvent.id).desc())
+            .limit(1)
+        )
+        top_category = category_result.scalar() or "mixed"
+
+        _last_under_attack_alert = now
+        logger.warning(
+            f"Under attack: {events_per_minute} threat events/min, "
+            f"top category={top_category}, sources={source_ips[:3]}"
+        )
+
+        from app.services.push_service import push_service
+        _send_push_notification_background(
+            push_service.notify_under_attack(
+                attack_type=top_category,
+                requests_per_minute=events_per_minute,
+                source_ips=source_ips,
+            )
+        )
+    except Exception as e:
+        logger.debug(f"Under-attack check skipped: {e}")
 
 
 async def evaluate_thresholds(db: AsyncSession, actor: ThreatActor) -> None:

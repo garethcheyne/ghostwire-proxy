@@ -216,6 +216,14 @@ class ProxyHostBase(BaseModel):
     proxy_buffer_size: str = "4k"
     proxy_buffers: str = "8 4k"
 
+    # Front-facing CDN/WAF, if any: none, cloudflare, imperva, generic
+    cdn_provider: str = "none"
+
+    # Timeouts for the default ("/") location
+    proxy_connect_timeout: int = 60
+    proxy_send_timeout: int = 60
+    proxy_read_timeout: int = 60
+
     # Caching
     cache_enabled: bool = False
     cache_valid: Optional[str] = None
@@ -292,6 +300,12 @@ class ProxyHostUpdate(BaseModel):
     proxy_buffer_size: Optional[str] = None
     proxy_buffers: Optional[str] = None
 
+    cdn_provider: Optional[str] = None
+
+    proxy_connect_timeout: Optional[int] = None
+    proxy_send_timeout: Optional[int] = None
+    proxy_read_timeout: Optional[int] = None
+
     cache_enabled: Optional[bool] = None
     cache_valid: Optional[str] = None
     cache_bypass: Optional[str] = None
@@ -335,6 +349,12 @@ class ProxyHostResponse(BaseModel):
     proxy_buffering: bool
     proxy_buffer_size: str
     proxy_buffers: str
+
+    cdn_provider: str
+
+    proxy_connect_timeout: int
+    proxy_send_timeout: int
+    proxy_read_timeout: int
 
     cache_enabled: bool
     cache_valid: Optional[str]

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -171,7 +172,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
@@ -196,13 +197,13 @@ export default function UsersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Last Login
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -232,7 +233,7 @@ export default function UsersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden md:table-cell">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(
                           user.role
@@ -253,7 +254,7 @@ export default function UsersPage() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                    <td className="px-6 py-4 text-sm text-muted-foreground hidden md:table-cell">
                       {user.last_login
                         ? new Date(user.last_login).toLocaleString()
                         : 'Never'}
@@ -307,9 +308,13 @@ export default function UsersPage() {
       </div>
 
       {/* Create/Edit Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="md"
+        srTitle="Users — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingUser ? 'Edit User' : 'Add User'}
@@ -393,9 +398,8 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Click outside to close dropdown */}
       {activeDropdown && (

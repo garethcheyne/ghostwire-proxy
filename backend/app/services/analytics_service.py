@@ -28,7 +28,16 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
-            func.avg(TrafficLog.response_time).label('avg_response_time'),
+            func.avg(TrafficLog.response_time).filter(
+                TrafficLog.is_streaming.isnot(True)
+            ).label('avg_response_time'),
+            func.percentile_cont(0.95).within_group(
+                TrafficLog.response_time.asc()
+            ).filter(TrafficLog.is_streaming.isnot(True)).label('p95_response_time'),
+            func.percentile_cont(0.99).within_group(
+                TrafficLog.response_time.asc()
+            ).filter(TrafficLog.is_streaming.isnot(True)).label('p99_response_time'),
+            func.count(func.nullif(TrafficLog.is_bot.is_(True), False)).label('bot_requests'),
             func.count(func.nullif(TrafficLog.status < 300, False)).label('status_2xx'),
             func.count(func.nullif(and_(TrafficLog.status >= 300, TrafficLog.status < 400), False)).label('status_3xx'),
             func.count(func.nullif(and_(TrafficLog.status >= 400, TrafficLog.status < 500), False)).label('status_4xx'),
@@ -61,6 +70,9 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
             hourly.bytes_sent = row.bytes_sent or 0
             hourly.bytes_received = row.bytes_received or 0
             hourly.avg_response_time_ms = int(row.avg_response_time) if row.avg_response_time else None
+            hourly.p95_response_time_ms = int(row.p95_response_time) if row.p95_response_time else None
+            hourly.p99_response_time_ms = int(row.p99_response_time) if row.p99_response_time else None
+            hourly.bot_requests = row.bot_requests or 0
             hourly.status_2xx = row.status_2xx or 0
             hourly.status_3xx = row.status_3xx or 0
             hourly.status_4xx = row.status_4xx or 0
@@ -75,6 +87,9 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
                 bytes_sent=row.bytes_sent or 0,
                 bytes_received=row.bytes_received or 0,
                 avg_response_time_ms=int(row.avg_response_time) if row.avg_response_time else None,
+                p95_response_time_ms=int(row.p95_response_time) if row.p95_response_time else None,
+                p99_response_time_ms=int(row.p99_response_time) if row.p99_response_time else None,
+                bot_requests=row.bot_requests or 0,
                 status_2xx=row.status_2xx or 0,
                 status_3xx=row.status_3xx or 0,
                 status_4xx=row.status_4xx or 0,
@@ -101,7 +116,16 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
-            func.avg(TrafficLog.response_time).label('avg_response_time'),
+            func.avg(TrafficLog.response_time).filter(
+                TrafficLog.is_streaming.isnot(True)
+            ).label('avg_response_time'),
+            func.percentile_cont(0.95).within_group(
+                TrafficLog.response_time.asc()
+            ).filter(TrafficLog.is_streaming.isnot(True)).label('p95_response_time'),
+            func.percentile_cont(0.99).within_group(
+                TrafficLog.response_time.asc()
+            ).filter(TrafficLog.is_streaming.isnot(True)).label('p99_response_time'),
+            func.count(func.nullif(TrafficLog.is_bot.is_(True), False)).label('bot_requests'),
             func.count(func.distinct(TrafficLog.client_ip)).label('unique_ips'),
         )
         .where(TrafficLog.timestamp >= start)
@@ -159,6 +183,9 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             daily.bytes_sent = row.bytes_sent or 0
             daily.bytes_received = row.bytes_received or 0
             daily.avg_response_time_ms = int(row.avg_response_time) if row.avg_response_time else None
+            daily.p95_response_time_ms = int(row.p95_response_time) if row.p95_response_time else None
+            daily.p99_response_time_ms = int(row.p99_response_time) if row.p99_response_time else None
+            daily.bot_requests = row.bot_requests or 0
             daily.unique_ips = row.unique_ips or 0
             daily.top_ips = json.dumps(top_ips)
         else:
@@ -171,6 +198,9 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
                 bytes_sent=row.bytes_sent or 0,
                 bytes_received=row.bytes_received or 0,
                 avg_response_time_ms=int(row.avg_response_time) if row.avg_response_time else None,
+                p95_response_time_ms=int(row.p95_response_time) if row.p95_response_time else None,
+                p99_response_time_ms=int(row.p99_response_time) if row.p99_response_time else None,
+                bot_requests=row.bot_requests or 0,
                 unique_ips=row.unique_ips or 0,
                 top_ips=json.dumps(top_ips),
             )

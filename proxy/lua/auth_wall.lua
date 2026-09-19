@@ -215,6 +215,12 @@ end
 
 -- Set auth headers for upstream service
 local function set_auth_headers(session)
+    -- Also make the identity available to the log phase. traffic_logger.lua
+    -- reads ngx.ctx.auth_user so authenticated traffic can be attributed to a
+    -- person instead of only an IP. Set here because this is the single point
+    -- every validated session passes through.
+    ngx.ctx.auth_user = session.username
+
     ngx.req.set_header("X-Auth-User", session.username or "")
     ngx.req.set_header("X-Auth-Email", session.email or "")
     ngx.req.set_header("X-Auth-User-Id", session.user_id or "")

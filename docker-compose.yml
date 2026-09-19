@@ -11,6 +11,15 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
       - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    labels:
+      # Watchtower runs with WATCHTOWER_LABEL_ENABLE=true, so it only touches
+      # containers that opt in. Only postgres and redis are worth opting in:
+      # the other four services are built locally from this repo and have no
+      # registry behind them, so watchtower could never pull a newer image for
+      # them — those update by rebuilding, not by watchtower.
+      # The tag is pinned to a major (16-alpine / 7-alpine), so this picks up
+      # patch and minor releases, never a major upgrade.
+      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -50,6 +59,24 @@ services:
       nofile:
         soft: 8192
         hard: 8192
+    # This is the only container reachable from the internet, so it gets the
+    # tightest profile the workload allows. It was previously the *least*
+    # hardened service in the stack — postgres and redis already had
+    # no-new-privileges and a read-only root, while the edge had neither.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Bind 80/443 without running the workers as root.
+      - NET_BIND_SERVICE
+      # The master starts as root and drops each worker to `nobody`; without
+      # these the workers cannot be spawned.
+      - SETUID
+      - SETGID
+      # The entrypoint fixes ownership on the log and cache directories.
+      - CHOWN
+      - DAC_OVERRIDE
     volumes:
       - ./data/certificates:/etc/nginx/certs:ro
       - ./data/nginx-configs:/etc/nginx/conf.d/proxy-hosts:ro
@@ -82,6 +109,13 @@ services:
     restart: unless-stopped
     ports:
       - "88:3000"
+    # Publishes a port, so it is an edge container by the same definition the
+    # container scanner uses. Already runs as the unprivileged `nextjs` user on
+    # port 3000, so it needs no capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - ./docs:/app/docs:ro
     environment:
@@ -117,6 +151,20 @@ services:
     restart: unless-stopped
     ports:
       - "8089:8000"
+    # Also edge-facing. The entrypoint starts as root and hands off with
+    # `gosu appuser`, so it keeps only the capabilities that handover needs —
+    # verified that gosu still drops to uid 1000 under no-new-privileges, and
+    # that the Docker socket stays usable for the container update feature.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
     environment:
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -164,24 +212,20 @@ services:
       timeout: 10s
       retries: 3
 
-  # Certbot for Let's Encrypt (runs renewal check every 12 hours)
-  ghostwire-proxy-certbot:
-    build:
-      context: ./certbot
-      dockerfile: Dockerfile
-    container_name: ghostwire-proxy-certbot
-    restart: unless-stopped
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
-    volumes:
-      - ./data/letsencrypt:/etc/letsencrypt
-      - certbot-webroot:/var/www/certbot
-    networks:
-      - ghostwire-proxy-network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
+  # NOTE: there used to be a standalone `ghostwire-proxy-certbot` container here
+  # running its own independent `certbot renew` loop every 12h against the same
+  # ./data/letsencrypt volume. It worked (it kept the underlying Let's Encrypt
+  # certs renewed), but it never deployed the renewed cert anywhere — no deploy
+  # hook, no API/DB update, no nginx reload — so nginx kept serving the
+  # original cert until it expired, while a fresh renewed one sat unused right
+  # next to it. It also risked racing with the API container's own certbot
+  # calls against the same on-disk config/lock directory.
+  #
+  # The API container already bundles the `certbot` binary and mounts the same
+  # /etc/letsencrypt + certbot-webroot volumes, and now runs its own
+  # certificate_renewal_loop (see backend/app/main.py) that renews AND deploys
+  # (writes cert files, regenerates nginx configs, reloads nginx) on a 12h
+  # cycle. That replaces this container entirely — see enhancement/01.
 
   # Redis for caching and queues (hardened — no external access)
   ghostwire-proxy-redis:
@@ -190,6 +234,10 @@ services:
     restart: unless-stopped
     # No ports exposed — only reachable from internal network
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    labels:
+      # See the note on ghostwire-proxy-postgres. Pinned to redis:7-alpine, so
+      # patch/minor only.
+      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - redis-data:/data
     networks:
@@ -228,6 +276,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock  # Write access for updates
       - .:/app/project:ro                          # Project source (read-only)
       - ./data/backups:/data/backups               # For pre-update backups
+    # Not edge-facing, but it holds write access to the Docker socket,
+    # so it should not be able to gain privileges either. Capabilities
+    # are left alone: it recreates containers as part of upgrades.
+    security_opt:
+      - no-new-privileges:true
     networks:
       - ghostwire-proxy-network
     depends_on:

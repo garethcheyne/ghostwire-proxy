@@ -78,13 +78,31 @@ class TestSendToChannel:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_send_to_email_channel(self, db_session):
+    async def test_send_to_email_channel_without_recipients_fails(self, db_session):
+        """An email channel with no recipients cannot deliver, so it must not
+        claim success. This used to return True unconditionally, which is how
+        undelivered alerts were recorded as sent."""
         channel = MagicMock(spec=AlertChannel)
         channel.channel_type = "email"
         channel.config = json.dumps({})
 
         result = await _send_to_channel(db_session, channel, "Title", "Message")
-        assert result is True  # Email is a placeholder that always returns True
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_send_to_email_channel_delivers(self, db_session):
+        channel = MagicMock(spec=AlertChannel)
+        channel.channel_type = "email"
+        channel.config = json.dumps({"recipients": ["ops@example.com"]})
+
+        with patch(
+            "app.services.email_service.send_email", new=AsyncMock(return_value=None)
+        ) as mock_send:
+            result = await _send_to_channel(db_session, channel, "Title", "Message")
+
+        assert result is True
+        assert mock_send.await_count == 1
+        assert mock_send.await_args.kwargs["to"] == ["ops@example.com"]
 
     @pytest.mark.asyncio
     async def test_send_to_unknown_channel(self, db_session):
@@ -205,11 +223,40 @@ class TestSendTelegram:
 
 
 class TestSendEmail:
-    """Tests for email sending (placeholder)."""
+    """Tests for email sending."""
 
     @pytest.mark.asyncio
-    async def test_email_always_returns_true(self):
+    async def test_email_without_recipients_reports_failure(self):
         channel = MagicMock(spec=AlertChannel)
         channel.config = json.dumps({})
         result = await _send_email(channel, "Title", "Message")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_email_accepts_comma_separated_recipients(self):
+        channel = MagicMock(spec=AlertChannel)
+        channel.config = json.dumps({"recipients": "a@example.com, b@example.com"})
+
+        with patch(
+            "app.services.email_service.send_email", new=AsyncMock(return_value=None)
+        ) as mock_send:
+            result = await _send_email(channel, "Title", "Message")
+
         assert result is True
+        assert mock_send.await_args.kwargs["to"] == ["a@example.com", "b@example.com"]
+
+    @pytest.mark.asyncio
+    async def test_email_reports_failure_when_smtp_unconfigured(self):
+        """No SMTP server means nothing was sent, and the caller must be told."""
+        from app.services.email_service import EmailNotConfigured
+
+        channel = MagicMock(spec=AlertChannel)
+        channel.config = json.dumps({"recipients": ["ops@example.com"]})
+
+        with patch(
+            "app.services.email_service.send_email",
+            new=AsyncMock(side_effect=EmailNotConfigured("no smtp")),
+        ):
+            result = await _send_email(channel, "Title", "Message")
+
+        assert result is False

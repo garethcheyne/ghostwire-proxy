@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -291,7 +292,7 @@ export default function BackupsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Backup & Restore</h1>
           <p className="text-muted-foreground">
@@ -391,6 +392,9 @@ export default function BackupsPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Inner scroller: the rounded wrapper clips, so without this the
+              table is cut off on narrow screens instead of scrolling. */}
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -400,13 +404,13 @@ export default function BackupsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Backup
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Size
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Includes
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -426,10 +430,10 @@ export default function BackupsPage() {
                   <td className="px-4 py-3">
                     <span className="font-mono text-sm">{backup.filename}</span>
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-3 text-sm hidden md:table-cell">
                     {formatBytes(backup.file_size)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                       backup.backup_type === 'scheduled'
                         ? 'bg-blue-500/10 text-blue-500'
@@ -440,7 +444,7 @@ export default function BackupsPage() {
                       {backup.backup_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <div className="flex items-center gap-1">
                       {backup.includes_database && (
                         <span title="Database" className="p-1 rounded bg-muted">
@@ -503,13 +507,18 @@ export default function BackupsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {/* Create Backup Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="md"
+        srTitle="Backups — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Create Backup</h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -603,14 +612,17 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Restore Dialog */}
-      {showRestoreDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showRestoreDialog}
+        onOpenChange={setShowRestoreDialog}
+        size="md"
+        srTitle="Backups — Restore"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Restore Backup</h2>
               <p className="text-sm text-destructive mt-1">
@@ -688,14 +700,18 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Settings Dialog */}
-      {showSettingsDialog && editedSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showSettingsDialog}
+        onOpenChange={setShowSettingsDialog}
+        size="lg"
+        srTitle="Backups — Settings"
+      >
+        {editedSettings && (
+          <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Backup Settings</h2>
             </div>
@@ -798,9 +814,9 @@ export default function BackupsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+        )}
+      </Modal>
     </div>
   )
 }

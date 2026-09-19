@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { useProxyHosts } from '@/lib/queries/proxy-hosts'
 import { useCertificates } from '@/lib/queries/dashboard'
@@ -11,6 +12,7 @@ import {
   Globe,
   Plus,
   MoreHorizontal,
+  FileBarChart,
   Shield,
 
   Pencil,
@@ -42,6 +44,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 
 type TabType = 'details' | 'locations' | 'advanced'
@@ -67,6 +71,10 @@ interface FormData {
   proxy_buffering: boolean
   proxy_buffer_size: string
   proxy_buffers: string
+  cdn_provider: 'none' | 'cloudflare' | 'imperva' | 'generic'
+  proxy_connect_timeout: number
+  proxy_send_timeout: number
+  proxy_read_timeout: number
   cache_enabled: boolean
   cache_valid: string | null
   cache_bypass: string | null
@@ -95,7 +103,7 @@ interface LocationFormData {
   proxy_connect_timeout: number
   proxy_send_timeout: number
   proxy_read_timeout: number
-  advanced_config?: string
+  advanced_config?: string | null
 }
 
 const defaultFormData: FormData = {
@@ -119,6 +127,10 @@ const defaultFormData: FormData = {
   proxy_buffering: true,
   proxy_buffer_size: '4k',
   proxy_buffers: '8 4k',
+  cdn_provider: 'none',
+  proxy_connect_timeout: 60,
+  proxy_send_timeout: 60,
+  proxy_read_timeout: 60,
   cache_enabled: false,
   cache_valid: null,
   cache_bypass: null,
@@ -146,6 +158,7 @@ const defaultLocationData: LocationFormData = {
   proxy_connect_timeout: 60,
   proxy_send_timeout: 60,
   proxy_read_timeout: 60,
+  advanced_config: '',
 }
 
 export default function ProxyHostsPage() {
@@ -251,6 +264,12 @@ export default function ProxyHostsPage() {
       proxy_buffering: host.proxy_buffering,
       proxy_buffer_size: host.proxy_buffer_size,
       proxy_buffers: host.proxy_buffers,
+      // ?? 60 keeps these inputs controlled against an API that predates the
+      // host-level timeout columns
+      cdn_provider: host.cdn_provider ?? 'none',
+      proxy_connect_timeout: host.proxy_connect_timeout ?? 60,
+      proxy_send_timeout: host.proxy_send_timeout ?? 60,
+      proxy_read_timeout: host.proxy_read_timeout ?? 60,
       cache_enabled: host.cache_enabled,
       cache_valid: host.cache_valid || null,
       cache_bypass: host.cache_bypass || null,
@@ -460,7 +479,7 @@ export default function ProxyHostsPage() {
       proxy_connect_timeout: location.proxy_connect_timeout,
       proxy_send_timeout: location.proxy_send_timeout,
       proxy_read_timeout: location.proxy_read_timeout,
-      advanced_config: location.advanced_config || undefined,
+      advanced_config: location.advanced_config || '',
     })
     setEditingLocation(location)
     setShowLocationDialog(true)
@@ -469,14 +488,20 @@ export default function ProxyHostsPage() {
   const handleSaveLocation = async () => {
     if (!editingHost) return
 
+    // An empty textarea means "no custom directives", not an empty config line
+    const payload = {
+      ...locationForm,
+      advanced_config: locationForm.advanced_config?.trim() || null,
+    }
+
     try {
       if (editingLocation) {
         await api.put(
           `/api/proxy-hosts/${editingHost.id}/locations/${editingLocation.id}`,
-          locationForm
+          payload
         )
       } else {
-        await api.post(`/api/proxy-hosts/${editingHost.id}/locations`, locationForm)
+        await api.post(`/api/proxy-hosts/${editingHost.id}/locations`, payload)
       }
 
       // Refresh locations
@@ -515,7 +540,7 @@ export default function ProxyHostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Proxy Hosts</h1>
           <p className="text-muted-foreground">
@@ -557,7 +582,11 @@ export default function ProxyHostsPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleEnabled(host)}
-                      className="shrink-0 mt-1.5"
+                      /* The dot is 12px. This toggles a host on or off, so it
+                         needs a finger-sized hit area — the negative margin
+                         grows it without shifting the dot or the domain name
+                         beside it. */
+                      className="shrink-0 mt-1.5 -m-3 p-3 flex items-center justify-center"
                       title={host.enabled ? 'Disable host' : 'Enable host'}
                     >
                       {host.enabled ? (
@@ -629,6 +658,12 @@ export default function ProxyHostsPage() {
                         <DropdownMenuItem onClick={() => handleEdit(host)}>
                           <Pencil className="h-4 w-4" />
                           Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/proxy-hosts/${host.id}/report`}>
+                            <FileBarChart className="h-4 w-4" />
+                            Traffic Report
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleToggleEnabled(host)}>
                           {host.enabled ? (
@@ -761,21 +796,27 @@ export default function ProxyHostsPage() {
       )}
 
       {/* Create/Edit Dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-xl bg-card border border-border shadow-xl flex flex-col">
-            <div className="border-b border-border p-6">
-              <h2 className="text-xl font-semibold">
+      <Modal
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        size="3xl"
+        // A half-finished Let's Encrypt run must not be dismissed out from under itself.
+        dismissible={!isSubmitting}
+      >
+            <ModalHeader className="p-6">
+              <ModalTitle className="text-xl">
                 {editingHost ? 'Edit Proxy Host' : 'Add Proxy Host'}
-              </h2>
-            </div>
+              </ModalTitle>
+            </ModalHeader>
 
             {/* Tabs */}
-            <div className="border-b border-border px-6">
-              <div className="flex gap-4">
+            <div className="shrink-0 border-b border-border px-6">
+              {/* Scrolls rather than wraps: a wrapped tab strip inside a
+                  fixed-height row is what broke the Analytics tabs. */}
+              <div className="flex gap-4 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('details')}
-                  className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'details'
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -789,7 +830,7 @@ export default function ProxyHostsPage() {
                 {editingHost && (
                   <button
                     onClick={() => setActiveTab('locations')}
-                    className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === 'locations'
                         ? 'border-primary text-primary'
                         : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -803,7 +844,7 @@ export default function ProxyHostsPage() {
                 )}
                 <button
                   onClick={() => setActiveTab('advanced')}
-                  className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'advanced'
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -817,7 +858,7 @@ export default function ProxyHostsPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-[400px]">
+            <ModalBody className="p-0 min-h-[400px]">
               {activeTab === 'details' && (
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                   {/* Domain Names */}
@@ -865,7 +906,7 @@ export default function ProxyHostsPage() {
                   </div>
 
                   {/* Forward Settings */}
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Scheme</label>
                       <select
@@ -981,7 +1022,7 @@ export default function ProxyHostsPage() {
                         </p>
                         <div>
                           <label className="block text-sm font-medium mb-2">Email for Let&apos;s Encrypt</label>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <input
                               type="email"
                               value={leEmail}
@@ -1191,7 +1232,7 @@ export default function ProxyHostsPage() {
                               priority: {loc.priority}
                             </span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => handleEditLocation(loc)}
                               className="p-1.5 rounded hover:bg-muted"
@@ -1221,6 +1262,38 @@ export default function ProxyHostsPage() {
 
               {activeTab === 'advanced' && (
                 <div className="p-6 space-y-6">
+                  {/* Client IP / CDN */}
+                  <div>
+                    <h3 className="text-sm font-medium mb-4">Visitor IP Source</h3>
+                    <div>
+                      <label className="block text-sm mb-1">Front-facing CDN / WAF</label>
+                      <select
+                        value={formData.cdn_provider}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            cdn_provider: e.target.value as FormData['cdn_provider'],
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                      >
+                        <option value="none">None — reached directly</option>
+                        <option value="cloudflare">Cloudflare</option>
+                        <option value="imperva">Imperva / Incapsula</option>
+                        <option value="generic">Other reverse proxy / load balancer</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tells nginx which header carries the real visitor IP
+                        (<code>CF-Connecting-IP</code> for Cloudflare,{' '}
+                        <code>Incap-Client-IP</code> for Imperva, otherwise{' '}
+                        <code>X-Forwarded-For</code>). Get this wrong and traffic logs,
+                        GeoIP, rate limits and IP blocking all see the CDN&apos;s edge
+                        address instead of the visitor. The header is only trusted from
+                        that provider&apos;s known ranges.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Server Settings */}
                   <div>
                     <h3 className="text-sm font-medium mb-4">Server Settings</h3>
@@ -1249,6 +1322,62 @@ export default function ProxyHostsPage() {
                           />
                           <span className="text-sm">Proxy Buffering</span>
                         </label>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm mb-1">Default Location Timeouts</label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Seconds. These apply to the default <code>/</code> location only.
+                        Custom locations carry their own timeouts, set per location on the
+                        Locations tab.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm mb-1">Connect</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={formData.proxy_connect_timeout}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                proxy_connect_timeout: parseInt(e.target.value) || 60,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm mb-1">Send</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={formData.proxy_send_timeout}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                proxy_send_timeout: parseInt(e.target.value) || 60,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm mb-1">Read</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={formData.proxy_read_timeout}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                proxy_read_timeout: parseInt(e.target.value) || 60,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1315,7 +1444,7 @@ export default function ProxyHostsPage() {
                         <span className="text-sm">Enable Rate Limiting</span>
                       </label>
                       {formData.rate_limit_enabled && (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm mb-1">Requests</label>
                             <input
@@ -1368,7 +1497,7 @@ export default function ProxyHostsPage() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm mb-1">Server-Level Config</label>
-                        <textarea
+                        <Textarea
                           value={formData.server_advanced_config || ''}
                           onChange={(e) =>
                             setFormData({
@@ -1376,14 +1505,21 @@ export default function ProxyHostsPage() {
                               server_advanced_config: e.target.value || null,
                             })
                           }
-                          className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
+                          className="w-full rounded-lg bg-background font-mono"
                           rows={3}
                           placeholder="# Directives added at server block level"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm mb-1">Location-Level Config</label>
-                        <textarea
+                        <label className="block text-sm mb-1">Default Location Config</label>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Rendered inside the default <code>/</code> location block only. To
+                          add directives to a custom location such as <code>/api</code>, edit
+                          that location on the Locations tab — a <code>location</code> block
+                          written here is nested inside <code>/</code> and will never be
+                          reached.
+                        </p>
+                        <Textarea
                           value={formData.advanced_config || ''}
                           onChange={(e) =>
                             setFormData({
@@ -1391,9 +1527,9 @@ export default function ProxyHostsPage() {
                               advanced_config: e.target.value || null,
                             })
                           }
-                          className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
+                          className="w-full rounded-lg bg-background font-mono"
                           rows={3}
-                          placeholder="# Directives added inside default location block"
+                          placeholder="# Directives added inside the default / location block"
                         />
                       </div>
                     </div>
@@ -1401,10 +1537,10 @@ export default function ProxyHostsPage() {
 
                 </div>
               )}
-            </div>
+            </ModalBody>
 
             {/* Shared footer buttons - visible on all tabs */}
-            <div className="flex justify-end gap-3 p-6 border-t border-border">
+            <ModalFooter className="p-6">
               <button
                 type="button"
                 onClick={() => setShowDialog(false)}
@@ -1421,22 +1557,18 @@ export default function ProxyHostsPage() {
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingHost ? 'Save Changes' : 'Create'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalFooter>
+      </Modal>
 
       {/* Location Dialog */}
-      {showLocationDialog && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
-            <div className="border-b border-border p-4">
-              <h3 className="text-lg font-semibold">
+      <Modal open={showLocationDialog} onOpenChange={setShowLocationDialog} size="lg">
+            <ModalHeader className="p-4">
+              <ModalTitle>
                 {editingLocation ? 'Edit Location' : 'Add Location'}
-              </h3>
-            </div>
+              </ModalTitle>
+            </ModalHeader>
 
-            <div className="p-4 space-y-4">
+            <ModalBody className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Path</label>
@@ -1481,7 +1613,7 @@ export default function ProxyHostsPage() {
                 <p className="text-xs text-muted-foreground mt-1">Higher priority = processed first</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Scheme</label>
                   <select
@@ -1562,7 +1694,84 @@ export default function ProxyHostsPage() {
                 </label>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+              <div>
+                <label className="block text-sm font-medium mb-1">Timeouts</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Seconds, for this location only. Raise the read timeout for upstreams
+                  that can take longer than 60s to respond.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm mb-1">Connect</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={locationForm.proxy_connect_timeout}
+                      onChange={(e) =>
+                        setLocationForm({
+                          ...locationForm,
+                          proxy_connect_timeout: parseInt(e.target.value) || 60,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1">Send</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={locationForm.proxy_send_timeout}
+                      onChange={(e) =>
+                        setLocationForm({
+                          ...locationForm,
+                          proxy_send_timeout: parseInt(e.target.value) || 60,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1">Read</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={locationForm.proxy_read_timeout}
+                      onChange={(e) =>
+                        setLocationForm({
+                          ...locationForm,
+                          proxy_read_timeout: parseInt(e.target.value) || 60,
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Advanced Config (this location only)
+                </label>
+                <Textarea
+                  value={locationForm.advanced_config || ''}
+                  onChange={(e) =>
+                    setLocationForm({ ...locationForm, advanced_config: e.target.value })
+                  }
+                  className="w-full rounded-lg bg-background font-mono"
+                  rows={4}
+                  placeholder="# Directives added inside this location block"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Raw nginx directives, rendered inside this location&apos;s own block. Do
+                  not wrap them in a <code>location {'{ }'}</code> block — that is added
+                  for you.
+                </p>
+              </div>
+
+            </ModalBody>
+
+            <ModalFooter className="p-4">
                 <button
                   onClick={() => setShowLocationDialog(false)}
                   className="px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm"
@@ -1575,11 +1784,8 @@ export default function ProxyHostsPage() {
                 >
                   {editingLocation ? 'Update' : 'Add'}
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalFooter>
+      </Modal>
 
     </div>
   )

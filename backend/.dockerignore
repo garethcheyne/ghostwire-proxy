@@ -1,0 +1,17 @@
+# The builder does `COPY . .`, so anything here can reach production.
+# See enhancement/10-deploys-do-not-gate-on-ci.md
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.venv
+venv
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+tests
+Dockerfile
+.dockerignore

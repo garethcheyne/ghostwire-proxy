@@ -252,7 +252,7 @@ export default function SystemMonitorPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">System Monitor</h1>
           <p className="text-muted-foreground">
@@ -576,10 +576,10 @@ export default function SystemMonitorPage() {
                   <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Memory
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                     Network I/O
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                     Uptime
                   </th>
                 </tr>
@@ -635,7 +635,7 @@ export default function SystemMonitorPage() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right hidden md:table-cell">
                       {container.network_rx_bytes !== undefined ? (
                         <div className="text-xs font-mono">
                           <span className="text-green-500">{formatBytes(container.network_rx_bytes)}</span>
@@ -646,7 +646,7 @@ export default function SystemMonitorPage() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right hidden md:table-cell">
                       {container.uptime ? (
                         <span className="text-sm text-muted-foreground">{container.uptime}</span>
                       ) : (

@@ -13,6 +13,7 @@ from app.core.cache import cached_json
 from app.models.user import User
 from app.models.traffic_log import TrafficLog
 from app.models.proxy_host import ProxyHost
+from app.models.analytics import AnalyticsDaily, AnalyticsGeo
 from app.api.deps import get_current_user
 
 router = APIRouter()
@@ -753,3 +754,158 @@ async def get_auth_errors(
         }
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
+
+
+# ─── Long-range trends ────────────────────────────────────────────────────────
+# These read the analytics_* rollups rather than traffic_logs, which is the only
+# way to answer questions that reach further back than the retention window —
+# raw rows are pruned nightly, the summaries are not.
+
+class TrendPoint(BaseModel):
+    date: str
+    requests: int
+    unique_visitors: int
+    blocked: int
+    threats: int
+    bytes_sent: int
+    bytes_received: int
+    avg_response_time: Optional[int] = None
+    p95_response_time: Optional[int] = None
+    p99_response_time: Optional[int] = None
+    bot_requests: int = 0
+
+
+class HostTrendSeries(BaseModel):
+    host_id: str
+    host_name: str
+    points: list[TrendPoint]
+
+
+class TrendsResponse(BaseModel):
+    days: int
+    totals: list[TrendPoint]
+    by_host: list[HostTrendSeries]
+    top_countries: list[dict]
+
+
+@router.get("/trends", response_model=TrendsResponse)
+async def get_trends(
+    days: int = Query(90, ge=1, le=730),
+    proxy_host_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily trends from the analytics rollups (cached 5 minutes).
+
+    Deliberately not computed from traffic_logs: retention prunes those, so a
+    live query can never look further back than the retention window.
+    """
+    cache_key = f"analytics:trends:{proxy_host_id or 'all'}:{days}"
+
+    async def _compute() -> dict:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        rows_q = select(AnalyticsDaily).where(AnalyticsDaily.date >= since)
+        if proxy_host_id:
+            rows_q = rows_q.where(AnalyticsDaily.proxy_host_id == proxy_host_id)
+        rows = (await db.execute(rows_q.order_by(AnalyticsDaily.date))).scalars().all()
+
+        host_names: dict[str, str] = {}
+        for host in (await db.execute(select(ProxyHost))).scalars().all():
+            host_names[host.id] = (host.domain_names or [host.id])[0]
+
+        # Fleet totals per day. unique_ips can't be summed across hosts without
+        # double-counting a visitor who hit two sites, so it is reported as the
+        # largest single-host figure for the day — an honest lower bound rather
+        # than an inflated total.
+        totals: dict[str, dict] = {}
+        per_host: dict[str, list] = {}
+
+        for r in rows:
+            t = totals.setdefault(r.date, {
+                "date": r.date, "requests": 0, "unique_visitors": 0, "blocked": 0,
+                "threats": 0, "bytes_sent": 0, "bytes_received": 0,
+                "bot_requests": 0, "p95_response_time": None, "p99_response_time": None,
+                "_rt_weighted": 0, "_rt_requests": 0,
+            })
+            t["requests"] += r.total_requests or 0
+            t["blocked"] += r.blocked_requests or 0
+            t["threats"] += r.total_threats or 0
+            t["bytes_sent"] += r.bytes_sent or 0
+            t["bytes_received"] += r.bytes_received or 0
+            t["unique_visitors"] = max(t["unique_visitors"], r.unique_ips or 0)
+            t["bot_requests"] += r.bot_requests or 0
+            # Percentiles can't be averaged across hosts, so the fleet figure is
+            # the worst host that day — which is the one you'd want to act on.
+            for key, value in (("p95_response_time", r.p95_response_time_ms),
+                               ("p99_response_time", r.p99_response_time_ms)):
+                if value is not None:
+                    t[key] = value if t[key] is None else max(t[key], value)
+            if r.avg_response_time_ms and r.total_requests:
+                t["_rt_weighted"] += r.avg_response_time_ms * r.total_requests
+                t["_rt_requests"] += r.total_requests
+
+            per_host.setdefault(r.proxy_host_id or "unknown", []).append({
+                "date": r.date,
+                "requests": r.total_requests or 0,
+                "unique_visitors": r.unique_ips or 0,
+                "blocked": r.blocked_requests or 0,
+                "threats": r.total_threats or 0,
+                "bytes_sent": r.bytes_sent or 0,
+                "bytes_received": r.bytes_received or 0,
+                "avg_response_time": r.avg_response_time_ms,
+                "p95_response_time": r.p95_response_time_ms,
+                "p99_response_time": r.p99_response_time_ms,
+                "bot_requests": r.bot_requests or 0,
+            })
+
+        totals_list = []
+        for date in sorted(totals):
+            t = totals[date]
+            rt_w = t.pop("_rt_weighted")
+            rt_n = t.pop("_rt_requests")
+            # Request-weighted, so a quiet host with one slow request doesn't
+            # drag the fleet average around.
+            t["avg_response_time"] = int(rt_w / rt_n) if rt_n else None
+            totals_list.append(t)
+
+        by_host = [
+            {
+                "host_id": hid,
+                "host_name": host_names.get(hid, hid),
+                "points": sorted(points, key=lambda p: p["date"]),
+            }
+            for hid, points in sorted(
+                per_host.items(),
+                key=lambda kv: sum(p["requests"] for p in kv[1]),
+                reverse=True,
+            )[:10]
+        ]
+
+        geo_q = select(
+            AnalyticsGeo.country_code,
+            func.sum(AnalyticsGeo.requests).label("requests"),
+            func.sum(AnalyticsGeo.blocked).label("blocked"),
+        ).where(AnalyticsGeo.date >= since)
+        if proxy_host_id:
+            geo_q = geo_q.where(AnalyticsGeo.proxy_host_id == proxy_host_id)
+        geo_rows = (
+            await db.execute(
+                geo_q.group_by(AnalyticsGeo.country_code)
+                .order_by(func.sum(AnalyticsGeo.requests).desc())
+                .limit(15)
+            )
+        ).all()
+
+        return {
+            "days": days,
+            "totals": totals_list,
+            "by_host": by_host,
+            "top_countries": [
+                {"country": g.country_code, "requests": int(g.requests or 0),
+                 "blocked": int(g.blocked or 0)}
+                for g in geo_rows
+            ],
+        }
+
+    return await cached_json(cache_key, ttl=300, producer=_compute)

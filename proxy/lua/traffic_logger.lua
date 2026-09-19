@@ -20,52 +20,38 @@ if string.sub(ngx.var.uri, 1, 28) == "/.well-known/acme-challenge/" then
     return
 end
 
--- Skip traffic logging for trusted IPs
-local function get_raw_client_ip()
-    local xff = ngx.var.http_x_forwarded_for
-    if xff then
-        local first_ip = xff:match("^([^,]+)")
-        if first_ip then return first_ip:gsub("^%s*(.-)%s*$", "%1") end
-    end
-    return ngx.var.http_x_real_ip or ngx.var.remote_addr
-end
-
-if init.is_trusted_ip(get_raw_client_ip()) then
+-- Skip traffic logging for trusted IPs. init.get_client_ip() returns the address
+-- nginx's real_ip module validated, never a raw request header -- otherwise a
+-- visitor could opt themselves out of logging by naming a trusted IP.
+if init.is_trusted_ip(init.get_client_ip()) then
     return
 end
 
 local http = require "resty.http"
 local geoip = require "geoip"
 
--- Get real client IP (check X-Forwarded-For, X-Real-IP, then fall back to remote_addr)
-local function get_client_ip()
-    local xff = ngx.var.http_x_forwarded_for
-    if xff then
-        -- X-Forwarded-For can contain multiple IPs, get the first (original client)
-        local first_ip = xff:match("^([^,]+)")
-        if first_ip then
-            return first_ip:gsub("^%s*(.-)%s*$", "%1")  -- trim whitespace
-        end
-    end
-
-    local real_ip = ngx.var.http_x_real_ip
-    if real_ip then
-        return real_ip
-    end
-
-    return ngx.var.remote_addr
-end
-
+-- ngx.ctx is readable here (log phase) but not inside the ngx.timer callback
+-- below, so the value has to be captured into log_data now.
 local log_data = {
     -- Request info
     timestamp = ngx.time(),
-    client_ip = get_client_ip(),
+    client_ip = init.get_client_ip(),
     method = ngx.var.request_method,
     uri = ngx.var.uri,
     query_string = ngx.var.query_string,
     host = ngx.var.host,
     user_agent = ngx.var.http_user_agent,
     referer = ngx.var.http_referer,
+
+    -- Identity, when the host sits behind an auth wall and the session was
+    -- validated this request (set by auth_wall.lua). nil for public traffic.
+    auth_user = ngx.ctx.auth_user,
+
+    -- Lets the API separate long-lived connections (websocket upgrades, SSE)
+    -- from genuinely slow requests. A stream that stays open for ten minutes is
+    -- not a ten-minute response time.
+    upgrade = ngx.var.upstream_http_upgrade or ngx.var.http_upgrade,
+    content_type = ngx.var.sent_http_content_type,
 
     -- Response info
     status_code = ngx.status,
@@ -146,8 +132,28 @@ ngx.timer.at(0, function(premature)
 
     if not res then
         ngx.log(ngx.ERR, "Failed to log traffic: ", err)
+        -- The socket state is unknown after a failed request, so discard it
+        -- rather than hand a possibly-corrupted connection back to the pool.
+        httpc:close()
+        return
     end
 
-    -- Return connection to pool
+    -- The low-level request() returns as soon as the response headers are
+    -- parsed; it does NOT consume the body. The body must be drained before the
+    -- connection is reusable, otherwise the next request to pull this socket off
+    -- the pool reads these leftover bytes as its own status line and the log
+    -- POST is dropped.
+    local body, body_err = res:read_body()
+    if not body then
+        ngx.log(ngx.ERR, "Failed to read traffic log response: ", body_err or "unknown")
+        httpc:close()
+        return
+    end
+
+    if res.status ~= 200 then
+        ngx.log(ngx.ERR, "Traffic log rejected (HTTP ", res.status, "): ", body)
+    end
+
+    -- Only a fully-drained connection is safe to reuse.
     httpc:set_keepalive(60000, 10)
 end)

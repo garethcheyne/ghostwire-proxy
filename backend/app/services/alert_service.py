@@ -19,8 +19,18 @@ async def dispatch_alert(
     title: str,
     message: str,
     data: Optional[dict] = None,
+    skip_push: bool = False,
 ) -> dict:
-    """Dispatch an alert to all configured channels based on user preferences."""
+    """Dispatch an alert to all configured channels based on user preferences.
+
+    skip_push: for callers that have already sent a richer push notification
+    themselves (with action buttons and the right urgency) and only want this to
+    fan the alert out to the remaining channels.
+
+    If no preference matches, the alert is still delivered to every push
+    subscriber rather than dropped. Alerting has to work before anyone has
+    configured channels and preferences, not after.
+    """
     severity_levels = {"low": 0, "medium": 1, "high": 2, "critical": 3}
     severity_level = severity_levels.get(severity, 1)
 
@@ -64,6 +74,8 @@ async def dispatch_alert(
             channels = ch_result.scalars().all()
 
         for channel in channels:
+            if skip_push and channel.channel_type == "push":
+                continue
             try:
                 success = await _send_to_channel(db, channel, title, message, data)
                 if success:
@@ -73,6 +85,25 @@ async def dispatch_alert(
             except Exception as e:
                 logger.error(f"Failed to send alert to channel {channel.id}: {e}")
                 error_count += 1
+
+    if sent_count == 0 and error_count == 0 and not skip_push:
+        # Nothing was configured to receive this. Fall back to every registered
+        # push subscriber so a fresh install still gets told about outages and
+        # attacks without first having to build a channel/preference matrix.
+        try:
+            from app.services.push_service import push_service
+
+            result = await push_service.notify_all(
+                title=title,
+                body=message,
+                notification_type=alert_type,
+                data=data,
+                db=db,
+            )
+            sent_count = int(result.get("sent", 0) or 0)
+        except Exception as e:
+            logger.error(f"Fallback push for '{alert_type}' failed: {e}")
+            error_count += 1
 
     return {"sent": sent_count, "errors": error_count}
 
@@ -253,6 +284,54 @@ async def _send_email(
     message: str,
     data: Optional[dict] = None,
 ) -> bool:
-    """Send email notification (placeholder - requires SMTP config)."""
-    logger.info(f"Email alert: {title} - {message}")
-    return True
+    """Send an alert by email via the configured SMTP server.
+
+    This used to log and return True, which meant every email alert was recorded
+    as delivered while nothing was ever sent. It now reports real success.
+    """
+    from app.core.database import AsyncSessionLocal
+    from app.services.email_service import send_email, EmailNotConfigured
+
+    try:
+        config = json.loads(channel.config) if isinstance(channel.config, str) else (channel.config or {})
+    except (json.JSONDecodeError, TypeError):
+        logger.error("Email channel %s has unreadable config", channel.id)
+        return False
+
+    recipients = config.get("recipients") or []
+    if isinstance(recipients, str):
+        recipients = [r.strip() for r in recipients.split(",") if r.strip()]
+
+    if not recipients:
+        logger.error("Email channel %s has no recipients configured", channel.id)
+        return False
+
+    detail = ""
+    if data:
+        rows = "".join(
+            f"<tr><td style='padding:4px 12px 4px 0;color:#666'>{k}</td>"
+            f"<td style='padding:4px 0'>{v}</td></tr>"
+            for k, v in data.items()
+        )
+        detail = f"<table style='margin-top:16px;font-size:14px'>{rows}</table>"
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await send_email(
+                db,
+                to=recipients,
+                subject=f"[Ghostwire Proxy] {title}",
+                text_body=f"{title}\n\n{message}\n",
+                html_body=(
+                    f"<h2 style='margin:0 0 8px;font-family:sans-serif'>{title}</h2>"
+                    f"<p style='font-family:sans-serif;font-size:15px'>{message}</p>"
+                    f"{detail}"
+                ),
+            )
+        return True
+    except EmailNotConfigured as e:
+        logger.error("Email alert not sent: %s", e)
+        return False
+    except Exception as e:
+        logger.error("Email alert failed: %s", e)
+        return False

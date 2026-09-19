@@ -16,6 +16,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
 
 interface WafRule {
@@ -264,7 +266,7 @@ export default function WafPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">WAF Rules</h1>
           <p className="text-muted-foreground">
@@ -388,9 +390,13 @@ export default function WafPage() {
       </div>
 
       {/* Create/Edit Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Waf — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingRule ? 'Edit WAF Rule' : 'Add WAF Rule'}
@@ -412,16 +418,16 @@ export default function WafPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
+                <Textarea
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full rounded-lg bg-background"
                   rows={2}
                   placeholder="Optional description"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Category</label>
                   <select
@@ -554,9 +560,8 @@ export default function WafPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
     </div>
   )
 }

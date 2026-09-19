@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Response
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, case, delete as sa_delete, cast, String
+from sqlalchemy import select, func, and_, or_, case, delete as sa_delete, cast, String
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -23,6 +23,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[TrafficLogResponse])
 async def list_traffic_logs(
+    response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     proxy_host_id: Optional[str] = None,
@@ -31,41 +32,63 @@ async def list_traffic_logs(
     status_max: Optional[int] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    search: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List traffic logs with filtering"""
+    """List traffic logs with filtering.
+
+    The matching row count is returned in the X-Total-Count header (same
+    convention as /api/proxy-hosts) so the UI can paginate; without it the
+    client has no way to know there is more than one page.
+    """
+    # Built once so the count query and the page query can never drift apart.
+    filters = []
+    if proxy_host_id:
+        filters.append(TrafficLog.proxy_host_id == proxy_host_id)
+    if client_ip:
+        filters.append(TrafficLog.client_ip == client_ip)
+    if status_min is not None:
+        filters.append(TrafficLog.status >= status_min)
+    if status_max is not None:
+        filters.append(TrafficLog.status <= status_max)
+    if start_date:
+        filters.append(TrafficLog.timestamp >= start_date)
+    if end_date:
+        filters.append(TrafficLog.timestamp <= end_date)
+    if search:
+        # Free-text over the two fields worth searching from the log view. This
+        # is an unindexed scan behind the timestamp ordering, so it stays quick
+        # for common terms and gets slower the rarer the match is; add a trigram
+        # index on request_uri if that becomes a problem.
+        term = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                TrafficLog.request_uri.ilike(term),
+                TrafficLog.client_ip.ilike(term),
+                TrafficLog.user_agent.ilike(term),
+            )
+        )
+
     query = (
         select(TrafficLog, IpEnrichment.city)
         .outerjoin(IpEnrichment, TrafficLog.client_ip == IpEnrichment.ip_address)
         .options(selectinload(TrafficLog.proxy_host))
     )
-
-    # Apply filters
-    if proxy_host_id:
-        query = query.where(TrafficLog.proxy_host_id == proxy_host_id)
-
-    if client_ip:
-        query = query.where(TrafficLog.client_ip == client_ip)
-
-    if status_min is not None:
-        query = query.where(TrafficLog.status >= status_min)
-
-    if status_max is not None:
-        query = query.where(TrafficLog.status <= status_max)
-
-    if start_date:
-        query = query.where(TrafficLog.timestamp >= start_date)
-
-    if end_date:
-        query = query.where(TrafficLog.timestamp <= end_date)
+    count_query = select(func.count()).select_from(TrafficLog)
+    if filters:
+        query = query.where(and_(*filters))
+        count_query = count_query.where(and_(*filters))
 
     query = query.order_by(TrafficLog.timestamp.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     rows = result.all()
 
-    # Build response with host_name and city from enrichment
-    response = []
+    total_result = await db.execute(count_query)
+    response.headers["X-Total-Count"] = str(int(total_result.scalar() or 0))
+
+    # Build items with host_name and city from enrichment
+    items = []
     for row in rows:
         log = row[0]
         city = row[1]
@@ -92,9 +115,9 @@ async def list_traffic_logs(
             "city": city,
             "auth_user": log.auth_user,
         }
-        response.append(TrafficLogResponse(**log_dict))
+        items.append(TrafficLogResponse(**log_dict))
 
-    return response
+    return items
 
 
 @router.get("/stats", response_model=TrafficStatsResponse)

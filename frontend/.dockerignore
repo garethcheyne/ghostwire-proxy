@@ -1,0 +1,22 @@
+# Never let host build artefacts or local dev config into the image.
+#
+# The builder stage does `COPY . .` and then `npm run build`, so anything here
+# that Next reads at build time ends up baked into the production bundle. A
+# local .env.local is the dangerous one: it overrode BACKEND_URL and got
+# compiled into .next/routes-manifest.json, pointing the container's API proxy
+# at localhost:8089 instead of the api service.
+node_modules
+.next
+out
+
+# Local dev environment overrides (see .env.local for npm run dev)
+.env.local
+.env.*.local
+
+.git
+.gitignore
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+Dockerfile
+.dockerignore

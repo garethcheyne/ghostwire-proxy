@@ -6,7 +6,8 @@ RUN apk add --no-cache \
     openssl \
     libmaxminddb \
     libmaxminddb-dev \
-    perl
+    perl \
+    logrotate
 
 # Install OpenResty packages using opm
 RUN opm get ledgetech/lua-resty-http \
@@ -32,6 +33,11 @@ COPY lua/ /usr/local/openresty/nginx/lua/
 # These are built separately and copied in via docker-compose volume or build arg
 COPY auth-portal/ /var/www/auth-portal/
 
+# Log rotation (see enhancement/02-disk-pressure-and-log-rotation.md)
+COPY logrotate/nginx /etc/logrotate.d/nginx
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && mkdir -p /var/lib
+
 # Set permissions
 RUN chown -R nobody:nobody /var/cache/nginx /var/log/nginx /var/www/auth-portal
 
@@ -42,5 +48,6 @@ EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
-# Run OpenResty
+# Run OpenResty (entrypoint starts the log-rotation cron first)
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["openresty", "-g", "daemon off;"]

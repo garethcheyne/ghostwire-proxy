@@ -6,7 +6,9 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { MobileSidebar } from '@/components/layout/mobile-sidebar'
 import { Header } from '@/components/layout/header'
 import { UpdateBanner } from '@/components/layout/update-banner'
+import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
+import { IpActionsProvider } from '@/components/ip-actions-provider'
 import { cn } from '@/lib/utils'
 import { clearSession, setSessionActive } from '@/lib/session'
 
@@ -72,7 +74,13 @@ export default function DashboardLayout({
   return (
     <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
       <ConfirmDialogProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <IpActionsProvider>
+      {/* h-screen is 100vh, which on a phone is the viewport *with browser
+          chrome hidden* — taller than what you can actually see. Combined with
+          overflow-hidden that pushes the bottom of the shell under the URL bar
+          and makes it unreachable. dvh tracks the visible height instead;
+          h-screen stays as the fallback for browsers without dvh. */}
+      <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-background">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden md:block">
           <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
@@ -87,9 +95,18 @@ export default function DashboardLayout({
           <UpdateBanner />
           <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-muted/30">
             {children}
+            {/* Clears the fixed bottom tab bar (and the home indicator below
+                it) so the last element on a page is never unreachable. */}
+            <div
+              aria-hidden
+              className="md:hidden h-[calc(64px+env(safe-area-inset-bottom))]"
+            />
           </main>
         </div>
+
+        <MobileTabBar />
       </div>
+      </IpActionsProvider>
       </ConfirmDialogProvider>
     </SidebarContext.Provider>
   )

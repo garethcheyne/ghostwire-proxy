@@ -23,6 +23,40 @@ end
 
 -- Check request against database-loaded WAF rules
 -- Returns: allowed (bool), threat_info (table or nil)
+--- Build the forms of a request string a rule should be tested against.
+---
+--- Rules are written against readable payloads ("union\s+select"), but nginx
+--- hands us the raw wire form, where a browser or attack tool has percent- and
+--- plus-encoded everything. Matching only the raw form meant "union%20select"
+--- sailed past every regex rule -- i.e. essentially all real traffic evaded the
+--- SQLi and XSS rules. Decoding twice also catches the standard double-encoding
+--- evasion, and the raw form is kept so encoding tricks are still visible.
+local function match_candidates(raw)
+    local seen = { [raw] = true }
+    local candidates = { raw }
+
+    -- In a query string "+" means space; unescape_uri does not do that for us.
+    local plussed = raw:gsub("%+", " ")
+    if not seen[plussed] then
+        seen[plussed] = true
+        candidates[#candidates + 1] = plussed
+    end
+
+    for _, start in ipairs({ raw, plussed }) do
+        local current = start
+        for _ = 1, 2 do
+            local ok, decoded = pcall(ngx.unescape_uri, current)
+            if not ok or not decoded or seen[decoded] then break end
+            seen[decoded] = true
+            candidates[#candidates + 1] = decoded
+            current = decoded
+        end
+    end
+
+    return candidates
+end
+
+
 local function check_db_rules(uri, args, user_agent)
     local db_rules = init.get_waf_rules()
     if not db_rules or #db_rules == 0 then
@@ -34,7 +68,7 @@ local function check_db_rules(uri, args, user_agent)
 
     for _, rule in ipairs(db_rules) do
         -- Only apply global rules (no host) or rules matching this host
-        if rule.proxy_host_id == nil or rule.proxy_host_id == host_id then
+        if init.rule_applies_to_host(rule.proxy_host_id, host_id) then
             local target
             if rule.category == "scanner" then
                 -- Scanner rules match against User-Agent (plain string)
@@ -56,21 +90,24 @@ local function check_db_rules(uri, args, user_agent)
                 target = request_data
             end
 
-            -- Regex match for non-scanner rules
+            -- Regex match for non-scanner rules, against every decoded form
             if target then
-                local ok, match = pcall(ngx.re.match, target, rule.pattern, "ijo")
-                if not ok then
-                    ngx.log(ngx.ERR, "Invalid WAF rule regex [" .. rule.name .. "]: " .. tostring(match))
-                elseif match then
-                    return false, {
-                        rule_id = rule.id,
-                        rule_name = rule.name,
-                        category = rule.category,
-                        severity = rule.severity,
-                        action = rule.action,
-                        pattern = rule.pattern,
-                        matched = target,
-                    }
+                for _, candidate in ipairs(match_candidates(target)) do
+                    local ok, match = pcall(ngx.re.match, candidate, rule.pattern, "ijo")
+                    if not ok then
+                        ngx.log(ngx.ERR, "Invalid WAF rule regex [" .. rule.name .. "]: " .. tostring(match))
+                        break
+                    elseif match then
+                        return false, {
+                            rule_id = rule.id,
+                            rule_name = rule.name,
+                            category = rule.category,
+                            severity = rule.severity,
+                            action = rule.action,
+                            pattern = rule.pattern,
+                            matched = candidate,
+                        }
+                    end
                 end
             end
         end

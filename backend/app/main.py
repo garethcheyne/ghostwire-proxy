@@ -218,7 +218,18 @@ async def lifespan(app: FastAPI):
     from croniter import croniter
 
     async def scheduled_backup_loop():
-        """Check and run scheduled backups based on cron settings."""
+        """Check and run scheduled backups based on cron settings.
+
+        `last_fired_slot` records which cron occurrence has already been served.
+        Without it the same slot fired twice: the loop ticks every 60s and the
+        window test used abs(), so a 02:00 backup matched at 01:59:47 (13s
+        before the slot) and again at 02:00:56 (56s after it) — two full
+        backups a minute apart, which also burned through the retention count
+        at twice the intended rate. Observed on 2026-09-10 at 01:59:47 and
+        02:00:56.
+        """
+        last_fired_slot: datetime | None = None
+
         while True:
             try:
                 await asyncio.sleep(60)  # Check every minute
@@ -227,20 +238,30 @@ async def lifespan(app: FastAPI):
                     if not settings_obj.auto_backup_enabled:
                         continue
 
-                    # Calculate next run time from cron expression
+                    # Work from the most recent scheduled occurrence at or
+                    # before now, rather than the next one. Seeding croniter
+                    # from `now - 1 minute` and taking get_next() only works
+                    # while a tick lands inside that minute — the loop sleeps
+                    # 60s *plus* however long the previous backup took, so
+                    # drift eventually pushes every tick past the window and
+                    # the backup is skipped for the day. get_prev() has no such
+                    # edge.
                     now = datetime.now(timezone.utc)
                     try:
-                        cron = croniter(settings_obj.schedule_cron, now - timedelta(minutes=1))
-                        next_run = cron.get_next(datetime)
+                        slot = croniter(settings_obj.schedule_cron, now).get_prev(datetime)
                     except (ValueError, KeyError):
                         logger.error(f"Invalid cron expression: {settings_obj.schedule_cron}")
                         continue
 
-                    # Check if we're within the current minute window
-                    if abs((next_run - now).total_seconds()) < 60:
+                    # Fire once per occurrence, only after it has arrived, and
+                    # only if it is still recent (so a restart does not replay
+                    # an occurrence from hours ago).
+                    age = (now - slot).total_seconds()
+                    if 0 <= age < 600 and slot != last_fired_slot:
+                        last_fired_slot = slot
                         logger.info("Running scheduled backup...")
                         try:
-                            await backup_service.create_backup(
+                            created_backup = await backup_service.create_backup(
                                 db=session,
                                 backup_type="scheduled",
                                 include_database=True,
@@ -252,8 +273,34 @@ async def lifespan(app: FastAPI):
                             # Run cleanup after scheduled backup
                             await backup_service.cleanup_old_backups(session)
                             logger.info("Scheduled backup completed successfully")
+                            try:
+                                from app.services.push_service import push_service
+                                await push_service.notify_backup_completed(
+                                    backup_id=created_backup.id,
+                                    size_mb=round((created_backup.file_size or 0) / 1048576, 1),
+                                    db=session,
+                                )
+                            except Exception as notify_err:
+                                logger.debug(f"Backup success notification skipped: {notify_err}")
                         except Exception as e:
                             logger.error(f"Scheduled backup failed: {e}")
+                            # A silent backup failure is how the August purge became
+                            # unrecoverable. Make it loud on every channel.
+                            try:
+                                from app.services.push_service import push_service
+                                from app.services.alert_service import dispatch_alert
+                                await push_service.notify_backup_failed(error=str(e), db=session)
+                                await dispatch_alert(
+                                    db=session,
+                                    alert_type="backup_failed",
+                                    severity="critical",
+                                    title="Backup Failed",
+                                    message=f"The scheduled backup did not complete: {e}",
+                                    data={"error": str(e)},
+                                    skip_push=True,
+                                )
+                            except Exception as notify_err:
+                                logger.error(f"Could not raise backup-failure alert: {notify_err}")
             except asyncio.CancelledError:
                 logger.info("Scheduled backup task cancelled")
                 break
@@ -262,6 +309,60 @@ async def lifespan(app: FastAPI):
 
     backup_task = asyncio.create_task(scheduled_backup_loop())
     logger.info("Started scheduled backup task")
+
+    # Upstream health monitoring — notifies when a proxy host goes down or recovers
+    from app.services.health_service import run_health_checks
+
+    async def health_check_loop():
+        """Probe every enabled host's upstream and alert on state changes."""
+        # Let nginx and the upstreams settle after a restart before the first
+        # probe, so a slow-starting backend isn't reported as an outage.
+        await asyncio.sleep(90)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    await run_health_checks(session)
+            except asyncio.CancelledError:
+                logger.info("Health check task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in health check loop: {e}")
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                logger.info("Health check task cancelled")
+                break
+
+    health_task = asyncio.create_task(health_check_loop())
+    logger.info("Started upstream health monitoring task")
+
+    # Refresh the CDN edge ranges nginx trusts for real-client-IP headers
+    from app.services.trusted_proxy_service import refresh_ranges
+
+    async def trusted_proxy_refresh_loop():
+        """Keep Cloudflare/Imperva edge ranges current (checked daily).
+
+        A stale list means either the CDN's own address gets logged and blocked
+        as if it were the visitor, or a range we should no longer trust still is.
+        """
+        await asyncio.sleep(30)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    await refresh_ranges(session)
+            except asyncio.CancelledError:
+                logger.info("Trusted proxy refresh task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error refreshing trusted proxy ranges: {e}")
+            try:
+                await asyncio.sleep(86400)
+            except asyncio.CancelledError:
+                logger.info("Trusted proxy refresh task cancelled")
+                break
+
+    trusted_proxy_task = asyncio.create_task(trusted_proxy_refresh_loop())
+    logger.info("Started trusted proxy range refresh task")
 
     # GeoIP database auto-update (checks monthly)
     async def geoip_update_loop():
@@ -413,13 +514,41 @@ async def lifespan(app: FastAPI):
     from app.services.enrichment_service import backfill_enrichment, cleanup_stale_enrichments
 
     async def enrichment_backfill_loop():
-        """Periodically backfill IP enrichment for traffic log IPs."""
-        # Wait 30 seconds on startup before first batch
+        """Periodically backfill IP enrichment for traffic log IPs.
+
+        Off by default. It walked every distinct client_ip in traffic_logs in
+        batches of 40 every 5 minutes — around 480 AbuseIPDB /check calls an
+        hour against a free tier of roughly 1,000 a day, which is why 641
+        lookups in one day came back HTTP 429 and enrichment stopped working
+        at all. Enrichment still happens on demand when an IP is actually
+        looked at, which is the traffic that matters.
+
+        Set the `enrichment_backfill_enabled` setting to "true" to turn the
+        sweep back on — worth doing only with a paid AbuseIPDB plan, or with no
+        AbuseIPDB key at all (ip-api.com is free and separately rate-limited).
+        """
         await asyncio.sleep(30)
         cleanup_counter = 0
         while True:
             try:
                 async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting as _Setting
+                    from sqlalchemy import select as _select
+
+                    _row = (await session.execute(
+                        _select(_Setting).where(_Setting.key == "enrichment_backfill_enabled")
+                    )).scalar_one_or_none()
+                    _enabled = bool(_row and str(_row.value).strip().lower() in ("true", "1", "yes", "on"))
+
+                    if not _enabled:
+                        # Still run the stale-record cleanup; it costs no API calls.
+                        cleanup_counter += 1
+                        if cleanup_counter >= 72:
+                            cleanup_counter = 0
+                            await cleanup_stale_enrichments(session)
+                        await asyncio.sleep(300)
+                        continue
+
                     result = await backfill_enrichment(session)
                     if result["enriched"] > 0:
                         logger.info(
@@ -450,14 +579,126 @@ async def lifespan(app: FastAPI):
     enrichment_backfill_task = asyncio.create_task(enrichment_backfill_loop())
     logger.info("Started IP enrichment backfill task")
 
+    # AbuseIPDB blacklist sync — pulls the confidenceMinimum=75 blacklist into a
+    # local table so per-IP enrichment can check known-bad IPs for free instead
+    # of spending a metered /check call on every honeypot hit. sync_abuseipdb_blacklist()
+    # itself no-ops if synced within BLACKLIST_SYNC_MIN_INTERVAL, so it's safe to
+    # just check every hour and let it decide - that endpoint's own rate limit
+    # is far tighter than /check (as low as 5 req/day on some plans).
+    from app.services.enrichment_service import sync_abuseipdb_blacklist
+
+    async def abuseipdb_blacklist_sync_loop():
+        """Periodically refresh the local AbuseIPDB blacklist cache."""
+        await asyncio.sleep(45)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting
+                    setting_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_api_key")
+                    )
+                    setting = setting_result.scalar_one_or_none()
+                    if setting and setting.value:
+                        result = await sync_abuseipdb_blacklist(session, setting.value)
+                        if result["status"] == "synced":
+                            logger.info(
+                                "AbuseIPDB blacklist sync: cached %d known-bad IPs",
+                                result["count"],
+                            )
+            except asyncio.CancelledError:
+                logger.info("AbuseIPDB blacklist sync task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in AbuseIPDB blacklist sync: %s", e)
+            await asyncio.sleep(3600)  # check hourly; sync itself is rate-limited internally
+
+    abuseipdb_blacklist_task = asyncio.create_task(abuseipdb_blacklist_sync_loop())
+    logger.info("Started AbuseIPDB blacklist sync task")
+
+    # AbuseIPDB reporting — submits confirmed attackers (ThreatActor rows that
+    # escalated to temp_blocked+) back to AbuseIPDB via /bulk-report. Opt-in:
+    # gated on the `abuseipdb_auto_report_enabled` setting (default off,
+    # toggle lives in Settings next to the API key). Trusted IPs are always
+    # excluded so testing from an admin's own IP never gets reported.
+    from app.services.abuseipdb_report_service import submit_bulk_reports
+
+    async def abuseipdb_report_loop():
+        """Periodically report newly-escalated threat actors to AbuseIPDB."""
+        await asyncio.sleep(60)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from app.models.setting import Setting
+                    key_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_api_key")
+                    )
+                    key_setting = key_result.scalar_one_or_none()
+                    enabled_result = await session.execute(
+                        select(Setting).where(Setting.key == "abuseipdb_auto_report_enabled")
+                    )
+                    enabled_setting = enabled_result.scalar_one_or_none()
+
+                    if (
+                        key_setting and key_setting.value
+                        and enabled_setting and enabled_setting.value == "true"
+                    ):
+                        result = await submit_bulk_reports(session, key_setting.value)
+                        if result["status"] == "reported":
+                            logger.info(
+                                "AbuseIPDB report: submitted %d IPs (%d accepted, %d rejected, %d skipped as trusted)",
+                                result["submitted"], result["accepted"], result["rejected"], result["skipped_trusted"],
+                            )
+            except asyncio.CancelledError:
+                logger.info("AbuseIPDB report task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in AbuseIPDB report loop: %s", e)
+            await asyncio.sleep(3600)  # check hourly; sync itself is rate-limited internally
+
+    abuseipdb_report_task = asyncio.create_task(abuseipdb_report_loop())
+    logger.info("Started AbuseIPDB report task")
+
     # Data retention cleanup — prune old traffic_logs, threat_events, audit_logs daily
     from app.services.retention_service import run_retention_cleanup
+    from app.services.analytics_service import (
+        aggregate_hourly, aggregate_daily, aggregate_geo,
+    )
+
+    async def roll_up_analytics(hours_back: int = 3, days_back: int = 2) -> None:
+        """Summarise traffic_logs into the analytics_* tables.
+
+        Deliberately called from inside the retention loop, immediately before the
+        prune: rolling up has to happen before rows are deleted, and making that
+        ordering structural is safer than running two loops that merely happen to
+        be scheduled apart.
+        """
+        async with AsyncSessionLocal() as session:
+            h = await aggregate_hourly(session, hours_back=hours_back)
+            d = await aggregate_daily(session, days_back=days_back)
+            g = await aggregate_geo(session, days_back=days_back)
+        logger.info(f"Analytics rollup: {h} hourly, {d} daily, {g} geo rows")
 
     async def data_retention_loop():
-        """Run data retention cleanup once per hour."""
+        """Roll traffic up into analytics, then prune, once per hour."""
         # Wait 5 minutes on startup before first run
         await asyncio.sleep(300)
+
+        # One-time backfill so traffic already sitting in the table is summarised
+        # before the first prune ever removes it.
+        try:
+            await roll_up_analytics(hours_back=72, days_back=90)
+        except Exception as e:
+            logger.error(f"Initial analytics backfill failed: {e}")
+
         while True:
+            try:
+                # Summarise first — anything pruned below is gone for good.
+                await roll_up_analytics()
+            except asyncio.CancelledError:
+                logger.info("Data retention task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in analytics rollup: {e}")
             try:
                 summary = await run_retention_cleanup()
                 total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
@@ -476,6 +717,220 @@ async def lifespan(app: FastAPI):
     retention_task = asyncio.create_task(data_retention_loop())
     logger.info("Started data retention cleanup task")
 
+    # Scheduled report emails — per-host traffic reports on a daily/weekly/monthly
+    # cadence. Checked hourly; each schedule tracks its own last_sent_at, so a
+    # restart or a missed tick doesn't skip a report.
+    from app.services.report_scheduler import run_due_schedules
+
+    async def report_schedule_loop():
+        # Let the app settle before the first check; reports are never urgent.
+        await asyncio.sleep(180)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    sent = await run_due_schedules(session)
+                if sent:
+                    logger.info("Scheduled reports: sent %d", sent)
+            except asyncio.CancelledError:
+                logger.info("Report schedule task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in report scheduler: {e}")
+            await asyncio.sleep(3600)
+
+    report_task = asyncio.create_task(report_schedule_loop())
+    logger.info("Started scheduled report task")
+
+    # Backup watchdog — a backup loop that dies is otherwise invisible: the
+    # per-run failure alert only fires if a run actually happens. This notices
+    # the absence of runs, which is how the August purge became unrecoverable.
+    from app.models.backup import Backup
+
+    async def backup_watchdog_loop():
+        await asyncio.sleep(600)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    from sqlalchemy import select as _select, func as _func
+
+                    last = (await session.execute(
+                        _select(_func.max(Backup.created_at)).where(Backup.status == "completed")
+                    )).scalar()
+
+                    now = datetime.now(timezone.utc)
+                    if last is not None:
+                        if last.tzinfo is None:
+                            last = last.replace(tzinfo=timezone.utc)
+                        age_hours = (now - last).total_seconds() / 3600
+                    else:
+                        age_hours = None
+
+                    # 26h rather than 24h so a daily backup running slightly late
+                    # doesn't cry wolf every morning.
+                    if age_hours is None or age_hours > 26:
+                        from app.services.alert_service import dispatch_alert
+
+                        detail = (
+                            "No successful backup has ever completed."
+                            if age_hours is None
+                            else f"The last successful backup was {age_hours:.0f} hours ago."
+                        )
+                        await dispatch_alert(
+                            db=session,
+                            alert_type="backup_stale",
+                            severity="critical",
+                            title="Backups Have Stopped",
+                            message=f"{detail} The scheduled backup may have stopped running.",
+                            data={"last_successful_backup_hours_ago": round(age_hours, 1) if age_hours else None},
+                        )
+                        logger.error("Backup watchdog: %s", detail)
+            except asyncio.CancelledError:
+                logger.info("Backup watchdog cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in backup watchdog: {e}")
+            # Once every 6 hours is enough to catch a stalled backup loop.
+            await asyncio.sleep(21600)
+
+    backup_watchdog_task = asyncio.create_task(backup_watchdog_loop())
+    logger.info("Started backup watchdog task")
+
+    # Automatic OS package updates inside the containers.
+    #
+    # Deliberately centralised here rather than as a crontab inside each image.
+    # Two of the six containers are official images (postgres, redis) that we
+    # do not build, so an in-image cron entry could never cover them, and three
+    # more would need cron installed purely for this. The API already holds the
+    # Docker socket and the exec plumbing the scanner uses, so one scheduler
+    # covers everything and the result is visible, alertable and switchable
+    # from the UI instead of buried in an image.
+    #
+    # Off by default, security-only, and postgres is never upgraded in place —
+    # swapping libraries under a running database is not worth the risk when
+    # watchtower already replaces that image wholesale.
+    async def container_auto_update_loop():
+        from app.api.routes.containers import get_auto_update_policy, _set_setting
+        from app.services.container_security_service import apply_updates_all
+
+        last_fired_slot: datetime | None = None
+        await asyncio.sleep(120)
+
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    policy = await get_auto_update_policy(session)
+                    if not policy["enabled"]:
+                        await asyncio.sleep(300)
+                        continue
+
+                    now = datetime.now(timezone.utc)
+                    try:
+                        slot = croniter(policy["cron"], now).get_prev(datetime)
+                    except (ValueError, KeyError):
+                        logger.error("Invalid container update cron: %s", policy["cron"])
+                        await asyncio.sleep(300)
+                        continue
+
+                    if not (0 <= (now - slot).total_seconds() < 600) or slot == last_fired_slot:
+                        await asyncio.sleep(60)
+                        continue
+
+                    last_fired_slot = slot
+                    excluded = set(policy["excluded"]) | set(policy["always_excluded"])
+                    logger.info("Running scheduled container package update...")
+
+                    results = await apply_updates_all(
+                        security_only=policy["security_only"], excluded=excluded,
+                    )
+                    upgraded = sum(r.get("upgraded", 0) or 0 for r in results)
+                    failures = [r for r in results if r.get("error") and not r.get("skipped")]
+
+                    await _set_setting(session, "container_auto_update_last_run", now.isoformat())
+                    await _set_setting(
+                        session, "container_auto_update_last_result",
+                        json.dumps({
+                            "upgraded": upgraded,
+                            "failed": [f["container"] for f in failures],
+                            "containers": len(results),
+                        }),
+                    )
+                    logger.info(
+                        "Container update run: %d packages upgraded across %d containers, %d failed",
+                        upgraded, len(results), len(failures),
+                    )
+
+                    if failures:
+                        from app.services.alert_service import dispatch_alert
+                        await dispatch_alert(
+                            db=session,
+                            alert_type="container_update_failed",
+                            severity="warning",
+                            title="Container Package Update Failed",
+                            message=(
+                                f"{len(failures)} container(s) could not be updated: "
+                                + ", ".join(f["container"] for f in failures)
+                            ),
+                            data={f["container"]: f.get("error") for f in failures},
+                        )
+            except asyncio.CancelledError:
+                logger.info("Container auto-update task cancelled")
+                break
+            except Exception as e:
+                logger.error("Error in container auto-update: %s", e)
+                await asyncio.sleep(300)
+
+    container_update_task = asyncio.create_task(container_auto_update_loop())
+    logger.info("Started container auto-update task")
+
+    # Certificate auto-renewal — checks for Let's Encrypt certs nearing expiry
+    # and renews + deploys (writes cert files, regenerates nginx configs,
+    # reloads nginx) them automatically. Previously renewal only happened if
+    # someone clicked "Renew" in the UI, which is why certs were quietly
+    # expiring despite "auto renew" being on.
+    from app.services.certificate_service import check_expiring_certificates, renew_and_deploy_certificate
+
+    async def certificate_renewal_loop():
+        """Periodically renew Let's Encrypt certificates approaching expiry."""
+        # Wait 2 minutes on startup before first check
+        await asyncio.sleep(120)
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    due = await check_expiring_certificates(
+                        session, days_before_expiry=30, send_notifications=True,
+                    )
+
+                if due:
+                    logger.info(
+                        "Certificate auto-renewal: %d certificate(s) due for renewal",
+                        len(due),
+                    )
+                    for cert in due:
+                        domain = cert.domain_names[0] if cert.domain_names else cert.id
+                        try:
+                            success, message = await renew_and_deploy_certificate(cert.id)
+                            if success:
+                                logger.info("Certificate auto-renewal: renewed %s", domain)
+                            else:
+                                logger.warning(
+                                    "Certificate auto-renewal: failed to renew %s: %s",
+                                    domain, message,
+                                )
+                        except Exception as e:
+                            logger.error("Certificate auto-renewal: error renewing %s: %s", domain, e)
+                else:
+                    logger.debug("Certificate auto-renewal: nothing due")
+            except asyncio.CancelledError:
+                logger.info("Certificate auto-renewal task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in certificate auto-renewal: {e}")
+            # Re-check every 12 hours
+            await asyncio.sleep(43200)
+
+    certificate_renewal_task = asyncio.create_task(certificate_renewal_loop())
+    logger.info("Started certificate auto-renewal task")
+
     yield
 
     # Cancel background tasks
@@ -484,7 +939,28 @@ async def lifespan(app: FastAPI):
     geoip_task.cancel()
     update_check_task.cancel()
     enrichment_backfill_task.cancel()
+    abuseipdb_blacklist_task.cancel()
+    abuseipdb_report_task.cancel()
     retention_task.cancel()
+    certificate_renewal_task.cancel()
+    health_task.cancel()
+    trusted_proxy_task.cancel()
+    report_task.cancel()
+    backup_watchdog_task.cancel()
+    container_update_task.cancel()
+    for _task in (report_task, backup_watchdog_task, container_update_task):
+        try:
+            await _task
+        except asyncio.CancelledError:
+            pass
+    try:
+        await trusted_proxy_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await health_task
+    except asyncio.CancelledError:
+        pass
     try:
         await metrics_task
     except asyncio.CancelledError:
@@ -506,7 +982,19 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     try:
+        await abuseipdb_blacklist_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await abuseipdb_report_task
+    except asyncio.CancelledError:
+        pass
+    try:
         await retention_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await certificate_renewal_task
     except asyncio.CancelledError:
         pass
 
@@ -535,6 +1023,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Pagination totals travel in this header; without exposing it the browser
+    # cannot read it on a genuinely cross-origin request.
+    expose_headers=["X-Total-Count"],
 )
 
 

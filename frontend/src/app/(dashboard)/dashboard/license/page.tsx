@@ -136,7 +136,7 @@ export default function LicensePage() {
       <div className="text-center pb-8">
         <Link
           href="/dashboard/about"
-          className="text-sm text-cyan-400 hover:underline"
+          className="inline-flex items-center min-h-11 px-4 text-sm text-cyan-400 hover:underline"
         >
           ← Back to About
         </Link>

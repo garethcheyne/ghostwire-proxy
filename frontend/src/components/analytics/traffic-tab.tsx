@@ -41,9 +41,17 @@ interface TrafficTabProps {
   formatNumber: (n: number) => string
   formatBytes: (b: number) => string
   formatResponseTime: (ms: number | null) => string
+  /** Drill the whole dashboard down to one host. */
+  onSelectHost?: (hostId: string) => void
 }
 
-export function TrafficTab({ data, formatNumber, formatBytes, formatResponseTime }: TrafficTabProps) {
+export function TrafficTab({
+  data,
+  formatNumber,
+  formatBytes,
+  formatResponseTime,
+  onSelectHost,
+}: TrafficTabProps) {
   const methodData = Object.entries(data.requests_by_method).map(([method, count]) => ({
     method,
     count,
@@ -107,25 +115,40 @@ export function TrafficTab({ data, formatNumber, formatBytes, formatResponseTime
               <tr className="border-b border-border">
                 <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Host</th>
                 <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Requests</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Visitors</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Bandwidth</th>
-                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Response</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Visitors</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Bandwidth</th>
+                <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">Avg Response</th>
                 <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Error Rate</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {data.top_hosts.map((host, idx) => (
-                <tr key={host.host_id} className="hover:bg-muted/50">
+                <tr
+                  key={host.host_id}
+                  onClick={onSelectHost ? () => onSelectHost(host.host_id) : undefined}
+                  className={`hover:bg-muted/50 ${onSelectHost ? 'cursor-pointer' : ''}`}
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                      <span className="font-medium" data-private="domain">{host.host_name}</span>
+                      {onSelectHost ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onSelectHost(host.host_id) }}
+                          className="font-medium text-left hover:underline"
+                          data-private="domain"
+                        >
+                          {host.host_name}
+                        </button>
+                      ) : (
+                        <span className="font-medium" data-private="domain">{host.host_name}</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{formatNumber(host.requests)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatNumber(host.unique_visitors)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatBytes(host.bytes_sent)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{formatResponseTime(host.avg_response_time)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatNumber(host.unique_visitors)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatBytes(host.bytes_sent)}</td>
+                  <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatResponseTime(host.avg_response_time)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={`font-mono ${
                       host.error_rate > 5 ? 'text-red-500' : host.error_rate > 1 ? 'text-yellow-500' : 'text-green-500'

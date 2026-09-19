@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = {
     "default_site_redirect_url": "",
     "trusted_ips": "[]",
     "abuseipdb_api_key": "",
+    "abuseipdb_auto_report_enabled": "false",
 }
 
 
@@ -53,6 +54,115 @@ async def list_settings(
     result = await db.execute(select(Setting).order_by(Setting.key))
     return result.scalars().all()
 
+
+# NOTE: these specific paths must stay ABOVE the generic /{key} routes.
+# FastAPI matches in declaration order, so /{key} would otherwise capture
+# "default-site" first — which is exactly what happened: PUTs landed in the
+# generic handler and wrote a junk settings row keyed "default-site" with an
+# empty value, GETs returned that row instead of {behavior, redirect_url}, and
+# the nginx default site was never regenerated.
+@router.get("/default-site")
+async def get_default_site(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current default site behavior settings"""
+    behavior = "congratulations"
+    redirect_url = ""
+
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_behavior"))
+    setting = result.scalar_one_or_none()
+    if setting:
+        behavior = setting.value
+
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_redirect_url"))
+    setting = result.scalar_one_or_none()
+    if setting:
+        redirect_url = setting.value
+
+    return {"behavior": behavior, "redirect_url": redirect_url}
+
+
+@router.put("/default-site")
+async def update_default_site(
+    request: Request,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update default site behavior and regenerate nginx config"""
+    from pydantic import BaseModel, field_validator
+
+    class DefaultSiteUpdate(BaseModel):
+        behavior: str
+        redirect_url: str = ""
+
+        @field_validator("behavior")
+        @classmethod
+        def validate_behavior(cls, v: str) -> str:
+            valid = ("congratulations", "redirect", "404", "444")
+            if v not in valid:
+                raise ValueError(f"Behavior must be one of: {', '.join(valid)}")
+            return v
+
+    body = await request.json()
+    data = DefaultSiteUpdate(**body)
+
+    # Validate redirect URL is provided when behavior is redirect
+    if data.behavior == "redirect" and not data.redirect_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Redirect URL is required when behavior is 'redirect'",
+        )
+
+    # Save settings
+    for key, value in [("default_site_behavior", data.behavior), ("default_site_redirect_url", data.redirect_url)]:
+        result = await db.execute(select(Setting).where(Setting.key == key))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = value
+        else:
+            setting = Setting(key=key, value=value)
+            db.add(setting)
+
+    # Audit log
+    db.add(AuditLog(
+        user_id=current_user.id,
+        email=current_user.email,
+        action="default_site_updated",
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
+    ))
+    await db.commit()
+
+    # Regenerate and apply the default site config
+    from app.services.openresty_service import generate_default_site_config, reload_nginx, test_nginx_config, backup_configs, restore_configs
+    import os
+    from app.core.config import settings as app_settings
+
+    # Backup current configs before writing the new default
+    backup_configs()
+
+    config = await generate_default_site_config(db)
+    config_path = os.path.join(app_settings.nginx_config_path, "_default.conf")
+    with open(config_path, "w") as f:
+        f.write(config)
+
+    # Test before reloading — roll back if invalid
+    test_ok, test_msg = test_nginx_config()
+    if not test_ok:
+        restore_configs()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Default site config is invalid — rolled back. Error: {test_msg}",
+        )
+
+    # Reload nginx to apply
+    success, message = reload_nginx()
+    if not success:
+        return {"message": "Default site saved but nginx reload failed", "detail": message, "behavior": data.behavior}
+
+    return {"message": "Default site updated and applied", "behavior": data.behavior}
 
 @router.get("/{key}", response_model=SettingResponse)
 async def get_setting(
@@ -192,107 +302,3 @@ async def reload_nginx_endpoint(
     await db.commit()
 
     return {"message": "Nginx configuration reloaded successfully"}
-
-
-@router.get("/default-site")
-async def get_default_site(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get current default site behavior settings"""
-    behavior = "congratulations"
-    redirect_url = ""
-
-    result = await db.execute(select(Setting).where(Setting.key == "default_site_behavior"))
-    setting = result.scalar_one_or_none()
-    if setting:
-        behavior = setting.value
-
-    result = await db.execute(select(Setting).where(Setting.key == "default_site_redirect_url"))
-    setting = result.scalar_one_or_none()
-    if setting:
-        redirect_url = setting.value
-
-    return {"behavior": behavior, "redirect_url": redirect_url}
-
-
-@router.put("/default-site")
-async def update_default_site(
-    request: Request,
-    current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Update default site behavior and regenerate nginx config"""
-    from pydantic import BaseModel, field_validator
-
-    class DefaultSiteUpdate(BaseModel):
-        behavior: str
-        redirect_url: str = ""
-
-        @field_validator("behavior")
-        @classmethod
-        def validate_behavior(cls, v: str) -> str:
-            valid = ("congratulations", "redirect", "404", "444")
-            if v not in valid:
-                raise ValueError(f"Behavior must be one of: {', '.join(valid)}")
-            return v
-
-    body = await request.json()
-    data = DefaultSiteUpdate(**body)
-
-    # Validate redirect URL is provided when behavior is redirect
-    if data.behavior == "redirect" and not data.redirect_url:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Redirect URL is required when behavior is 'redirect'",
-        )
-
-    # Save settings
-    for key, value in [("default_site_behavior", data.behavior), ("default_site_redirect_url", data.redirect_url)]:
-        result = await db.execute(select(Setting).where(Setting.key == key))
-        setting = result.scalar_one_or_none()
-        if setting:
-            setting.value = value
-        else:
-            setting = Setting(key=key, value=value)
-            db.add(setting)
-
-    # Audit log
-    db.add(AuditLog(
-        user_id=current_user.id,
-        email=current_user.email,
-        action="default_site_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
-    ))
-    await db.commit()
-
-    # Regenerate and apply the default site config
-    from app.services.openresty_service import generate_default_site_config, reload_nginx, test_nginx_config, backup_configs, restore_configs
-    import os
-    from app.core.config import settings as app_settings
-
-    # Backup current configs before writing the new default
-    backup_configs()
-
-    config = await generate_default_site_config(db)
-    config_path = os.path.join(app_settings.nginx_config_path, "_default.conf")
-    with open(config_path, "w") as f:
-        f.write(config)
-
-    # Test before reloading — roll back if invalid
-    test_ok, test_msg = test_nginx_config()
-    if not test_ok:
-        restore_configs()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Default site config is invalid — rolled back. Error: {test_msg}",
-        )
-
-    # Reload nginx to apply
-    success, message = reload_nginx()
-    if not success:
-        return {"message": "Default site saved but nginx reload failed", "detail": message, "behavior": data.behavior}
-
-    return {"message": "Default site updated and applied", "behavior": data.behavior}

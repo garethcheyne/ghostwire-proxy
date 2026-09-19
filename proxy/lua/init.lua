@@ -290,6 +290,26 @@ function _M.reload_all_rules()
     _M.load_honeypot_traps()
 end
 
+--- Does a host-scoped rule apply to the current request?
+---
+--- The API serialises a global rule's proxy_host_id as JSON null, and cjson
+--- decodes null to cjson.null -- a sentinel userdata, NOT Lua nil. So the
+--- obvious `rule.proxy_host_id == nil` test is false for every global rule,
+--- which silently skipped all of them: the WAF, GeoIP rules, rate limits and
+--- honeypot traps each evaluated nothing at all while appearing configured.
+--- Always route host-scope checks through here.
+function _M.rule_applies_to_host(rule_host_id, current_host_id)
+    if rule_host_id == nil or rule_host_id == cjson.null or rule_host_id == "" then
+        return true  -- global rule: applies everywhere
+    end
+    return rule_host_id == current_host_id
+end
+
+--- Is this a global (all-hosts) rule?
+function _M.is_global_rule(rule_host_id)
+    return rule_host_id == nil or rule_host_id == cjson.null or rule_host_id == ""
+end
+
 --- Get WAF rules from shared dict (returns parsed table or nil).
 function _M.get_waf_rules()
     local json = waf_cache and waf_cache:get("waf_rules")
@@ -356,39 +376,112 @@ function _M.get_honeypot_traps()
     return nil
 end
 
---- Get the real client IP, handling Cloudflare and other proxies.
---- Checks CF-Connecting-IP, X-Forwarded-For (first IP), X-Real-IP, then remote_addr.
---- Note: When nginx real_ip module is properly configured with Cloudflare ranges,
---- ngx.var.remote_addr will already be the real IP. This function provides a
---- belt-and-suspenders approach for Lua modules that run in access phase.
+--- Get the real client IP.
+---
+--- This deliberately reads ONLY ngx.var.remote_addr, and must stay that way.
+---
+--- nginx's real_ip module has already rewritten remote_addr to the true client
+--- address -- but only when the request genuinely arrived from a proxy listed in
+--- set_real_ip_from (Cloudflare's ranges, Imperva's, the Docker network, and
+--- whatever each host's cdn_provider adds). That validation is the entire point
+--- of the module.
+---
+--- Reading CF-Connecting-IP / X-Forwarded-For / X-Real-IP here instead would
+--- trust request headers that any visitor can set. That let a client pick their
+--- own source address, and with it: evade IP blocklists by rotating the header,
+--- bypass GeoIP country rules, dodge rate limits, poison the traffic log and
+--- threat attribution with an innocent third party's IP, and -- by naming any
+--- entry in the trusted-IP list -- skip the WAF, rate limiter and traffic
+--- logging altogether (see the is_trusted_ip callers in waf.lua, rate_limit.lua
+--- and traffic_logger.lua).
+---
+--- If a host sits behind a CDN, teach nginx about it via that host's
+--- cdn_provider setting so real_ip resolves it. Do not re-derive it here.
 function _M.get_client_ip()
-    -- CF-Connecting-IP is set by Cloudflare to the true client IP
-    local cf_ip = ngx.var.http_cf_connecting_ip
-    if cf_ip and cf_ip ~= "" then
-        return cf_ip
-    end
-
-    -- X-Forwarded-For may contain multiple IPs; first is the original client
-    local xff = ngx.var.http_x_forwarded_for
-    if xff then
-        local first_ip = xff:match("^([^,]+)")
-        if first_ip then
-            return first_ip:gsub("^%s*(.-)%s*$", "%1")
-        end
-    end
-
-    -- X-Real-IP set by upstream proxy
-    local real_ip = ngx.var.http_x_real_ip
-    if real_ip and real_ip ~= "" then
-        return real_ip
-    end
-
-    -- Fallback to remote_addr (which should be correct if real_ip module is configured)
     return ngx.var.remote_addr
 end
 
+--- Expand an IPv6 address string (with optional "::" compression) into 8
+--- 16-bit hextets, or nil if it doesn't parse.
+local function ipv6_to_hextets(addr)
+    if addr:find("::", 1, true) then
+        local left, right = addr:match("^(.-)::(.*)$")
+        if not left then return nil end
+        local left_parts, right_parts = {}, {}
+        if left ~= "" then
+            for part in left:gmatch("[^:]+") do
+                local n = tonumber(part, 16)
+                if not n then return nil end
+                left_parts[#left_parts + 1] = n
+            end
+        end
+        if right ~= "" then
+            for part in right:gmatch("[^:]+") do
+                local n = tonumber(part, 16)
+                if not n then return nil end
+                right_parts[#right_parts + 1] = n
+            end
+        end
+        local missing = 8 - #left_parts - #right_parts
+        if missing < 0 then return nil end
+        local hextets = {}
+        for _, v in ipairs(left_parts) do hextets[#hextets + 1] = v end
+        for _ = 1, missing do hextets[#hextets + 1] = 0 end
+        for _, v in ipairs(right_parts) do hextets[#hextets + 1] = v end
+        if #hextets ~= 8 then return nil end
+        return hextets
+    else
+        local hextets = {}
+        for part in addr:gmatch("[^:]+") do
+            local n = tonumber(part, 16)
+            if not n then return nil end
+            hextets[#hextets + 1] = n
+        end
+        if #hextets ~= 8 then return nil end
+        return hextets
+    end
+end
+
+local function band16(a, b)
+    local result, bitval = 0, 1
+    while a > 0 and b > 0 do
+        if a % 2 == 1 and b % 2 == 1 then result = result + bitval end
+        bitval = bitval * 2
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+    end
+    return result
+end
+
+--- Is `ip` (IPv6) within `cidr_ip`/`mask_bits`? Compares whole hextets up to
+--- mask_bits, then masks the one hextet the boundary falls inside (Lua/LuaJIT
+--- numbers can't hold 128 bits, so this is done 16 bits at a time rather than
+--- as one big integer, same idea as the IPv4 path below just chunked).
+local function ipv6_in_cidr(ip, cidr_ip, mask_bits)
+    local ip_hex = ipv6_to_hextets(ip)
+    local cidr_hex = ipv6_to_hextets(cidr_ip)
+    if not ip_hex or not cidr_hex then return false end
+
+    local full_groups = math.floor(mask_bits / 16)
+    local remaining_bits = mask_bits % 16
+
+    for i = 1, full_groups do
+        if ip_hex[i] ~= cidr_hex[i] then return false end
+    end
+
+    if remaining_bits > 0 and full_groups < 8 then
+        local shift = 16 - remaining_bits
+        local mask = math.floor(65535 / (2 ^ shift)) * (2 ^ shift)
+        if band16(ip_hex[full_groups + 1], mask) ~= band16(cidr_hex[full_groups + 1], mask) then
+            return false
+        end
+    end
+
+    return true
+end
+
 --- Check if an IP is in the trusted IPs list.
---- Supports exact IP match and CIDR notation.
+--- Supports exact IP match (v4 and v6) and CIDR notation (v4 and v6).
 function _M.is_trusted_ip(ip)
     local trusted = _M.get_trusted_ips()
     if not trusted or #trusted == 0 then
@@ -401,6 +494,14 @@ function _M.is_trusted_ip(ip)
         -- CIDR match
         if string.find(entry, "/", 1, true) then
             local ok, cidr_match = pcall(function()
+                if string.find(entry, ":", 1, true) then
+                    -- IPv6 CIDR, e.g. 2001:db8::/32
+                    local cidr_ip, cidr_bits = entry:match("^(.+)/(%d+)$")
+                    if not cidr_ip or not cidr_bits then return false end
+                    return ipv6_in_cidr(ip, cidr_ip, tonumber(cidr_bits))
+                end
+
+                -- IPv4 CIDR, e.g. 10.0.0.0/8
                 local cidr_ip, cidr_bits = entry:match("^([%d%.]+)/(%d+)$")
                 if not cidr_ip or not cidr_bits then return false end
                 cidr_bits = tonumber(cidr_bits)

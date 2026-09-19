@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -156,7 +157,7 @@ export default function AccessListsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Access Lists</h1>
           <p className="text-muted-foreground">
@@ -285,9 +286,13 @@ export default function AccessListsPage() {
       </div>
 
       {/* Create/Edit Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        size="lg"
+        srTitle="Access lists — Create"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingList ? 'Edit Access List' : 'Add Access List'}
@@ -337,7 +342,7 @@ export default function AccessListsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Entries</label>
-                <div className="flex gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-3">
                   <input
                     type="text"
                     value={newEntryIp}
@@ -415,9 +420,8 @@ export default function AccessListsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Click outside to close dropdown */}
       {activeDropdown && (

@@ -24,6 +24,9 @@ const nextConfig: NextConfig = {
   generateBuildId: () => getBuildId(),
   reactStrictMode: true,
   poweredByHeader: false,
+  // Dev-server only (ignored by `next build`): allow `npm run dev` to be reached
+  // over the LAN rather than just localhost.
+  allowedDevOrigins: ['192.168.0.13'],
   images: {
     remotePatterns: [
       {
@@ -55,6 +58,9 @@ const nextConfig: NextConfig = {
         { source: '/api/firewalls', destination: `${backendUrl}/api/firewalls` },
         { source: '/api/users', destination: `${backendUrl}/api/users/` },
         { source: '/api/backups', destination: `${backendUrl}/api/backups/` },
+        { source: '/api/known-ips', destination: `${backendUrl}/api/known-ips/` },
+        { source: '/api/settings', destination: `${backendUrl}/api/settings/` },
+        { source: '/api/search', destination: `${backendUrl}/api/search/` },
         // WAF and System endpoints don't use trailing slash routes
         { source: '/api/waf/rules', destination: `${backendUrl}/api/waf/rules` },
         { source: '/api/waf/rules/sets', destination: `${backendUrl}/api/waf/rules/sets` },
@@ -62,6 +68,11 @@ const nextConfig: NextConfig = {
         { source: '/api/system/metrics', destination: `${backendUrl}/api/system/metrics` },
         { source: '/api/system/throughput', destination: `${backendUrl}/api/system/throughput` },
         { source: '/api/system/containers', destination: `${backendUrl}/api/system/containers` },
+        // The API serves /version at its root rather than under /api, so the
+        // generic /api/:path* fallback never reached it. The sidebar and the
+        // About page both call it and both swallow the error, so the version
+        // just silently rendered blank while every page logged a 404.
+        { source: '/version', destination: `${backendUrl}/version` },
       ],
       fallback: [
         // Generic fallback for API routes not handled by Next.js route handlers
@@ -86,7 +97,7 @@ const nextConfig: NextConfig = {
                 ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
                 : "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://*.basemaps.cartocdn.com",
+              "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
               "font-src 'self' data:",
               "connect-src 'self' ws: wss: https://*.basemaps.cartocdn.com",
               "worker-src 'self' blob:",

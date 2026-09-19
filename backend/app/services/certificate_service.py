@@ -14,6 +14,20 @@ from app.core.security import encrypt_data
 from app.models.certificate import Certificate
 
 
+def _parse_certificate_expiry(certificate_pem: str) -> datetime:
+    """Read the real notAfter date out of a PEM certificate.
+
+    Used instead of assuming "Let's Encrypt = 90 days from now", which is
+    wrong whenever `certbot renew` is a no-op (cert wasn't actually due yet,
+    so the current on-disk cert - possibly issued weeks ago - gets re-read
+    unchanged) but the caller still stamps a fresh 90-day expiry on it.
+    """
+    from cryptography import x509
+
+    cert = x509.load_pem_x509_certificate(certificate_pem.encode())
+    return cert.not_valid_after_utc
+
+
 async def request_letsencrypt_certificate(
     db: AsyncSession,
     cert_id: str,
@@ -92,10 +106,7 @@ async def request_letsencrypt_certificate(
         cert.error_message = None
         cert.last_renewed_at = datetime.now(timezone.utc)
 
-        # Parse expiry from certificate (simplified - should use cryptography library)
-        # For now, Let's Encrypt certs are valid for 90 days
-        from datetime import timedelta
-        cert.expires_at = datetime.now(timezone.utc) + timedelta(days=90)
+        cert.expires_at = _parse_certificate_expiry(certificate_content)
 
         await db.commit()
 
@@ -178,9 +189,7 @@ async def renew_certificate(
         cert.status = "valid"
         cert.error_message = None
         cert.last_renewed_at = datetime.now(timezone.utc)
-
-        from datetime import timedelta
-        cert.expires_at = datetime.now(timezone.utc) + timedelta(days=90)
+        cert.expires_at = _parse_certificate_expiry(certificate_content)
 
         await db.commit()
 
@@ -191,6 +200,36 @@ async def renew_certificate(
         cert.error_message = str(e)
         await db.commit()
         return False, str(e)
+
+
+async def renew_and_deploy_certificate(cert_id: str) -> tuple[bool, str]:
+    """
+    Renew a Let's Encrypt certificate and, on success, deploy it: write the
+    renewed cert/key to the on-disk certificate store nginx reads from,
+    regenerate the nginx vhost configs, and reload nginx.
+
+    This is the single place that should be used to renew a certificate —
+    both the manual "Renew" button and the automatic renewal loop in
+    main.py call this, so the deploy step (which was previously only ever
+    triggered from the API route as a one-off background task) always runs.
+    Opens its own DB session so it's safe to call from a background task or
+    a scheduler loop that doesn't already have one.
+    """
+    from app.core.database import async_session_maker
+    from app.services.openresty_service import generate_all_configs, write_certificate_files, reload_nginx
+
+    async with async_session_maker() as db:
+        success, message = await renew_certificate(db, cert_id)
+
+        if success:
+            result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
+            cert = result.scalar_one_or_none()
+            if cert and cert.certificate:
+                await write_certificate_files(cert)
+                await generate_all_configs(db)
+                reload_nginx()
+
+        return success, message
 
 
 async def check_expiring_certificates(

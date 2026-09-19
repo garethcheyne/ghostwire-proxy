@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Index
+from sqlalchemy import Column, String, DateTime, Integer, Text, Boolean, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
@@ -45,7 +45,15 @@ class TrafficLog(Base):
     country_name = Column(String(100), nullable=True)
 
     # Auth
-    auth_user = Column(String(255), nullable=True)  # User from auth wall
+    auth_user = Column(String(255), nullable=True)
+
+    # Client classification. NULL means "not classified" (rows written before
+    # this existed), which is deliberately distinct from False.
+    is_bot = Column(Boolean, nullable=True, index=True)
+    # Long-lived connections (websocket upgrades, SSE streams). Their duration
+    # measures how long someone stayed connected, not how slow the server was,
+    # so they are excluded from latency statistics.
+    is_streaming = Column(Boolean, nullable=True)  # User from auth wall
 
     # Relationships
     proxy_host = relationship("ProxyHost", back_populates="traffic_logs")

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -259,7 +260,7 @@ export default function DnsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">DNS Management</h1>
           <p className="text-muted-foreground">
@@ -392,7 +393,7 @@ export default function DnsPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-border">
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                             Type
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -401,10 +402,10 @@ export default function DnsPage() {
                           <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                             Content
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                             Proxy
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                             Linked
                           </th>
                           <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -415,7 +416,7 @@ export default function DnsPage() {
                       <tbody className="divide-y divide-border">
                         {records.map((record) => (
                           <tr key={record.id} className="hover:bg-muted/50">
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 hidden md:table-cell">
                               <span
                                 className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getRecordTypeColor(
                                   record.type
@@ -430,12 +431,12 @@ export default function DnsPage() {
                             <td className="px-4 py-3 text-sm font-mono max-w-xs truncate" data-private="address">
                               {record.content}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 hidden md:table-cell">
                               <span title={record.proxied ? "Proxied" : "DNS Only"}>
                                 <Cloud className={`h-4 w-4 ${record.proxied ? 'text-orange-500' : 'text-gray-400'}`} />
                               </span>
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 hidden md:table-cell">
                               {record.linked_proxy_host_id ? (
                                 <span title="Linked to proxy host">
                                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -478,9 +479,13 @@ export default function DnsPage() {
       )}
 
       {/* Add Provider Dialog */}
-      {showProviderDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showProviderDialog}
+        onOpenChange={setShowProviderDialog}
+        size="md"
+        srTitle="Dns — Provider"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">Add DNS Provider</h2>
             </div>
@@ -561,14 +566,17 @@ export default function DnsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
 
       {/* Add/Edit Record Dialog */}
-      {showRecordDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+      <Modal
+        open={showRecordDialog}
+        onOpenChange={setShowRecordDialog}
+        size="md"
+        srTitle="Dns — Record"
+      >
+        <ModalBody className="p-0">
             <div className="border-b border-border p-6">
               <h2 className="text-xl font-semibold">
                 {editingRecord ? 'Edit DNS Record' : 'Add DNS Record'}
@@ -663,7 +671,7 @@ export default function DnsPage() {
                       onChange={(e) => setRecordProxied(e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-orange-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                    <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-orange-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-background after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                   </label>
                 </div>
               )}
@@ -692,9 +700,8 @@ export default function DnsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </ModalBody>
+      </Modal>
     </div>
   )
 }

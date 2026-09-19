@@ -69,7 +69,7 @@ export interface ProxyHost {
   block_exploits: boolean
   access_list_id: string | null
   auth_wall_id: string | null
-  // Location-level advanced config
+  // Advanced config rendered inside the default ("/") location block
   advanced_config: string | null
   // Server-level advanced config
   server_advanced_config: string | null
@@ -78,6 +78,12 @@ export interface ProxyHost {
   proxy_buffering: boolean
   proxy_buffer_size: string
   proxy_buffers: string
+  // Front-facing CDN/WAF, if any: decides which header carries the real client IP
+  cdn_provider: 'none' | 'cloudflare' | 'imperva' | 'generic'
+  // Timeouts for the default ("/") location
+  proxy_connect_timeout: number
+  proxy_send_timeout: number
+  proxy_read_timeout: number
   // Caching
   cache_enabled: boolean
   cache_valid: string | null
