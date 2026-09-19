@@ -324,10 +324,17 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             <label className="block text-sm font-medium">Verification code</label>
+            {/* No autoComplete="one-time-code" here: password managers read that
+                as "offer to fill me" and float their inline menu over the field.
+                The code comes from an authenticator app (or is a backup code),
+                so there is nothing for the browser itself to fill. */}
             <input
               type="text"
               inputMode="numeric"
-              autoComplete="one-time-code"
+              autoComplete="off"
+              data-bwignore="true"
+              data-1p-ignore
+              data-lpignore="true"
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value)}
               className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -421,10 +428,15 @@ export default function LoginPage() {
               <p className="text-sm font-medium">
                 3. Enter the code from your app to finish
               </p>
+              {/* Same as the verify step: no one-time-code hint, or the
+                  password manager floats its fill menu over the field. */}
               <input
                 type="text"
                 inputMode="numeric"
-                autoComplete="one-time-code"
+                autoComplete="off"
+                data-bwignore="true"
+                data-1p-ignore
+                data-lpignore="true"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
                 className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
