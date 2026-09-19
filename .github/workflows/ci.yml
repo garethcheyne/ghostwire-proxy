@@ -169,7 +169,8 @@ jobs:
         if: steps.version_check.outputs.changed == 'true'
         run: |
           TAG="v${{ steps.version_check.outputs.version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          # The checkout is shallow and has no tags, so ask GitHub (releases usually push the tag).
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping"
           else
             git config user.name "github-actions[bot]"
