@@ -50,7 +50,7 @@ export default function AuthLayout({
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#050a0f] p-12 flex-col justify-between">
 
         {/* Dot grid background */}
-        <div className="absolute inset-0 bg-[radial-gradient(rgba(0,220,180,0.08)_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(rgba(0,220,180,0.08)_1px,transparent_1px)] bg-size-[28px_28px]" />
 
         {/* Corner glow accents */}
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-cyan-500/8 rounded-full blur-3xl pointer-events-none" />
@@ -59,12 +59,12 @@ export default function AuthLayout({
 
         {/* Animated scan line */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="scanline absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+          <div className="scanline absolute left-0 right-0 h-px bg-linear-to-r from-transparent via-cyan-400/40 to-transparent" />
         </div>
 
         {/* Top border glow */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
+        <div className="absolute top-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-cyan-500/50 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-violet-500/30 to-transparent" />
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-4 flicker">
@@ -99,7 +99,7 @@ export default function AuthLayout({
             <h1 className="text-5xl font-black text-white leading-[1.1] tracking-tight mb-5">
               Secure your<br />
               <span className="relative">
-                <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-400 bg-clip-text text-transparent">services</span>
+                <span className="bg-linear-to-r from-cyan-400 via-teal-300 to-blue-400 bg-clip-text text-transparent">services</span>
               </span>
               <br />
               <span className="text-3xl font-light text-white/50">with confidence.</span>
@@ -110,9 +110,9 @@ export default function AuthLayout({
           </div>
 
           {/* Terminal-style feature list */}
-          <div className="font-mono text-sm space-y-0 border border-white/5 rounded-lg overflow-hidden bg-white/[0.02] backdrop-blur-sm">
+          <div className="font-mono text-sm space-y-0 border border-white/5 rounded-lg overflow-hidden bg-white/2 backdrop-blur-xs">
             {/* Terminal header bar */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-white/[0.03]">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-white/3">
               <div className="h-2.5 w-2.5 rounded-full bg-red-500/60" />
               <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
               <div className="h-2.5 w-2.5 rounded-full bg-green-500/60" />
@@ -183,15 +183,15 @@ export default function AuthLayout({
 
           {/* Stats strip */}
           <div className="grid grid-cols-3 gap-0 border border-white/5 rounded-lg overflow-hidden">
-            <div className="px-5 py-4 bg-white/[0.02] border-r border-white/5 text-center">
+            <div className="px-5 py-4 bg-white/2 border-r border-white/5 text-center">
               <div className="text-2xl font-black text-cyan-400 font-mono tracking-tight">99.9%</div>
               <div className="text-[10px] text-white/25 mt-1 uppercase tracking-widest font-mono">Uptime</div>
             </div>
-            <div className="px-5 py-4 bg-white/[0.02] border-r border-white/5 text-center">
+            <div className="px-5 py-4 bg-white/2 border-r border-white/5 text-center">
               <div className="text-2xl font-black text-violet-400 font-mono tracking-tight">SSL</div>
               <div className="text-[10px] text-white/25 mt-1 uppercase tracking-widest font-mono">Auto-Renew</div>
             </div>
-            <div className="px-5 py-4 bg-white/[0.02] text-center">
+            <div className="px-5 py-4 bg-white/2 text-center">
               <div className="text-2xl font-black text-green-400 font-mono tracking-tight">&lt;1ms</div>
               <div className="text-[10px] text-white/25 mt-1 uppercase tracking-widest font-mono">Latency</div>
             </div>

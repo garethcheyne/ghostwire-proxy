@@ -331,7 +331,7 @@ export default function FirewallsPage() {
             onClick={() => setActiveTab(tab)}
             className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
               activeTab === tab
-                ? 'bg-background shadow-sm'
+                ? 'bg-background shadow-xs'
                 : 'hover:bg-background/50 text-muted-foreground'
             }`}
           >
@@ -557,7 +557,7 @@ export default function FirewallsPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="Main Router"
                   required
                 />
@@ -568,7 +568,7 @@ export default function FirewallsPage() {
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value="unifi">Ubiquiti UniFi</option>
                   <option value="routeros">MikroTik RouterOS (untested)</option>
@@ -584,7 +584,7 @@ export default function FirewallsPage() {
                     type="text"
                     value={formHost}
                     onChange={(e) => setFormHost(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="192.168.1.1"
                     required
                   />
@@ -595,7 +595,7 @@ export default function FirewallsPage() {
                     type="number"
                     value={formPort}
                     onChange={(e) => setFormPort(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder={
                       formType === 'routeros' ? '8728' :
                       formType === 'unifi' ? '443' :
@@ -615,7 +615,7 @@ export default function FirewallsPage() {
                       type="text"
                       value={formUsername}
                       onChange={(e) => setFormUsername(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder="admin"
                     />
                   </div>
@@ -625,7 +625,7 @@ export default function FirewallsPage() {
                       type="password"
                       value={formPassword}
                       onChange={(e) => setFormPassword(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder={editingConnector ? '(unchanged)' : ''}
                     />
                   </div>
@@ -641,7 +641,7 @@ export default function FirewallsPage() {
                       type="password"
                       value={formApiKey}
                       onChange={(e) => setFormApiKey(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder={editingConnector ? '(unchanged)' : ''}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
@@ -654,7 +654,7 @@ export default function FirewallsPage() {
                       type="text"
                       value={formSiteId}
                       onChange={(e) => setFormSiteId(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder="Leave empty to use default site"
                     />
                   </div>
@@ -669,7 +669,7 @@ export default function FirewallsPage() {
                     type="password"
                     value={formApiKey}
                     onChange={(e) => setFormApiKey(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder={editingConnector ? '(unchanged)' : ''}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -687,7 +687,7 @@ export default function FirewallsPage() {
                       type="password"
                       value={formApiKey}
                       onChange={(e) => setFormApiKey(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder={editingConnector ? '(unchanged)' : ''}
                     />
                   </div>
@@ -697,7 +697,7 @@ export default function FirewallsPage() {
                       type="password"
                       value={formPassword}
                       onChange={(e) => setFormPassword(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder={editingConnector ? '(unchanged)' : ''}
                     />
                   </div>
@@ -714,7 +714,7 @@ export default function FirewallsPage() {
                   type="text"
                   value={formAddressList}
                   onChange={(e) => setFormAddressList(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder={formType === 'unifi' ? 'Ghostwire Block' : 'ghostwire-blocked'}
                 />
                 <p className="text-xs text-muted-foreground mt-1">

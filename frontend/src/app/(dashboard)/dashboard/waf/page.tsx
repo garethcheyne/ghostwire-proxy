@@ -413,7 +413,7 @@ export default function WafPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="SQL Injection - UNION SELECT"
                   required
                 />
@@ -436,7 +436,7 @@ export default function WafPage() {
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     {categories.map((c) => (
                       <option key={c} value={c}>{c.replace('_', ' ')}</option>
@@ -448,7 +448,7 @@ export default function WafPage() {
                   <select
                     value={formSeverity}
                     onChange={(e) => setFormSeverity(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -461,7 +461,7 @@ export default function WafPage() {
                   <select
                     value={formAction}
                     onChange={(e) => setFormAction(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="log">Log only</option>
                     <option value="block">Block request</option>
@@ -476,7 +476,7 @@ export default function WafPage() {
                   type="text"
                   value={formPattern}
                   onChange={(e) => setFormPattern(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="union(\s)+select"
                   required
                 />
@@ -498,7 +498,7 @@ export default function WafPage() {
                 <button
                   type="button"
                   onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <span className="truncate">
                     {formHostIds.length === 0

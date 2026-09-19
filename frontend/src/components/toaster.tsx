@@ -34,7 +34,7 @@ export function Toaster() {
         // On phones the bottom tab bar owns the bottom of the screen, so toasts
         // sit above it and span the width instead of being pinned to a corner
         // that a 360px screen cannot fit.
-        'fixed z-[100] flex flex-col gap-2 ' +
+        'fixed z-100 flex flex-col gap-2 ' +
         'left-4 right-4 bottom-[calc(64px+env(safe-area-inset-bottom)+1rem)] ' +
         'md:left-auto md:right-4 md:bottom-4 md:max-w-sm'
       }>
@@ -43,7 +43,7 @@ export function Toaster() {
         return (
           <div
             key={t.id}
-            className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 fade-in duration-200 ${styles[t.type]}`}
+            className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg backdrop-blur-xs animate-in slide-in-from-bottom-2 fade-in duration-200 ${styles[t.type]}`}
           >
             <Icon className="h-4 w-4 mt-0.5 shrink-0" />
             <p className="text-sm flex-1">{t.message}</p>

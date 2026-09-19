@@ -362,7 +362,7 @@ export default function CertificatesPage() {
                             handleAddLeDomain()
                           }
                         }}
-                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
                       <button
@@ -399,7 +399,7 @@ export default function CertificatesPage() {
                       type="email"
                       value={leEmail}
                       onChange={(e) => setLeEmail(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder="admin@example.com"
                       required
                     />
@@ -418,7 +418,7 @@ export default function CertificatesPage() {
                       type="text"
                       value={uploadName}
                       onChange={(e) => setUploadName(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder="My Certificate"
                       required
                     />
@@ -438,7 +438,7 @@ export default function CertificatesPage() {
                             handleAddUploadDomain()
                           }
                         }}
-                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
                       <button

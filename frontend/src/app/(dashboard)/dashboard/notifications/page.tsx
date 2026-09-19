@@ -349,7 +349,7 @@ export default function NotificationsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'bg-background shadow-sm'
+                ? 'bg-background shadow-xs'
                 : 'hover:bg-background/50 text-muted-foreground'
             }`}
           >
@@ -388,7 +388,7 @@ export default function NotificationsPage() {
                       value={severity}
                       onChange={(e) => updateSeverity(nt.key, e.target.value)}
                       disabled={saving}
-                      className="px-2 py-1 rounded-md border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                      className="px-2 py-1 rounded-md border border-input bg-background text-xs focus:outline-hidden focus:ring-2 focus:ring-primary disabled:opacity-50"
                     >
                       {severityLevels.map((s) => (
                         <option key={s.value} value={s.value}>{s.label}</option>
@@ -533,7 +533,7 @@ export default function NotificationsPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="e.g. Security Alerts Slack"
                   required
                 />
@@ -544,7 +544,7 @@ export default function NotificationsPage() {
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value="webhook">Webhook</option>
                   <option value="email">Email</option>

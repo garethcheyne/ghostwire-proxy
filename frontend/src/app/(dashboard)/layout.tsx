@@ -80,7 +80,7 @@ export default function DashboardLayout({
           overflow-hidden that pushes the bottom of the shell under the URL bar
           and makes it unreachable. dvh tracks the visible height instead;
           h-screen stays as the fallback for browsers without dvh. */}
-      <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-background">
+      <div className="flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background">
         {/* Desktop Sidebar - hidden on mobile */}
         <div className="hidden md:block">
           <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />

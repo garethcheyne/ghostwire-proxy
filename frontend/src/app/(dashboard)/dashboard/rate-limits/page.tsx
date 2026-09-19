@@ -356,7 +356,7 @@ export default function RateLimitsPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="API rate limit"
                   required
                 />
@@ -369,7 +369,7 @@ export default function RateLimitsPage() {
                     type="number"
                     value={formRps}
                     onChange={(e) => setFormRps(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="—"
                     min="1"
                   />
@@ -380,7 +380,7 @@ export default function RateLimitsPage() {
                     type="number"
                     value={formRpm}
                     onChange={(e) => setFormRpm(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="—"
                     min="1"
                   />
@@ -391,7 +391,7 @@ export default function RateLimitsPage() {
                     type="number"
                     value={formRph}
                     onChange={(e) => setFormRph(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="—"
                     min="1"
                   />
@@ -405,7 +405,7 @@ export default function RateLimitsPage() {
                     type="number"
                     value={formBurst}
                     onChange={(e) => setFormBurst(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     min="1"
                     required
                   />
@@ -415,7 +415,7 @@ export default function RateLimitsPage() {
                   <select
                     value={formAction}
                     onChange={(e) => setFormAction(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="reject">Reject (429)</option>
                     <option value="delay">Delay</option>
@@ -440,7 +440,7 @@ export default function RateLimitsPage() {
                 <button
                   type="button"
                   onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <span className="truncate">
                     {formHostIds.length === 0

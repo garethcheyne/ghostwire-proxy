@@ -168,7 +168,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
               // A new term changes the result set; page 2 of the old one is meaningless.
               setPage(1)
             }}
-            className="flex-1 px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+            className="flex-1 px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary text-sm"
             placeholder="Search URI or IP..."
           />
         </div>

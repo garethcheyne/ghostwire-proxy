@@ -418,7 +418,7 @@ export default function SettingsPage() {
                 value={defaultSite.redirect_url}
                 onChange={(e) => setDefaultSite({ ...defaultSite, redirect_url: e.target.value })}
                 placeholder="https://example.com"
-                className="w-full max-w-md px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full max-w-md px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </div>
           )}
@@ -470,7 +470,7 @@ export default function SettingsPage() {
               onChange={(e) =>
                 setSettings({ ...settings, default_ssl_provider: e.target.value })
               }
-              className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
             >
               <option value="letsencrypt">Let's Encrypt</option>
               <option value="custom">Custom Certificate</option>
@@ -513,7 +513,7 @@ export default function SettingsPage() {
                   traffic_log_retention_days: parseInt(e.target.value) || 30,
                 })
               }
-              className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
               min={1}
               max={365}
             />
@@ -595,7 +595,7 @@ export default function SettingsPage() {
                     rate_limit_requests_per_second: parseInt(e.target.value) || 100,
                   })
                 }
-                className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full max-w-xs px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 min={1}
               />
             </div>
@@ -652,7 +652,7 @@ export default function SettingsPage() {
                   value={abuseIpDbKey}
                   onChange={(e) => setAbuseIpDbKey(e.target.value)}
                   placeholder={abuseIpDbKeyHasValue ? '••••••••••••••••••••••••' : 'Paste your AbuseIPDB API key'}
-                  className="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                 />
                 <button
                   type="button"
@@ -732,7 +732,7 @@ export default function SettingsPage() {
               onChange={(e) => setNewTrustedIp(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addTrustedIp()}
               placeholder="e.g. 203.86.201.144, 10.0.0.0/8, or 2001:db8::1"
-              className="flex-1 max-w-sm px-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 max-w-sm px-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
             <button
               onClick={addTrustedIp}

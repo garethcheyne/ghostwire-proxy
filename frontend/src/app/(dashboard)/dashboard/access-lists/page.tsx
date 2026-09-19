@@ -307,7 +307,7 @@ export default function AccessListsPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="My Access List"
                   required
                 />
@@ -348,13 +348,13 @@ export default function AccessListsPage() {
                     type="text"
                     value={newEntryIp}
                     onChange={(e) => setNewEntryIp(e.target.value)}
-                    className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="192.168.1.0/24 or single IP"
                   />
                   <select
                     value={newEntryAction}
                     onChange={(e) => setNewEntryAction(e.target.value as 'allow' | 'deny')}
-                    className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="allow">Allow</option>
                     <option value="deny">Deny</option>

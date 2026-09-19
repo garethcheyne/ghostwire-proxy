@@ -500,7 +500,7 @@ export default function DnsPage() {
                   type="text"
                   value={providerName}
                   onChange={(e) => setProviderName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="My Cloudflare Account"
                   required
                 />
@@ -511,7 +511,7 @@ export default function DnsPage() {
                 <select
                   value={providerType}
                   onChange={(e) => setProviderType(e.target.value as any)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value="cloudflare">Cloudflare</option>
                   <option value="godaddy" disabled>GoDaddy (coming soon)</option>
@@ -526,7 +526,7 @@ export default function DnsPage() {
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                       placeholder="Your Cloudflare API Token"
                       required
                     />
@@ -592,7 +592,7 @@ export default function DnsPage() {
                 <select
                   value={recordType}
                   onChange={(e) => setRecordType(e.target.value as any)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value="A">A</option>
                   <option value="AAAA">AAAA</option>
@@ -609,7 +609,7 @@ export default function DnsPage() {
                     type="text"
                     value={recordName}
                     onChange={(e) => setRecordName(e.target.value)}
-                    className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                     placeholder="subdomain"
                     required
                   />
@@ -632,7 +632,7 @@ export default function DnsPage() {
                   type="text"
                   value={recordContent}
                   onChange={(e) => setRecordContent(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder={
                     recordType === 'A'
                       ? '192.168.1.1'
@@ -649,7 +649,7 @@ export default function DnsPage() {
                 <select
                   value={recordTtl}
                   onChange={(e) => setRecordTtl(parseInt(e.target.value))}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value={1}>Auto</option>
                   <option value={60}>1 minute</option>

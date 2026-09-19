@@ -878,7 +878,7 @@ export default function ProxyHostsPage() {
                             handleAddDomain()
                           }
                         }}
-                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
                       <button

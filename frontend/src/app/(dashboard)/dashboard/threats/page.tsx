@@ -388,7 +388,7 @@ export default function ThreatsPage() {
               onClick={() => setActiveTab(tab.key as typeof activeTab)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-background shadow-sm'
+                  ? 'bg-background shadow-xs'
                   : 'hover:bg-background/50 text-muted-foreground'
               }`}
             >

@@ -60,8 +60,8 @@ export function MobileTabBar() {
       aria-label="Primary"
       className={cn(
         'md:hidden fixed inset-x-0 bottom-0 z-40',
-        'border-t border-border bg-background/95 backdrop-blur',
-        'supports-[backdrop-filter]:bg-background/80',
+        'border-t border-border bg-background/95 backdrop-blur-sm',
+        'supports-backdrop-filter:bg-background/80',
         // Clears the iPhone home indicator.
         'pb-[env(safe-area-inset-bottom)]',
       )}

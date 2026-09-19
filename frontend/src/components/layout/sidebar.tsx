@@ -123,7 +123,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     <TooltipProvider delayDuration={0} key={isCollapsed ? 'collapsed' : 'expanded'}>
       <div
         className={cn(
-          'relative flex h-full flex-col border-r border-border bg-card/95 backdrop-blur transition-all duration-300',
+          'relative flex h-full flex-col border-r border-border bg-card/95 backdrop-blur-sm transition-all duration-300',
           isCollapsed ? 'w-16' : 'w-64'
         )}
       >

@@ -247,7 +247,7 @@ export default function ContainersPage() {
                 value={policy.cron}
                 onChange={(e) => setPolicy({ ...policy, cron: e.target.value })}
                 onBlur={(e) => savePolicy({ cron: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground">
                 Default <code>0 4 * * 0</code> — Sundays at 04:00 UTC.
@@ -263,7 +263,7 @@ export default function ContainersPage() {
                 }
                 onBlur={(e) => savePolicy({ excluded: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
                 placeholder="container-name, another-container"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground">
                 Always excluded: {policy.always_excluded.join(', ')} — swapping libraries under a

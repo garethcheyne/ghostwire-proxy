@@ -85,7 +85,7 @@ export default function AboutPage() {
           onClick={() => setActiveTab('about')}
           className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'about'
-              ? 'bg-background shadow-sm'
+              ? 'bg-background shadow-xs'
               : 'hover:bg-background/50 text-muted-foreground'
           }`}
         >
@@ -97,7 +97,7 @@ export default function AboutPage() {
           onClick={() => setActiveTab('license')}
           className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'license'
-              ? 'bg-background shadow-sm'
+              ? 'bg-background shadow-xs'
               : 'hover:bg-background/50 text-muted-foreground'
           }`}
         >
@@ -109,7 +109,7 @@ export default function AboutPage() {
           onClick={() => setActiveTab('updates')}
           className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'updates'
-              ? 'bg-background shadow-sm'
+              ? 'bg-background shadow-xs'
               : 'hover:bg-background/50 text-muted-foreground'
           }`}
         >

@@ -379,7 +379,7 @@ export default function GeoIPPage() {
             onClick={() => setActiveTab(tab)}
             className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
               activeTab === tab
-                ? 'bg-background shadow-sm'
+                ? 'bg-background shadow-xs'
                 : 'hover:bg-background/50 text-muted-foreground'
             }`}
           >
@@ -478,7 +478,7 @@ export default function GeoIPPage() {
               type="text"
               value={lookupIp}
               onChange={(e) => setLookupIp(e.target.value)}
-              className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+              className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary font-mono"
               placeholder="Enter IP address (e.g., 8.8.8.8)"
             />
             <button
@@ -533,7 +533,7 @@ export default function GeoIPPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   placeholder="Block high-risk countries"
                   required
                 />
@@ -545,7 +545,7 @@ export default function GeoIPPage() {
                   <select
                     value={formMode}
                     onChange={(e) => setFormMode(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="blocklist">Blocklist (deny listed)</option>
                     <option value="allowlist">Allowlist (only allow listed)</option>
@@ -556,7 +556,7 @@ export default function GeoIPPage() {
                   <select
                     value={formAction}
                     onChange={(e) => setFormAction(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="block">Block</option>
                     <option value="log">Log only</option>
@@ -577,7 +577,7 @@ export default function GeoIPPage() {
                         type="text"
                         value={countrySearch}
                         onChange={(e) => setCountrySearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full pl-8 pr-3 py-1.5 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="Search countries..."
                       />
                     </div>
@@ -640,7 +640,7 @@ export default function GeoIPPage() {
                 <button
                   type="button"
                   onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <span className="truncate">
                     {formHostIds.length === 0

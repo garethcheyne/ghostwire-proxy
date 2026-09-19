@@ -31,7 +31,7 @@ export default function AccessControlPage() {
           onClick={() => setActiveTab('auth-walls')}
           className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'auth-walls'
-              ? 'bg-background shadow-sm'
+              ? 'bg-background shadow-xs'
               : 'hover:bg-background/50 text-muted-foreground'
           }`}
         >
@@ -44,7 +44,7 @@ export default function AccessControlPage() {
           onClick={() => setActiveTab('ip-lists')}
           className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'ip-lists'
-              ? 'bg-background shadow-sm'
+              ? 'bg-background shadow-xs'
               : 'hover:bg-background/50 text-muted-foreground'
           }`}
         >

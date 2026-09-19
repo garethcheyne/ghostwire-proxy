@@ -433,7 +433,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
               >
                 {PERIODS.map((p) => (
                   <option key={p.value} value={p.value}>
@@ -731,7 +731,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
             value={recipients}
             onChange={(e) => setRecipients(e.target.value)}
             placeholder="owner@example.com, ops@example.com"
-            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
           />
           {emailNotice && <p className="text-sm">{emailNotice}</p>}
         </ModalBody>

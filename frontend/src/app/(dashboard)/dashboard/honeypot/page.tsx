@@ -384,7 +384,7 @@ export default function HoneypotPage() {
             onClick={() => setActiveTab(tab)}
             className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-md transition-colors ${
               activeTab === tab
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >

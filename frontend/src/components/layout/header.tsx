@@ -213,7 +213,7 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
 
   return (
     <TooltipProvider>
-      <header className="sticky top-0 z-40 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 px-3 sm:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-40 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 px-3 sm:px-6 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
         {/* Left side - Mobile menu + Page title or search */}
         <div className="flex items-center gap-2 sm:gap-4">
           {/* Mobile hamburger menu */}
@@ -243,7 +243,7 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 onFocus={() => { if (searchResults.length > 0) setSearchOpen(true) }}
-                className="h-9 w-48 xl:w-72 rounded-md border bg-muted/50 pl-9 pr-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+                className="h-9 w-48 xl:w-72 rounded-md border bg-muted/50 pl-9 pr-4 text-sm outline-hidden placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
               />
               {searchOpen && searchResults.length > 0 && (
                 <div className="absolute top-full left-0 mt-1 w-80 xl:w-96 rounded-md border bg-popover shadow-lg z-50 max-h-80 overflow-y-auto">

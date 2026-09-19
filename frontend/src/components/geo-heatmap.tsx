@@ -284,7 +284,7 @@ export default function GeoHeatmap({
       <div className="h-[700px] rounded-xl overflow-hidden border border-border relative">
         <MapContent data={data} threatData={threatData} cityData={cityData} showCountry={layerCountry} showCity={layerCity} showThreats={layerThreats} />
         {/* Interactive Legend */}
-        <div className="absolute bottom-3 left-3 z-[1000] flex gap-1 rounded-lg bg-card/90 backdrop-blur border border-border px-2 py-1.5 text-xs">
+        <div className="absolute bottom-3 left-3 z-1000 flex gap-1 rounded-lg bg-card/90 backdrop-blur-sm border border-border px-2 py-1.5 text-xs">
           <button
             type="button"
             onClick={() => setLayerCountry(v => !v)}

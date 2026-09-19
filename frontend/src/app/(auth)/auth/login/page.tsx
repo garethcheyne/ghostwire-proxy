@@ -244,7 +244,7 @@ export default function LoginPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="John Doe"
               required
               disabled={isSubmitting}
@@ -260,7 +260,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
             placeholder="admin@proxy.local"
             required
             disabled={isSubmitting}
@@ -276,7 +276,7 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
             placeholder="••••••••"
             required
             disabled={isSubmitting}
@@ -294,7 +294,7 @@ export default function LoginPage() {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full h-10 px-4 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="••••••••"
               required
               disabled={isSubmitting}
@@ -330,7 +330,7 @@ export default function LoginPage() {
               autoComplete="one-time-code"
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value)}
-              className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="000000"
               maxLength={8}
               autoFocus
@@ -427,7 +427,7 @@ export default function LoginPage() {
                 autoComplete="one-time-code"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
-                className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="000000"
                 maxLength={6}
                 required

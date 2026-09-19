@@ -56,7 +56,7 @@ function StatCard({ title, value, icon: Icon, description, trend, trendValue }: 
       </div>
 
       {/* Row 2: the number, across the card's full width. */}
-      <p className="mt-1.5 sm:mt-2 text-xl sm:text-3xl font-bold leading-tight break-words tabular-nums">
+      <p className="mt-1.5 sm:mt-2 text-xl sm:text-3xl font-bold leading-tight wrap-break-word tabular-nums">
         {value}
       </p>
 

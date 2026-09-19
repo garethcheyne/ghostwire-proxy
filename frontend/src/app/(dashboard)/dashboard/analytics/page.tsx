@@ -277,7 +277,7 @@ export default function AnalyticsPage() {
                     value={refreshInterval}
                     onChange={(e) => setRefreshInterval(Number(e.target.value))}
                     title="Auto-refresh interval"
-                    className="bg-transparent text-xs text-muted-foreground border-none outline-none cursor-pointer"
+                    className="bg-transparent text-xs text-muted-foreground border-none outline-hidden cursor-pointer"
                   >
                     <option value={15}>15s</option>
                     <option value={30}>30s</option>

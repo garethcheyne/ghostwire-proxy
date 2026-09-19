@@ -89,7 +89,7 @@ export function SmtpCard() {
     )
   }
 
-  const field = 'w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary'
+  const field = 'w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary'
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">

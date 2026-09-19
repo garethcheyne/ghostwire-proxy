@@ -682,7 +682,7 @@ export default function RulesPage() {
               onClick={() => setActiveTab(tab.key as TabType)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-background shadow-sm'
+                  ? 'bg-background shadow-xs'
                   : 'hover:bg-background/50 text-muted-foreground'
               }`}
             >
@@ -818,7 +818,7 @@ export default function RulesPage() {
                   <button
                     key={tab}
                     onClick={() => setGeoSubTab(tab)}
-                    className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${geoSubTab === tab ? 'bg-background shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                    className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${geoSubTab === tab ? 'bg-background shadow-xs' : 'hover:bg-background/50 text-muted-foreground'}`}
                   >
                     {tab === 'lookup' ? 'IP Lookup' : 'Rules'}
                   </button>
@@ -882,7 +882,7 @@ export default function RulesPage() {
                       type="text"
                       value={lookupIp}
                       onChange={e => setLookupIp(e.target.value)}
-                      className="flex-1 px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                      className="flex-1 px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary font-mono text-sm"
                       placeholder="8.8.8.8"
                     />
                     <Button type="submit" disabled={lookupLoading}>
@@ -1068,7 +1068,7 @@ export default function RulesPage() {
             <form onSubmit={handleSubmitWaf} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Name</label>
-                <input type="text" value={wafForm.name} onChange={e => setWafForm({ ...wafForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder="SQL Injection - UNION SELECT" required />
+                <input type="text" value={wafForm.name} onChange={e => setWafForm({ ...wafForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary text-sm" placeholder="SQL Injection - UNION SELECT" required />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
@@ -1097,7 +1097,7 @@ export default function RulesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Pattern (Regex)</label>
-                <input type="text" value={wafForm.pattern} onChange={e => setWafForm({ ...wafForm, pattern: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" placeholder="union(\s)+select" required />
+                <input type="text" value={wafForm.pattern} onChange={e => setWafForm({ ...wafForm, pattern: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-primary" placeholder="union(\s)+select" required />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Apply to Host</label>
@@ -1133,7 +1133,7 @@ export default function RulesPage() {
             <form onSubmit={handleSubmitGeo} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Name</label>
-                <input type="text" value={geoForm.name} onChange={e => setGeoForm({ ...geoForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder="Block high-risk countries" required />
+                <input type="text" value={geoForm.name} onChange={e => setGeoForm({ ...geoForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary text-sm" placeholder="Block high-risk countries" required />
               </div>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
@@ -1208,7 +1208,7 @@ export default function RulesPage() {
             <form onSubmit={handleSubmitRateLimit} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Name</label>
-                <input type="text" value={rateLimitForm.name} onChange={e => setRateLimitForm({ ...rateLimitForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder="API rate limit" required />
+                <input type="text" value={rateLimitForm.name} onChange={e => setRateLimitForm({ ...rateLimitForm, name: e.target.value })} className="w-full px-3 sm:px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary text-sm" placeholder="API rate limit" required />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>

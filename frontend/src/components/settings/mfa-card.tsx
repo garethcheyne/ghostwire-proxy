@@ -367,7 +367,7 @@ export function MfaCard() {
               onChange={(e) => setVerifyCode(e.target.value)}
               maxLength={6}
               placeholder="000000"
-              className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full h-12 px-4 rounded-md border border-input bg-background text-center text-2xl tracking-[0.4em] font-mono focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
           </div>
         </ModalBody>
@@ -405,7 +405,7 @@ export function MfaCard() {
               type="password"
               value={disablePassword}
               onChange={(e) => setDisablePassword(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
           </div>
           <div className="space-y-2">
@@ -417,7 +417,7 @@ export function MfaCard() {
               onChange={(e) => setDisableCode(e.target.value)}
               maxLength={8}
               placeholder="000000"
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
           </div>
         </ModalBody>
@@ -457,7 +457,7 @@ export function MfaCard() {
                 onChange={(e) => setRegenCode(e.target.value)}
                 maxLength={6}
                 placeholder="000000"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </>
           ) : (

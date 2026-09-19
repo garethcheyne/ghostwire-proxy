@@ -186,7 +186,7 @@ export default function TrafficPage() {
               // A new term changes the result set; page 2 of the old one is meaningless.
               setPage(1)
             }}
-            className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
             placeholder="Search by URI or IP..."
           />
         </div>
@@ -196,7 +196,7 @@ export default function TrafficPage() {
             setSelectedHost(e.target.value)
             setPage(1)
           }}
-          className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
         >
           <option value="">All Hosts</option>
           {hosts.map((host) => (
@@ -211,7 +211,7 @@ export default function TrafficPage() {
             setSelectedStatus(e.target.value)
             setPage(1)
           }}
-          className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
         >
           <option value="">All Status Codes</option>
           <option value="200">2xx Success</option>
