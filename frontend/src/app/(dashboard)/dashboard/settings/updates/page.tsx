@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { PageHeader } from '@/components/layout/page-header'
+import { Download as HeaderIcon } from 'lucide-react'
 
 interface AppVersion {
   version: string
@@ -308,35 +310,36 @@ export default function UpdatesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">System Updates</h1>
-          <p className="text-muted-foreground">
-            Manage application and base image updates
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </button>
-          <button
-            onClick={handleCheckUpdates}
-            disabled={isChecking || isUpdateInProgress}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isChecking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Check for Updates
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="System Updates"
+        description="Manage application and base image updates"
+        actions={
+          <>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
+              <button
+                onClick={handleCheckUpdates}
+                disabled={isChecking || isUpdateInProgress}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {isChecking ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Check for Updates
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {/* Alerts */}
       {error && (

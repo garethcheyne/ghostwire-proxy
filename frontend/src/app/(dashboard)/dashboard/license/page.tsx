@@ -1,7 +1,8 @@
 'use client'
 
-import { FileText } from 'lucide-react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/layout/page-header'
+import { FileText as HeaderIcon } from 'lucide-react'
 
 const LICENSE_TEXT = `MIT License
 
@@ -45,17 +46,12 @@ const THIRD_PARTY = [
 
 export default function LicensePage() {
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 pt-4">
-        <FileText className="h-6 w-6 text-cyan-400" />
-        <div>
-          <h1 className="text-2xl font-bold">License</h1>
-          <p className="text-sm text-muted-foreground">
-            Ghostwire Proxy is open source software released under the MIT License
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={HeaderIcon}
+        title="License"
+        description="Ghostwire Proxy is open source software released under the MIT License"
+      />
 
       {/* MIT License */}
       <div className="rounded-xl border border-border bg-card">
@@ -133,10 +129,10 @@ export default function LicensePage() {
       </div>
 
       {/* Back link */}
-      <div className="text-center pb-8">
+      <div className="pb-8">
         <Link
           href="/dashboard/about"
-          className="inline-flex items-center min-h-11 px-4 text-sm text-cyan-400 hover:underline"
+          className="inline-flex items-center min-h-11 text-sm text-cyan-400 hover:underline"
         >
           ← Back to About
         </Link>

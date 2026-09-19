@@ -22,6 +22,15 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
+import { PageHeader } from '@/components/layout/page-header'
+import { Flame as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface FirewallConnector {
   id: string
@@ -72,7 +81,6 @@ export default function FirewallsPage() {
   const [editingConnector, setEditingConnector] = useState<FirewallConnector | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [blockTestResults, setBlockTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [syncingId, setSyncingId] = useState<string | null>(null)
@@ -149,7 +157,6 @@ export default function FirewallsPage() {
     setFormEnabled(connector.enabled)
     setEditingConnector(connector)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -198,7 +205,6 @@ export default function FirewallsPage() {
       console.error('Failed to delete connector:', error)
       toastError('Failed to delete connector')
     }
-    setActiveDropdown(null)
   }
 
   const handleTest = async (connector: FirewallConnector) => {
@@ -289,40 +295,41 @@ export default function FirewallsPage() {
           <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">&times;</button>
         </div>
       )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Firewall Integration</h1>
-          <p className="text-muted-foreground">
-            Push blocked IPs to your network firewalls
-          </p>
-        </div>
-        {activeTab === 'connectors' && (
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Connector
-          </button>
-        )}
-        {activeTab === 'blocklist' && blocklist.length > 0 && (
-          <button
-            onClick={handleDeduplicate}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            <Trash2 className="h-4 w-4" />
-            Remove Duplicates
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Firewall Integration"
+        description="Push blocked IPs to your network firewalls"
+        actions={
+          <>
+            {activeTab === 'connectors' && (
+              <button
+                onClick={handleCreate}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Connector
+              </button>
+            )}
+            {activeTab === 'blocklist' && blocklist.length > 0 && (
+              <button
+                onClick={handleDeduplicate}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove Duplicates
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         {(['connectors', 'blocklist'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
               activeTab === tab
                 ? 'bg-background shadow-sm'
                 : 'hover:bg-background/50 text-muted-foreground'
@@ -410,33 +417,30 @@ export default function FirewallsPage() {
                       <RefreshCw className={`h-3.5 w-3.5 ${syncingId === connector.id ? 'animate-spin' : ''}`} />
                     </button>
 
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setActiveDropdown(activeDropdown === connector.id ? null : connector.id)}
-                        className="rounded-lg p-2 hover:bg-muted"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                      {activeDropdown === connector.id && (
-                        <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                          <div className="p-1">
-                            <button
-                              onClick={() => handleEdit(connector)}
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(connector)}
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onSelect={() => handleEdit(connector)}
+                            className="gap-2"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => handleDelete(connector)}
+                            className="gap-2 text-red-500 focus:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>

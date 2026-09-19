@@ -31,6 +31,8 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { HoneypotTabs } from '@/components/threats/honeypot-tabs'
 import { Bug } from 'lucide-react'
+import { PageHeader } from '@/components/layout/page-header'
+import { AlertTriangle as HeaderIcon } from 'lucide-react'
 
 interface ThreatStats {
   total_events: number
@@ -362,15 +364,14 @@ export default function ThreatsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Threat Detection</h1>
-        <p className="text-muted-foreground">
-          Monitor threats, events, and manage IP reputation
-        </p>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Threat Detection"
+        description="Monitor threats, events, and manage IP reputation"
+      />
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 overflow-x-auto">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         {[
           { key: 'overview', label: 'Overview', icon: Shield },
           { key: 'events', label: 'Events', icon: AlertTriangle },

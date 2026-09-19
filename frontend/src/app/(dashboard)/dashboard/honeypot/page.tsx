@@ -27,6 +27,8 @@ import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress, CountryBadge } from '@/components/ip-address'
+import { PageHeader } from '@/components/layout/page-header'
+import { Bug as HeaderIcon } from 'lucide-react'
 
 interface HoneypotTrap {
   id: string
@@ -355,34 +357,32 @@ export default function HoneypotPage() {
         </div>
       )}
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Bug className="h-6 w-6 text-amber-500" />
-            Honeypot Traps
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Fake endpoints that catch scanners and gather attacker intelligence
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={installDefaults} disabled={installingDefaults}>
-            {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
-            Install Defaults
-          </Button>
-          <Button size="sm" onClick={() => { resetForm(); setShowCreateDialog(true) }}>
-            <Plus className="h-4 w-4 mr-1" /> Add Trap
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Honeypot Traps"
+        description="Fake endpoints that catch scanners and gather attacker intelligence"
+        actions={
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={installDefaults} disabled={installingDefaults}>
+                {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
+                Install Defaults
+              </Button>
+              <Button size="sm" onClick={() => { resetForm(); setShowCreateDialog(true) }}>
+                <Plus className="h-4 w-4 mr-1" /> Add Trap
+              </Button>
+            </div>
+          </>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-muted/50 p-1 rounded-lg w-fit">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         {(['overview', 'traps', 'hits', 'intel'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-md transition-colors ${
               activeTab === tab
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'

@@ -19,6 +19,15 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import type { AccessList, AccessListEntry } from '@/types'
+import { PageHeader } from '@/components/layout/page-header'
+import { Key as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function AccessListsPage() {
   const [accessLists, setAccessLists] = useState<AccessList[]>([])
@@ -28,7 +37,6 @@ export default function AccessListsPage() {
   const [expandedLists, setExpandedLists] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -77,7 +85,6 @@ export default function AccessListsPage() {
     )
     setEditingList(list)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const toggleExpanded = (listId: string) => {
@@ -144,7 +151,6 @@ export default function AccessListsPage() {
       console.error('Failed to delete access list:', error)
       toastError('Failed to delete access list')
     }
-    setActiveDropdown(null)
   }
 
   if (isLoading) {
@@ -157,21 +163,22 @@ export default function AccessListsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Access Lists</h1>
-          <p className="text-muted-foreground">
-            Control access to your proxy hosts with IP whitelists and blacklists
-          </p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add Access List
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Access Lists"
+        description="Control access to your proxy hosts with IP whitelists and blacklists"
+        actions={
+          <>
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Access List
+            </button>
+          </>
+        }
+      />
 
       {/* Access Lists */}
       <div className="space-y-4">
@@ -218,36 +225,30 @@ export default function AccessListsPage() {
                   </div>
                 </div>
 
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() =>
-                      setActiveDropdown(activeDropdown === list.id ? null : list.id)
-                    }
-                    className="rounded-lg p-2 hover:bg-muted"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-
-                  {activeDropdown === list.id && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                      <div className="p-1">
-                        <button
-                          onClick={() => handleEdit(list)}
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(list)}
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        onSelect={() => handleEdit(list)}
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => handleDelete(list)}
+                        className="gap-2 text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -423,13 +424,6 @@ export default function AccessListsPage() {
         </ModalBody>
       </Modal>
 
-      {/* Click outside to close dropdown */}
-      {activeDropdown && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setActiveDropdown(null)}
-        />
-      )}
     </div>
   )
 }

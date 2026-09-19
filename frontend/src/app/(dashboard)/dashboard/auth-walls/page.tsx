@@ -60,6 +60,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageHeader } from '@/components/layout/page-header'
+import { Lock as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface AuthSession {
   id: string
@@ -87,7 +96,6 @@ export default function AuthWallPage() {
   const [selectedWall, setSelectedWall] = useState<AuthWall | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
 
   // Wall form state
   const [wallName, setWallName] = useState('')
@@ -165,7 +173,6 @@ export default function AuthWallPage() {
     setWallTheme(wall.theme || 'default')
     setEditingWall(wall)
     setShowWallDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmitWall = async (e: React.FormEvent) => {
@@ -209,7 +216,6 @@ export default function AuthWallPage() {
       console.error('Failed to delete auth wall:', error)
       toastError('Failed to delete auth wall')
     }
-    setActiveDropdown(null)
   }
 
   // Provider handlers
@@ -463,18 +469,19 @@ export default function AuthWallPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Authentication Walls</h1>
-          <p className="text-muted-foreground">
-            Protect your proxy hosts with a login gate
-          </p>
-        </div>
-        <Button onClick={handleCreateWall}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Auth Wall
-        </Button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Authentication Walls"
+        description="Protect your proxy hosts with a login gate"
+        actions={
+          <>
+            <Button onClick={handleCreateWall}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Auth Wall
+            </Button>
+          </>
+        }
+      />
 
       {/* Auth Walls Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -502,45 +509,36 @@ export default function AuthWallPage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="relative">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        setActiveDropdown(activeDropdown === wall.id ? null : wall.id)
-                      }
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-
-                    {activeDropdown === wall.id && (
-                      <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-border bg-popover shadow-lg">
-                        <div className="p-1">
-                          <button
-                            onClick={() => handleEditWall(wall)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleViewSessions(wall)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                          >
-                            <MonitorSmartphone className="h-4 w-4" />
-                            View Sessions
-                          </button>
-                          <button
-                            onClick={() => handleDeleteWall(wall)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="Actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        onSelect={() => handleEditWall(wall)}
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => handleViewSessions(wall)}
+                        className="gap-2"
+                      >
+                        <MonitorSmartphone className="h-4 w-4" />
+                        View Sessions
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => handleDeleteWall(wall)}
+                        className="gap-2 text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
@@ -1022,13 +1020,6 @@ export default function AuthWallPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Click outside to close dropdown */}
-      {activeDropdown && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setActiveDropdown(null)}
-        />
-      )}
     </div>
   )
 }

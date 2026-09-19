@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { PageHeader } from '@/components/layout/page-header'
+import { Cloud as HeaderIcon } from 'lucide-react'
 
 interface DnsProvider {
   id: string
@@ -260,24 +262,25 @@ export default function DnsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">DNS Management</h1>
-          <p className="text-muted-foreground">
-            Manage DNS records with Cloudflare integration
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            resetProviderForm()
-            setShowProviderDialog(true)
-          }}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add DNS Provider
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="DNS Management"
+        description="Manage DNS records with Cloudflare integration"
+        actions={
+          <>
+            <button
+              onClick={() => {
+                resetProviderForm()
+                setShowProviderDialog(true)
+              }}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add DNS Provider
+            </button>
+          </>
+        }
+      />
 
       {providers.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">

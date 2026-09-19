@@ -26,6 +26,8 @@ import api from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
 import { MfaCard } from '@/components/settings/mfa-card'
 import { SmtpCard } from '@/components/settings/smtp-card'
+import { PageHeader } from '@/components/layout/page-header'
+import { Settings as HeaderIcon } from 'lucide-react'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -285,36 +287,37 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">System Settings</h1>
-          <p className="text-muted-foreground">
-            Configure system-wide settings for your proxy (admin only)
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleReloadNginx}
-            disabled={isReloading}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isReloading ? 'animate-spin' : ''}`} />
-            Reload Nginx
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Save Settings
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="System Settings"
+        description="Configure system-wide settings for your proxy (admin only)"
+        actions={
+          <>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleReloadNginx}
+                disabled={isReloading}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${isReloading ? 'animate-spin' : ''}`} />
+                Reload Nginx
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save Settings
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {message && (
         <div

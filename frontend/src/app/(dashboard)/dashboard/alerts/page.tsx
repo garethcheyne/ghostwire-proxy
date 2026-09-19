@@ -23,6 +23,15 @@ import api from '@/lib/api'
 import { Textarea } from '@/components/ui/textarea'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
+import { PageHeader } from '@/components/layout/page-header'
+import { Bell as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface AlertChannel {
   id: string
@@ -58,7 +67,6 @@ export default function AlertsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // Channel form
@@ -109,7 +117,6 @@ export default function AlertsPage() {
     setFormEnabled(channel.enabled)
     setEditingChannel(channel)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmitChannel = async (e: React.FormEvent) => {
@@ -145,7 +152,6 @@ export default function AlertsPage() {
       setNotification({ type: 'error', message: 'Failed to delete channel' })
       toastError('Failed to delete channel')
     }
-    setActiveDropdown(null)
   }
 
   const handleTestAlert = async () => {
@@ -175,34 +181,40 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <AlertTriangle className="h-6 w-6 text-amber-500" />
-            Alert Channels
-          </h1>
-          <p className="text-muted-foreground">
-            Manage global alert delivery channels (admin)
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleTestAlert}
-            disabled={isTesting}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-          >
-            {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Test Alert
-          </button>
-          <button
-            onClick={handleCreateChannel}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Channel
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Alert Channels"
+        description={
+          <>
+            Manage global alert delivery channels (admin). Your own alert choices are under{' '}
+            <Link href="/dashboard/notifications" className="text-primary hover:underline">
+              Notifications
+            </Link>
+            .
+          </>
+        }
+        actions={
+          <>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleTestAlert}
+                disabled={isTesting}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Test Alert
+              </button>
+              <button
+                onClick={handleCreateChannel}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Channel
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {/* Notification banner */}
       {notification && (
@@ -216,19 +228,6 @@ export default function AlertsPage() {
           <button onClick={() => setNotification(null)} className="ml-4 hover:opacity-70">&times;</button>
         </div>
       )}
-
-      {/* User notification preferences link */}
-      <Link href="/dashboard/notifications">
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors cursor-pointer">
-          <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-sm font-medium">Looking for your personal notification preferences?</p>
-              <p className="text-xs text-muted-foreground">Go to Notifications to choose which events you subscribe to</p>
-            </div>
-          </div>
-        </div>
-      </Link>
 
       {isLoading ? (
         <div className="flex h-96 items-center justify-center">
@@ -272,33 +271,30 @@ export default function AlertsPage() {
                     </div>
                   </div>
 
-                  <div className="relative shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => setActiveDropdown(activeDropdown === channel.id ? null : channel.id)}
-                      className="rounded-lg p-2 hover:bg-muted"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                    {activeDropdown === channel.id && (
-                      <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                        <div className="p-1">
-                          <button
-                            onClick={() => handleEditChannel(channel)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteChannel(channel)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                  <div className="shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onSelect={() => handleEditChannel(channel)}
+                          className="gap-2"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => handleDeleteChannel(channel)}
+                          className="gap-2 text-red-500 focus:text-red-500"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </div>

@@ -19,6 +19,15 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { PageHeader } from '@/components/layout/page-header'
+import { Gauge as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface RateLimitRule {
   id: string
@@ -53,7 +62,6 @@ export default function RateLimitsPage() {
   const [editingRule, setEditingRule] = useState<RateLimitRule | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -123,7 +131,6 @@ export default function RateLimitsPage() {
     setFormHostIds(rule.proxy_host_id ? [rule.proxy_host_id] : [])
     setEditingRule(rule)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -185,7 +192,6 @@ export default function RateLimitsPage() {
       console.error('Failed to delete rule:', error)
       toastError('Failed to delete rule')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggle = async (rule: RateLimitRule) => {
@@ -217,21 +223,22 @@ export default function RateLimitsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Rate Limiting</h1>
-          <p className="text-muted-foreground">
-            Control request rates to protect your services
-          </p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add Rule
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Rate Limiting"
+        description="Control request rates to protect your services"
+        actions={
+          <>
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Rule
+            </button>
+          </>
+        }
+      />
 
       <div className="space-y-3">
         {rules.length === 0 ? (
@@ -297,33 +304,30 @@ export default function RateLimitsPage() {
                   </div>
                 </div>
 
-                <div className="relative shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === rule.id ? null : rule.id)}
-                    className="rounded-lg p-2 hover:bg-muted"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                  {activeDropdown === rule.id && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                      <div className="p-1">
-                        <button
-                          onClick={() => handleEdit(rule)}
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(rule)}
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                <div className="shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        onSelect={() => handleEdit(rule)}
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => handleDelete(rule)}
+                        className="gap-2 text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>

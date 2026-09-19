@@ -25,6 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { PageHeader } from '@/components/layout/page-header'
+import { Users as HeaderIcon } from 'lucide-react'
 
 interface SystemUser {
   id: string
@@ -175,21 +177,22 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Users</h1>
-          <p className="text-muted-foreground">
-            Manage administrator and user accounts
-          </p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add User
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Users"
+        description="Manage administrator and user accounts"
+        actions={
+          <>
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add User
+            </button>
+          </>
+        }
+      />
 
       {/* Users Table */}
       <div className="rounded-xl border border-border bg-card">

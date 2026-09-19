@@ -19,6 +19,7 @@ import {
   Info,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/layout/page-header'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -70,13 +71,19 @@ export default function AboutPage() {
   }, [])
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-6">
+      <PageHeader
+        icon={Info}
+        title="About"
+        description="Version, license and updates for Ghostwire Proxy"
+      />
+
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 max-w-md">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         <button
           data-value="about"
           onClick={() => setActiveTab('about')}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'about'
               ? 'bg-background shadow-sm'
               : 'hover:bg-background/50 text-muted-foreground'
@@ -88,7 +95,7 @@ export default function AboutPage() {
         <button
           data-value="license"
           onClick={() => setActiveTab('license')}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'license'
               ? 'bg-background shadow-sm'
               : 'hover:bg-background/50 text-muted-foreground'
@@ -100,7 +107,7 @@ export default function AboutPage() {
         <button
           data-value="updates"
           onClick={() => setActiveTab('updates')}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'updates'
               ? 'bg-background shadow-sm'
               : 'hover:bg-background/50 text-muted-foreground'
@@ -127,30 +134,26 @@ export default function AboutPage() {
 
       {/* About Tab Content */}
       {activeTab === 'about' && (
-      <div className="space-y-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="text-center space-y-4 pt-4">
-        <div className="flex justify-center">
-          <div className="relative h-20 w-20">
-            <Image
-              src="/logo.png"
-              alt="Ghostwire Logo"
-              width={80}
-              height={80}
-              className="h-20 w-20 object-contain"
-            />
-          </div>
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+      <div className="space-y-6">
+      {/* Product */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-6">
+        <Image
+          src="/logo.png"
+          alt="Ghostwire Logo"
+          width={56}
+          height={56}
+          className="h-14 w-14 object-contain"
+        />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
             Ghostwire Proxy
-          </h1>
-          <p className="text-muted-foreground mt-1">
+          </h2>
+          <p className="text-sm text-muted-foreground">
             A modern, self-hosted reverse proxy manager with built-in security
           </p>
         </div>
         {versionInfo && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/30 px-4 py-1.5">
             <span className="text-xs text-muted-foreground">Version</span>
             <span className="text-sm font-mono font-bold text-cyan-400">{versionInfo.version}</span>
           </div>
@@ -269,7 +272,7 @@ export default function AboutPage() {
       </div>
 
       {/* Copyright */}
-      <div className="text-center text-xs text-muted-foreground pb-8">
+      <div className="text-xs text-muted-foreground pb-8">
         <p>
           Made with <Heart className="inline h-3 w-3 text-red-400" /> by{' '}
           <a

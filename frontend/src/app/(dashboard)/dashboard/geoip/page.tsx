@@ -23,6 +23,15 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
+import { PageHeader } from '@/components/layout/page-header'
+import { Earth as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface GeoipRule {
   id: string
@@ -79,7 +88,6 @@ export default function GeoIPPage() {
   const [editingRule, setEditingRule] = useState<GeoipRule | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'rules' | 'lookup'>('rules')
   const [dbInfo, setDbInfo] = useState<{ installed: boolean; size_bytes: number; last_modified: string | null } | null>(null)
   const [isUpdatingDb, setIsUpdatingDb] = useState(false)
@@ -163,7 +171,6 @@ export default function GeoIPPage() {
     setFormHostIds(rule.proxy_host_id ? [rule.proxy_host_id] : [])
     setEditingRule(rule)
     setShowCreateDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -223,7 +230,6 @@ export default function GeoIPPage() {
       console.error('Failed to delete rule:', error)
       toastError('Failed to delete rule')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggle = async (rule: GeoipRule) => {
@@ -277,23 +283,24 @@ export default function GeoIPPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">GeoIP Blocking</h1>
-          <p className="text-muted-foreground">
-            Block or allow traffic by country
-          </p>
-        </div>
-        {activeTab === 'rules' && (
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Rule
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="GeoIP Blocking"
+        description="Block or allow traffic by country"
+        actions={
+          <>
+            {activeTab === 'rules' && (
+              <button
+                onClick={handleCreate}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Rule
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* GeoIP Database Status */}
       <div className="rounded-xl border border-border bg-card p-6">
@@ -365,12 +372,12 @@ export default function GeoIPPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         {(['rules', 'lookup'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
               activeTab === tab
                 ? 'bg-background shadow-sm'
                 : 'hover:bg-background/50 text-muted-foreground'
@@ -433,33 +440,30 @@ export default function GeoIPPage() {
                       </div>
                     </div>
 
-                    <div className="relative shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setActiveDropdown(activeDropdown === rule.id ? null : rule.id)}
-                        className="rounded-lg p-2 hover:bg-muted"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                      {activeDropdown === rule.id && (
-                        <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                          <div className="p-1">
-                            <button
-                              onClick={() => handleEdit(rule)}
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(rule)}
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                    <div className="shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onSelect={() => handleEdit(rule)}
+                            className="gap-2"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => handleDelete(rule)}
+                            className="gap-2 text-red-500 focus:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>

@@ -47,6 +47,8 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
+import { PageHeader } from '@/components/layout/page-header'
+import { Globe as HeaderIcon } from 'lucide-react'
 
 type TabType = 'details' | 'locations' | 'advanced'
 
@@ -540,21 +542,22 @@ export default function ProxyHostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Proxy Hosts</h1>
-          <p className="text-muted-foreground">
-            Manage your reverse proxy configurations
-          </p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add Proxy Host
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Proxy Hosts"
+        description="Manage your reverse proxy configurations"
+        actions={
+          <>
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Proxy Host
+            </button>
+          </>
+        }
+      />
 
       {/* Proxy Hosts */}
       {hosts.length === 0 ? (

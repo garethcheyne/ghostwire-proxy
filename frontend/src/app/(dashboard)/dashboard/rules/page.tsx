@@ -37,6 +37,15 @@ import { Modal, ModalBody } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { IpAddress } from '@/components/ip-address'
 import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
+import { PageHeader } from '@/components/layout/page-header'
+import { ShieldAlert as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type TabType = 'waf' | 'geoip' | 'rate-limits' | 'presets'
 
@@ -204,7 +213,6 @@ export default function RulesPage() {
   const [presetFilter, setPresetFilter] = useState<string | null>(null)
 
   // General
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -305,7 +313,6 @@ export default function RulesPage() {
     })
     setEditingWafRule(rule)
     setShowWafDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmitWaf = async (e: React.FormEvent) => {
@@ -349,7 +356,6 @@ export default function RulesPage() {
     } catch (error) {
       toastError('Failed to delete rule')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggleWaf = async (rule: WafRule) => {
@@ -392,7 +398,6 @@ export default function RulesPage() {
     })
     setEditingGeoRule(rule)
     setShowGeoDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmitGeo = async (e: React.FormEvent) => {
@@ -435,7 +440,6 @@ export default function RulesPage() {
     } catch (error) {
       toastError('Failed to delete rule')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggleGeo = async (rule: GeoipRule) => {
@@ -513,7 +517,6 @@ export default function RulesPage() {
     })
     setEditingRateLimitRule(rule)
     setShowRateLimitDialog(true)
-    setActiveDropdown(null)
   }
 
   const handleSubmitRateLimit = async (e: React.FormEvent) => {
@@ -561,7 +564,6 @@ export default function RulesPage() {
     } catch (error) {
       toastError('Failed to delete rule')
     }
-    setActiveDropdown(null)
   }
 
   const handleToggleRateLimit = async (rule: RateLimitRule) => {
@@ -641,33 +643,31 @@ export default function RulesPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <Shield className="h-6 w-6 text-cyan-400" />
-            Security Rules
-          </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Configure WAF, GeoIP blocking, rate limiting, and security presets
-          </p>
-        </div>
-        {activeTab !== 'presets' && (
-          <Button
-            onClick={() => {
-              if (activeTab === 'waf') handleCreateWaf()
-              else if (activeTab === 'geoip') handleCreateGeo()
-              else if (activeTab === 'rate-limits') handleCreateRateLimit()
-            }}
-            className="shrink-0"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Rule
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Security Rules"
+        description="Configure WAF, GeoIP blocking, rate limiting, and security presets"
+        actions={
+          <>
+            {activeTab !== 'presets' && (
+              <Button
+                onClick={() => {
+                  if (activeTab === 'waf') handleCreateWaf()
+                  else if (activeTab === 'geoip') handleCreateGeo()
+                  else if (activeTab === 'rate-limits') handleCreateRateLimit()
+                }}
+                className="shrink-0"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Rule
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Main Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 overflow-x-auto">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         {[
           { key: 'waf', label: 'WAF Rules', icon: ShieldAlert },
           { key: 'geoip', label: 'GeoIP', icon: Map },
@@ -749,22 +749,22 @@ export default function RulesPage() {
                             <code className="text-xs text-muted-foreground mt-1 block truncate">{rule.pattern}</code>
                           </div>
                         </div>
-                        <div className="relative shrink-0 ml-2">
-                          <button onClick={() => setActiveDropdown(activeDropdown === rule.id ? null : rule.id)} className="rounded-lg p-2 hover:bg-muted">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                          {activeDropdown === rule.id && (
-                            <div className="absolute right-0 top-full z-10 mt-1 w-32 sm:w-40 rounded-lg border border-border bg-card shadow-lg">
-                              <div className="p-1">
-                                <button onClick={() => handleEditWaf(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
-                                  <Pencil className="h-4 w-4" /> Edit
-                                </button>
-                                <button onClick={() => handleDeleteWaf(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted">
-                                  <Trash2 className="h-4 w-4" /> Delete
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                        <div className="shrink-0 ml-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onSelect={() => handleEditWaf(rule)} className="gap-2">
+                                <Pencil className="h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => handleDeleteWaf(rule)} className="gap-2 text-red-500 focus:text-red-500">
+                                <Trash2 className="h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </div>
@@ -813,12 +813,12 @@ export default function RulesPage() {
               </div>
 
               {/* Sub-tabs */}
-              <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+              <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
                 {(['rules', 'lookup'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setGeoSubTab(tab)}
-                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${geoSubTab === tab ? 'bg-background shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                    className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${geoSubTab === tab ? 'bg-background shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
                   >
                     {tab === 'lookup' ? 'IP Lookup' : 'Rules'}
                   </button>
@@ -856,18 +856,18 @@ export default function RulesPage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="relative shrink-0 ml-2">
-                              <button onClick={() => setActiveDropdown(activeDropdown === rule.id ? null : rule.id)} className="rounded-lg p-2 hover:bg-muted">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </button>
-                              {activeDropdown === rule.id && (
-                                <div className="absolute right-0 top-full z-10 mt-1 w-32 sm:w-40 rounded-lg border border-border bg-card shadow-lg">
-                                  <div className="p-1">
-                                    <button onClick={() => handleEditGeo(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"><Pencil className="h-4 w-4" /> Edit</button>
-                                    <button onClick={() => handleDeleteGeo(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"><Trash2 className="h-4 w-4" /> Delete</button>
-                                  </div>
-                                </div>
-                              )}
+                            <div className="shrink-0 ml-2">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40">
+                                  <DropdownMenuItem onSelect={() => handleEditGeo(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleDeleteGeo(rule)} className="gap-2 text-red-500 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </div>
@@ -935,18 +935,18 @@ export default function RulesPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="relative shrink-0 ml-2">
-                        <button onClick={() => setActiveDropdown(activeDropdown === rule.id ? null : rule.id)} className="rounded-lg p-2 hover:bg-muted">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                        {activeDropdown === rule.id && (
-                          <div className="absolute right-0 top-full z-10 mt-1 w-32 sm:w-40 rounded-lg border border-border bg-card shadow-lg">
-                            <div className="p-1">
-                              <button onClick={() => handleEditRateLimit(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"><Pencil className="h-4 w-4" /> Edit</button>
-                              <button onClick={() => handleDeleteRateLimit(rule)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"><Trash2 className="h-4 w-4" /> Delete</button>
-                            </div>
-                          </div>
-                        )}
+                      <div className="shrink-0 ml-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onSelect={() => handleEditRateLimit(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDeleteRateLimit(rule)} className="gap-2 text-red-500 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
@@ -1251,8 +1251,6 @@ export default function RulesPage() {
         </ModalBody>
       </Modal>
 
-      {/* Click outside to close dropdowns */}
-      {activeDropdown && <div className="fixed inset-0 z-0" onClick={() => setActiveDropdown(null)} />}
     </div>
   )
 }

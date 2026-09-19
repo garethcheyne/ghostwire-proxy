@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Boxes,
   Loader2,
   RefreshCw,
   AlertCircle,
@@ -15,6 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/layout/page-header'
+import { Boxes as HeaderIcon } from 'lucide-react'
 
 interface Pending {
   count: number
@@ -162,29 +163,27 @@ export default function ContainersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Boxes className="h-6 w-6 text-primary" />
-            Container Security
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            OS packages, pending updates and image age for every container in the stack.
-          </p>
-        </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
-        >
-          {refreshing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {refreshing ? 'Scanning…' : 'Rescan'}
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Container Security"
+        description="OS packages, pending updates and image age for every container in the stack."
+        actions={
+          <>
+            <button
+              onClick={() => load(true)}
+              disabled={refreshing}
+              className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {refreshing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {refreshing ? 'Scanning…' : 'Rescan'}
+            </button>
+          </>
+        }
+      />
 
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">

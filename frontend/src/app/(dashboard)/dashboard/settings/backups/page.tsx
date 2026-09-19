@@ -26,6 +26,8 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
+import { PageHeader } from '@/components/layout/page-header'
+import { DatabaseBackup as HeaderIcon } from 'lucide-react'
 
 interface Backup {
   id: string
@@ -292,48 +294,49 @@ export default function BackupsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Backup & Restore</h1>
-          <p className="text-muted-foreground">
-            Create and manage backups of your Ghostwire Proxy configuration
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".tar.gz,.tgz"
-            onChange={handleUpload}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {isUploading ? 'Uploading...' : 'Upload Backup'}
-          </button>
-          <button
-            onClick={() => {
-              setEditedSettings(settings)
-              setShowSettingsDialog(true)
-            }}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </button>
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Create Backup
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Backup & Restore"
+        description="Create and manage backups of your Ghostwire Proxy configuration"
+        actions={
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".tar.gz,.tgz"
+                onChange={handleUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isUploading ? 'Uploading...' : 'Upload Backup'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditedSettings(settings)
+                  setShowSettingsDialog(true)
+                }}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
+              <button
+                onClick={() => setShowCreateDialog(true)}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Create Backup
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {/* Alerts */}
       {error && (

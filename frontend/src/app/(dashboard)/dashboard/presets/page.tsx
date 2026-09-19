@@ -19,6 +19,8 @@ import {
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/layout/page-header'
+import { Sparkles as HeaderIcon } from 'lucide-react'
 
 interface PresetSummary {
   id: string
@@ -177,15 +179,11 @@ export default function PresetsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Sparkles className="h-8 w-8 text-cyan-400" />
-          Security Presets
-        </h1>
-        <p className="text-slate-400 mt-1">
-          Best-practice security templates. Preview rules before applying — presets are additive and never remove existing rules.
-        </p>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Security Presets"
+        description="Best-practice security templates. Preview rules before applying — presets are additive and never remove existing rules."
+      />
 
       {/* Category Filters */}
       <div className="flex flex-wrap gap-2">

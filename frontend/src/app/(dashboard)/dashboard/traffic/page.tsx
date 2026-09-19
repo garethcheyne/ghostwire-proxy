@@ -25,6 +25,8 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { TrafficLog, ProxyHost } from '@/types'
+import { PageHeader } from '@/components/layout/page-header'
+import { Activity as HeaderIcon } from 'lucide-react'
 
 export default function TrafficPage() {
   const confirm = useConfirm()
@@ -121,31 +123,32 @@ export default function TrafficPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Traffic Logs</h1>
-          <p className="text-muted-foreground">
-            Monitor requests through your proxy hosts
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePurgeLogs}
-            className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
-          >
-            <Trash2 className="h-4 w-4" />
-            Purge All
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Traffic Logs"
+        description="Monitor requests through your proxy hosts"
+        actions={
+          <>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePurgeLogs}
+                className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                Purge All
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {/* Stats Cards */}
       {stats && (

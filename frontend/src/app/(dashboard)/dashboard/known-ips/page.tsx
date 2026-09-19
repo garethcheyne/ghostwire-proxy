@@ -20,6 +20,8 @@ import {
   type KnownIp,
 } from '@/lib/queries/known-ips'
 import { useIpActions } from '@/components/ip-actions-provider'
+import { PageHeader } from '@/components/layout/page-header'
+import { Tag as HeaderIcon } from 'lucide-react'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']
 
@@ -93,22 +95,27 @@ export default function KnownIpsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Known IPs</h1>
-          <p className="text-muted-foreground">
+      <PageHeader
+        icon={HeaderIcon}
+        title="Known IPs"
+        description={
+          <>
             Put a name to the addresses you recognise. Labels appear wherever that
             IP shows up across the app.
-          </p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium"
-        >
-          <Plus className="h-4 w-4" />
-          Label an IP
-        </button>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Label an IP
+            </button>
+          </>
+        }
+      />
 
       {/* Look up any address, labelled or not */}
       <div className="rounded-xl border border-border bg-card p-4">

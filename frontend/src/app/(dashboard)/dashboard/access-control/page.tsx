@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Key, Lock, Shield } from 'lucide-react'
+import { Key, Lock } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import { PageHeader } from '@/components/layout/page-header'
+import { Key as HeaderIcon } from 'lucide-react'
 
 // Dynamic imports to avoid code duplication - load the existing pages as components
 const AuthWallsContent = dynamic(() => import('../auth-walls/page'), { ssr: false })
@@ -16,22 +18,18 @@ export default function AccessControlPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          <Shield className="h-6 w-6 text-cyan-400" />
-          Access Control
-        </h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Manage authentication walls and IP access lists
-        </p>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Access Control"
+        description="Manage authentication walls and IP access lists"
+      />
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
         <button
           data-value="auth-walls"
           onClick={() => setActiveTab('auth-walls')}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'auth-walls'
               ? 'bg-background shadow-sm'
               : 'hover:bg-background/50 text-muted-foreground'
@@ -44,7 +42,7 @@ export default function AccessControlPage() {
         <button
           data-value="ip-lists"
           onClick={() => setActiveTab('ip-lists')}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             activeTab === 'ip-lists'
               ? 'bg-background shadow-sm'
               : 'hover:bg-background/50 text-muted-foreground'

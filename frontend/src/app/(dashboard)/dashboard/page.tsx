@@ -24,6 +24,8 @@ import {
   useWafStats,
   useAuthErrors,
 } from '@/lib/queries/dashboard'
+import { PageHeader } from '@/components/layout/page-header'
+import { LayoutDashboard as HeaderIcon } from 'lucide-react'
 
 interface StatCardProps {
   title: string
@@ -122,12 +124,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Overview of your reverse proxy infrastructure
-        </p>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="Dashboard"
+        description="Overview of your reverse proxy infrastructure"
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-6 lg:grid-cols-4">

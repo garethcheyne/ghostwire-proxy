@@ -23,6 +23,8 @@ import { PerformanceTab } from '@/components/analytics/performance-tab'
 import { LogsTab } from '@/components/analytics/logs-tab'
 import { TrendsTab, type TrendsData } from '@/components/analytics/trends-tab'
 import { FileText } from 'lucide-react'
+import { PageHeader } from '@/components/layout/page-header'
+import { BarChart3 as HeaderIcon } from 'lucide-react'
 
 interface AnalyticsDashboard {
   total_requests: number
@@ -210,79 +212,84 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-muted-foreground">
+      <PageHeader
+        icon={HeaderIcon}
+        title="Analytics"
+        description={
+          <>
             {selectedHostName
               ? `Traffic, security, and performance for ${selectedHostName}`
               : 'Traffic, security, and performance across all hosts'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedHost}
-            onChange={(e) => setSelectedHost(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-input bg-background text-sm"
-            aria-label="Filter analytics by host"
-          >
-            <option value="">All hosts</option>
-            {hosts.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.domain_names?.[0] ?? h.id}
-              </option>
-            ))}
-          </select>
-          <div className="flex rounded-lg border border-input overflow-hidden">
-            {(['24h', '7d', '30d', '90d'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  period === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => fetchData()}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-          <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2">
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                autoRefresh ? 'text-green-500' : 'text-muted-foreground'
-              }`}
-              title={autoRefresh ? 'Disable auto-refresh' : 'Enable auto-refresh'}
-            >
-              <div className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'}`} />
-              {autoRefresh ? `${countdown}s` : 'Auto'}
-            </button>
-            {autoRefresh && (
+          </>
+        }
+        actions={
+          <>
+            <div className="flex flex-wrap items-center gap-3">
               <select
-                value={refreshInterval}
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                title="Auto-refresh interval"
-                className="bg-transparent text-xs text-muted-foreground border-none outline-none cursor-pointer"
+                value={selectedHost}
+                onChange={(e) => setSelectedHost(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border border-input bg-background text-sm"
+                aria-label="Filter analytics by host"
               >
-                <option value={15}>15s</option>
-                <option value={30}>30s</option>
-                <option value={60}>1m</option>
-                <option value={300}>5m</option>
+                <option value="">All hosts</option>
+                {hosts.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.domain_names?.[0] ?? h.id}
+                  </option>
+                ))}
               </select>
-            )}
-          </div>
-        </div>
-      </div>
+              <div className="flex rounded-lg border border-input overflow-hidden">
+                {(['24h', '7d', '30d', '90d'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      period === p
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => fetchData()}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+              <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2">
+                <button
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                    autoRefresh ? 'text-green-500' : 'text-muted-foreground'
+                  }`}
+                  title={autoRefresh ? 'Disable auto-refresh' : 'Enable auto-refresh'}
+                >
+                  <div className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'}`} />
+                  {autoRefresh ? `${countdown}s` : 'Auto'}
+                </button>
+                {autoRefresh && (
+                  <select
+                    value={refreshInterval}
+                    onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                    title="Auto-refresh interval"
+                    className="bg-transparent text-xs text-muted-foreground border-none outline-none cursor-pointer"
+                  >
+                    <option value={15}>15s</option>
+                    <option value={30}>30s</option>
+                    <option value={60}>1m</option>
+                    <option value={300}>5m</option>
+                  </select>
+                )}
+              </div>
+            </div>
+          </>
+        }
+      />
 
       {/* Real-time Stats Bar */}
       {realtime && (
@@ -317,7 +324,7 @@ export default function AnalyticsPage() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="w-full justify-start gap-1 overflow-x-auto lg:w-auto lg:inline-flex">
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto sm:w-fit">
           <TabsTrigger value="overview" className="shrink-0 gap-1.5">
             <BarChart3 className="h-4 w-4" />
             <span>Overview</span>

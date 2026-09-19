@@ -8,7 +8,6 @@ import {
   Printer,
   Mail,
   AlertCircle,
-  Globe,
   ShieldAlert,
   TrendingUp,
   TrendingDown,
@@ -29,6 +28,8 @@ import {
 } from 'recharts'
 import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
+import { PageHeader } from '@/components/layout/page-header'
+import { FileBarChart as HeaderIcon } from 'lucide-react'
 
 // Leaflet touches `window` on import, so it cannot be server-rendered.
 const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), {
@@ -410,52 +411,53 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
       `}</style>
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link
-            href="/dashboard/proxy-hosts"
-            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to hosts
-          </Link>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Globe className="h-6 w-6 text-primary print:hidden" />
-            {report.host?.primary_domain}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Traffic report · {PERIODS.find((p) => p.value === period)?.label} ·
-            generated {String(report.meta?.generated_at || '').slice(0, 16).replace('T', ' ')} UTC
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 print:hidden">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            {PERIODS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setEmailOpen(true)}
-            className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent flex items-center gap-1.5"
-          >
-            <Mail className="h-3.5 w-3.5" />
-            Email
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 flex items-center gap-1.5"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Print / PDF
-          </button>
-        </div>
+      <div className="space-y-2">
+      <Link
+        href="/dashboard/proxy-hosts"
+        className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back to hosts
+      </Link>
+        <PageHeader
+          icon={HeaderIcon}
+          title={report.host?.primary_domain}
+          description={
+            <>
+              Traffic report · {PERIODS.find((p) => p.value === period)?.label} ·
+              generated {String(report.meta?.generated_at || '').slice(0, 16).replace('T', ' ')} UTC
+            </>
+          }
+          actions={
+            <div className="flex items-center gap-2 print:hidden">
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {PERIODS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setEmailOpen(true)}
+                className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent flex items-center gap-1.5"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Email
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 flex items-center gap-1.5"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print / PDF
+              </button>
+            </div>
+          }
+        />
       </div>
 
       {/* Headline */}

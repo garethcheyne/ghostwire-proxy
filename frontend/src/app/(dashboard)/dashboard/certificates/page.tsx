@@ -23,6 +23,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
 import type { Certificate } from '@/types'
+import { PageHeader } from '@/components/layout/page-header'
+import { Shield as HeaderIcon } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function CertificatesPage() {
   const confirm = useConfirm()
@@ -36,7 +45,6 @@ export default function CertificatesPage() {
   const [createMode, setCreateMode] = useState<'upload' | 'letsencrypt'>('letsencrypt')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
 
   // Let's Encrypt form
   const [leDomains, setLeDomains] = useState<string[]>([])
@@ -138,7 +146,6 @@ export default function CertificatesPage() {
       console.error('Failed to renew certificate:', error)
       toastError('Failed to renew certificate')
     }
-    setActiveDropdown(null)
   }
 
   const handleDelete = async (cert: Certificate) => {
@@ -152,7 +159,6 @@ export default function CertificatesPage() {
       console.error('Failed to delete certificate:', error)
       toastError('Failed to delete certificate')
     }
-    setActiveDropdown(null)
   }
 
   const getDaysUntilExpiry = (expiresAt: string | null) => {
@@ -180,24 +186,25 @@ export default function CertificatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">SSL Certificates</h1>
-          <p className="text-muted-foreground">
-            Manage SSL/TLS certificates for your proxy hosts
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setShowCreateDialog(true)
-          }}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Add Certificate
-        </button>
-      </div>
+      <PageHeader
+        icon={HeaderIcon}
+        title="SSL Certificates"
+        description="Manage SSL/TLS certificates for your proxy hosts"
+        actions={
+          <>
+            <button
+              onClick={() => {
+                resetForm()
+                setShowCreateDialog(true)
+              }}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Certificate
+            </button>
+          </>
+        }
+      />
 
       {/* Certificates Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -238,39 +245,31 @@ export default function CertificatesPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        setActiveDropdown(activeDropdown === cert.id ? null : cert.id)
-                      }
-                      className="rounded-lg p-1 hover:bg-muted"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-
-                    {activeDropdown === cert.id && (
-                      <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-lg border border-border bg-card shadow-lg">
-                        <div className="p-1">
-                          {cert.is_letsencrypt && (
-                            <button
-                              onClick={() => handleRenew(cert)}
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                              Renew
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(cert)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-muted"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="rounded-lg p-1 hover:bg-muted" aria-label="Actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      {cert.is_letsencrypt && (
+                        <DropdownMenuItem
+                          onSelect={() => handleRenew(cert)}
+                          className="gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Renew
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onSelect={() => handleDelete(cert)}
+                        className="gap-2 text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -524,13 +523,6 @@ export default function CertificatesPage() {
         </ModalBody>
       </Modal>
 
-      {/* Click outside to close dropdown */}
-      {activeDropdown && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setActiveDropdown(null)}
-        />
-      )}
     </div>
   )
 }
