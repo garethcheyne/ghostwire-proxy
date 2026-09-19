@@ -10,7 +10,8 @@ import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { IpActionsProvider } from '@/components/ip-actions-provider'
 import { cn } from '@/lib/utils'
-import { clearSession, setSessionActive } from '@/lib/session'
+import { authClient } from '@/lib/auth-client'
+import { clearLegacySession } from '@/lib/session'
 
 interface SidebarContextType {
   isCollapsed: boolean
@@ -39,15 +40,25 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      clearSession()
-      router.push('/auth/login')
-    } else {
-      // Ensure session cookie is set if we have a token
-      setSessionActive()
-      setIsLoading(false)
+    // Check authentication (Better Auth session cookie)
+    let cancelled = false
+    authClient
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return
+        if (data) {
+          setIsLoading(false)
+        } else {
+          clearLegacySession()
+          const next = window.location.pathname + window.location.search
+          router.push(`/auth/login?next=${encodeURIComponent(next)}`)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) router.push('/auth/login')
+      })
+    return () => {
+      cancelled = true
     }
   }, [router])
 

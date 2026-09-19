@@ -55,12 +55,36 @@ fi
 # Run Alembic migrations
 echo "Running database migrations..."
 cd /app
-gosu appuser alembic upgrade head 2>&1
-ALEMBIC_EXIT=$?
+# After a rollback the database can be at a migration this (older) code doesn't know. Migrations
+# are additive, so the older version runs fine on it; start without migrating in that case.
+DB_STATE=$(gosu appuser python - <<'PY' 2>/dev/null
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from sqlalchemy import create_engine
+from app.core.config import settings
+
+known = {rev.revision for rev in ScriptDirectory.from_config(Config("alembic.ini")).walk_revisions()}
+engine = create_engine(settings.sync_database_url)
+with engine.connect() as conn:
+    current = MigrationContext.configure(conn).get_current_heads()
+print("newer" if any(head not in known for head in current) else "ok")
+PY
+)
+if [ "$DB_STATE" = "newer" ]; then
+    echo "WARNING: The database has migrations newer than this version (rolled back?). Starting without migrating."
+    ALEMBIC_EXIT=0
+else
+    gosu appuser alembic upgrade head 2>&1
+    ALEMBIC_EXIT=$?
+fi
 if [ $ALEMBIC_EXIT -eq 0 ]; then
     echo "Database migrations complete."
 else
-    echo "WARNING: Alembic migration failed (exit $ALEMBIC_EXIT), app will attempt to start anyway."
+    # Don't start on a half-migrated database: admin sign-in, for one, depends on the migrations.
+    # The container restarts and retries; scripts/upgrade.sh reports it and how to roll back.
+    echo "ERROR: Alembic migration failed (exit $ALEMBIC_EXIT). Not starting the API."
+    exit 1
 fi
 
 # Drop to appuser and exec the main command

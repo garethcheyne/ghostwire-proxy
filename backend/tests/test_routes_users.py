@@ -19,7 +19,7 @@ class TestListUsers:
     @pytest.mark.asyncio
     async def test_list_users_no_auth(self, client):
         response = await client.get("/api/users/")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestCreateUser:

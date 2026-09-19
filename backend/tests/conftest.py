@@ -21,12 +21,15 @@ os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key-for-testing-only")
 # The target now comes from its own variable and is validated below.
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Fast rounds for tests
+os.environ.setdefault("BETTER_AUTH_SECRET", "test-better-auth-secret")
+os.environ.setdefault("INTERNAL_AUTH_TOKEN", "test-internal-token")
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from httpx import AsyncClient, ASGITransport
 
 from app.core.database import Base, get_db
-from app.core.security import get_password_hash, create_access_token
+from app.core.security import get_password_hash
+from app.core.auth_session import create_session
 from app.models.user import User
 
 # Test database URL — a dedicated throwaway database, never the ambient one.
@@ -134,15 +137,19 @@ async def inactive_user(db_session: AsyncSession):
 
 
 @pytest.fixture
-def admin_token(admin_user: User):
-    """Create a valid JWT token for the admin user."""
-    return create_access_token(data={"sub": admin_user.id})
+async def admin_token(db_session: AsyncSession, admin_user: User):
+    """A signed-in session (Better Auth) for the admin user; its token works as a Bearer."""
+    session = await create_session(db_session, admin_user.id)
+    await db_session.commit()
+    return session.token
 
 
 @pytest.fixture
-def user_token(regular_user: User):
-    """Create a valid JWT token for a regular user."""
-    return create_access_token(data={"sub": regular_user.id})
+async def user_token(db_session: AsyncSession, regular_user: User):
+    """A signed-in session (Better Auth) for a regular user."""
+    session = await create_session(db_session, regular_user.id)
+    await db_session.commit()
+    return session.token
 
 
 @pytest.fixture

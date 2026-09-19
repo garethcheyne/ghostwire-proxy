@@ -13,7 +13,11 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379"
 
-    # JWT
+    # Better Auth (admin sign-in, run by the admin UI). Same value as the UI's BETTER_AUTH_SECRET;
+    # the API uses it to check the signature on the session cookie.
+    better_auth_secret: str = ""
+
+    # JWT (auth wall sessions; admin sign-in no longer uses it)
     jwt_secret: str
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7

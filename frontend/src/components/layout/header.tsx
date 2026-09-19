@@ -52,7 +52,7 @@ import {
 import Link from 'next/link'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { clearSession } from '@/lib/session'
+import { signOutAndRedirect } from '@/lib/session'
 
 interface HeaderProps {
   title?: string
@@ -154,7 +154,7 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
 
   const fetchUser = async () => {
     try {
-      const response = await api.get('/api/auth/me')
+      const response = await api.get('/api/users/me')
       setUser(response.data)
     } catch {
       // Ignore errors
@@ -191,16 +191,10 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
   }
 
   const handleLogout = async () => {
-    // Best-effort notify backend so the logout is audit-logged.
-    // We don't await failure — even if the call fails, we still clear the client.
-    try {
-      await api.post('/api/auth/logout')
-    } catch {
-      // Ignore — local logout still proceeds.
-    }
-    clearSession()
-    router.push('/auth/login')
+    // Ends the Better Auth session (audit-logged by the auth server) and clears the client.
+    await signOutAndRedirect()
   }
+
 
   const getInitials = (name: string) => {
     return name

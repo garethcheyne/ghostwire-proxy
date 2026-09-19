@@ -1,25 +1,37 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { Loader2, AlertCircle, ShieldCheck, KeyRound } from 'lucide-react'
 import api from '@/lib/api'
-import { setSessionActive } from '@/lib/session'
+import { authClient } from '@/lib/auth-client'
+import { clearLegacySession } from '@/lib/session'
 
-export default function LoginPage() {
+/** Where to go after signing in: ?next= when it's a path on this site, else the dashboard. */
+function nextPath(value: string | null) {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard'
+}
+
+/** Better Auth's error body, or a fallback. */
+function messageOf(error: { message?: string; status?: number } | null | undefined, fallback: string) {
+  if (!error) return fallback
+  if (error.status === 429) return 'Too many attempts. Wait a moment and try again.'
+  return error.message || fallback
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isSetupMode, setIsSetupMode] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Two-factor challenge. `stage` drives which form is shown: the password
-  // form, the 6-digit code form, or forced enrolment when MFA is required
-  // org-wide and this account has not set it up yet.
+  // Two-factor. `stage` drives which form is shown: the password form, the 6-digit code form,
+  // or forced enrolment when MFA is required org-wide and this account has not set it up yet.
+  // Between steps the pending sign-in is a short-lived signed cookie set by the auth server.
   const [stage, setStage] = useState<'password' | 'totp' | 'enrol'>('password')
-  const [challengeToken, setChallengeToken] = useState('')
-  const [enrolmentToken, setEnrolmentToken] = useState('')
   const [totpCode, setTotpCode] = useState('')
   const [enrolSecret, setEnrolSecret] = useState('')
   const [enrolQr, setEnrolQr] = useState('')
@@ -48,6 +60,11 @@ export default function LoginPage() {
     }
   }
 
+  const finishSignIn = () => {
+    clearLegacySession()
+    router.push(isSetupMode ? '/dashboard' : nextPath(searchParams.get('next')))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -58,70 +75,68 @@ export default function LoginPage() {
         // Initial setup
         if (password !== confirmPassword) {
           setError('Passwords do not match')
-          setIsSubmitting(false)
           return
         }
 
         if (password.length < 8) {
           setError('Password must be at least 8 characters')
-          setIsSubmitting(false)
           return
         }
 
-        const response = await api.post('/api/setup/initialize', {
+        await api.post('/api/setup/initialize', {
           email,
           password,
           name,
         })
-
-        localStorage.setItem('access_token', response.data.access_token)
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-        setSessionActive()
-        router.push('/dashboard')
-      } else {
-        // Normal login. The password alone may not be enough: the API answers
-        // with a challenge instead of a session when MFA is in play.
-        const response = await api.post('/api/auth/login', {
-          email,
-          password,
-        })
-
-        if (response.data.challenge === 'totp') {
-          setChallengeToken(response.data.challenge_token)
-          setStage('totp')
-          return
-        }
-
-        if (response.data.challenge === 'enrol') {
-          setEnrolmentToken(response.data.enrolment_token)
-          await beginEnrolment(response.data.enrolment_token)
-          setStage('enrol')
-          return
-        }
-
-        localStorage.setItem('access_token', response.data.access_token)
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-        setSessionActive()
-        router.push('/dashboard')
       }
+
+      // Sign in with Better Auth. The password alone may not be enough: the auth server answers
+      // with { mfa: 'totp' | 'enrol' } instead of a session when two-factor is in play.
+      const { data, error: signInError } = await authClient.signIn.email({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+
+      if (signInError) {
+        setError(
+          signInError.status === 403
+            ? signInError.message || 'Account is disabled'
+            : signInError.status === 429
+              ? 'Too many attempts. Wait a moment and try again.'
+              : 'Invalid email or password'
+        )
+        return
+      }
+
+      const mfa = (data as { mfa?: 'totp' | 'enrol' } | null)?.mfa
+      if (mfa === 'totp') {
+        setStage('totp')
+        return
+      }
+      if (mfa === 'enrol') {
+        await beginEnrolment()
+        setStage('enrol')
+        return
+      }
+
+      finishSignIn()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'An error occurred')
+      setError(err.response?.data?.detail || err.message || 'An error occurred')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // The enrolment token is not a session, so it has to be passed explicitly —
-  // the axios interceptor only attaches a stored access_token.
-  const beginEnrolment = async (token: string) => {
-    const setup = await api.post(
-      '/api/auth/mfa/setup',
-      {},
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    setEnrolSecret(setup.data.secret)
-    setEnrolQr(setup.data.qr_code || '')
-    setBackupCodes(setup.data.backup_codes || [])
+  const beginEnrolment = async () => {
+    const { data, error: setupError } = await authClient.$fetch<{
+      secret: string
+      qr_code: string | null
+      backup_codes: string[]
+    }>('/admin-mfa/enrol/begin', { method: 'POST', body: {} })
+    if (setupError || !data) throw new Error(messageOf(setupError, 'Could not start two-factor setup'))
+    setEnrolSecret(data.secret)
+    setEnrolQr(data.qr_code || '')
+    setBackupCodes(data.backup_codes || [])
   }
 
   const handleTotpSubmit = async (e: React.FormEvent) => {
@@ -129,52 +144,47 @@ export default function LoginPage() {
     setError('')
     setIsSubmitting(true)
     try {
-      const response = await api.post('/api/auth/login/totp', {
-        challenge_token: challengeToken,
-        code: totpCode.trim(),
+      const { error: verifyError } = await authClient.$fetch('/admin-mfa/verify', {
+        method: 'POST',
+        body: { code: totpCode.trim() },
       })
-      localStorage.setItem('access_token', response.data.access_token)
-      localStorage.setItem('refresh_token', response.data.refresh_token)
-      setSessionActive()
-      router.push('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid verification code')
-      setTotpCode('')
+      if (verifyError) {
+        setError(messageOf(verifyError, 'Invalid verification code'))
+        setTotpCode('')
+        if (verifyError.status === 401 && /again/i.test(verifyError.message || '')) restart(true)
+        return
+      }
+      finishSignIn()
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Verifying during forced enrolment also completes the login, so the API
-  // hands back the session here rather than making the user sign in twice.
+  // Confirming the code during forced enrolment also completes the sign-in.
   const handleEnrolSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setIsSubmitting(true)
     try {
-      const response = await api.post(
-        '/api/auth/mfa/verify',
-        { code: totpCode.trim() },
-        { headers: { Authorization: `Bearer ${enrolmentToken}` } }
-      )
-      localStorage.setItem('access_token', response.data.access_token)
-      localStorage.setItem('refresh_token', response.data.refresh_token)
-      setSessionActive()
-      router.push('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'That code did not match')
-      setTotpCode('')
+      const { error: confirmError } = await authClient.$fetch('/admin-mfa/enrol/confirm', {
+        method: 'POST',
+        body: { code: totpCode.trim() },
+      })
+      if (confirmError) {
+        setError(messageOf(confirmError, 'That code did not match'))
+        setTotpCode('')
+        return
+      }
+      finishSignIn()
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const restart = () => {
+  const restart = (keepError = false) => {
     setStage('password')
     setTotpCode('')
-    setChallengeToken('')
-    setEnrolmentToken('')
-    setError('')
+    if (!keepError) setError('')
     setPassword('')
   }
 
@@ -353,7 +363,7 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={restart}
+            onClick={() => restart()}
             className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Back to sign in
@@ -448,7 +458,7 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={restart}
+            onClick={() => restart()}
             className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
@@ -456,5 +466,20 @@ export default function LoginPage() {
         </form>
       )}
     </div>
+  )
+}
+
+// useSearchParams needs a Suspense boundary so the page can still be prerendered.
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

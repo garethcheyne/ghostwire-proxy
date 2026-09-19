@@ -89,7 +89,7 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Alert severity levels and filtering
 
 ### System & Administration
-- Multi-user admin with JWT authentication
+- Multi-user admin with [Better Auth](https://better-auth.com) sign-in (httpOnly session cookies)
 - Audit logging for all admin actions
 - Backup and restore
 - System health monitoring
@@ -196,7 +196,7 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 | **Frontend** | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
 | **Backend API** | Python 3.12, FastAPI, SQLAlchemy |
 | **Database** | PostgreSQL 16 (via asyncpg) |
-| **Auth** | JWT, TOTP |
+| **Auth** | Better Auth (admin), JWT + TOTP (auth walls) |
 | **Containers** | Docker Compose |
 
 ---
@@ -249,16 +249,18 @@ Run the included upgrade script from your project directory:
 ```bash
 ./scripts/upgrade.sh            # upgrade to latest tagged release
 ./scripts/upgrade.sh v2026.04.05.1200  # upgrade to a specific version
+./scripts/upgrade.sh --rollback # back to the images from before the last upgrade
 ```
 
 The script will:
 1. **Back up** your database (`data/backups/pre-upgrade-*.sql`)
-2. **Pull** the new version via git
-3. **Build** new container images
-4. **Restart** services — database migrations run automatically on startup
-5. **Health check** — verifies the API is responding
+2. **Keep** the running images as `:previous` for `--rollback`
+3. **Pull** the new version via git
+4. **Build** new container images
+5. **Restart** services — database migrations run automatically on startup
+6. **Health check** — verifies the API and admin sign-in are responding
 
-If the health check fails, the script prints rollback instructions.
+If the health check fails, run `./scripts/upgrade.sh --rollback`.
 
 ### Manual
 
@@ -281,6 +283,28 @@ docker logs ghostwire-proxy-api 2>&1 | head -20
 # Look for: "Running upgrade ... baseline schema" and "Database migrations complete."
 ```
 
+### Admin sign-in and locked-out admins
+
+The admin panel signs in with [Better Auth](https://better-auth.com): the session is an httpOnly
+cookie (`gwp.session_token`) that the API checks against the `auth_session` table. Passwords are
+bcrypt, as before; the upgrade that introduced Better Auth copied every admin's existing password
+hash, so passwords didn't change (everyone signs in once more after that upgrade).
+
+Two-factor for admins works as before: the secrets, backup codes and the "required for every
+admin" setting stay in the API, and a small Better Auth plugin (`frontend/src/lib/auth-admin-mfa.ts`)
+asks for the code, or runs enrolment, before it creates a session. Nobody re-enrols.
+
+If nobody can sign in, reset a password from the server:
+
+```bash
+docker exec -it ghostwire-proxy-api python -m app.cli.reset_password --list
+docker exec -it ghostwire-proxy-api python -m app.cli.reset_password you@example.com
+docker exec -it ghostwire-proxy-api python -m app.cli.reset_password you@example.com --generate --make-admin
+```
+
+It sets the password, re-enables the account, signs the user out everywhere and records it in the
+audit log. Auth walls (the login pages in front of proxied sites) are separate and unaffected.
+
 ### How migrations work
 
 Ghostwire Proxy uses **Alembic** for database migrations. On every container start, `entrypoint.sh` runs `alembic upgrade head` before the application starts:
@@ -296,7 +320,9 @@ Ghostwire Proxy uses **Alembic** for database migrations. On every container sta
 
 ### Rollback
 
-If an upgrade goes wrong:
+`./scripts/upgrade.sh --rollback` puts back the images from before the last upgrade (the script keeps
+them from the upgrade that introduced it onwards). Migrations stay applied; they are additive, and an
+older version starts on a newer database with a warning. By hand:
 
 ```bash
 # 1. Check out the previous version
@@ -361,7 +387,7 @@ Ghostwire Proxy is under active development. Here's what's done and what's in pr
 - Access lists (IP allow/deny)
 - Traffic logging and analytics
 - Alert system
-- User management with JWT auth
+- User management with Better Auth sign-in
 - Audit logging
 - Backup and restore
 - System health monitoring

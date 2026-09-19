@@ -2,18 +2,16 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { authClient } from '@/lib/auth-client'
 
 export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      router.push('/dashboard')
-    } else {
-      router.push('/auth/login')
-    }
+    authClient
+      .getSession()
+      .then(({ data }) => router.push(data ? '/dashboard' : '/auth/login'))
+      .catch(() => router.push('/auth/login'))
   }, [router])
 
   return (

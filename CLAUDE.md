@@ -22,8 +22,8 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 | Proxy | OpenResty (nginx + Lua) on Alpine |
 | Frontend | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend | Python 3.12, FastAPI |
-| Database | SQLite (aiosqlite) |
-| Auth | JWT, TOTP |
+| Database | PostgreSQL 16 (asyncpg, Alembic migrations) |
+| Auth | Admin: Better Auth in the UI (`frontend/src/lib/auth.ts`), API reads its session (`backend/app/core/auth_session.py`); admin 2FA stays in the API (`admin_mfa_service`), asked for by the `auth-admin-mfa` plugin. Auth walls: JWT, TOTP |
 
 ### Ports
 - Proxy HTTP: 80

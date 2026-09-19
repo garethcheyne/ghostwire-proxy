@@ -1,30 +1,40 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.auth_session import COOKIE_NAMES, find_session, token_from_cookie
 from app.core.database import get_db
-from app.core.security import decode_token
 from app.models.user import User
 
-security = HTTPBearer()
+
+def _session_token(request: Request) -> str | None:
+    """Better Auth's signed session cookie, or its bare token as a Bearer header."""
+    for name in COOKIE_NAMES:
+        token = token_from_cookie(request.cookies.get(name))
+        if token:
+            return token
+
+    authorization = request.headers.get("authorization", "")
+    scheme, _, credentials = authorization.partition(" ")
+    if scheme.lower() == "bearer" and credentials.strip():
+        return credentials.strip()
+    return None
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    token = credentials.credentials
-    payload = decode_token(token)
+    token = _session_token(request)
+    session = await find_session(db, token) if token else None
 
-    if not payload or payload.get("type") != "access":
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Not signed in or session expired",
         )
 
-    user_id = payload.get("sub")
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == session.user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -54,38 +64,11 @@ async def get_current_admin_user(
 
 
 async def get_enrolling_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> User:
-    """Authenticate a user who is allowed to set up MFA but may not have a session.
+    """A signed-in user setting up two-factor from the settings page.
 
-    Accepts a normal access token (voluntary enrolment from the settings page)
-    or a short-lived "mfa_enrol" token, which is all a user gets when MFA is
-    required org-wide and they have not enrolled yet. The enrolment token is
-    deliberately useless anywhere else: every other endpoint depends on
-    `get_current_user`, which only accepts type "access".
+    Forced enrolment at sign-in (MFA required org-wide, user not enrolled) has no session yet; the
+    admin UI's Better Auth plugin runs it through /api/internal/admin-mfa/* instead.
     """
-    payload = decode_token(credentials.credentials)
-
-    if not payload or payload.get("type") not in ("access", "mfa_enrol"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    result = await db.execute(select(User).where(User.id == payload.get("sub")))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled",
-        )
-
-    return user
+    return current_user

@@ -2,20 +2,19 @@
 
 Enrolment is a three-step handshake:
 
-    POST /api/auth/mfa/setup    -> secret + QR + backup codes (nothing enforced yet)
-    POST /api/auth/mfa/verify   -> user proves they can generate a code; MFA goes live
-    POST /api/auth/mfa/disable  -> requires password *and* a current code
+    POST /api/admin-mfa/setup    -> secret + QR + backup codes (nothing enforced yet)
+    POST /api/admin-mfa/verify   -> user proves they can generate a code; MFA goes live
+    POST /api/admin-mfa/disable  -> requires password *and* a current code
 
-`setup` and `verify` accept an enrolment token as well as a session token, so a
-user caught by the org-wide requirement can complete enrolment before they have
-a session. Everything else here needs a real session.
+These need a signed-in session. A user caught by the org-wide requirement at sign-in has no
+session yet; the admin UI's Better Auth plugin enrols them through internal_admin_mfa.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limiter import limiter, RATE_LIMITS
-from app.core.security import verify_password
+from app.core.auth_session import verify_user_password
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.user import User
@@ -103,12 +102,7 @@ async def verify_mfa(
     current_user: User = Depends(get_enrolling_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Confirm enrolment with the first generated code.
-
-    If the caller got here with an enrolment token (forced enrolment at login),
-    a successful verification also completes that login — otherwise they would
-    have to enter their password again immediately.
-    """
+    """Confirm enrolment with the first generated code."""
     try:
         ok = await admin_mfa_service.confirm_enrolment(db, current_user, verify_request.code)
     except admin_mfa_service.MfaNotAvailable as e:
@@ -123,15 +117,9 @@ async def verify_mfa(
 
     await _audit(db, request, current_user, "mfa_enabled")
 
-    # Complete the pending login for the forced-enrolment path.
-    from app.api.routes.auth import _issue_session
-
-    session = _issue_session(current_user)
     return MfaVerifiedResponse(
         success=True,
         message="Two-factor authentication is now enabled.",
-        access_token=session.access_token,
-        refresh_token=session.refresh_token,
     )
 
 
@@ -156,7 +144,7 @@ async def disable_mfa(
             detail="Two-factor authentication is not enabled.",
         )
 
-    if not verify_password(disable_request.password, current_user.password_hash):
+    if not await verify_user_password(db, current_user, disable_request.password):
         await _audit(db, request, current_user, "mfa_disable_failed", "Invalid password")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
 

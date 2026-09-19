@@ -1,70 +1,111 @@
-"""Tests for deps module — authentication dependencies."""
+"""Tests for deps module — sign-in through Better Auth sessions."""
+
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from app.core.security import create_access_token, create_refresh_token
-from app.api.deps import get_current_user, get_current_admin_user
-from app.models.user import User
 from fastapi import HTTPException
+from starlette.requests import Request
+
+from app.api.deps import get_current_user, get_current_admin_user
+from app.core.auth_session import create_session, sign
+
+
+def make_request(cookies: dict[str, str] | None = None, bearer: str | None = None) -> Request:
+    headers = []
+    if cookies:
+        headers.append((b"cookie", "; ".join(f"{k}={v}" for k, v in cookies.items()).encode()))
+    if bearer:
+        headers.append((b"authorization", f"Bearer {bearer}".encode()))
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": headers})
+
+
+def cookie_value(token: str) -> str:
+    """What Better Auth puts in the cookie: url-encoded `token.signature`."""
+    return quote(f"{token}.{sign(token)}", safe="")
 
 
 class TestGetCurrentUser:
-    """Tests for the get_current_user dependency."""
-
     @pytest.mark.asyncio
-    async def test_valid_token_returns_user(self, db_session, admin_user):
-        token = create_access_token(data={"sub": admin_user.id})
-        credentials = MagicMock()
-        credentials.credentials = token
+    async def test_signed_cookie_returns_user(self, db_session, admin_user):
+        session = await create_session(db_session, admin_user.id)
+        await db_session.commit()
 
-        user = await get_current_user(credentials=credentials, db=db_session)
+        request = make_request(cookies={"gwp.session_token": cookie_value(session.token)})
+        user = await get_current_user(request=request, db=db_session)
         assert user.id == admin_user.id
-        assert user.email == "admin@test.com"
 
     @pytest.mark.asyncio
-    async def test_invalid_token_raises(self, db_session):
-        credentials = MagicMock()
-        credentials.credentials = "invalid-token"
+    async def test_secure_cookie_name_on_https(self, db_session, admin_user):
+        session = await create_session(db_session, admin_user.id)
+        await db_session.commit()
 
+        request = make_request(cookies={"__Secure-gwp.session_token": cookie_value(session.token)})
+        user = await get_current_user(request=request, db=db_session)
+        assert user.id == admin_user.id
+
+    @pytest.mark.asyncio
+    async def test_bearer_session_token_returns_user(self, db_session, admin_user):
+        session = await create_session(db_session, admin_user.id)
+        await db_session.commit()
+
+        user = await get_current_user(request=make_request(bearer=session.token), db=db_session)
+        assert user.id == admin_user.id
+
+    @pytest.mark.asyncio
+    async def test_forged_signature_rejected(self, db_session, admin_user):
+        session = await create_session(db_session, admin_user.id)
+        await db_session.commit()
+
+        forged = quote(f"{session.token}.{sign(session.token, 'another-secret')}", safe="")
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(credentials=credentials, db=db_session)
+            await get_current_user(
+                request=make_request(cookies={"gwp.session_token": forged}), db=db_session
+            )
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_refresh_token_rejected(self, db_session, admin_user):
-        token = create_refresh_token(data={"sub": admin_user.id})
-        credentials = MagicMock()
-        credentials.credentials = token
-
+    async def test_unknown_token_rejected(self, db_session):
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(credentials=credentials, db=db_session)
+            await get_current_user(request=make_request(bearer="not-a-session"), db=db_session)
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_deleted_user_raises(self, db_session):
-        token = create_access_token(data={"sub": "deleted-user-id"})
-        credentials = MagicMock()
-        credentials.credentials = token
-
+    async def test_no_credentials_rejected(self, db_session):
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(credentials=credentials, db=db_session)
+            await get_current_user(request=make_request(), db=db_session)
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_inactive_user_raises(self, db_session, inactive_user):
-        token = create_access_token(data={"sub": inactive_user.id})
-        credentials = MagicMock()
-        credentials.credentials = token
+    async def test_expired_session_rejected(self, db_session, admin_user):
+        session = await create_session(db_session, admin_user.id)
+        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db_session.commit()
 
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(credentials=credentials, db=db_session)
+            await get_current_user(request=make_request(bearer=session.token), db=db_session)
+        assert exc.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_deleted_user_rejected(self, db_session):
+        session = await create_session(db_session, "deleted-user-id")
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(request=make_request(bearer=session.token), db=db_session)
+        assert exc.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_inactive_user_rejected(self, db_session, inactive_user):
+        session = await create_session(db_session, inactive_user.id)
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(request=make_request(bearer=session.token), db=db_session)
         assert exc.value.status_code == 403
 
 
 class TestGetCurrentAdminUser:
-    """Tests for the get_current_admin_user dependency."""
-
     @pytest.mark.asyncio
     async def test_admin_user_passes(self, admin_user):
         result = await get_current_admin_user(current_user=admin_user)

@@ -59,7 +59,7 @@ class TestRateLimitsRoutes:
     @pytest.mark.asyncio
     async def test_rate_limits_no_auth(self, client):
         response = await client.get("/api/rate-limits")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestGeoipRoutes:
@@ -89,4 +89,4 @@ class TestGeoipRoutes:
     @pytest.mark.asyncio
     async def test_geoip_no_auth(self, client):
         response = await client.get("/api/geoip/settings")
-        assert response.status_code == 403
+        assert response.status_code == 401

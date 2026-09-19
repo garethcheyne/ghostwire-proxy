@@ -18,7 +18,7 @@ class TestGetSettings:
     @pytest.mark.asyncio
     async def test_get_settings_no_auth(self, client):
         response = await client.get("/api/settings/")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestGetSetting:
@@ -82,4 +82,4 @@ class TestReloadNginx:
     @pytest.mark.asyncio
     async def test_reload_nginx_no_auth(self, client):
         response = await client.post("/api/settings/reload-nginx")
-        assert response.status_code == 403
+        assert response.status_code == 401

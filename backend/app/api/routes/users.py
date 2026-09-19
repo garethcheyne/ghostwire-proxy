@@ -5,7 +5,7 @@ import secrets
 import string
 
 from app.core.database import get_db
-from app.core.security import get_password_hash
+from app.core.auth_session import delete_auth_data, revoke_sessions, set_password
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.audit_log import AuditLog
@@ -19,6 +19,12 @@ def generate_password(length: int = 16) -> str:
     """Generate a secure random password"""
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
     return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """The signed-in user"""
+    return current_user
 
 
 @router.get("/", response_model=list[UserResponse])
@@ -73,10 +79,11 @@ async def create_user(
     user = User(
         email=user_data.email.lower(),
         name=user_data.name,
-        password_hash=get_password_hash(password),
         role=user_data.role,
     )
     db.add(user)
+    await db.flush()
+    await set_password(db, user, password)
 
     # Audit log
     audit_log = AuditLog(
@@ -146,13 +153,18 @@ async def update_user(
 
     # Update fields
     update_data = user_data.model_dump(exclude_unset=True)
-    if 'password' in update_data:
-        update_data['password_hash'] = get_password_hash(update_data.pop('password'))
+    new_password = update_data.pop('password', None)
+    if new_password:
+        await set_password(db, user, new_password)
     if 'email' in update_data:
         update_data['email'] = update_data['email'].lower()
 
     for field, value in update_data.items():
         setattr(user, field, value)
+
+    # Disabling someone, or changing their password, signs them out everywhere.
+    if update_data.get('is_active') is False or new_password:
+        await revoke_sessions(db, user.id)
 
     # Audit log
     audit_log = AuditLog(
@@ -204,5 +216,6 @@ async def delete_user(
     )
     db.add(audit_log)
 
+    await delete_auth_data(db, user.id)
     await db.delete(user)
     await db.commit()

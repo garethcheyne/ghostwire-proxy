@@ -25,6 +25,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { signOutAndRedirect } from '@/lib/session'
 import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/layout/page-header'
 import { DatabaseBackup as HeaderIcon } from 'lucide-react'
@@ -203,9 +204,7 @@ export default function BackupsPage() {
 
       // Database was replaced — existing tokens are invalid, force re-login
       setTimeout(() => {
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        window.location.href = '/auth/login'
+        void signOutAndRedirect()
       }, 2000)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to restore backup')

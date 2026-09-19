@@ -57,8 +57,8 @@ export function MfaCard() {
   const load = async () => {
     try {
       const [s, p] = await Promise.all([
-        api.get('/api/auth/mfa/status'),
-        api.get('/api/auth/mfa/policy').catch(() => null), // admin-only
+        api.get('/api/admin-mfa/status'),
+        api.get('/api/admin-mfa/policy').catch(() => null), // admin-only
       ])
       setStatus(s.data)
       if (p) setPolicy(p.data)
@@ -77,7 +77,7 @@ export function MfaCard() {
     setError('')
     setBusy(true)
     try {
-      const { data } = await api.post('/api/auth/mfa/setup', {})
+      const { data } = await api.post('/api/admin-mfa/setup', {})
       setSecret(data.secret)
       setQr(data.qr_code || '')
       setCodes(data.backup_codes || [])
@@ -95,7 +95,7 @@ export function MfaCard() {
     setError('')
     setBusy(true)
     try {
-      await api.post('/api/auth/mfa/verify', { code: verifyCode.trim() })
+      await api.post('/api/admin-mfa/verify', { code: verifyCode.trim() })
       setSetupOpen(false)
       setNotice('Two-factor authentication is now enabled on your account.')
       await load()
@@ -110,7 +110,7 @@ export function MfaCard() {
     setError('')
     setBusy(true)
     try {
-      await api.post('/api/auth/mfa/disable', {
+      await api.post('/api/admin-mfa/disable', {
         password: disablePassword,
         code: disableCode.trim(),
       })
@@ -130,7 +130,7 @@ export function MfaCard() {
     setError('')
     setBusy(true)
     try {
-      const { data } = await api.post('/api/auth/mfa/backup-codes/regenerate', {
+      const { data } = await api.post('/api/admin-mfa/backup-codes/regenerate', {
         code: regenCode.trim(),
       })
       setNewCodes(data.backup_codes)
@@ -147,7 +147,7 @@ export function MfaCard() {
     setError('')
     setBusy(true)
     try {
-      await api.put('/api/auth/mfa/policy', { required })
+      await api.put('/api/admin-mfa/policy', { required })
       setNotice(
         required
           ? 'Two-factor authentication is now required. Anyone not enrolled will be asked to set it up at their next sign-in.'

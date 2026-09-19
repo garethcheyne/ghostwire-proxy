@@ -8,6 +8,7 @@ set -euo pipefail
 #   ./scripts/upgrade.sh              # upgrade to latest
 #   ./scripts/upgrade.sh v1.2.0       # upgrade to specific version
 #   ./scripts/upgrade.sh --force      # rebuild current version (if containers are stale)
+#   ./scripts/upgrade.sh --rollback   # go back to the images that ran before the last upgrade
 # ─────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,12 +16,16 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 COMPOSE="docker compose"
 FORCE=false
+ROLLBACK=false
 TARGET_VERSION=""
+# Services built from this repo; their running images are kept as :previous for --rollback.
+BUILT_SERVICES="ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force|-f) FORCE=true ;;
+        --rollback) ROLLBACK=true ;;
         *) TARGET_VERSION="$1" ;;
     esac
     shift
@@ -38,6 +43,61 @@ warn()  { echo -e "${YELLOW}[ warn ]${NC} $*"; }
 err()   { echo -e "${RED}[error ]${NC} $*" >&2; }
 
 CURRENT_VERSION=$(cat "$PROJECT_DIR/VERSION" 2>/dev/null || echo "unknown")
+
+# The image a service's container runs (compose names it <project>-<service>).
+service_image() {
+    local container
+    container=$($COMPOSE ps -q "$1" 2>/dev/null | head -n1)
+    [ -n "$container" ] && docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null
+}
+
+# Waits for the API, then checks admin sign-in (Better Auth in the UI, reading the database).
+check_health() {
+    local api_ok=false ui_ok=false
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:8089/health >/dev/null 2>&1; then api_ok=true; break; fi
+        sleep 2
+    done
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:88/api/auth/get-session >/dev/null 2>&1; then ui_ok=true; break; fi
+        sleep 2
+    done
+    [ "$api_ok" = true ] || err "API health check failed (http://localhost:8089/health)"
+    [ "$ui_ok" = true ] || err "Admin sign-in check failed (http://localhost:88/api/auth/get-session)"
+    [ "$api_ok" = true ] && [ "$ui_ok" = true ]
+}
+
+# ─────────────────────────────────────────────
+# Rollback: the images kept by the last upgrade
+# ─────────────────────────────────────────────
+if [ "$ROLLBACK" = true ]; then
+    cd "$PROJECT_DIR"
+    log "Rolling back to the images from before the last upgrade..."
+    ROLLED=""
+    for svc in $BUILT_SERVICES; do
+        image=$(service_image "$svc" || true)
+        [ -z "$image" ] && continue
+        image="${image%%:*}"
+        if docker image inspect "$image:previous" >/dev/null 2>&1; then
+            docker tag "$image:previous" "$image:latest"
+            ROLLED="$ROLLED $svc"
+        else
+            warn "No previous image for $svc; leaving it as it is."
+        fi
+    done
+    [ -z "$ROLLED" ] && { err "Nothing to roll back to (no :previous images)."; exit 1; }
+    # shellcheck disable=SC2086
+    $COMPOSE up -d --no-build --force-recreate $ROLLED
+    if check_health; then
+        ok "Rolled back:$ROLLED"
+        warn "The code in $PROJECT_DIR is still the newer version; the next upgrade rebuilds it."
+        warn "Database migrations are not undone (they are additive, so the older version runs on them)."
+    else
+        err "Rolled back, but the services aren't healthy. Check: $COMPOSE logs --tail 50"
+        exit 1
+    fi
+    exit 0
+fi
 
 # ─────────────────────────────────────────────
 # 1. Determine target version
@@ -145,6 +205,17 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     done < "$PROJECT_DIR/.env"
 fi
 
+# Admin sign-in (Better Auth) needs a secret. docker-compose.yml falls back to NEXTAUTH_SECRET, then
+# JWT_SECRET (so existing installs keep their sessions); only if none is set, create one.
+if [ -f "$PROJECT_DIR/.env" ] && [ -z "${BETTER_AUTH_SECRET:-}" ] && [ -z "${NEXTAUTH_SECRET:-}" ] && [ -z "${JWT_SECRET:-}" ]; then
+    NEW_SECRET=$(openssl rand -base64 48 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c 48)
+    [ -z "$NEW_SECRET" ] && NEW_SECRET=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
+    printf '\n# Signs admin session cookies (added by upgrade.sh on %s)\nBETTER_AUTH_SECRET=%s\n' \
+        "$(date +%F)" "$NEW_SECRET" >> "$PROJECT_DIR/.env"
+    export BETTER_AUTH_SECRET="$NEW_SECRET"
+    ok "Added BETTER_AUTH_SECRET to .env (admin sign-in)"
+fi
+
 PG_USER="${POSTGRES_USER:-ghostwire}"
 PG_DB="${POSTGRES_DB:-ghostwire_proxy}"
 PG_PASS="${POSTGRES_PASSWORD:-}"
@@ -187,6 +258,14 @@ fi
 # ─────────────────────────────────────────────
 # 5. Build new images
 # ─────────────────────────────────────────────
+log "Keeping the current images for rollback (./scripts/upgrade.sh --rollback)..."
+for svc in $BUILT_SERVICES; do
+    image=$(service_image "$svc" || true)
+    [ -z "$image" ] && continue
+    image_id=$($COMPOSE images -q "$svc" 2>/dev/null | head -n1)
+    [ -n "$image_id" ] && docker tag "$image_id" "${image%%:*}:previous" 2>/dev/null || true
+done
+
 log "Building new container images..."
 
 # Export BUILD_VERSION so docker compose passes it as a build arg to the UI Dockerfile.
@@ -238,23 +317,13 @@ ok "Services restarted"
 # ─────────────────────────────────────────────
 log "Waiting for services to become healthy..."
 
-HEALTHY=false
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:8089/health >/dev/null 2>&1; then
-        HEALTHY=true
-        break
-    fi
-    sleep 2
-done
-
-if [ "$HEALTHY" = true ]; then
-    ok "All services healthy"
+if check_health; then
+    ok "All services healthy (API and admin sign-in)"
 else
-    err "Health check failed after 60 seconds!"
+    err "Health check failed!"
     echo ""
-    warn "To rollback:"
-    warn "  git checkout v$CURRENT_VERSION"
-    warn "  $COMPOSE up -d --build"
+    warn "See why:      $COMPOSE logs --tail 50 ghostwire-proxy-api ghostwire-proxy-ui"
+    warn "To rollback:  ./scripts/upgrade.sh --rollback"
     if [ -n "${BACKUP_FILE:-}" ]; then
         warn "  Restore DB: cat $BACKUP_FILE | docker exec -i ghostwire-proxy-postgres psql -U ghostwire ghostwire_proxy"
     fi

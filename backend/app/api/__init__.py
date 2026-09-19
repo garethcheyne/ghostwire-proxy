@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import auth, users, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers
+from app.api.routes import users, internal_admin_mfa, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers
 
 router = APIRouter()
 
@@ -8,13 +8,14 @@ router.include_router(setup.router, prefix="/setup", tags=["Setup"])
 
 # Internal routes (no auth - called from nginx Lua)
 router.include_router(internal.router, prefix="/internal", tags=["Internal"])
+router.include_router(internal_admin_mfa.router, prefix="/internal/admin-mfa", tags=["Internal"])
 
 # Auth portal routes (no auth - public login pages)
 router.include_router(auth_portal.router, prefix="/auth-portal", tags=["Auth Portal"])
 
 # Include all route modules
-router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-router.include_router(mfa.router, prefix="/auth/mfa", tags=["Two-Factor Auth"])
+# Admin sign-in (/api/auth/*) is Better Auth in the admin UI; see frontend/src/lib/auth.ts.
+router.include_router(mfa.router, prefix="/admin-mfa", tags=["Two-Factor Auth"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(proxy_hosts.router, prefix="/proxy-hosts", tags=["Proxy Hosts"])
 router.include_router(certificates.router, prefix="/certificates", tags=["Certificates"])

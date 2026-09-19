@@ -8,9 +8,8 @@ from sqlalchemy import select, func
 from pydantic import BaseModel, EmailStr
 
 from app.core.database import get_db
-from app.core.security import get_password_hash, create_access_token, create_refresh_token
+from app.core.auth_session import set_password
 from app.models.user import User
-from app.schemas.auth import TokenResponse
 
 router = APIRouter()
 
@@ -52,14 +51,19 @@ async def check_setup(
     )
 
 
-@router.post("/initialize", response_model=TokenResponse)
+class SetupResponse(BaseModel):
+    message: str
+
+
+@router.post("/initialize", response_model=SetupResponse)
 async def initialize_system(
     setup_data: SetupRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Initialize the system with the first admin user.
-    This endpoint is only accessible when no users exist.
+    This endpoint is only accessible when no users exist. The UI then signs in with the same
+    email and password through Better Auth.
     """
     # Check if setup is still required
     setup_required = await check_setup_required(db)
@@ -81,19 +85,12 @@ async def initialize_system(
     user = User(
         email=setup_data.email.lower(),
         name=setup_data.name,
-        password_hash=get_password_hash(setup_data.password),
         role="admin",
         is_active=True,
     )
     db.add(user)
+    await db.flush()
+    await set_password(db, user, setup_data.password)
     await db.commit()
-    await db.refresh(user)
 
-    # Create tokens and log them in
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    return SetupResponse(message="Setup complete. Sign in with your new account.")

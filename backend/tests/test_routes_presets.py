@@ -27,7 +27,7 @@ class TestListPresets:
     @pytest.mark.asyncio
     async def test_list_presets_no_auth(self, client):
         response = await client.get("/api/presets")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestGetPresetDetail:
@@ -80,4 +80,4 @@ class TestApplyPreset:
     @pytest.mark.asyncio
     async def test_apply_preset_no_auth(self, client):
         response = await client.post("/api/presets/any/apply")
-        assert response.status_code == 403
+        assert response.status_code == 401

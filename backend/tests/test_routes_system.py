@@ -32,7 +32,7 @@ class TestSystemStatus:
     @pytest.mark.asyncio
     async def test_system_status_no_auth(self, client):
         response = await client.get("/api/system/status")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestSystemMetrics:

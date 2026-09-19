@@ -124,6 +124,18 @@ services:
       - BACKEND_URL=http://ghostwire-proxy-api:8000
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:88}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      # Admin sign-in (Better Auth). The secret signs session cookies; the API checks them with it.
+      # Falls back to NEXTAUTH_SECRET, then JWT_SECRET, so older .env files work unchanged.
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-${NEXTAUTH_SECRET:-${JWT_SECRET}}}
+      # Optional. Leave unset to allow opening the UI both by IP on port 88 and through a domain.
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-}
+      # The sign-in plugin asks the API to check two-factor codes (internal endpoints).
+      - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
+      - PGHOST=ghostwire-proxy-postgres
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER:-ghostwire}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGDATABASE=${POSTGRES_DB:-ghostwire_proxy}
     depends_on:
       ghostwire-proxy-api:
         condition: service_healthy
@@ -170,6 +182,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ghostwire}:${POSTGRES_PASSWORD}@ghostwire-proxy-postgres:5432/${POSTGRES_DB:-ghostwire_proxy}
       - JWT_SECRET=${JWT_SECRET}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-${NEXTAUTH_SECRET:-${JWT_SECRET}}}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}

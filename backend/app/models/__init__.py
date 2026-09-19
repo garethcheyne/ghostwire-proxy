@@ -1,5 +1,6 @@
 # Import all models to ensure they're registered with SQLAlchemy
 from app.models.user import User
+from app.models.auth import AuthSession, AuthAccount, AuthVerification
 from app.models.proxy_host import ProxyHost, UpstreamServer, ProxyLocation
 from app.models.certificate import Certificate
 from app.models.access_list import AccessList, AccessListEntry
@@ -22,6 +23,9 @@ from app.models.known_ip import KnownIp
 
 __all__ = [
     "User",
+    "AuthSession",
+    "AuthAccount",
+    "AuthVerification",
     "ProxyHost",
     "UpstreamServer",
     "ProxyLocation",
