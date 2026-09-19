@@ -34,12 +34,12 @@ const categoryColors: Record<string, string> = {
   sqli: 'bg-red-500/10 text-red-500',
   xss: 'bg-orange-500/10 text-orange-500',
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
-  rce: 'bg-purple-500/10 text-purple-500',
+  rce: 'bg-purple-500/10 text-brand-2',
   scanner: 'bg-blue-500/10 text-blue-500',
   probe: 'bg-indigo-500/10 text-indigo-500',
-  sensitive_data: 'bg-cyan-500/10 text-cyan-400',
-  injection: 'bg-red-500/10 text-red-400',
-  recon: 'bg-slate-500/10 text-slate-400',
+  sensitive_data: 'bg-cyan-500/10 text-brand',
+  injection: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  recon: 'bg-slate-500/10 text-muted-foreground',
   dos: 'bg-amber-500/10 text-amber-500',
   blocked_ip: 'bg-red-500/10 text-red-500',
 }
@@ -86,7 +86,7 @@ export function createEventColumns(actions: {
         const host = row.getValue('host') as string | null
         if (!host) return <span className="text-xs text-muted-foreground">—</span>
         return (
-          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 max-w-40 truncate">
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-brand border border-cyan-500/20 max-w-40 truncate">
             <Globe className="h-3 w-3 shrink-0" />
             <span className="truncate">{host}</span>
           </span>
@@ -137,7 +137,7 @@ export function createEventColumns(actions: {
         const action = row.getValue('action_taken') as string
         return (
           <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
-            action === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-slate-400'
+            action === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-muted-foreground'
           }`}>
             {action}
           </span>
@@ -155,7 +155,7 @@ export function createEventColumns(actions: {
           return (
             <Link
               href={`/dashboard/waf?highlight=${ruleId}`}
-              className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 max-w-48 truncate block"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 underline underline-offset-2 max-w-48 truncate block"
               title={`${rule} — Click to view/edit rule`}
             >
               {rule}

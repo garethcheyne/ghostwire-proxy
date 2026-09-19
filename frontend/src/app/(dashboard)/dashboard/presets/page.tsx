@@ -65,10 +65,10 @@ interface ApplyResult {
 }
 
 const categoryConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  waf: { label: 'WAF Rules', icon: Shield, color: 'text-red-400' },
-  geoip: { label: 'GeoIP', icon: Globe, color: 'text-blue-400' },
-  rate_limit: { label: 'Rate Limiting', icon: Gauge, color: 'text-yellow-400' },
-  threat_response: { label: 'Threat Response', icon: AlertTriangle, color: 'text-purple-400' },
+  waf: { label: 'WAF Rules', icon: Shield, color: 'text-red-600 dark:text-red-400' },
+  geoip: { label: 'GeoIP', icon: Globe, color: 'text-blue-600 dark:text-blue-400' },
+  rate_limit: { label: 'Rate Limiting', icon: Gauge, color: 'text-yellow-700 dark:text-yellow-400' },
+  threat_response: { label: 'Threat Response', icon: AlertTriangle, color: 'text-brand-2' },
 }
 
 const severityColors: Record<string, string> = {
@@ -171,7 +171,7 @@ export default function PresetsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand" />
       </div>
     )
   }
@@ -243,9 +243,9 @@ export default function PresetsPage() {
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -257,18 +257,18 @@ export default function PresetsPage() {
                               {preset.severity}
                             </Badge>
                             {preset.tags.includes('recommended') && (
-                              <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+                              <Badge className="bg-cyan-500/10 text-brand border-cyan-500/20">
                                 recommended
                               </Badge>
                             )}
                             {isApplied && (
-                              <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
+                              <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
                                 <Check className="h-3 w-3 mr-1" />
                                 Applied
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-slate-400 mt-0.5 truncate">
+                          <p className="text-sm text-muted-foreground mt-0.5 truncate">
                             {preset.description}
                           </p>
                         </div>
@@ -287,7 +287,7 @@ export default function PresetsPage() {
                               e.stopPropagation()
                               removePreset(preset.id)
                             }}
-                            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                            className="border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                           >
                             {isRemoving ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -326,7 +326,7 @@ export default function PresetsPage() {
                       <div className="border-t border-border bg-muted/30 p-4">
                         {detailLoading ? (
                           <div className="flex items-center justify-center py-4">
-                            <Loader2 className="h-5 w-5 animate-spin text-cyan-500" />
+                            <Loader2 className="h-5 w-5 animate-spin text-brand" />
                           </div>
                         ) : presetDetail ? (
                           <div className="space-y-3">

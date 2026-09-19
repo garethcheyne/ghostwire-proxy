@@ -144,10 +144,10 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
 
   const typeIcon = (type: string) => {
     switch (type) {
-      case 'host': return <Globe className="h-4 w-4 text-blue-400" />
-      case 'threat': return <ShieldAlert className="h-4 w-4 text-red-400" />
-      case 'blocklist': return <Shield className="h-4 w-4 text-orange-400" />
-      case 'certificate': return <Lock className="h-4 w-4 text-green-400" />
+      case 'host': return <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      case 'threat': return <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400" />
+      case 'blocklist': return <Shield className="h-4 w-4 text-orange-700 dark:text-orange-400" />
+      case 'certificate': return <Lock className="h-4 w-4 text-green-600 dark:text-green-400" />
       default: return <Search className="h-4 w-4 text-muted-foreground" />
     }
   }

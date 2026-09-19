@@ -289,7 +289,7 @@ export default function GeoHeatmap({
             type="button"
             onClick={() => setLayerCountry(v => !v)}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-              layerCountry ? 'bg-cyan-500/15 text-cyan-400' : 'text-muted-foreground/50 line-through'
+              layerCountry ? 'bg-cyan-500/15 text-brand' : 'text-muted-foreground/50 line-through'
             } hover:bg-cyan-500/20`}
           >
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCountry ? 'bg-cyan-500' : 'bg-muted-foreground/30'}`} />
@@ -299,7 +299,7 @@ export default function GeoHeatmap({
             type="button"
             onClick={() => setLayerCity(v => !v)}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-              layerCity ? 'bg-amber-500/15 text-amber-400' : 'text-muted-foreground/50 line-through'
+              layerCity ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'text-muted-foreground/50 line-through'
             } hover:bg-amber-500/20`}
           >
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCity ? 'bg-amber-400' : 'bg-muted-foreground/30'}`} />
@@ -310,7 +310,7 @@ export default function GeoHeatmap({
               type="button"
               onClick={() => setLayerThreats(v => !v)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-                layerThreats ? 'bg-red-500/15 text-red-400' : 'text-muted-foreground/50 line-through'
+                layerThreats ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'text-muted-foreground/50 line-through'
               } hover:bg-red-500/20`}
             >
               <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerThreats ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
@@ -329,7 +329,7 @@ export default function GeoHeatmap({
             <span className="text-lg"><CountryBadge code={item.country_code} name={item.country_name} /></span>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium truncate">{item.country_name}</p>
-              <p className="text-xs text-cyan-400">{item.count.toLocaleString()} requests</p>
+              <p className="text-xs text-brand">{item.count.toLocaleString()} requests</p>
             </div>
           </div>
         ))}
@@ -337,7 +337,7 @@ export default function GeoHeatmap({
       {/* Threat countries list */}
       {threatData.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-red-400 mb-2">Threat Origins</h4>
+          <h4 className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">Threat Origins</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {threatData.slice(0, 12).map((item) => (
               <div
@@ -347,7 +347,7 @@ export default function GeoHeatmap({
                 <span className="text-lg"><CountryBadge code={item.country_code} name={item.country_name} /></span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{item.country_name}</p>
-                  <p className="text-xs text-red-400">{item.count.toLocaleString()} threats</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">{item.count.toLocaleString()} threats</p>
                 </div>
               </div>
             ))}
@@ -357,7 +357,7 @@ export default function GeoHeatmap({
       {/* City breakdown */}
       {cityData.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-amber-400 mb-2">Top Cities</h4>
+          <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2">Top Cities</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {cityData.slice(0, 12).map((item, idx) => (
               <div
@@ -367,7 +367,7 @@ export default function GeoHeatmap({
                 <CountryBadge code={item.country_code} name={item.country_name} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{item.city}</p>
-                  <p className="text-xs text-amber-400">{item.count.toLocaleString()} req &middot; {item.unique_ips} IPs</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{item.count.toLocaleString()} req &middot; {item.unique_ips} IPs</p>
                 </div>
               </div>
             ))}

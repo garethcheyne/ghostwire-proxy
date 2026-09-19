@@ -200,8 +200,8 @@ export function UpdatesTab() {
       {activeUpdate && !['completed', 'failed'].includes(activeUpdate.status) && (
         <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Activity className="h-5 w-5 text-blue-400 animate-pulse" />
-            <h3 className="font-semibold text-blue-400">Update In Progress</h3>
+            <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-pulse" />
+            <h3 className="font-semibold text-blue-600 dark:text-blue-400">Update In Progress</h3>
           </div>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
@@ -229,7 +229,7 @@ export function UpdatesTab() {
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <ArrowUpCircle className="h-5 w-5 text-cyan-500" />
+            <ArrowUpCircle className="h-5 w-5 text-brand" />
             <h3 className="font-semibold">Application Updates</h3>
           </div>
           <Button
@@ -244,7 +244,7 @@ export function UpdatesTab() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-400">
+          <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-600 dark:text-red-400">
             {error}
           </div>
         )}
@@ -260,8 +260,8 @@ export function UpdatesTab() {
                 <>
                   <span className="text-muted-foreground">→</span>
                   <div className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-4 py-3">
-                    <p className="text-xs text-cyan-400">Latest</p>
-                    <p className="text-lg font-bold font-mono text-cyan-400">v{appCheck.latest_version}</p>
+                    <p className="text-xs text-brand">Latest</p>
+                    <p className="text-lg font-bold font-mono text-brand">v{appCheck.latest_version}</p>
                   </div>
                   <Button
                     onClick={() => startAppUpdate(appCheck.latest_version!)}
@@ -282,7 +282,7 @@ export function UpdatesTab() {
             </div>
 
             {appCheck.error && (
-              <p className="text-sm text-yellow-400 flex items-center gap-2">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 {appCheck.error}
               </p>
@@ -317,7 +317,7 @@ export function UpdatesTab() {
                               href={release.html_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-cyan-400 hover:underline"
+                              className="text-xs text-brand hover:underline"
                             >
                               Release notes
                             </a>
@@ -369,10 +369,10 @@ export function UpdatesTab() {
                 </div>
                 <div className="flex items-center gap-3">
                   {img.error ? (
-                    <span className="text-xs text-yellow-400">{img.error}</span>
+                    <span className="text-xs text-yellow-700 dark:text-yellow-400">{img.error}</span>
                   ) : img.update_available ? (
                     <>
-                      <Badge variant="outline" className="text-amber-400 border-amber-500/30">
+                      <Badge variant="outline" className="text-amber-700 dark:text-amber-400 border-amber-500/30">
                         Update available
                       </Badge>
                       <Button
@@ -504,7 +504,7 @@ export function UpdatesTab() {
                     <p className="text-xs text-muted-foreground">
                       {new Date(item.started_at).toLocaleString()}
                       {item.error_message && (
-                        <span className="text-red-400 ml-2">{item.error_message}</span>
+                        <span className="text-red-600 dark:text-red-400 ml-2">{item.error_message}</span>
                       )}
                     </p>
                   </div>

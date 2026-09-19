@@ -442,7 +442,7 @@ export default function BackupsPage() {
                         ? 'bg-blue-500/10 text-blue-500'
                         : backup.backup_type === 'uploaded'
                         ? 'bg-orange-500/10 text-orange-500'
-                        : 'bg-purple-500/10 text-purple-500'
+                        : 'bg-purple-500/10 text-brand-2'
                     }`}>
                       {backup.backup_type}
                     </span>

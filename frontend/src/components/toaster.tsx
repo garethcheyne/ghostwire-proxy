@@ -11,9 +11,9 @@ const icons = {
 }
 
 const styles = {
-  success: 'border-green-500/30 bg-green-500/10 text-green-400',
-  error: 'border-red-500/30 bg-red-500/10 text-red-400',
-  info: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
+  success: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
+  error: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+  info: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
 }
 
 export function Toaster() {

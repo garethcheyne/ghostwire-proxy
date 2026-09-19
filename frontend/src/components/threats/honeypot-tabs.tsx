@@ -69,8 +69,8 @@ const trapTypeColors: Record<string, string> = {
   wordpress: 'bg-blue-500/10 text-blue-500',
   phpmyadmin: 'bg-orange-500/10 text-orange-500',
   admin: 'bg-red-500/10 text-red-500',
-  api: 'bg-purple-500/10 text-purple-500',
-  generic: 'bg-slate-500/10 text-slate-400',
+  api: 'bg-purple-500/10 text-brand-2',
+  generic: 'bg-slate-500/10 text-muted-foreground',
 }
 
 const trapTypeLabels: Record<string, string> = {
@@ -465,7 +465,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                         {hit.country_code ? <CountryBadge code={hit.country_code} name={hit.country_name} /> : '-'}
                       </td>
                       <td className="px-2 sm:px-4 py-2">
-                        <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${hit.action_taken === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-slate-400'}`}>
+                        <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${hit.action_taken === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-muted-foreground'}`}>
                           {hit.action_taken}
                         </span>
                       </td>

@@ -103,11 +103,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 const statusColors: Record<string, string> = {
-  monitored: 'bg-slate-500/10 text-slate-400',
+  monitored: 'bg-slate-500/10 text-muted-foreground',
   warned: 'bg-yellow-500/10 text-yellow-500',
   temp_blocked: 'bg-orange-500/10 text-orange-500',
   perm_blocked: 'bg-red-500/10 text-red-500',
-  firewall_banned: 'bg-purple-500/10 text-purple-500',
+  firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
 interface SecurityTabProps {
@@ -439,7 +439,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                   <div className="flex-1 min-w-0 truncate">
                     <IpAddress ip={actor.ip} />
                   </div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusColors[actor.status] || 'bg-slate-500/10 text-slate-400'}`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusColors[actor.status] || 'bg-slate-500/10 text-muted-foreground'}`}>
                     {actor.status.replace(/_/g, ' ')}
                   </span>
                   <span className="text-xs text-muted-foreground w-16 text-right">{actor.events} events</span>
@@ -513,7 +513,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                       </span>
                     </td>
                     <td className="px-3 py-2 hidden md:table-cell">
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400">{event.host}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-brand">{event.host}</span>
                     </td>
                     <td className="px-3 py-2 hidden md:table-cell">
                       <code className="text-xs font-mono text-muted-foreground truncate max-w-[200px] block">

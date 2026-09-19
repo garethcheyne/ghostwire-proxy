@@ -320,7 +320,7 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-border bg-card">
             <div className="border-b border-border p-4 flex items-center justify-between">
               <h2 className="font-semibold">Top Threat Actors</h2>
-              <a href="/dashboard/threats" className="text-xs text-cyan-500 hover:underline">View all →</a>
+              <a href="/dashboard/threats" className="text-xs text-brand hover:underline">View all →</a>
             </div>
             <div className="p-4">
               <div className="space-y-3">
@@ -348,7 +348,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm font-semibold text-orange-400">{actor.score}</span>
+                    <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">{actor.score}</span>
                   </div>
                 ))}
               </div>
@@ -359,7 +359,7 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-border bg-card">
             <div className="border-b border-border p-4 flex items-center justify-between">
               <h2 className="font-semibold">Attack Categories</h2>
-              <a href="/dashboard/waf" className="text-xs text-cyan-500 hover:underline">WAF Rules →</a>
+              <a href="/dashboard/waf" className="text-xs text-brand hover:underline">WAF Rules →</a>
             </div>
             <div className="p-4">
               {threatStats.top_categories.length === 0 ? (
@@ -439,7 +439,7 @@ export default function DashboardPage() {
                   <ShieldX className="h-4 w-4 text-orange-500" />
                   <h2 className="font-semibold">Recent 403/401 Events</h2>
                 </div>
-                <a href="/dashboard/analytics" className="text-xs text-cyan-500 hover:underline">Analytics →</a>
+                <a href="/dashboard/analytics" className="text-xs text-brand hover:underline">Analytics →</a>
               </div>
               <div className="p-4 max-h-80 overflow-y-auto">
                 {authErrors.recent_events.length === 0 ? (

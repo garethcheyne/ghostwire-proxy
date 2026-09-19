@@ -66,9 +66,9 @@ const typeLabels: Record<string, string> = {
 
 const typeColors: Record<string, string> = {
   routeros: 'bg-blue-500/10 text-blue-500',
-  unifi: 'bg-cyan-500/10 text-cyan-500',
+  unifi: 'bg-cyan-500/10 text-brand',
   pfsense: 'bg-orange-500/10 text-orange-500',
-  opnsense: 'bg-purple-500/10 text-purple-500',
+  opnsense: 'bg-purple-500/10 text-brand-2',
 }
 
 export default function FirewallsPage() {
@@ -463,7 +463,7 @@ export default function FirewallsPage() {
                   <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                     entry.status === 'pushed' ? 'bg-green-500/10 text-green-500' :
                     entry.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
-                    'bg-slate-500/10 text-slate-400'
+                    'bg-slate-500/10 text-muted-foreground'
                   }`}>
                     {entry.status}
                   </span>

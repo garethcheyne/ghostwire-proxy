@@ -24,11 +24,11 @@ export interface ThreatActor {
 }
 
 const statusColors: Record<string, string> = {
-  monitored: 'bg-slate-500/10 text-slate-400',
+  monitored: 'bg-slate-500/10 text-muted-foreground',
   warned: 'bg-yellow-500/10 text-yellow-500',
   temp_blocked: 'bg-orange-500/10 text-orange-500',
   perm_blocked: 'bg-red-500/10 text-red-500',
-  firewall_banned: 'bg-purple-500/10 text-purple-500',
+  firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
 function formatDate(d: string): string {
@@ -173,7 +173,7 @@ export function createActorColumns(actions: {
         return (
           <div className="flex items-center gap-1 flex-wrap">
             {tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
                 {tag}
               </span>
             ))}
@@ -197,7 +197,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                className="h-7 text-xs text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-500/10"
                 onClick={() => actions.onInvestigate!(actor.ip_address)}
                 title="Investigate IP"
               >
@@ -209,7 +209,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                className="h-7 text-xs text-green-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-500/10"
                 onClick={() => actions.onUnblock(actor.ip_address)}
               >
                 <Unlock className="h-3.5 w-3.5 mr-1" />
@@ -219,7 +219,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                className="h-7 text-xs text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
                 onClick={() => actions.onBlock(actor.ip_address)}
               >
                 <Ban className="h-3.5 w-3.5 mr-1" />
@@ -232,7 +232,7 @@ export function createActorColumns(actions: {
                 size="sm"
                 className={`h-7 text-xs ${
                   actions.firewallAvailable
-                    ? 'text-purple-500 hover:text-purple-400 hover:bg-purple-500/10'
+                    ? 'text-brand-2 hover:text-brand-2 hover:bg-purple-500/10'
                     : 'text-muted-foreground/40 cursor-not-allowed'
                 }`}
                 onClick={() => actions.firewallAvailable && actions.onFirewallBan?.(actor.ip_address)}

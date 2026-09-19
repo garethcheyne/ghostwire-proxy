@@ -116,8 +116,8 @@ const trapTypeColors: Record<string, string> = {
   wordpress: 'bg-blue-500/10 text-blue-500',
   phpmyadmin: 'bg-orange-500/10 text-orange-500',
   admin: 'bg-red-500/10 text-red-500',
-  api: 'bg-purple-500/10 text-purple-500',
-  generic: 'bg-slate-500/10 text-slate-400',
+  api: 'bg-purple-500/10 text-brand-2',
+  generic: 'bg-slate-500/10 text-muted-foreground',
 }
 
 const severityColors: Record<string, string> = {
@@ -595,7 +595,7 @@ export default function HoneypotPage() {
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
                                 hit.action_taken === 'blocked'
                                   ? 'bg-red-500/10 text-red-500'
-                                  : 'bg-slate-500/10 text-slate-400'
+                                  : 'bg-slate-500/10 text-muted-foreground'
                               }`}>
                                 {hit.action_taken}
                               </span>
@@ -674,7 +674,7 @@ export default function HoneypotPage() {
                   {/* Network */}
                   <div className="bg-card border rounded-lg p-5">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-purple-500" /> Network
+                      <Shield className="h-4 w-4 text-brand-2" /> Network
                     </h3>
                     <div className="space-y-3 text-sm">
                       <InfoRow label="ISP" value={enrichment.isp} />

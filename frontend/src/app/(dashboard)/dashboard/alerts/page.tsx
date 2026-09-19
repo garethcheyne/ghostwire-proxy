@@ -53,8 +53,8 @@ const channelIcons: Record<string, typeof Mail> = {
 
 const channelColors: Record<string, string> = {
   email: 'bg-blue-500/10 text-blue-500',
-  webhook: 'bg-cyan-500/10 text-cyan-500',
-  slack: 'bg-purple-500/10 text-purple-500',
+  webhook: 'bg-cyan-500/10 text-brand',
+  slack: 'bg-purple-500/10 text-brand-2',
   telegram: 'bg-sky-500/10 text-sky-500',
   push: 'bg-green-500/10 text-green-500',
 }
@@ -262,7 +262,7 @@ export default function AlertsPage() {
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">global</span>
                         )}
                         {!channel.enabled && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400">disabled</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/10 text-muted-foreground">disabled</span>
                         )}
                       </div>
                       {channel.config && (

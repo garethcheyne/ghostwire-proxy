@@ -56,7 +56,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
     <div className="w-64 border-r border-border bg-card/50 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 h-14 border-b border-border shrink-0">
-        <BookOpen className="h-5 w-5 text-cyan-400" />
+        <BookOpen className="h-5 w-5 text-brand" />
         <span className="font-semibold text-sm">Documentation</span>
       </div>
 
@@ -70,7 +70,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
               className={cn(
                 'w-full justify-start text-sm',
                 pathname === '/dashboard/docs'
-                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                  ? 'bg-cyan-500/10 text-brand border border-cyan-500/30'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -93,7 +93,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
                   className={cn(
                     'flex items-center w-full px-3 py-2 text-sm rounded-md transition-colors',
                     isInSection
-                      ? 'text-cyan-400 font-medium'
+                      ? 'text-brand font-medium'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                 >
@@ -125,7 +125,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
                             className={cn(
                               'w-full justify-start text-xs h-8 font-normal',
                               isActive
-                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                                ? 'bg-cyan-500/10 text-brand border border-cyan-500/30'
                                 : 'text-muted-foreground hover:text-foreground'
                             )}
                           >

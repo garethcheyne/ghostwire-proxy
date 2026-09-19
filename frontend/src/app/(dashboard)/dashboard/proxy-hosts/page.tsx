@@ -737,7 +737,7 @@ export default function ProxyHostsPage() {
                   <span className="text-border">|</span>
 
                   {/* Security features */}
-                  <span className={`flex items-center gap-1 ${host.websockets_support ? 'text-cyan-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.websockets_support ? 'text-brand' : 'text-muted-foreground/50'}`}>
                     <Cable className="h-3.5 w-3.5" />
                     WebSocket
                   </span>
@@ -756,7 +756,7 @@ export default function ProxyHostsPage() {
 
                   {/* Conditional extras */}
                   {host.cache_enabled && (
-                    <span className="flex items-center gap-1 text-purple-500">
+                    <span className="flex items-center gap-1 text-brand-2">
                       <HardDrive className="h-3.5 w-3.5" />
                       Cache
                     </span>
@@ -768,7 +768,7 @@ export default function ProxyHostsPage() {
                     </span>
                   )}
                   {locationCount > 0 && (
-                    <span className="flex items-center gap-1 text-blue-400">
+                    <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                       <Layers className="h-3.5 w-3.5" />
                       {locationCount} Location{locationCount !== 1 ? 's' : ''}
                     </span>

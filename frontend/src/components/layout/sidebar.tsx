@@ -141,7 +141,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent leading-tight">
+                <span className="text-xl font-bold text-brand-gradient leading-tight">
                   Ghostwire
                 </span>
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -164,7 +164,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 )}
                 <div className="space-y-1">
                   {group.items.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                    // The Dashboard link is the parent of every page, so it's only active on itself.
+                    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'))
                     const Icon = item.icon
 
                     if (isCollapsed) {
@@ -178,8 +179,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                                 className={cn(
                                   'w-full relative transition-all duration-200',
                                   isActive
-                                    ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                                    : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
+                                    ? 'nav-active'
+                                    : 'hover:bg-accent hover:text-brand text-muted-foreground'
                                 )}
                               >
                                 <Icon className="h-5 w-5" />
@@ -200,8 +201,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                           className={cn(
                             'w-full justify-start transition-all duration-200',
                             isActive
-                              ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                              : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
+                              ? 'nav-active'
+                              : 'hover:bg-accent hover:text-brand text-muted-foreground'
                           )}
                         >
                           <Icon className="mr-2 h-5 w-5" />
@@ -226,7 +227,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link href="/dashboard/about" className="block text-center">
-                    <span className="text-[10px] font-mono text-muted-foreground hover:text-cyan-400 transition-colors">
+                    <span className="text-[10px] font-mono text-muted-foreground hover:text-brand transition-colors">
                       v{version.split('.').pop()}
                     </span>
                   </Link>
@@ -239,7 +240,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               <Link href="/dashboard/about" className="group block">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Version</span>
-                  <span className="text-[10px] font-mono text-muted-foreground group-hover:text-cyan-400 transition-colors">
+                  <span className="text-[10px] font-mono text-muted-foreground group-hover:text-brand transition-colors">
                     {version}
                   </span>
                 </div>

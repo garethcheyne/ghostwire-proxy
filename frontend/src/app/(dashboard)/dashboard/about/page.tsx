@@ -35,12 +35,12 @@ interface VersionInfo {
 }
 
 const techStack = [
-  { name: 'OpenResty', description: 'Nginx + Lua reverse proxy engine', icon: Server, color: 'text-green-400' },
-  { name: 'Next.js 16', description: 'React framework for the admin UI', icon: Layers, color: 'text-blue-400' },
-  { name: 'FastAPI', description: 'Python async API backend', icon: Code, color: 'text-teal-400' },
-  { name: 'PostgreSQL', description: 'Primary database', icon: Database, color: 'text-sky-400' },
-  { name: 'Redis', description: 'Caching, pub/sub, rate limiting', icon: Cpu, color: 'text-red-400' },
-  { name: 'Docker', description: 'Containerized deployment', icon: Box, color: 'text-cyan-400' },
+  { name: 'OpenResty', description: 'Nginx + Lua reverse proxy engine', icon: Server, color: 'text-green-600 dark:text-green-400' },
+  { name: 'Next.js 16', description: 'React framework for the admin UI', icon: Layers, color: 'text-blue-600 dark:text-blue-400' },
+  { name: 'FastAPI', description: 'Python async API backend', icon: Code, color: 'text-teal-600 dark:text-teal-400' },
+  { name: 'PostgreSQL', description: 'Primary database', icon: Database, color: 'text-sky-600 dark:text-sky-400' },
+  { name: 'Redis', description: 'Caching, pub/sub, rate limiting', icon: Cpu, color: 'text-red-600 dark:text-red-400' },
+  { name: 'Docker', description: 'Containerized deployment', icon: Box, color: 'text-brand' },
 ]
 
 const features = [
@@ -145,7 +145,7 @@ export default function AboutPage() {
           className="h-14 w-14 object-contain"
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+          <h2 className="text-xl font-bold text-brand-gradient">
             Ghostwire Proxy
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -155,7 +155,7 @@ export default function AboutPage() {
         {versionInfo && (
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/30 px-4 py-1.5">
             <span className="text-xs text-muted-foreground">Version</span>
-            <span className="text-sm font-mono font-bold text-cyan-400">{versionInfo.version}</span>
+            <span className="text-sm font-mono font-bold text-brand">{versionInfo.version}</span>
           </div>
         )}
       </div>
@@ -163,7 +163,7 @@ export default function AboutPage() {
       {/* Description */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-start gap-3">
-          <Globe className="h-5 w-5 text-cyan-400 mt-0.5 shrink-0" />
+          <Globe className="h-5 w-5 text-brand mt-0.5 shrink-0" />
           <div className="space-y-2">
             <h2 className="font-semibold">What is Ghostwire Proxy?</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -178,7 +178,7 @@ export default function AboutPage() {
                 href="https://github.com/garethcheyne/ghostwire"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-cyan-400 hover:underline inline-flex items-center gap-1"
+                className="text-brand hover:underline inline-flex items-center gap-1"
               >
                 Ghostwire <ExternalLink className="h-3 w-3" />
               </a>{' '}
@@ -191,7 +191,7 @@ export default function AboutPage() {
       {/* Tech Stack */}
       <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="font-semibold mb-4 flex items-center gap-2">
-          <Layers className="h-5 w-5 text-purple-400" />
+          <Layers className="h-5 w-5 text-brand-2" />
           Tech Stack
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -216,13 +216,13 @@ export default function AboutPage() {
       {/* Features */}
       <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="font-semibold mb-4 flex items-center gap-2">
-          <Shield className="h-5 w-5 text-green-400" />
+          <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
           Features
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           {features.map((feature) => (
             <div key={feature} className="flex items-start gap-2 text-sm text-muted-foreground py-1">
-              <span className="text-cyan-400 mt-0.5 shrink-0">•</span>
+              <span className="text-brand mt-0.5 shrink-0">•</span>
               {feature}
             </div>
           ))}
@@ -274,12 +274,12 @@ export default function AboutPage() {
       {/* Copyright */}
       <div className="text-xs text-muted-foreground pb-8">
         <p>
-          Made with <Heart className="inline h-3 w-3 text-red-400" /> by{' '}
+          Made with <Heart className="inline h-3 w-3 text-red-600 dark:text-red-400" /> by{' '}
           <a
             href="https://github.com/garethcheyne"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-cyan-400 hover:underline"
+            className="text-brand hover:underline"
           >
             Gareth Cheyne
           </a>

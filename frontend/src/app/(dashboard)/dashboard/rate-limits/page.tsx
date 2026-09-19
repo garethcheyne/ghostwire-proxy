@@ -46,7 +46,7 @@ interface RateLimitRule {
 const actionColors: Record<string, string> = {
   reject: 'bg-red-500/10 text-red-500',
   delay: 'bg-yellow-500/10 text-yellow-500',
-  log: 'bg-slate-500/10 text-slate-400',
+  log: 'bg-slate-500/10 text-muted-foreground',
 }
 
 interface ProxyHostBasic {

@@ -53,18 +53,18 @@ const severityColors: Record<string, string> = {
 }
 
 const statusColors: Record<string, string> = {
-  monitored: 'bg-slate-500/10 text-slate-400',
+  monitored: 'bg-slate-500/10 text-muted-foreground',
   warned: 'bg-yellow-500/10 text-yellow-500',
   temp_blocked: 'bg-orange-500/10 text-orange-500',
   perm_blocked: 'bg-red-500/10 text-red-500',
-  firewall_banned: 'bg-purple-500/10 text-purple-500',
+  firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
 const categoryColors: Record<string, string> = {
   sqli: 'bg-red-500/10 text-red-500',
   xss: 'bg-orange-500/10 text-orange-500',
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
-  rce: 'bg-purple-500/10 text-purple-500',
+  rce: 'bg-purple-500/10 text-brand-2',
   scanner: 'bg-blue-500/10 text-blue-500',
 }
 
@@ -626,7 +626,7 @@ export default function ThreatsPage() {
                               {formatDate(event.timestamp)}
                             </span>
                             {event.host && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 text-brand border border-cyan-500/20 shrink-0">
                                 <Globe className="h-3 w-3" />
                                 {event.host}
                               </span>
@@ -717,7 +717,7 @@ export default function ThreatsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 text-xs border-purple-500/30 text-purple-500 hover:bg-purple-500/10 ml-auto"
+                  className="h-9 text-xs border-purple-500/30 text-brand-2 hover:bg-purple-500/10 ml-auto"
                   onClick={handleBulkFirewallBan}
                 >
                   <Flame className="h-3.5 w-3.5 mr-1" />
@@ -802,7 +802,7 @@ export default function ThreatsPage() {
                 {/* Network */}
                 <div className="bg-card border rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Shield className="h-3.5 w-3.5 text-purple-500" /> Network
+                    <Shield className="h-3.5 w-3.5 text-brand-2" /> Network
                   </h4>
                   <div className="space-y-2 text-sm">
                     <IntelRow label="ISP" value={intelData.isp} />

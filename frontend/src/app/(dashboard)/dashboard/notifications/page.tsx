@@ -87,7 +87,7 @@ const notificationTypes = [
 ]
 
 const severityLevels = [
-  { value: 'low', label: 'All', color: 'text-slate-400' },
+  { value: 'low', label: 'All', color: 'text-muted-foreground' },
   { value: 'medium', label: 'Medium+', color: 'text-yellow-500' },
   { value: 'high', label: 'High+', color: 'text-orange-500' },
   { value: 'critical', label: 'Critical', color: 'text-red-500' },
@@ -103,8 +103,8 @@ const channelIcons: Record<string, typeof Mail> = {
 
 const channelColors: Record<string, string> = {
   email: 'bg-blue-500/10 text-blue-500',
-  webhook: 'bg-cyan-500/10 text-cyan-500',
-  slack: 'bg-purple-500/10 text-purple-500',
+  webhook: 'bg-cyan-500/10 text-brand',
+  slack: 'bg-purple-500/10 text-brand-2',
   telegram: 'bg-sky-500/10 text-sky-500',
   push: 'bg-green-500/10 text-green-500',
 }
@@ -455,7 +455,7 @@ export default function NotificationsPage() {
                             {channel.channel_type}
                           </span>
                           {!channel.enabled && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400">disabled</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/10 text-muted-foreground">disabled</span>
                           )}
                         </div>
                         {channel.config && (

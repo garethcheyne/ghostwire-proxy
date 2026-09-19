@@ -240,7 +240,7 @@ export default function DnsPage() {
       case 'A':
         return 'bg-blue-500/10 text-blue-500'
       case 'AAAA':
-        return 'bg-purple-500/10 text-purple-500'
+        return 'bg-purple-500/10 text-brand-2'
       case 'CNAME':
         return 'bg-green-500/10 text-green-500'
       case 'TXT':

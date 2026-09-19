@@ -62,15 +62,15 @@ const categoryColors: Record<string, string> = {
   sqli: 'bg-red-500/10 text-red-500',
   xss: 'bg-orange-500/10 text-orange-500',
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
-  rce: 'bg-purple-500/10 text-purple-500',
+  rce: 'bg-purple-500/10 text-brand-2',
   scanner: 'bg-blue-500/10 text-blue-500',
   probe: 'bg-indigo-500/10 text-indigo-500',
-  protocol: 'bg-slate-500/10 text-slate-400',
+  protocol: 'bg-slate-500/10 text-muted-foreground',
   file_upload: 'bg-amber-500/10 text-amber-500',
-  injection: 'bg-red-500/10 text-red-400',
-  recon: 'bg-teal-500/10 text-teal-400',
+  injection: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  recon: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
   dos: 'bg-pink-500/10 text-pink-500',
-  custom: 'bg-cyan-500/10 text-cyan-500',
+  custom: 'bg-cyan-500/10 text-brand',
 }
 
 const severityColors: Record<string, string> = {
@@ -81,9 +81,9 @@ const severityColors: Record<string, string> = {
 }
 
 const actionColors: Record<string, string> = {
-  log: 'bg-slate-500/10 text-slate-400',
+  log: 'bg-slate-500/10 text-muted-foreground',
   block: 'bg-red-500/10 text-red-500',
-  blocklist: 'bg-purple-500/10 text-purple-500',
+  blocklist: 'bg-purple-500/10 text-brand-2',
 }
 
 export default function WafPage() {

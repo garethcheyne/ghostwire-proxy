@@ -73,7 +73,7 @@ const modeColors: Record<string, string> = {
 
 const actionColors: Record<string, string> = {
   block: 'bg-red-500/10 text-red-500',
-  log: 'bg-slate-500/10 text-slate-400',
+  log: 'bg-slate-500/10 text-muted-foreground',
   challenge: 'bg-yellow-500/10 text-yellow-500',
 }
 

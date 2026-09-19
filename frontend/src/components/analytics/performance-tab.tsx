@@ -207,7 +207,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
                                   ? 'bg-orange-500/10 text-orange-500'
                                   : code === '404'
                                   ? 'bg-yellow-500/10 text-yellow-500'
-                                  : 'bg-slate-500/10 text-slate-400'
+                                  : 'bg-slate-500/10 text-muted-foreground'
                               }`}
                             >
                               {code}: {count}

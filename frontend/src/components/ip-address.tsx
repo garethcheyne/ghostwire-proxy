@@ -78,7 +78,7 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>
         <button
-          className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold hover:text-blue-400 transition-colors cursor-pointer ${className || ''}`}
+          className={`inline-flex items-center gap-1.5 font-mono text-xs font-semibold hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer ${className || ''}`}
           onMouseEnter={fetchEnrichment}
           onFocus={fetchEnrichment}
           onClick={(e) => {

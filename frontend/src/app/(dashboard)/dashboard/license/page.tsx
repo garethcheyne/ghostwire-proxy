@@ -73,27 +73,27 @@ export default function LicensePage() {
         <h2 className="font-semibold mb-3">What does the MIT License mean?</h2>
         <div className="space-y-3 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
-            <span className="text-green-400 font-bold shrink-0">✓</span>
+            <span className="text-green-600 dark:text-green-400 font-bold shrink-0">✓</span>
             <div><strong className="text-foreground">Commercial use</strong> — You can use this software for commercial purposes.</div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-green-400 font-bold shrink-0">✓</span>
+            <span className="text-green-600 dark:text-green-400 font-bold shrink-0">✓</span>
             <div><strong className="text-foreground">Modification</strong> — You can modify the source code as you see fit.</div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-green-400 font-bold shrink-0">✓</span>
+            <span className="text-green-600 dark:text-green-400 font-bold shrink-0">✓</span>
             <div><strong className="text-foreground">Distribution</strong> — You can distribute the original or modified software.</div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-green-400 font-bold shrink-0">✓</span>
+            <span className="text-green-600 dark:text-green-400 font-bold shrink-0">✓</span>
             <div><strong className="text-foreground">Private use</strong> — You can use the software for private purposes.</div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-yellow-400 font-bold shrink-0">!</span>
+            <span className="text-yellow-700 dark:text-yellow-400 font-bold shrink-0">!</span>
             <div><strong className="text-foreground">License notice</strong> — You must include the MIT license notice in copies.</div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-red-400 font-bold shrink-0">✗</span>
+            <span className="text-red-600 dark:text-red-400 font-bold shrink-0">✗</span>
             <div><strong className="text-foreground">No warranty</strong> — The software is provided as-is without warranty.</div>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function LicensePage() {
                   href={dep.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium hover:text-cyan-400 transition-colors"
+                  className="text-sm font-medium hover:text-brand transition-colors"
                 >
                   {dep.name}
                 </a>
@@ -132,7 +132,7 @@ export default function LicensePage() {
       <div className="pb-8">
         <Link
           href="/dashboard/about"
-          className="inline-flex items-center min-h-11 text-sm text-cyan-400 hover:underline"
+          className="inline-flex items-center min-h-11 text-sm text-brand hover:underline"
         >
           ← Back to About
         </Link>

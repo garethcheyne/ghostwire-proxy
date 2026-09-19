@@ -17,6 +17,8 @@ const config: Config = {
     },
     extend: {
       colors: {
+        brand: 'hsl(var(--brand) / <alpha-value>)',
+        'brand-2': 'hsl(var(--brand-2) / <alpha-value>)',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

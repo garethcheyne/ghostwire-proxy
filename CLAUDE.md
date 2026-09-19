@@ -8,6 +8,9 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 ## Critical Development Rules
 
 ### Frontend (Next.js)
+- **Follow the suite design guide**: `../design/README.md` (colours, light/dark rules, page header,
+  tabs, menus). Brand colours are `text-brand` / `text-brand-2`, never hard-coded `cyan-400`; every
+  page starts with `PageHeader` (`src/components/layout/page-header.tsx`).
 - **ALWAYS use shadcn/ui components** - Never create custom UI components from scratch
 - Install components via: `npx shadcn@latest add <component>`
 - Available shadcn components: button, input, form, table, dialog, dropdown-menu, card, tabs, badge, alert, toast, etc.

@@ -127,7 +127,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
               />
             </div>
             <SheetTitle className="flex flex-col">
-              <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent leading-tight">
+              <span className="text-xl font-bold text-brand-gradient leading-tight">
                 Ghostwire
               </span>
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-normal">
@@ -151,7 +151,8 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                 </h4>
                 <div className="space-y-1">
                   {group.items.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                    // The Dashboard link is the parent of every page, so it's only active on itself.
+                    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'))
                     const Icon = item.icon
 
                     return (
@@ -161,8 +162,8 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                           className={cn(
                             'w-full justify-start transition-all duration-200 h-11',
                             isActive
-                              ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30'
-                              : 'hover:bg-accent hover:text-cyan-400 text-muted-foreground'
+                              ? 'nav-active'
+                              : 'hover:bg-accent hover:text-brand text-muted-foreground'
                           )}
                         >
                           <Icon className="mr-3 h-5 w-5" />

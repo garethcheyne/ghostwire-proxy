@@ -24,6 +24,11 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 199 89% 48%;
     --radius: 0.5rem;
+
+    /* Ghostwire brand (see ghostwire-suite/design/ghostwire-theme.css). Deeper shades on light
+       backgrounds so brand text stays readable (WCAG AA on white). */
+    --brand: 192 91% 31%;
+    --brand-2: 272 72% 47%;
   }
 
   .dark {
@@ -46,6 +51,9 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 199 89% 48%;
+
+    --brand: 187 85% 53%;
+    --brand-2: 270 95% 75%;
   }
 }
 
@@ -59,6 +67,14 @@
 }
 
 @layer utilities {
+  /* Brand gradient text: logo, product name. */
+  .text-brand-gradient {
+    @apply bg-gradient-to-r from-brand to-brand-2 bg-clip-text text-transparent;
+  }
+  /* The active item in navigation (sidebar, tab bars that use the brand look). */
+  .nav-active {
+    @apply bg-gradient-to-r from-brand/15 to-brand-2/15 text-brand border border-brand/30 font-medium;
+  }
   .severity-critical {
     @apply bg-red-500/10 text-red-500 border-red-500/20;
   }

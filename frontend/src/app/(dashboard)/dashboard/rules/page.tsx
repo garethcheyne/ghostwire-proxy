@@ -138,9 +138,9 @@ const wafCategoryColors: Record<string, string> = {
   sqli: 'bg-red-500/10 text-red-500',
   xss: 'bg-orange-500/10 text-orange-500',
   path_traversal: 'bg-yellow-500/10 text-yellow-500',
-  rce: 'bg-purple-500/10 text-purple-500',
+  rce: 'bg-purple-500/10 text-brand-2',
   scanner: 'bg-blue-500/10 text-blue-500',
-  custom: 'bg-cyan-500/10 text-cyan-500',
+  custom: 'bg-cyan-500/10 text-brand',
 }
 
 const severityColors: Record<string, string> = {
@@ -151,9 +151,9 @@ const severityColors: Record<string, string> = {
 }
 
 const actionColors: Record<string, string> = {
-  log: 'bg-slate-500/10 text-slate-400',
+  log: 'bg-slate-500/10 text-muted-foreground',
   block: 'bg-red-500/10 text-red-500',
-  blocklist: 'bg-purple-500/10 text-purple-500',
+  blocklist: 'bg-purple-500/10 text-brand-2',
   reject: 'bg-red-500/10 text-red-500',
   delay: 'bg-yellow-500/10 text-yellow-500',
   challenge: 'bg-yellow-500/10 text-yellow-500',
@@ -165,10 +165,10 @@ const geoModeColors: Record<string, string> = {
 }
 
 const presetCategoryConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  waf: { label: 'WAF Rules', icon: Shield, color: 'text-red-400' },
-  geoip: { label: 'GeoIP', icon: Globe, color: 'text-blue-400' },
-  rate_limit: { label: 'Rate Limiting', icon: Gauge, color: 'text-yellow-400' },
-  threat_response: { label: 'Threat Response', icon: AlertTriangle, color: 'text-purple-400' },
+  waf: { label: 'WAF Rules', icon: Shield, color: 'text-red-600 dark:text-red-400' },
+  geoip: { label: 'GeoIP', icon: Globe, color: 'text-blue-600 dark:text-blue-400' },
+  rate_limit: { label: 'Rate Limiting', icon: Gauge, color: 'text-yellow-700 dark:text-yellow-400' },
+  threat_response: { label: 'Threat Response', icon: AlertTriangle, color: 'text-brand-2' },
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -994,8 +994,8 @@ export default function RulesPage() {
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <span className="font-medium text-sm sm:text-base">{preset.name}</span>
                                 <Badge variant="outline" className={severityColors[preset.severity]}>{preset.severity}</Badge>
-                                {preset.tags.includes('recommended') && <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20">recommended</Badge>}
-                                {isApplied && <Badge className="bg-green-500/10 text-green-400 border-green-500/20"><Check className="h-3 w-3 mr-1" />Applied</Badge>}
+                                {preset.tags.includes('recommended') && <Badge className="bg-cyan-500/10 text-brand border-cyan-500/20">recommended</Badge>}
+                                {isApplied && <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"><Check className="h-3 w-3 mr-1" />Applied</Badge>}
                               </div>
                               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{preset.description}</p>
                             </div>
@@ -1003,7 +1003,7 @@ export default function RulesPage() {
                           <div className="flex items-center gap-2 shrink-0 ml-2 sm:ml-4">
                             <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">{preset.rule_count} rules</span>
                             {isApplied ? (
-                              <Button size="sm" variant="outline" disabled={isRemoving} onClick={e => { e.stopPropagation(); removePreset(preset.id) }} className="border-red-500/30 text-red-400 hover:bg-red-500/10">
+                              <Button size="sm" variant="outline" disabled={isRemoving} onClick={e => { e.stopPropagation(); removePreset(preset.id) }} className="border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10">
                                 {isRemoving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="h-4 w-4 mr-1" />Remove</>}
                               </Button>
                             ) : (
@@ -1016,7 +1016,7 @@ export default function RulesPage() {
                         {isExpanded && (
                           <div className="border-t border-border bg-muted/30 p-3 sm:p-4">
                             {presetDetailLoading ? (
-                              <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-cyan-500" /></div>
+                              <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
                             ) : presetDetail ? (
                               <div className="space-y-3">
                                 <p className="text-xs sm:text-sm text-muted-foreground">{presetDetail.description}</p>

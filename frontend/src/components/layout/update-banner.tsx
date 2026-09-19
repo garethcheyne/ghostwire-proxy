@@ -45,11 +45,11 @@ export function UpdateBanner() {
   if (!hasAppUpdate && !hasBaseUpdates) return null
 
   return (
-    <div className="relative border-b bg-cyan-950/50 border-cyan-800/30 px-4 py-2">
+    <div className="relative border-b border-brand/20 bg-brand/10 px-4 py-2">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 text-sm">
           {hasAppUpdate && (
-            <div className="flex items-center gap-2 text-cyan-400">
+            <div className="flex items-center gap-2 text-brand">
               <ArrowUpCircle className="h-4 w-4" />
               <span>
                 Version <strong>{update.app_latest_version}</strong> is available
@@ -63,7 +63,7 @@ export function UpdateBanner() {
             <span className="text-muted-foreground">·</span>
           )}
           {hasBaseUpdates && (
-            <div className="flex items-center gap-2 text-amber-400">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
               <Shield className="h-4 w-4" />
               <span>
                 {update.base_image_updates} container{update.base_image_updates !== 1 ? 's have' : ' has'} security updates
@@ -75,7 +75,7 @@ export function UpdateBanner() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-cyan-400 hover:text-cyan-300"
+            className="h-7 text-xs text-brand hover:text-brand"
             onClick={() => router.push('/dashboard/system?tab=updates')}
           >
             View Updates
