@@ -4,6 +4,7 @@ Generates nginx server blocks from ProxyHost database records.
 Supports multiple locations, caching, rate limiting, and custom headers.
 """
 import glob
+import ipaddress
 import logging
 import os
 import shutil
@@ -19,6 +20,7 @@ from app.core.security import decrypt_data
 from app.models.proxy_host import ProxyHost, ProxyLocation
 from app.models.certificate import Certificate
 from app.models.auth_wall import AuthWall
+from app.models.access_list import AccessList
 
 
 # Which request header carries the true client IP for each front-facing service.
@@ -49,6 +51,32 @@ def set_trusted_proxy_ranges(ranges: dict) -> None:
 def _safe_id(id_str: str) -> str:
     """Convert UUID to nginx-safe identifier"""
     return id_str.replace('-', '_')
+
+
+def _generate_access_list_rules(host: ProxyHost, indent: str = "    ") -> list[str]:
+    """nginx allow/deny lines for the host's IP access list.
+
+    nginx checks them in order and the first match wins, then the last line
+    settles everyone not listed: denied for a whitelist, allowed for a
+    blacklist. At server level they cover every location, custom ones included.
+    """
+    if not host.access_list_id or not host.access_list:
+        return []
+
+    acl = host.access_list
+    lines = [f"{indent}# IP access list: {acl.id} ({acl.mode})"]
+    for entry in acl.entries or []:
+        # Re-parse rather than trust the stored text: it goes straight into the config.
+        try:
+            network = ipaddress.ip_network(entry.ip_or_cidr.strip(), strict=False)
+        except ValueError:
+            logger.warning(f"Access list {acl.id}: skipping invalid entry {entry.ip_or_cidr!r}")
+            continue
+        verb = "allow" if entry.action == "allow" else "deny"
+        lines.append(f"{indent}{verb} {network};")
+    lines.append(f"{indent}{'deny' if acl.mode == 'whitelist' else 'allow'} all;")
+    lines.append("")
+    return lines
 
 
 def generate_upstream_block(host: ProxyHost) -> str:
@@ -343,11 +371,8 @@ def _generate_server_block_content(
     lines.append(f'{indent}set $honeypot_enabled "{1 if host.honeypot_enabled else 0}";')
     lines.append("")
 
-    # Access control (if configured)
-    if host.access_list_id:
-        lines.append(f"{indent}# Access list: {host.access_list_id}")
-        lines.append(f"{indent}access_by_lua_file /usr/local/openresty/nginx/lua/access_control.lua;")
-        lines.append("")
+    # IP access list (if configured)
+    lines.extend(_generate_access_list_rules(host, indent))
 
     # Auth wall (if configured)
     if host.auth_wall_id:
@@ -427,6 +452,9 @@ def _generate_server_block_content(
     # ACME challenge location (always first on HTTP, also on HTTPS for good measure)
     lines.append(f"{indent}location /.well-known/acme-challenge/ {{")
     lines.append(f"{indent}    root /var/www/certbot;")
+    if host.access_list_id:
+        # Let's Encrypt must reach this whatever the host's IP access list says
+        lines.append(f"{indent}    allow all;")
     lines.append(f"{indent}}}")
     lines.append("")
 
@@ -678,7 +706,8 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
         .options(
             selectinload(ProxyHost.upstream_servers),
             selectinload(ProxyHost.locations),
-            selectinload(ProxyHost.auth_wall)
+            selectinload(ProxyHost.auth_wall),
+            selectinload(ProxyHost.access_list).selectinload(AccessList.entries),
         )
         .where(ProxyHost.enabled == True)
     )

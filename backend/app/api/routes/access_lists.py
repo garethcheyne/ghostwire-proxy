@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
@@ -8,14 +8,52 @@ from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.access_list import AccessList, AccessListEntry
+from app.models.proxy_host import ProxyHost
 from app.models.audit_log import AuditLog
 from app.schemas.access_list import (
     AccessListCreate, AccessListUpdate, AccessListResponse,
     AccessListEntryCreate, AccessListEntryResponse
 )
 from app.api.deps import get_current_user, get_current_admin_user
+from app.api.routes.proxy_hosts import validate_and_apply
 
 router = APIRouter()
+
+
+def _with_relations(query):
+    return query.options(
+        selectinload(AccessList.entries),
+        selectinload(AccessList.proxy_hosts),
+    )
+
+
+async def _load_access_list(db: AsyncSession, list_id: str) -> AccessList:
+    result = await db.execute(_with_relations(select(AccessList)).where(AccessList.id == list_id))
+    access_list = result.scalar_one_or_none()
+    if not access_list:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Access list not found",
+        )
+    return access_list
+
+
+async def _host_count(db: AsyncSession, list_id: str) -> int:
+    result = await db.execute(
+        select(func.count()).select_from(ProxyHost).where(ProxyHost.access_list_id == list_id)
+    )
+    return int(result.scalar() or 0)
+
+
+async def _save(db: AsyncSession, list_id: str) -> None:
+    """Commit, or if hosts use this list, commit only once nginx has taken the new rules."""
+    if await _host_count(db, list_id):
+        ok, msg = await validate_and_apply(db)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    else:
+        await db.commit()
+    await cache_delete_prefix("access_lists:")
 
 
 @router.get("/", response_model=list[AccessListResponse])
@@ -31,8 +69,7 @@ async def list_access_lists(
 
     async def _compute() -> dict:
         query = (
-            select(AccessList)
-            .options(selectinload(AccessList.entries))
+            _with_relations(select(AccessList))
             .order_by(AccessList.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -86,13 +123,7 @@ async def create_access_list(
     await db.commit()
     await cache_delete_prefix("access_lists:")
 
-    # Reload with entries
-    result = await db.execute(
-        select(AccessList)
-        .options(selectinload(AccessList.entries))
-        .where(AccessList.id == access_list.id)
-    )
-    return result.scalar_one()
+    return await _load_access_list(db, access_list.id)
 
 
 @router.get("/{list_id}", response_model=AccessListResponse)
@@ -102,20 +133,7 @@ async def get_access_list(
     db: AsyncSession = Depends(get_db),
 ):
     """Get access list by ID"""
-    result = await db.execute(
-        select(AccessList)
-        .options(selectinload(AccessList.entries))
-        .where(AccessList.id == list_id)
-    )
-    access_list = result.scalar_one_or_none()
-
-    if not access_list:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Access list not found",
-        )
-
-    return access_list
+    return await _load_access_list(db, list_id)
 
 
 @router.put("/{list_id}", response_model=AccessListResponse)
@@ -126,23 +144,15 @@ async def update_access_list(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update access list"""
-    result = await db.execute(
-        select(AccessList)
-        .options(selectinload(AccessList.entries))
-        .where(AccessList.id == list_id)
-    )
-    access_list = result.scalar_one_or_none()
+    """Update access list. Hosts using it get the new rules straight away."""
+    access_list = await _load_access_list(db, list_id)
 
-    if not access_list:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Access list not found",
-        )
-
-    # Update fields
-    for field, value in list_data.model_dump(exclude_unset=True).items():
+    changes = list_data.model_dump(exclude_unset=True, exclude={"entries"})
+    for field, value in changes.items():
         setattr(access_list, field, value)
+
+    if list_data.entries is not None:
+        access_list.entries = [AccessListEntry(**e.model_dump()) for e in list_data.entries]
 
     # Audit log
     audit_log = AuditLog(
@@ -154,11 +164,10 @@ async def update_access_list(
         details=f"Updated access list: {access_list.name}",
     )
     db.add(audit_log)
-    await db.commit()
-    await cache_delete_prefix("access_lists:")
-    await db.refresh(access_list)
+    await _save(db, list_id)
 
-    return access_list
+    db.expunge_all()
+    return await _load_access_list(db, list_id)
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -168,7 +177,7 @@ async def delete_access_list(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete access list"""
+    """Delete access list. Hosts using it are left open (no list)."""
     result = await db.execute(select(AccessList).where(AccessList.id == list_id))
     access_list = result.scalar_one_or_none()
 
@@ -177,6 +186,8 @@ async def delete_access_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Access list not found",
         )
+
+    in_use = await _host_count(db, list_id)
 
     # Audit log
     audit_log = AuditLog(
@@ -189,8 +200,17 @@ async def delete_access_list(
     )
     db.add(audit_log)
 
+    await db.execute(
+        update(ProxyHost).where(ProxyHost.access_list_id == list_id).values(access_list_id=None)
+    )
     await db.delete(access_list)
-    await db.commit()
+
+    if in_use:
+        ok, msg = await validate_and_apply(db)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    else:
+        await db.commit()
     await cache_delete_prefix("access_lists:")
 
 
@@ -203,25 +223,17 @@ async def add_entry(
     db: AsyncSession = Depends(get_db),
 ):
     """Add entry to access list"""
-    result = await db.execute(select(AccessList).where(AccessList.id == list_id))
-    access_list = result.scalar_one_or_none()
+    access_list = await _load_access_list(db, list_id)
 
-    if not access_list:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Access list not found",
-        )
+    entry = AccessListEntry(**entry_data.model_dump())
+    access_list.entries.append(entry)
+    await db.flush()
+    entry_id = entry.id
 
-    entry = AccessListEntry(
-        access_list_id=list_id,
-        **entry_data.model_dump()
-    )
-    db.add(entry)
-    await db.commit()
-    await cache_delete_prefix("access_lists:")
-    await db.refresh(entry)
+    await _save(db, list_id)
 
-    return entry
+    result = await db.execute(select(AccessListEntry).where(AccessListEntry.id == entry_id))
+    return result.scalar_one()
 
 
 @router.delete("/{list_id}/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -232,20 +244,14 @@ async def remove_entry(
     db: AsyncSession = Depends(get_db),
 ):
     """Remove entry from access list"""
-    result = await db.execute(
-        select(AccessListEntry).where(
-            (AccessListEntry.id == entry_id) &
-            (AccessListEntry.access_list_id == list_id)
-        )
-    )
-    entry = result.scalar_one_or_none()
+    access_list = await _load_access_list(db, list_id)
 
+    entry = next((e for e in access_list.entries if e.id == entry_id), None)
     if not entry:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Entry not found",
         )
 
-    await db.delete(entry)
-    await db.commit()
-    await cache_delete_prefix("access_lists:")
+    access_list.entries.remove(entry)
+    await _save(db, list_id)

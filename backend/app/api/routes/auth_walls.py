@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
@@ -10,15 +10,34 @@ from app.core.utils import get_client_ip
 from app.models.user import User
 from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
 from app.models.audit_log import AuditLog
+from app.models.proxy_host import ProxyHost
 from app.schemas.auth_wall import (
     AuthWallCreate, AuthWallUpdate, AuthWallResponse,
     LocalAuthUserCreate, LocalAuthUserUpdate, LocalAuthUserResponse,
     AuthProviderCreate, AuthProviderUpdate, AuthProviderResponse,
     LdapConfigCreate, LdapConfigUpdate, LdapConfigResponse
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
+from app.api.routes.proxy_hosts import validate_and_apply
 
 router = APIRouter()
+
+
+async def _host_count(db: AsyncSession, wall_id: str) -> int:
+    result = await db.execute(
+        select(func.count()).select_from(ProxyHost).where(ProxyHost.auth_wall_id == wall_id)
+    )
+    return int(result.scalar() or 0)
+
+
+async def _commit_or_apply(db: AsyncSession, in_use: bool) -> None:
+    """Commit, or if hosts use this wall, commit only once nginx has taken the regenerated config."""
+    if in_use:
+        ok, msg = await validate_and_apply(db)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    else:
+        await db.commit()
 
 
 @router.get("/", response_model=list[AuthWallResponse])
@@ -38,6 +57,7 @@ async def list_auth_walls(
                 selectinload(AuthWall.local_users),
                 selectinload(AuthWall.auth_providers),
                 selectinload(AuthWall.ldap_configs),
+                selectinload(AuthWall.proxy_hosts),
             )
             .order_by(AuthWall.created_at.desc())
             .offset(skip)
@@ -54,7 +74,7 @@ async def list_auth_walls(
 async def create_auth_wall(
     wall_data: AuthWallCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new auth wall"""
@@ -137,6 +157,7 @@ async def create_auth_wall(
             selectinload(AuthWall.local_users),
             selectinload(AuthWall.auth_providers),
             selectinload(AuthWall.ldap_configs),
+            selectinload(AuthWall.proxy_hosts),
         )
         .where(AuthWall.id == auth_wall.id)
     )
@@ -156,6 +177,7 @@ async def get_auth_wall(
             selectinload(AuthWall.local_users),
             selectinload(AuthWall.auth_providers),
             selectinload(AuthWall.ldap_configs),
+            selectinload(AuthWall.proxy_hosts),
         )
         .where(AuthWall.id == wall_id)
     )
@@ -175,7 +197,7 @@ async def update_auth_wall(
     wall_id: str,
     wall_data: AuthWallUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update auth wall"""
@@ -185,6 +207,7 @@ async def update_auth_wall(
             selectinload(AuthWall.local_users),
             selectinload(AuthWall.auth_providers),
             selectinload(AuthWall.ldap_configs),
+            selectinload(AuthWall.proxy_hosts),
         )
         .where(AuthWall.id == wall_id)
     )
@@ -208,18 +231,29 @@ async def update_auth_wall(
         details=f"Updated auth wall: {auth_wall.name}",
     )
     db.add(audit_log)
-    await db.commit()
+    # Its name, type and theme are written into each host's config
+    await _commit_or_apply(db, bool(await _host_count(db, wall_id)))
     await cache_delete_prefix("auth_walls:")
-    await db.refresh(auth_wall)
 
-    return auth_wall
+    db.expunge_all()
+    result = await db.execute(
+        select(AuthWall)
+        .options(
+            selectinload(AuthWall.local_users),
+            selectinload(AuthWall.auth_providers),
+            selectinload(AuthWall.ldap_configs),
+            selectinload(AuthWall.proxy_hosts),
+        )
+        .where(AuthWall.id == wall_id)
+    )
+    return result.scalar_one()
 
 
 @router.delete("/{wall_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_auth_wall(
     wall_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete auth wall"""
@@ -242,8 +276,13 @@ async def delete_auth_wall(
     )
     db.add(audit_log)
 
+    # Hosts behind it are left open (no wall), rather than stuck behind a login that no longer exists
+    in_use = await _host_count(db, wall_id)
+    await db.execute(
+        update(ProxyHost).where(ProxyHost.auth_wall_id == wall_id).values(auth_wall_id=None)
+    )
     await db.delete(auth_wall)
-    await db.commit()
+    await _commit_or_apply(db, bool(in_use))
     await cache_delete_prefix("auth_walls:")
 
 
@@ -252,7 +291,7 @@ async def delete_auth_wall(
 async def add_local_user(
     wall_id: str,
     user_data: LocalAuthUserCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Add local user to auth wall"""
@@ -284,7 +323,7 @@ async def add_local_user(
 async def remove_local_user(
     wall_id: str,
     user_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove local user from auth wall"""
@@ -312,7 +351,7 @@ async def remove_local_user(
 async def add_auth_provider(
     wall_id: str,
     provider_data: AuthProviderCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Add OAuth provider to auth wall"""
@@ -349,7 +388,7 @@ async def add_auth_provider(
 async def remove_auth_provider(
     wall_id: str,
     provider_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove OAuth provider from auth wall"""
@@ -377,7 +416,7 @@ async def remove_auth_provider(
 async def add_ldap_config(
     wall_id: str,
     ldap_data: LdapConfigCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Add LDAP config to auth wall"""
@@ -418,7 +457,7 @@ async def add_ldap_config(
 async def remove_ldap_config(
     wall_id: str,
     ldap_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove LDAP config from auth wall"""

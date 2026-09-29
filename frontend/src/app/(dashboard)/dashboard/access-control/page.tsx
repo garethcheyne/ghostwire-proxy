@@ -2,13 +2,10 @@
 
 import { useState } from 'react'
 import { Key, Lock } from 'lucide-react'
-import dynamic from 'next/dynamic'
 import { PageHeader } from '@/components/layout/page-header'
 import { Key as HeaderIcon } from 'lucide-react'
-
-// Dynamic imports to avoid code duplication - load the existing pages as components
-const AuthWallsContent = dynamic(() => import('../auth-walls/page'), { ssr: false })
-const AccessListsContent = dynamic(() => import('../access-lists/page'), { ssr: false })
+import { AuthWallsPanel } from '@/components/access/auth-walls-panel'
+import { AccessListsPanel } from '@/components/access/access-lists-panel'
 
 type TabType = 'auth-walls' | 'ip-lists'
 
@@ -55,10 +52,8 @@ export default function AccessControlPage() {
       </div>
 
       {/* Tab Content */}
-      <div className="[&>div>div:first-child]:hidden">
-        {activeTab === 'auth-walls' && <AuthWallsContent />}
-        {activeTab === 'ip-lists' && <AccessListsContent />}
-      </div>
+      {activeTab === 'auth-walls' && <AuthWallsPanel embedded />}
+      {activeTab === 'ip-lists' && <AccessListsPanel embedded />}
     </div>
   )
 }

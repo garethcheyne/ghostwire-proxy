@@ -1,6 +1,7 @@
 """Tests for openresty service — nginx config generation."""
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -127,6 +128,64 @@ class TestGenerateServerBlock:
         result = generate_server_block(host)
         assert "a.example.com" in result
         assert "b.example.com" in result
+
+
+def _host_with_access_list(mode, entries):
+    host = MagicMock(spec=ProxyHost)
+    host.id = "host-acl"
+    host.domain_names = ["acl.example.com"]
+    host.forward_scheme = "http"
+    host.forward_host = "backend"
+    host.forward_port = 8080
+    host.ssl_enabled = False
+    host.hsts_enabled = False
+    host.access_list_id = "acl-1"
+    host.access_list = SimpleNamespace(
+        id="acl-1",
+        mode=mode,
+        entries=[SimpleNamespace(ip_or_cidr=ip, action=action) for ip, action in entries],
+    )
+    host.auth_wall_id = None
+    host.upstream_servers = []
+    host.locations = []
+    return host
+
+
+class TestAccessListRules:
+    """An assigned IP access list becomes nginx allow/deny rules."""
+
+    def test_whitelist_allows_listed_then_denies_everyone_else(self):
+        host = _host_with_access_list("whitelist", [("203.0.113.7", "allow"), ("10.0.0.0/8", "allow")])
+        result = generate_server_block(host)
+        assert "allow 203.0.113.7/32;" in result
+        assert "allow 10.0.0.0/8;" in result
+        assert result.index("allow 10.0.0.0/8;") < result.index("deny all;")
+
+    def test_blacklist_denies_listed_then_allows_everyone_else(self):
+        host = _host_with_access_list("blacklist", [("2001:db8::/32", "deny")])
+        result = generate_server_block(host)
+        assert "deny 2001:db8::/32;" in result
+        assert result.index("deny 2001:db8::/32;") < result.index("allow all;")
+
+    def test_rules_apply_before_any_location_and_acme_stays_reachable(self):
+        host = _host_with_access_list("whitelist", [("203.0.113.7", "allow")])
+        result = generate_server_block(host)
+        assert result.index("deny all;") < result.index("location /")
+        acme = result[result.index("location /.well-known/acme-challenge/"):]
+        assert "allow all;" in acme[:acme.index("}")]
+
+    def test_invalid_entry_is_skipped_not_written(self):
+        host = _host_with_access_list("whitelist", [("1.2.3.4; return 200", "allow"), ("198.51.100.1", "allow")])
+        result = generate_server_block(host)
+        assert "return 200" not in result
+        assert "allow 198.51.100.1/32;" in result
+
+    def test_no_access_list_writes_no_rules(self):
+        host = _host_with_access_list("whitelist", [])
+        host.access_list_id = None
+        result = generate_server_block(host)
+        assert "deny all;" not in result
+        assert "access_control.lua" not in result
 
 
 class TestGenerateDefaultSiteConfig:

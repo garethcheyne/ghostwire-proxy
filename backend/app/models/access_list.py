@@ -23,7 +23,11 @@ class AccessList(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    entries = relationship("AccessListEntry", back_populates="access_list", cascade="all, delete-orphan")
+    # Ordered: nginx applies the rules top to bottom and the first match wins
+    entries = relationship(
+        "AccessListEntry", back_populates="access_list", cascade="all, delete-orphan",
+        order_by="AccessListEntry.created_at",
+    )
     proxy_hosts = relationship("ProxyHost", back_populates="access_list")
 
 
