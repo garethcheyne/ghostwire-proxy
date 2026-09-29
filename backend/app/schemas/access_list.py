@@ -4,6 +4,15 @@ from typing import Optional
 import ipaddress
 
 
+class ProxyHostRef(BaseModel):
+    """A proxy host that uses an access list or auth wall."""
+    id: str
+    domain_names: list[str]
+
+    class Config:
+        from_attributes = True
+
+
 class AccessListEntryCreate(BaseModel):
     ip_or_cidr: str
     action: str = "deny"
@@ -71,6 +80,15 @@ class AccessListUpdate(BaseModel):
     name: Optional[str] = None
     mode: Optional[str] = None
     default_action: Optional[str] = None
+    # When given, replaces every entry (in this order)
+    entries: Optional[list[AccessListEntryCreate]] = None
+
+    @field_validator('mode')
+    @classmethod
+    def mode_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ('whitelist', 'blacklist'):
+            raise ValueError('Mode must be whitelist or blacklist')
+        return v
 
 
 class AccessListResponse(BaseModel):
@@ -79,6 +97,7 @@ class AccessListResponse(BaseModel):
     mode: str
     default_action: str
     entries: list[AccessListEntryResponse] = []
+    proxy_hosts: list[ProxyHostRef] = []
     created_at: datetime
     updated_at: datetime
 

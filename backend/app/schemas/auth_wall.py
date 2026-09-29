@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.access_list import ProxyHostRef
+
 
 # Local Auth Users (Basic Auth)
 class LocalAuthUserCreate(BaseModel):
@@ -202,6 +204,7 @@ class AuthWallResponse(BaseModel):
     local_users: list[LocalAuthUserResponse] = []
     providers: list[AuthProviderResponse] = Field(default=[], validation_alias="auth_providers")
     ldap_config: Optional[LdapConfigResponse] = Field(default=None, validation_alias="ldap_configs")
+    proxy_hosts: list[ProxyHostRef] = []
     created_at: datetime
     updated_at: datetime
 

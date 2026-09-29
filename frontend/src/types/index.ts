@@ -130,12 +130,19 @@ export interface AccessListEntry {
   created_at: string
 }
 
+/** A proxy host that uses an access list or auth wall. */
+export interface ProxyHostRef {
+  id: string
+  domain_names: string[]
+}
+
 export interface AccessList {
   id: string
   name: string
   mode: 'whitelist' | 'blacklist'
   default_action: 'allow' | 'deny'
   entries: AccessListEntry[]
+  proxy_hosts: ProxyHostRef[]
   created_at: string
   updated_at: string
 }
@@ -200,6 +207,7 @@ export interface AuthWall {
   local_users: LocalAuthUser[]
   providers: AuthProvider[]
   ldap_config: LdapConfig | null
+  proxy_hosts: ProxyHostRef[]
   created_at: string
   updated_at: string
 }

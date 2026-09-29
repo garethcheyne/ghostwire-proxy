@@ -1,8 +1,12 @@
+import os
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
@@ -213,6 +217,37 @@ async def create_proxy_host(
     host = result.scalar_one()
 
     return host
+
+
+@router.get("/{host_id}/config")
+async def get_proxy_host_config(
+    host_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The host's nginx config file exactly as it is on disk.
+
+    nginx reads this same file (the directory is shared with it), and it is only
+    written just before a reload (restored if the reload fails), so it is what
+    nginx is running. Unsaved edits in the dialog are not in it.
+    """
+    result = await db.execute(select(ProxyHost.id, ProxyHost.enabled).where(ProxyHost.id == host_id))
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proxy host not found",
+        )
+
+    # Built from the stored id, never the raw path parameter
+    path = os.path.join(settings.nginx_config_path, f"{row.id}.conf")
+    if not os.path.isfile(path):
+        return {"exists": False, "enabled": row.enabled, "path": path, "content": None, "modified_at": None}
+
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        content = f.read()
+    modified_at = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc)
+    return {"exists": True, "enabled": row.enabled, "path": path, "content": content, "modified_at": modified_at}
 
 
 @router.get("/{host_id}", response_model=ProxyHostResponse)

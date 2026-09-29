@@ -45,12 +45,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
+import { HostConfigPanel } from '@/components/proxy-hosts/host-config-panel'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 import { PageHeader } from '@/components/layout/page-header'
 import { Globe as HeaderIcon } from 'lucide-react'
 
-type TabType = 'details' | 'locations' | 'advanced'
+type TabType = 'details' | 'locations' | 'advanced' | 'config'
 
 interface FormData {
   domain_names: string[]
@@ -858,6 +859,21 @@ export default function ProxyHostsPage() {
                     Advanced
                   </div>
                 </button>
+                {editingHost && (
+                  <button
+                    onClick={() => setActiveTab('config')}
+                    className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'config'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Config
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1540,6 +1556,8 @@ export default function ProxyHostsPage() {
 
                 </div>
               )}
+
+              {activeTab === 'config' && editingHost && <HostConfigPanel hostId={editingHost.id} />}
             </ModalBody>
 
             {/* Shared footer buttons - visible on all tabs */}
