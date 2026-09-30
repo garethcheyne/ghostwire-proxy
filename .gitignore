@@ -30,7 +30,6 @@ frontend-authwall/default/vite.config.js
 frontend-authwall/default/vite.config.d.ts
 
 # Docker/container-generated
-proxy/auth-portal/default/assets/
 proxy/conf.d/*.tmp.*
 
 # IDE & local tool config

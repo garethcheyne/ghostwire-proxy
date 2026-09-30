@@ -96,6 +96,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # The proxy image serves proxy/auth-portal as committed. A login page whose
+      # script or stylesheet is missing from the repo renders as a blank page.
+      - name: Auth portal assets are committed
+        working-directory: proxy/auth-portal
+        run: |
+          missing=0
+          for page in */index.html; do
+            for ref in $(grep -oE '/__auth/[^"]+' "$page" | sed 's#^/__auth/##'); do
+              [ -f "$(dirname "$page")/$ref" ] || { echo "::error file=proxy/auth-portal/$page::references missing $ref"; missing=1; }
+            done
+          done
+          exit $missing
+
       - name: Install dependencies
         run: npm ci
 
