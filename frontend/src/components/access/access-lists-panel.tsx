@@ -15,10 +15,20 @@ import {
   Loader2,
   ShieldCheck,
   ShieldX,
+  CheckCircle,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
-import type { AccessList, AccessListEntry } from '@/types'
+import type { AccessList, AccessListBlockedBehavior, AccessListEntry } from '@/types'
+
+/** What a blocked visitor gets - the Default Site choices, plus nginx's plain 403. */
+const BLOCKED_OPTIONS: Array<{ value: AccessListBlockedBehavior; label: string; desc: string }> = [
+  { value: '403', label: '403 Forbidden', desc: 'Return a 403 error page' },
+  { value: 'congratulations', label: 'Ghostwire Welcome', desc: 'Show the Ghostwire Proxy landing page' },
+  { value: 'redirect', label: 'Redirect', desc: 'Redirect to a custom URL' },
+  { value: '404', label: '404 Not Found', desc: 'Return a 404 error page' },
+  { value: '444', label: 'Drop Connection', desc: 'Silently close the connection' },
+]
 import { UsedBy, deleteWarning } from '@/components/access/used-by'
 import { PageHeader } from '@/components/layout/page-header'
 import { Key as HeaderIcon } from 'lucide-react'
@@ -46,6 +56,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
   const [formEntries, setFormEntries] = useState<Array<{ ip_or_cidr: string; action: 'allow' | 'deny' }>>([])
   const [newEntryIp, setNewEntryIp] = useState('')
   const [newEntryAction, setNewEntryAction] = useState<'allow' | 'deny'>('allow')
+  const [formBlocked, setFormBlocked] = useState<AccessListBlockedBehavior>('403')
+  const [formRedirectUrl, setFormRedirectUrl] = useState('')
   const confirm = useConfirm()
 
   usePageData(() => { fetchAccessLists() })
@@ -67,6 +79,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
     setFormEntries([])
     setNewEntryIp('')
     setNewEntryAction('allow')
+    setFormBlocked('403')
+    setFormRedirectUrl('')
     setError('')
   }
 
@@ -79,6 +93,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
   const handleEdit = (list: AccessList) => {
     setFormName(list.name)
     setFormMode(list.mode)
+    setFormBlocked(list.blocked_behavior ?? '403')
+    setFormRedirectUrl(list.blocked_redirect_url ?? '')
     setFormEntries(
       list.entries.map((e) => ({
         ip_or_cidr: e.ip_or_cidr,
@@ -122,6 +138,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
       const data = {
         name: formName,
         mode: formMode,
+        blocked_behavior: formBlocked,
+        blocked_redirect_url: formBlocked === 'redirect' ? formRedirectUrl.trim() : null,
         entries: formEntries,
       }
 
@@ -227,6 +245,14 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                       >
                         {list.mode === 'whitelist' ? 'Whitelist' : 'Blacklist'}
                       </span>
+                      {list.blocked_behavior && list.blocked_behavior !== '403' && (
+                        <>
+                          {' '}• Blocked:{' '}
+                          {list.blocked_behavior === 'redirect'
+                            ? `redirect to ${list.blocked_redirect_url}`
+                            : BLOCKED_OPTIONS.find((o) => o.value === list.blocked_behavior)?.label}
+                        </>
+                      )}
                     </p>
                     <UsedBy hosts={list.proxy_hosts} />
                   </div>
@@ -346,6 +372,56 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                     <span className="text-sm">Blacklist (block listed)</span>
                   </label>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">When someone is blocked</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  What a visitor this list blocks gets instead of the site.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {BLOCKED_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`relative flex flex-col rounded-lg border p-3 cursor-pointer transition-colors ${
+                        formBlocked === opt.value
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                          : 'border-border hover:border-muted-foreground/30'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="blockedBehavior"
+                        value={opt.value}
+                        checked={formBlocked === opt.value}
+                        onChange={() => setFormBlocked(opt.value)}
+                        className="sr-only"
+                      />
+                      {formBlocked === opt.value && (
+                        <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                          <CheckCircle className="h-3 w-3" />
+                          Active
+                        </span>
+                      )}
+                      <span className="font-medium text-sm">{opt.label}</span>
+                      <span className="text-xs text-muted-foreground mt-1">{opt.desc}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {formBlocked === 'redirect' && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium mb-2">Redirect URL</label>
+                    <input
+                      type="url"
+                      value={formRedirectUrl}
+                      onChange={(e) => setFormRedirectUrl(e.target.value)}
+                      placeholder="https://example.com"
+                      className="w-full max-w-md px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

@@ -97,6 +97,8 @@ async def create_access_list(
         name=list_data.name,
         mode=list_data.mode,
         default_action=list_data.default_action,
+        blocked_behavior=list_data.blocked_behavior,
+        blocked_redirect_url=list_data.blocked_redirect_url,
     )
     db.add(access_list)
     await db.flush()

@@ -136,11 +136,16 @@ export interface ProxyHostRef {
   domain_names: string[]
 }
 
+export type AccessListBlockedBehavior = '403' | 'congratulations' | 'redirect' | '404' | '444'
+
 export interface AccessList {
   id: string
   name: string
   mode: 'whitelist' | 'blacklist'
   default_action: 'allow' | 'deny'
+  /** What a blocked visitor gets - the Default Site choices, plus nginx's plain 403 */
+  blocked_behavior: AccessListBlockedBehavior
+  blocked_redirect_url: string | null
   entries: AccessListEntry[]
   proxy_hosts: ProxyHostRef[]
   created_at: string

@@ -18,6 +18,11 @@ class AccessList(Base):
     # Default action for IPs not in list
     default_action = Column(String(20), default="allow", nullable=False)  # allow, deny
 
+    # What a blocked visitor gets: '403' (Forbidden), 'congratulations' (the Ghostwire
+    # welcome page), 'redirect' (to blocked_redirect_url), '404', or '444' (drop).
+    blocked_behavior = Column(String(20), default="403", server_default="403", nullable=False)
+    blocked_redirect_url = Column(String(2048), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

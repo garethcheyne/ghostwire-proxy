@@ -53,6 +53,42 @@ def _safe_id(id_str: str) -> str:
     return id_str.replace('-', '_')
 
 
+# The Ghostwire welcome page, as the body of a `location` block. Served by the
+# default site and, when chosen, to visitors an IP access list blocks.
+_WELCOME_PAGE = [
+    "        default_type text/html;",
+    "        return 200 '<!DOCTYPE html>",
+    "<html lang=\"en\">",
+    "<head>",
+    "    <meta charset=\"UTF-8\">",
+    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+    "    <title>Ghostwire Proxy</title>",
+    "    <style>",
+    "        * { margin: 0; padding: 0; box-sizing: border-box; }",
+    "        body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;",
+    "               background: #0f172a; color: #e2e8f0; display: flex; align-items: center;",
+    "               justify-content: center; min-height: 100vh; }",
+    "        .card { text-align: center; max-width: 480px; padding: 3rem; }",
+    "        .icon { font-size: 4rem; margin-bottom: 1.5rem; }",
+    "        h1 { font-size: 1.75rem; font-weight: 700; color: #22d3ee; margin-bottom: 0.5rem; }",
+    "        p { color: #94a3b8; line-height: 1.6; }",
+    "        .badge { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1rem;",
+    "                 background: rgba(34,211,238,0.1); color: #22d3ee; border-radius: 9999px;",
+    "                 font-size: 0.875rem; border: 1px solid rgba(34,211,238,0.2); }",
+    "    </style>",
+    "</head>",
+    "<body>",
+    "    <div class=\"card\">",
+    "        <div class=\"icon\">&#128737;</div>",
+    "        <h1>Ghostwire Proxy</h1>",
+    "        <p>This server is powered by Ghostwire Proxy. If you are seeing this page, no site has been configured for this hostname yet.</p>",
+    "        <div class=\"badge\">Reverse Proxy Active</div>",
+    "    </div>",
+    "</body>",
+    "</html>';",
+]
+
+
 def _generate_access_list_rules(host: ProxyHost, indent: str = "    ") -> list[str]:
     """nginx allow/deny lines for the host's IP access list.
 
@@ -75,6 +111,46 @@ def _generate_access_list_rules(host: ProxyHost, indent: str = "    ") -> list[s
         verb = "allow" if entry.action == "allow" else "deny"
         lines.append(f"{indent}{verb} {network};")
     lines.append(f"{indent}{'deny' if acl.mode == 'whitelist' else 'allow'} all;")
+    lines.append("")
+    lines.extend(_generate_access_list_blocked_response(host, indent))
+    return lines
+
+
+def _generate_access_list_blocked_response(host: ProxyHost, indent: str = "    ") -> list[str]:
+    """Send blocked visitors what the list asks for instead of nginx's bare 403.
+
+    `deny` always answers 403, so the list's choice hangs off error_page 403.
+    The Lua block pages (WAF, geo) write their own response before exiting, so
+    error_page never replaces them; only the access list's deny lands here.
+    """
+    acl = host.access_list
+    behavior = getattr(acl, "blocked_behavior", None) or "403"
+    redirect_url = getattr(acl, "blocked_redirect_url", None)
+
+    if behavior == "403" or (behavior == "redirect" and not redirect_url):
+        return []
+    if "403" in {str(code) for code in (getattr(host, "custom_error_pages", None) or {})}:
+        logger.warning(f"Host {host.id}: its custom 403 page takes precedence over access list {acl.id}'s blocked response")
+        return []
+
+    lines = [
+        f"{indent}# Blocked by the IP access list: {behavior}",
+        f"{indent}error_page 403 = @ip_access_blocked;",
+        f"{indent}location @ip_access_blocked {{",
+        # Without this the list's own `deny all` would refuse this location too,
+        # and nginx would fall back to its plain 403.
+        f"{indent}    allow all;",
+    ]
+    if behavior == "redirect":
+        # 302, not 301: a list changes, and browsers keep a 301 for good
+        lines.append(f"{indent}    return 302 {redirect_url};")
+    elif behavior == "404":
+        lines.append(f"{indent}    return 404;")
+    elif behavior == "444":
+        lines.append(f"{indent}    return 444;")
+    else:
+        lines.extend(_WELCOME_PAGE)
+    lines.append(f"{indent}}}")
     lines.append("")
     return lines
 
@@ -413,7 +489,9 @@ def _generate_server_block_content(
         lines.append(f"{indent}location /__auth/ {{")
         lines.append(f"{indent}    alias /var/www/auth-portal/{theme}/;")
         lines.append(f"{indent}    index index.html;")
-        lines.append(f"{indent}    try_files $uri $uri/ /index.html;")
+        # The fallback is a URI, not a file: it must stay under /__auth/ so it lands back in
+        # this location. A bare /index.html falls through to `location /` and the backend.
+        lines.append(f"{indent}    try_files $uri $uri/ /__auth/index.html;")
         lines.append(f"{indent}    add_header Cache-Control \"no-cache\";")
         lines.append(f"{indent}}}")
         lines.append("")
@@ -661,36 +739,7 @@ async def generate_default_site_config(db: AsyncSession) -> str:
         # congratulations (default) — show welcome page
         lines.extend([
             "    location / {",
-            "        default_type text/html;",
-            "        return 200 '<!DOCTYPE html>",
-            "<html lang=\"en\">",
-            "<head>",
-            "    <meta charset=\"UTF-8\">",
-            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-            "    <title>Ghostwire Proxy</title>",
-            "    <style>",
-            "        * { margin: 0; padding: 0; box-sizing: border-box; }",
-            "        body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;",
-            "               background: #0f172a; color: #e2e8f0; display: flex; align-items: center;",
-            "               justify-content: center; min-height: 100vh; }",
-            "        .card { text-align: center; max-width: 480px; padding: 3rem; }",
-            "        .icon { font-size: 4rem; margin-bottom: 1.5rem; }",
-            "        h1 { font-size: 1.75rem; font-weight: 700; color: #22d3ee; margin-bottom: 0.5rem; }",
-            "        p { color: #94a3b8; line-height: 1.6; }",
-            "        .badge { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1rem;",
-            "                 background: rgba(34,211,238,0.1); color: #22d3ee; border-radius: 9999px;",
-            "                 font-size: 0.875rem; border: 1px solid rgba(34,211,238,0.2); }",
-            "    </style>",
-            "</head>",
-            "<body>",
-            "    <div class=\"card\">",
-            "        <div class=\"icon\">&#128737;</div>",
-            "        <h1>Ghostwire Proxy</h1>",
-            "        <p>This server is powered by Ghostwire Proxy. If you are seeing this page, no site has been configured for this hostname yet.</p>",
-            "        <div class=\"badge\">Reverse Proxy Active</div>",
-            "    </div>",
-            "</body>",
-            "</html>';",
+            *_WELCOME_PAGE,
             "    }",
         ])
 

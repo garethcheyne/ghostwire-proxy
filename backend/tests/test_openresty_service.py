@@ -188,6 +188,53 @@ class TestAccessListRules:
         assert "access_control.lua" not in result
 
 
+class TestAccessListBlockedResponse:
+    """A list can answer blocked visitors like the default site does."""
+
+    def _render(self, behavior, url=None, custom_error_pages=None):
+        host = _host_with_access_list("whitelist", [("203.0.113.7", "allow")])
+        host.access_list.blocked_behavior = behavior
+        host.access_list.blocked_redirect_url = url
+        host.custom_error_pages = custom_error_pages or {}
+        return generate_server_block(host)
+
+    def test_403_keeps_nginx_default(self):
+        assert "error_page 403" not in self._render("403")
+
+    def test_redirect_sends_blocked_visitors_elsewhere(self):
+        result = self._render("redirect", "https://example.org/")
+        assert "error_page 403 = @ip_access_blocked;" in result
+        assert "return 302 https://example.org/;" in result
+
+    def test_blocked_location_is_reachable_despite_deny_all(self):
+        result = self._render("444")
+        named = result[result.index("location @ip_access_blocked {"):]
+        assert "allow all;" in named[:named.index("}")]
+        assert "return 444;" in named[:named.index("}")]
+
+    def test_welcome_page(self):
+        assert "<title>Ghostwire Proxy</title>" in self._render("congratulations")
+
+    def test_custom_403_page_takes_precedence(self):
+        assert "@ip_access_blocked" not in self._render("404", custom_error_pages={"403": "/403.html"})
+
+
+class TestAuthPortal:
+    """A walled host serves its login portal itself, never from the backend."""
+
+    def test_spa_fallback_stays_inside_the_portal(self):
+        # A fallback of /index.html leaves /__auth/, lands in `location /` and is
+        # proxied to the backend - whose own login redirect then loops forever.
+        host = _host_with_access_list("whitelist", [])
+        host.access_list_id = None
+        host.auth_wall_id = "wall-1"
+        host.auth_wall = SimpleNamespace(auth_type="multi", name="Wall", theme="default")
+        result = generate_server_block(host)
+        portal = result[result.index("location /__auth/ {"):]
+        portal = portal[:portal.index("}")]
+        assert "try_files $uri $uri/ /__auth/index.html;" in portal
+
+
 class TestGenerateDefaultSiteConfig:
     """Tests for default site config generation."""
 
