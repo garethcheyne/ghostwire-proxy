@@ -243,76 +243,6 @@ local function redirect_to_login(auth_wall_id)
 end
 
 
--- Request HTTP Basic Auth
-local function request_basic_auth(realm)
-    realm = realm or "Protected"
-    ngx.header["WWW-Authenticate"] = 'Basic realm="' .. realm .. '"'
-    ngx.status = 401
-    ngx.header["Content-Type"] = "application/json"
-    ngx.say('{"error":"Unauthorized","message":"Authentication required"}')
-    return ngx.exit(401)
-end
-
-
--- Validate basic auth against backend
-local function validate_basic_auth(auth_wall_id)
-    local auth_header = ngx.var.http_authorization
-    if not auth_header then
-        return nil
-    end
-
-    local encoded = string.match(auth_header, "Basic%s+(.+)")
-    if not encoded then
-        return nil
-    end
-
-    local decoded = ngx.decode_base64(encoded)
-    if not decoded then
-        return nil
-    end
-
-    local username, password = string.match(decoded, "([^:]+):(.+)")
-    if not username or not password then
-        return nil
-    end
-
-    -- Validate against backend API
-    local http = require "resty.http"
-    local httpc = http.new()
-    httpc:set_timeout(5000)
-
-    local api_url = init.config.api_url .. "/api/internal/auth-wall/validate-basic"
-
-    local res, err = httpc:request_uri(api_url, {
-        method = "POST",
-        body = cjson.encode({
-            auth_wall_id = auth_wall_id,
-            username = username,
-            password = password
-        }),
-        headers = {
-            ["Content-Type"] = "application/json"
-        }
-    })
-
-    if err then
-        ngx.log(ngx.ERR, "Basic auth validation failed: ", err)
-        return nil
-    end
-
-    if res.status ~= 200 then
-        return nil
-    end
-
-    local body = cjson.decode(res.body)
-    if body and body.valid then
-        return body.session
-    end
-
-    return nil
-end
-
-
 -- Main access handler
 -- Called from access_by_lua_file in nginx config
 function _M.access()
@@ -330,20 +260,9 @@ function _M.access()
         return
     end
 
-    -- Get auth wall config (for auth_type)
-    local auth_type = ngx.var.auth_wall_type or "multi"
-
-    -- Handle HTTP Basic Auth
-    if auth_type == "basic" then
-        local session = validate_basic_auth(auth_wall_id)
-        if session then
-            set_auth_headers(session)
-            return
-        end
-        return request_basic_auth(ngx.var.auth_wall_name or "Protected")
-    end
-
-    -- For form-based auth (multi, oauth, local), check session cookie
+    -- Every wall type, "basic" (username/password) included, signs in through
+    -- the login page at /__auth/login and is then recognised by its session
+    -- cookie. No browser Basic-auth popup.
     local cookie_value = get_session_cookie()
     ngx.log(ngx.INFO, "Auth wall: checking session, cookie present: ", cookie_value and "yes" or "no")
 
