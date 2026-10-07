@@ -112,12 +112,13 @@ async def build_host_report(
         _visitors(window),
         _security(host.id, start, prev_start),
         _lifetime(host.id),
+        _nodes(host.id, start),
         return_exceptions=True,
     )
 
     names = [
         "overview", "timeseries", "paths", "responses", "clients",
-        "geography", "referrers", "visitors", "security", "lifetime",
+        "geography", "referrers", "visitors", "security", "lifetime", "nodes",
     ]
     report: dict = {}
     for name, value in zip(names, results):
@@ -145,6 +146,16 @@ async def build_host_report(
         "lifetime_source": "analytics_daily rollups",
     }
     return report
+
+
+async def _nodes(host_id: str, start: datetime) -> dict:
+    """Which upstream node served the traffic (load-balanced hosts): share,
+    errors, latency and failovers per node."""
+    from app.services import traffic_nodes, traffic_query
+
+    async with AsyncSessionLocal() as s:
+        f = traffic_query.TrafficFilters(start=start, host_ids=[host_id])
+        return await traffic_nodes.node_summary(s, f, now=datetime.now(timezone.utc))
 
 
 async def _overview(window, prev_window) -> dict:

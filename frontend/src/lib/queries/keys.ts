@@ -40,6 +40,14 @@ export const trafficKeys = {
     [...trafficKeys.all, 'stats', proxyHostId ?? null] as const,
   logs: (params: Record<string, unknown> = {}) =>
     [...trafficKeys.all, 'logs', params] as const,
+  overview: (filters: string) => [...trafficKeys.all, 'overview', filters] as const,
+  top: (filters: string, dimension: string, limit: number) =>
+    [...trafficKeys.all, 'top', filters, dimension, limit] as const,
+  backends: (filters: string, group: string) => [...trafficKeys.all, 'backends', filters, group] as const,
+  nodes: (filters: string) => [...trafficKeys.all, 'nodes', filters] as const,
+  backendInfo: (backend: string) => [...trafficKeys.all, 'backend-info', backend] as const,
+  clientInfo: (ip: string) => [...trafficKeys.all, 'client-info', ip] as const,
+  detail: (id: string) => [...trafficKeys.all, 'detail', id] as const,
 }
 
 export const wafKeys = {
