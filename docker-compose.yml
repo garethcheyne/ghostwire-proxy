@@ -230,6 +230,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      # Alembic runs before uvicorn starts, and big migrations (e.g. rewriting
+      # traffic_logs) can take minutes. Without a grace period the API is marked
+      # unhealthy mid-migration and compose never starts the UI or updater.
+      start_period: 600s
+      start_interval: 5s
 
   # NOTE: there used to be a standalone `ghostwire-proxy-certbot` container here
   # running its own independent `certbot renew` loop every 12h against the same
