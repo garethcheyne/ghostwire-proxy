@@ -23,6 +23,8 @@ class TestGenerateUpstreamBlock:
 
     def test_empty_upstream_returns_empty(self):
         host = MagicMock(spec=ProxyHost)
+        host.rate_limit_requests = 100
+        host.rate_limit_period = "1s"
         host.id = "host-1"
         host.upstream_servers = []
 
@@ -39,6 +41,8 @@ class TestGenerateUpstreamBlock:
         server.fail_timeout = 30
 
         host = MagicMock(spec=ProxyHost)
+        host.rate_limit_requests = 100
+        host.rate_limit_period = "1s"
         host.id = "abc-123"
         host.upstream_servers = [server]
 
@@ -52,6 +56,8 @@ class TestGenerateServerBlock:
 
     def test_http_server_block(self):
         host = MagicMock(spec=ProxyHost)
+        host.rate_limit_requests = 100
+        host.rate_limit_period = "1s"
         host.id = "host-2"
         host.domain_names = ["example.com"]
         host.forward_scheme = "http"
@@ -77,6 +83,8 @@ class TestGenerateServerBlock:
 
     def test_ssl_server_block(self):
         host = MagicMock(spec=ProxyHost)
+        host.rate_limit_requests = 100
+        host.rate_limit_period = "1s"
         host.id = "host-3"
         host.domain_names = ["secure.example.com"]
         host.forward_scheme = "https"
@@ -106,6 +114,8 @@ class TestGenerateServerBlock:
 
     def test_multiple_domains(self):
         host = MagicMock(spec=ProxyHost)
+        host.rate_limit_requests = 100
+        host.rate_limit_period = "1s"
         host.id = "host-4"
         host.domain_names = ["a.example.com", "b.example.com"]
         host.forward_scheme = "http"
@@ -132,6 +142,8 @@ class TestGenerateServerBlock:
 
 def _host_with_access_list(mode, entries):
     host = MagicMock(spec=ProxyHost)
+    host.rate_limit_requests = 100
+    host.rate_limit_period = "1s"
     host.id = "host-acl"
     host.domain_names = ["acl.example.com"]
     host.forward_scheme = "http"
