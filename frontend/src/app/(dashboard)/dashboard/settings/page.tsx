@@ -20,6 +20,8 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  KeyRound,
+  Bot,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -540,6 +542,39 @@ export default function SettingsPage() {
           </div>
         </div>
       </Link>
+
+      {/* API keys and AI agents (MCP) */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {[
+          {
+            href: '/dashboard/settings/api-keys',
+            icon: KeyRound,
+            title: 'API keys',
+            text: 'Scoped keys for scripts and AI agents. Create, see last use, revoke.',
+          },
+          {
+            href: '/dashboard/settings/mcp',
+            icon: Bot,
+            title: 'AI agents (MCP)',
+            text: 'Connect Claude Code or another MCP client so it can configure this proxy.',
+          },
+        ].map(({ href, icon: Icon, title, text }) => (
+          <Link key={href} href={href} className="block">
+            <div className="flex h-full items-center justify-between rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/50 hover:bg-muted/50 group">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Icon className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">{title}</h2>
+                  <p className="text-sm text-muted-foreground">{text}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+            </div>
+          </Link>
+        ))}
+      </div>
 
       {/* Security Settings */}
       <div className="rounded-xl border border-border bg-card p-6">

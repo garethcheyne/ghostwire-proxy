@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import users, internal_admin_mfa, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers
+from app.api.routes import users, internal_admin_mfa, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers, api_keys, config_tools, mcp
 
 router = APIRouter()
 
@@ -39,3 +39,9 @@ router.include_router(search.router, prefix="/search", tags=["Search"])
 router.include_router(known_ips.router, prefix="/known-ips", tags=["Known IPs"])
 router.include_router(reports.router, prefix="/reports", tags=["Reports"])
 router.include_router(containers.router, prefix="/containers", tags=["Container Security"])
+
+# Scripts and AI agents: scoped API keys (session-only to manage), config tooling and MCP.
+router.include_router(api_keys.router, prefix="/api-keys", tags=["API Keys"])
+router.include_router(config_tools.router, prefix="/config", tags=["Config"])
+router.include_router(config_tools.audit_router, prefix="/audit-logs", tags=["Audit Log"])
+router.include_router(mcp.router, prefix="/mcp", tags=["MCP"])

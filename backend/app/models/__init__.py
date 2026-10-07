@@ -20,6 +20,8 @@ from app.models.backup import Backup, BackupSettings
 from app.models.update import UpdateHistory, BaseImageVersion, UpdateSettings
 from app.models.honeypot import HoneypotTrap, HoneypotHit, IpEnrichment, AbuseIPDBBlacklistEntry
 from app.models.known_ip import KnownIp
+from app.models.traffic_rollup import TrafficRollupHourly, TrafficRollupMethodHourly, TrafficRollupState
+from app.models.api_key import ApiKey
 
 __all__ = [
     "User",
@@ -70,4 +72,8 @@ __all__ = [
     "IpEnrichment",
     "KnownIp",
     "AbuseIPDBBlacklistEntry",
+    "TrafficRollupHourly",
+    "TrafficRollupMethodHourly",
+    "TrafficRollupState",
+    "ApiKey",
 ]
