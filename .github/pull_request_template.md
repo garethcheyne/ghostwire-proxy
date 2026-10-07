@@ -14,7 +14,7 @@
 
 - [ ] Backend tests pass (`make test`)
 - [ ] Frontend lints clean (`make lint`)
-- [ ] Frontend builds (`cd frontend && npm run build`)
+- [ ] Frontend builds (`cd frontend && pnpm build`)
 - [ ] Tested manually in browser
 
 ## Checklist

@@ -12,7 +12,7 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
   tabs, menus). Brand colours are `text-brand` / `text-brand-2`, never hard-coded `cyan-400`; every
   page starts with `PageHeader` (`src/components/layout/page-header.tsx`).
 - **ALWAYS use shadcn/ui components** - Never create custom UI components from scratch
-- Install components via: `npx shadcn@latest add <component>`
+- Install components via: `pnpm dlx shadcn@latest add <component>`
 - Available shadcn components: button, input, form, table, dialog, dropdown-menu, card, tabs, badge, alert, toast, etc.
 - Check https://ui.shadcn.com/docs/components for full list
 

@@ -20,13 +20,13 @@ found on 2026-09-09 were not visible by reading the CSS:
 
 ### Running it
 
-Playwright is deliberately **not** a dependency: `npm ci` runs in the Docker
+Playwright is deliberately **not** a dependency: `pnpm install` runs in the Docker
 builder stage, and adding it there would pull a browser download into the image.
 Install it ad hoc and revert the manifest afterwards.
 
 ```bash
 cd frontend
-npm i -D playwright && npx playwright install chromium
+pnpm add -D playwright && pnpm exec playwright install chromium
 
 # Mint a read-only session token without needing anyone's password.
 docker exec ghostwire-proxy-api python -c "
@@ -44,7 +44,7 @@ asyncio.run(main())"
 TOKEN=<that token> SHOTS=1 OUT=/tmp/uiaudit node scripts/ui-audit.mjs
 
 # Leave the manifest as you found it.
-git checkout -- package.json package-lock.json
+git checkout -- package.json pnpm-lock.yaml
 ```
 
 Environment: `BASE` (default `http://localhost:88`), `WIDTH`/`HEIGHT` (default
