@@ -29,24 +29,52 @@ depends_on = None
 _ROLLUP_TABLES = ("analytics_hourly", "analytics_daily")
 
 
+# Idempotent: migration 0001 builds a fresh database from the live models with
+# create_all(), so there this schema already exists when this runs, while an
+# existing database does not have it yet. Guarding on the actual schema keeps
+# the effect on existing databases unchanged and lets a fresh install finish.
+def _has_table(table: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table)
+
+
+def _has_column(table: str, column: str) -> bool:
+    if not _has_table(table):
+        return False
+    return column in {c["name"] for c in sa.inspect(op.get_bind()).get_columns(table)}
+
+
+def _has_index(table: str, name: str) -> bool:
+    if not _has_table(table):
+        return False
+    return name in {i["name"] for i in sa.inspect(op.get_bind()).get_indexes(table)}
+
+
 def upgrade() -> None:
     for table in _ROLLUP_TABLES:
-        op.add_column(table, sa.Column("p95_response_time_ms", sa.Integer(), nullable=True))
-        op.add_column(table, sa.Column("p99_response_time_ms", sa.Integer(), nullable=True))
-        op.add_column(table, sa.Column("bot_requests", sa.Integer(), nullable=True, server_default="0"))
+        if not _has_column(table, "p95_response_time_ms"):
+            op.add_column(table, sa.Column("p95_response_time_ms", sa.Integer(), nullable=True))
+        if not _has_column(table, "p99_response_time_ms"):
+            op.add_column(table, sa.Column("p99_response_time_ms", sa.Integer(), nullable=True))
+        if not _has_column(table, "bot_requests"):
+            op.add_column(table, sa.Column("bot_requests", sa.Integer(), nullable=True, server_default="0"))
 
     # Nullable with no default, so adding these to a large traffic_logs table is
     # a metadata-only change rather than a full rewrite.
-    op.add_column("traffic_logs", sa.Column("is_bot", sa.Boolean(), nullable=True))
-    op.add_column("traffic_logs", sa.Column("is_streaming", sa.Boolean(), nullable=True))
-    op.create_index("ix_traffic_logs_is_bot", "traffic_logs", ["is_bot"])
+    if not _has_column("traffic_logs", "is_bot"):
+        op.add_column("traffic_logs", sa.Column("is_bot", sa.Boolean(), nullable=True))
+    if not _has_column("traffic_logs", "is_streaming"):
+        op.add_column("traffic_logs", sa.Column("is_streaming", sa.Boolean(), nullable=True))
+    if not _has_index("traffic_logs", "ix_traffic_logs_is_bot"):
+        op.create_index("ix_traffic_logs_is_bot", "traffic_logs", ["is_bot"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_traffic_logs_is_bot", table_name="traffic_logs")
-    op.drop_column("traffic_logs", "is_streaming")
-    op.drop_column("traffic_logs", "is_bot")
+    if _has_index("traffic_logs", "ix_traffic_logs_is_bot"):
+        op.drop_index("ix_traffic_logs_is_bot", table_name="traffic_logs")
+    for column in ("is_streaming", "is_bot"):
+        if _has_column("traffic_logs", column):
+            op.drop_column("traffic_logs", column)
     for table in _ROLLUP_TABLES:
-        op.drop_column(table, "bot_requests")
-        op.drop_column(table, "p99_response_time_ms")
-        op.drop_column(table, "p95_response_time_ms")
+        for column in ("bot_requests", "p99_response_time_ms", "p95_response_time_ms"):
+            if _has_column(table, column):
+                op.drop_column(table, column)

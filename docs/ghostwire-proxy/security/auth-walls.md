@@ -11,7 +11,7 @@ Authentication walls add a login requirement to any proxy host. Users must authe
 
 ## How It Works
 
-When an auth wall is assigned to a proxy host, every request is intercepted in OpenResty's `access_by_lua` phase:
+When an auth wall is assigned to a proxy host, every request is intercepted in OpenResty's `access_by_lua` phase. This covers the host's default location and every custom location (and the WAF runs in the same phase when **Block exploits** is on):
 
 1. Check for a valid session cookie (`gw_auth_session`)
 2. Verify the cookie signature using HMAC-SHA256
@@ -75,6 +75,30 @@ Add OAuth2 providers for single sign-on:
 | **Userinfo URL** | User profile endpoint |
 | **Scopes** | Requested scopes (e.g., `email profile`) |
 
+Register this redirect URI with the provider (Google Cloud console, GitHub OAuth app):
+
+```
+https://<protected-host>/api/auth-portal/<auth-wall-id>/callback
+```
+
+### Who may sign in with Google or GitHub
+
+Signing in with Google or GitHub only proves who someone is. Limit who gets through with the wall's
+allow-list (Edit auth wall):
+
+| Field | Description |
+|-------|-------------|
+| **Allowed emails** | Exact addresses, one per line (`alice@example.com`) |
+| **Allowed email domains** | Domains, one per line (`example.com`). Matches every verified address at exactly that domain, not its subdomains |
+
+A visitor passes if their provider-verified email is listed, or its domain is. Anyone else is
+sent back to the login page with "This account is not allowed to access this site", and the
+attempt is written to the audit log. Local users and LDAP are not affected by the list.
+
+> **Warning:** with both lists empty, any Google or GitHub account can pass the wall. Walls in that
+> state show a red warning on the Auth Walls page. Existing walls keep working after an upgrade
+> (the list starts empty), so add your emails or domains.
+
 ## TOTP Two-Factor Authentication
 
 Auth wall users can enable TOTP (Time-based One-Time Password) for two-factor authentication. After enabling TOTP, users must enter a 6-digit code from their authenticator app in addition to their password.
@@ -90,6 +114,9 @@ The auth wall login portal is a separate Vite + React single-page application th
 - Custom branding (logo, colors, text)
 
 Portal paths (`/__auth/`, `/api/auth-portal/`) are excluded from authentication to prevent redirect loops.
+
+After sign-in the portal only sends visitors back to the protected site itself (a path on the same
+host); any other `redirect` value is replaced with `/`.
 
 ## Active Sessions
 

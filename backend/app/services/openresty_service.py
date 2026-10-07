@@ -21,6 +21,17 @@ from app.models.proxy_host import ProxyHost, ProxyLocation
 from app.models.certificate import Certificate
 from app.models.auth_wall import AuthWall
 from app.models.access_list import AccessList
+from app.services.load_balancing import (
+    BACKUP_METHODS,
+    DEFAULT_FAIL_TIMEOUT,
+    DEFAULT_KEEPALIVE,
+    DEFAULT_MAX_FAILS,
+    DEFAULT_WEIGHT,
+    LB_METHOD_LABELS,
+    LB_METHODS,
+    MAX_NEXT_UPSTREAM_TRIES,
+    format_server_address,
+)
 
 
 # Which request header carries the true client IP for each front-facing service.
@@ -155,28 +166,146 @@ def _generate_access_list_blocked_response(host: ProxyHost, indent: str = "    "
     return lines
 
 
+def active_upstream_servers(host) -> list:
+    """The host's enabled upstream servers, in config order."""
+    return [s for s in (getattr(host, "upstream_servers", None) or []) if getattr(s, "enabled", True)]
+
+
+def uses_upstream_group(host) -> bool:
+    """True when "/" proxies to an upstream group rather than forward_host:port.
+
+    A host with no enabled upstream servers keeps the plain single-backend
+    config, byte for byte.
+    """
+    return bool(active_upstream_servers(host))
+
+
+def upstream_name(host) -> str:
+    return f"upstream_{_safe_id(host.id)}"
+
+
+def _lb_method(host) -> str:
+    method = getattr(host, "lb_method", None)
+    return method if isinstance(method, str) and method in LB_METHODS else "round_robin"
+
+
+def _upstream_keepalive(host) -> int:
+    value = getattr(host, "upstream_keepalive", None)
+    return value if isinstance(value, int) and value >= 0 else DEFAULT_KEEPALIVE
+
+
+def _connection_map_var(host) -> str:
+    # Kept short: nginx's default variables_hash_bucket_size (64) rejects long
+    # variable names, so the id goes in without its dashes.
+    return f"$gw_conn_{str(host.id).replace('-', '')}"
+
+
+def _upstream_server_line(host, server, method: str) -> str:
+    params = []
+    weight = getattr(server, "weight", DEFAULT_WEIGHT)
+    if isinstance(weight, int) and weight != DEFAULT_WEIGHT:
+        params.append(f"weight={weight}")
+    max_fails = getattr(server, "max_fails", DEFAULT_MAX_FAILS)
+    if isinstance(max_fails, int) and max_fails != DEFAULT_MAX_FAILS:
+        params.append(f"max_fails={max_fails}")
+    fail_timeout = getattr(server, "fail_timeout", DEFAULT_FAIL_TIMEOUT)
+    if isinstance(fail_timeout, int) and fail_timeout != DEFAULT_FAIL_TIMEOUT:
+        params.append(f"fail_timeout={fail_timeout}s")
+    max_conns = getattr(server, "max_conns", None)
+    if isinstance(max_conns, int) and max_conns > 0:
+        params.append(f"max_conns={max_conns}")
+    # Validation refuses backup with hash/ip_hash/random; never let a stale row
+    # render a config nginx would reject.
+    if getattr(server, "backup", False) is True and method in BACKUP_METHODS:
+        params.append("backup")
+    manual_down = getattr(server, "down", False) is True
+    auto_down = getattr(host, "lb_auto_down", False) is True and getattr(server, "auto_down", False) is True
+    if manual_down or auto_down:
+        params.append("down")
+
+    address = format_server_address(str(server.host), server.port)
+    line = f"    server {address}"
+    if params:
+        line += " " + " ".join(params)
+    line += ";"
+    if auto_down and not manual_down:
+        line += "  # health check: down"
+    return line
+
+
 def generate_upstream_block(host: ProxyHost) -> str:
-    """Generate upstream block for load balancing"""
-    if not host.upstream_servers or len(host.upstream_servers) == 0:
+    """The upstream group for a load-balanced host ("" for a single backend).
+
+    Order matters to nginx: the balancing method has to come before
+    `keepalive`. The shared `zone` makes least_conn, random and max_conns count
+    connections across all workers instead of per worker.
+    """
+    servers = active_upstream_servers(host)
+    if not servers:
         return ""
 
-    lines = [f"upstream upstream_{_safe_id(host.id)} {{"]
-
-    for server in host.upstream_servers:
-        if server.enabled:
-            server_line = f"    server {server.host}:{server.port}"
-            if server.weight != 1:
-                server_line += f" weight={server.weight}"
-            if server.max_fails != 3:
-                server_line += f" max_fails={server.max_fails}"
-            if server.fail_timeout != 30:
-                server_line += f" fail_timeout={server.fail_timeout}s"
-            server_line += ";"
-            lines.append(server_line)
-
-    lines.append("    keepalive 32;")
+    name = upstream_name(host)
+    method = _lb_method(host)
+    lines = [f"upstream {name} {{"]
+    lines.append(f"    # Load balancing: {LB_METHOD_LABELS[method]}")
+    lines.append(f"    zone {name} 64k;")
+    directive = LB_METHODS[method]
+    if directive:
+        lines.append(f"    {directive}")
+    for server in servers:
+        lines.append(_upstream_server_line(host, server, method))
+    keepalive = _upstream_keepalive(host)
+    if keepalive > 0:
+        lines.append(f"    keepalive {keepalive};")
     lines.append("}")
     return "\n".join(lines)
+
+
+def generate_upstream_connection_map(host) -> str:
+    """Per-host Connection header map for a keepalive upstream with WebSockets.
+
+    The global $connection_upgrade map sends `close` for ordinary requests,
+    which makes nginx drop every upstream keepalive connection. This one sends
+    an empty Connection header instead (so the connection is reused) and still
+    upgrades WebSocket requests.
+    """
+    if not uses_upstream_group(host) or _upstream_keepalive(host) <= 0:
+        return ""
+    if not getattr(host, "websockets_support", False):
+        return ""
+    return "\n".join([
+        f"map $http_upgrade {_connection_map_var(host)} {{",
+        "    default upgrade;",
+        "    ''      \"\";",
+        "}",
+    ])
+
+
+def generate_upstream_location_directives(host, indent: str = "    ") -> list[str]:
+    """Directives the default location needs when it proxies to an upstream group."""
+    servers = active_upstream_servers(host)
+    if not servers:
+        return []
+    lines = []
+    if _upstream_keepalive(host) > 0 and not getattr(host, "websockets_support", False):
+        lines.append(f"{indent}# Reuse upstream connections (keepalive)")
+        lines.append(f'{indent}proxy_set_header Connection "";')
+    if len(servers) > 1:
+        tries = min(len(servers), MAX_NEXT_UPSTREAM_TRIES)
+        lines.append(f"{indent}# Try the next server when one fails (non-idempotent requests are not retried)")
+        lines.append(f"{indent}proxy_next_upstream error timeout http_502 http_503 http_504;")
+        lines.append(f"{indent}proxy_next_upstream_tries {tries};")
+    return lines
+
+
+def _rate_unit(period) -> str:
+    """nginx takes r/s or r/m. The UI stores "1s" / "1m" ("100r/1s" fails nginx -t)."""
+    unit = str(period or "s").strip().lower().lstrip("1")
+    if unit in ("s", "sec", "second"):
+        return "s"
+    if unit in ("m", "min", "minute"):
+        return "m"
+    raise ValueError(f"Unsupported rate limit period: {period!r} (use 1s or 1m)")
 
 
 def _generate_rate_limit_zone(host: ProxyHost) -> str:
@@ -195,7 +324,7 @@ def _generate_rate_limit_zone(host: ProxyHost) -> str:
         return ""
 
     zone_name = f"ratelimit_{_safe_id(host.id)}"
-    rate = f"{host.rate_limit_requests}r/{host.rate_limit_period}"
+    rate = f"{int(host.rate_limit_requests)}r/{_rate_unit(host.rate_limit_period)}"
     return f"limit_req_zone $binary_remote_addr zone={zone_name}:10m rate={rate};"
 
 
@@ -234,6 +363,30 @@ def _generate_location_directive(location: ProxyLocation) -> str:
         return path
 
 
+def _generate_access_phase(host: ProxyHost, indent: str = "        ") -> list[str]:
+    """The Lua access phase for a proxied location: auth wall, then WAF (incl. honeypot).
+
+    Every location that proxies to a backend must carry this: nginx does not
+    inherit access_by_lua into a location from a sibling, so a custom location
+    without it would skip the auth wall and the WAF. The auth portal's own
+    locations (/__auth/, /api/auth-portal/) and the ACME challenge are the only
+    ones left without it. IP access lists and host-level limit_req sit at
+    server level and are inherited by every location.
+    """
+    if host.auth_wall_id and host.block_exploits:
+        return [
+            f"{indent}access_by_lua_block {{",
+            f"{indent}    require('auth_wall').access()",
+            f"{indent}    require('waf').access()",
+            f"{indent}}}",
+        ]
+    if host.auth_wall_id:
+        return [f"{indent}access_by_lua_block {{ require('auth_wall').access() }}"]
+    if host.block_exploits:
+        return [f"{indent}access_by_lua_block {{ require('waf').access() }}"]
+    return []
+
+
 def _generate_location_block(
     location: ProxyLocation,
     host: ProxyHost,
@@ -245,6 +398,12 @@ def _generate_location_block(
     backend = f"{location.forward_host}:{location.forward_port}"
 
     lines.append(f"{indent}location {loc_directive} {{")
+
+    # Auth wall + WAF: same as the default location
+    access_phase = _generate_access_phase(host, indent + "    ")
+    if access_phase:
+        lines.extend(access_phase)
+        lines.append("")
 
     # Rate limiting
     if location.rate_limit_enabled:
@@ -345,16 +504,8 @@ def _generate_default_location(
 
     lines.append(f"{indent}location / {{")
 
-    # Auth wall + WAF inside the default location
-    if host.auth_wall_id and host.block_exploits:
-        lines.append(f"{indent}    access_by_lua_block {{")
-        lines.append(f"{indent}        require('auth_wall').access()")
-        lines.append(f"{indent}        require('waf').access()")
-        lines.append(f"{indent}    }}")
-    elif host.auth_wall_id:
-        lines.append(f"{indent}    access_by_lua_block {{ require('auth_wall').access() }}")
-    elif host.block_exploits:
-        lines.append(f"{indent}    access_by_lua_block {{ require('waf').access() }}")
+    # Auth wall + WAF (the same access phase every proxied location gets)
+    lines.extend(_generate_access_phase(host, indent + "    "))
 
     # Proxy pass
     scheme = host.forward_scheme
@@ -374,7 +525,17 @@ def _generate_default_location(
         lines.append("")
         lines.append(f"{indent}    # WebSocket support")
         lines.append(f"{indent}    proxy_set_header Upgrade $http_upgrade;")
-        lines.append(f"{indent}    proxy_set_header Connection $connection_upgrade;")
+        if generate_upstream_connection_map(host):
+            # Keepalive-safe variant: empty Connection for ordinary requests
+            lines.append(f"{indent}    proxy_set_header Connection {_connection_map_var(host)};")
+        else:
+            lines.append(f"{indent}    proxy_set_header Connection $connection_upgrade;")
+
+    # Load balancing
+    lb_lines = generate_upstream_location_directives(host, indent + "    ")
+    if lb_lines:
+        lines.append("")
+        lines.extend(lb_lines)
 
     # Timeouts
     lines.append("")
@@ -572,12 +733,17 @@ def generate_server_block(host: ProxyHost, cert: Optional[Certificate] = None) -
     # Upstream definition
     upstream_block = generate_upstream_block(host)
     if upstream_block:
+        connection_map = generate_upstream_connection_map(host)
+        if connection_map:
+            config_lines.append(connection_map)
+            config_lines.append("")
         config_lines.append(upstream_block)
         config_lines.append("")
 
-    # Determine backend target
-    if host.upstream_servers and len(host.upstream_servers) > 0:
-        backend = f"upstream_{_safe_id(host.id)}"
+    # Determine backend target: the upstream group when the host has enabled
+    # upstream servers, otherwise the single forward host exactly as before.
+    if uses_upstream_group(host):
+        backend = upstream_name(host)
     else:
         backend = f"{host.forward_host}:{host.forward_port}"
 
@@ -666,6 +832,52 @@ async def write_certificate_files(cert: Certificate) -> None:
     os.chmod(key_path, 0o600)
 
 
+def ensure_default_certificate() -> None:
+    """Create the self-signed fallback certificate the default site serves on 443.
+
+    `_default.conf` (and the kill switch) point at default.crt/default.key. On a
+    fresh install nothing had created them, so every `nginx -t` failed and no
+    proxy host could be saved. Existing files are never touched.
+    """
+    cert_dir = settings.certificates_path
+    crt = os.path.join(cert_dir, "default.crt")
+    key = os.path.join(cert_dir, "default.key")
+    if os.path.exists(crt) and os.path.exists(key):
+        return
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    os.makedirs(cert_dir, exist_ok=True)
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ghostwire-proxy-default")])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .sign(private_key, hashes.SHA256())
+    )
+    with open(key, "wb") as f:
+        f.write(private_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        ))
+    os.chmod(key, 0o600)
+    with open(crt, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    logger.info("Created the self-signed default certificate for the default site")
+
+
 async def generate_default_site_config(db: AsyncSession) -> str:
     """Generate the default site nginx config for direct IP / unknown host access.
 
@@ -675,6 +887,11 @@ async def generate_default_site_config(db: AsyncSession) -> str:
     - 404: Return 404 Not Found
     - 444: Drop the connection (no response)
     """
+    # The fallback certificate it serves on 443
+    try:
+        ensure_default_certificate()
+    except OSError as e:
+        logger.error(f"Could not create the default certificate: {e}")
     from app.models.setting import Setting
 
     # Read settings from DB

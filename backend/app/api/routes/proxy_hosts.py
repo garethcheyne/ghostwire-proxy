@@ -1,5 +1,7 @@
 import os
+import re
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,21 +13,78 @@ from app.core.database import get_db
 from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
-from app.models.proxy_host import ProxyHost, UpstreamServer, ProxyLocation
+from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent, ProxyLocation
 from app.models.audit_log import AuditLog
 from app.schemas.proxy_host import (
     ProxyHostCreate, ProxyHostUpdate, ProxyHostResponse,
-    UpstreamServerCreate, UpstreamServerResponse,
+    UpstreamServerCreate, UpstreamServerUpdate, UpstreamServerUpsert, UpstreamServerResponse,
+    UpstreamPreviewRequest, UpstreamPreviewResponse, UpstreamCheckResult, UpstreamServerEventResponse,
     ProxyLocationCreate, ProxyLocationUpdate, ProxyLocationResponse,
     LocationReorderRequest
 )
+from app.services.load_balancing import check_lb_rules
 from app.api.deps import get_current_user, get_current_admin_user
 from app.services.openresty_service import (
     generate_all_configs, reload_nginx, remove_config,
     backup_configs, restore_configs, test_nginx_config,
+    generate_upstream_block, generate_upstream_connection_map,
+    generate_upstream_location_directives, upstream_name,
 )
 
 router = APIRouter()
+
+
+def _enforce_lb_rules(method: str | None, servers) -> None:
+    """Refuse an upstream group nginx would reject (or that can't serve)."""
+    errors, _warnings = check_lb_rules(method, servers)
+    if errors:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=" ".join(errors))
+
+
+_HEALTH_FIELDS = ("last_check_at", "last_error", "last_latency_ms")
+
+
+def _reset_health(server: UpstreamServer) -> None:
+    for name in _HEALTH_FIELDS:
+        setattr(server, name, None)
+    server.last_status = "unknown"
+    server.auto_down = False
+
+
+def _replace_upstream_servers(host: ProxyHost, items: list[UpstreamServerUpsert]) -> None:
+    """Make the host's servers match `items`, keeping saved rows by id.
+
+    Rows that keep their id keep their health history (unless their address
+    changed); rows left out are deleted by the relationship's delete-orphan
+    cascade when the session flushes.
+    """
+    existing = {s.id: s for s in host.upstream_servers}
+    servers = []
+    for item in items:
+        data = item.model_dump(exclude={"id"})
+        server = existing.pop(item.id, None) if item.id else None
+        if server is None:
+            server = UpstreamServer(proxy_host_id=host.id, **data)
+        else:
+            if (server.host, server.port) != (data["host"], data["port"]):
+                _reset_health(server)
+            for field, value in data.items():
+                setattr(server, field, value)
+        servers.append(server)
+    host.upstream_servers = servers
+
+
+async def _load_host(db: AsyncSession, host_id: str) -> ProxyHost | None:
+    result = await db.execute(
+        select(ProxyHost)
+        .options(
+            selectinload(ProxyHost.upstream_servers),
+            selectinload(ProxyHost.locations)
+        )
+        .where(ProxyHost.id == host_id)
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one_or_none()
 
 
 async def validate_and_apply(
@@ -135,39 +194,9 @@ async def create_proxy_host(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new proxy host"""
-    # Create proxy host with all fields
-    host = ProxyHost(
-        domain_names=host_data.domain_names,
-        forward_scheme=host_data.forward_scheme,
-        forward_host=host_data.forward_host,
-        forward_port=host_data.forward_port,
-        ssl_enabled=host_data.ssl_enabled,
-        ssl_force=host_data.ssl_force,
-        certificate_id=host_data.certificate_id,
-        http2_support=host_data.http2_support,
-        hsts_enabled=host_data.hsts_enabled,
-        hsts_subdomains=host_data.hsts_subdomains,
-        websockets_support=host_data.websockets_support,
-        block_exploits=host_data.block_exploits,
-        access_list_id=host_data.access_list_id,
-        auth_wall_id=host_data.auth_wall_id,
-        advanced_config=host_data.advanced_config,
-        server_advanced_config=host_data.server_advanced_config,
-        client_max_body_size=host_data.client_max_body_size,
-        proxy_buffering=host_data.proxy_buffering,
-        proxy_buffer_size=host_data.proxy_buffer_size,
-        proxy_buffers=host_data.proxy_buffers,
-        cache_enabled=host_data.cache_enabled,
-        cache_valid=host_data.cache_valid,
-        cache_bypass=host_data.cache_bypass,
-        rate_limit_enabled=host_data.rate_limit_enabled,
-        rate_limit_requests=host_data.rate_limit_requests,
-        rate_limit_period=host_data.rate_limit_period,
-        rate_limit_burst=host_data.rate_limit_burst,
-        custom_error_pages=host_data.custom_error_pages,
-        traffic_logging_enabled=host_data.traffic_logging_enabled,
-        enabled=host_data.enabled,
-    )
+    # Every field the schema carries; nested lists are added below.
+    _enforce_lb_rules(host_data.lb_method, host_data.upstream_servers or [])
+    host = ProxyHost(**host_data.model_dump(exclude={"upstream_servers", "locations"}))
     db.add(host)
     await db.flush()
 
@@ -302,8 +331,15 @@ async def update_proxy_host(
         )
 
     # Update fields
-    for field, value in host_data.model_dump(exclude_unset=True).items():
+    updates = host_data.model_dump(exclude_unset=True, exclude={"upstream_servers"})
+    for field, value in updates.items():
         setattr(host, field, value)
+
+    if host_data.upstream_servers is not None:
+        _enforce_lb_rules(host.lb_method, host_data.upstream_servers)
+        _replace_upstream_servers(host, host_data.upstream_servers)
+    else:
+        _enforce_lb_rules(host.lb_method, host.upstream_servers)
 
     # Audit log
     audit_log = AuditLog(
@@ -321,9 +357,9 @@ async def update_proxy_host(
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
-    await db.refresh(host)
-
-    return host
+    # Re-read with relationships: a refresh would leave them to lazy-load,
+    # which async sessions can't do during serialisation.
+    return await _load_host(db, host_id)
 
 
 @router.delete("/{host_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -455,7 +491,65 @@ async def disable_proxy_host(
     return host
 
 
-# Upstream servers management
+# Upstream servers (load balancing)
+@router.post("/upstream-preview", response_model=UpstreamPreviewResponse)
+async def preview_upstream(
+    preview: UpstreamPreviewRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Render the upstream block for the editor's unsaved state.
+
+    Uses the same generator the real config does, so the admin sees exactly
+    what nginx will get. Nothing is saved or reloaded.
+    """
+    errors, warnings = check_lb_rules(preview.lb_method, preview.servers)
+    # The id only names the upstream in the preview text; keep it to UUID characters.
+    host_id = preview.host_id if preview.host_id and re.fullmatch(r"[A-Za-z0-9-]{1,36}", preview.host_id) else "new-host"
+    host = SimpleNamespace(
+        id=host_id,
+        lb_method=preview.lb_method,
+        upstream_keepalive=preview.upstream_keepalive,
+        lb_auto_down=preview.lb_auto_down,
+        websockets_support=preview.websockets_support,
+        upstream_servers=[SimpleNamespace(auto_down=False, **srv.model_dump(exclude={"id"})) for srv in preview.servers],
+    )
+    block = generate_upstream_block(host)
+    connection_map = generate_upstream_connection_map(host)
+    if connection_map:
+        block = f"{connection_map}\n\n{block}"
+    location = ""
+    if block:
+        # The parts of the default location that load balancing adds; the
+        # rest (headers, timeouts, WAF) is unchanged and elided.
+        location = "\n".join([
+            "location / {",
+            f"    proxy_pass {preview.forward_scheme}://{upstream_name(host)};",
+            "    proxy_http_version 1.1;",
+            *generate_upstream_location_directives(host, indent="    "),
+            "    # ... headers, timeouts and the rest as usual",
+            "}",
+        ])
+    return UpstreamPreviewResponse(
+        upstream_block=block,
+        location_directives=location,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+@router.get("/{host_id}/upstreams", response_model=list[UpstreamServerResponse])
+async def list_upstream_servers(
+    host_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The host's upstream servers with their latest health."""
+    host = await _load_host(db, host_id)
+    if not host:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    return host.upstream_servers
+
+
 @router.post("/{host_id}/upstreams", response_model=UpstreamServerResponse, status_code=status.HTTP_201_CREATED)
 async def add_upstream_server(
     host_id: str,
@@ -463,24 +557,60 @@ async def add_upstream_server(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Add upstream server to proxy host"""
-    result = await db.execute(select(ProxyHost).where(ProxyHost.id == host_id))
-    host = result.scalar_one_or_none()
-
+    """Add an upstream server to a proxy host"""
+    host = await _load_host(db, host_id)
     if not host:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Proxy host not found",
         )
 
+    _enforce_lb_rules(host.lb_method, [*host.upstream_servers, server_data])
+
     server = UpstreamServer(
         proxy_host_id=host_id,
         **server_data.model_dump()
     )
-    db.add(server)
+    host.upstream_servers.append(server)
 
     # Upstream changes alter the generated upstream block, so they go through
     # the same validate-then-commit path as every other config change.
+    ok, msg = await validate_and_apply(db)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    await db.refresh(server)
+    return server
+
+
+@router.api_route("/{host_id}/upstreams/{server_id}", methods=["PUT", "PATCH"], response_model=UpstreamServerResponse)
+async def update_upstream_server(
+    host_id: str,
+    server_id: str,
+    server_data: UpstreamServerUpdate,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change an upstream server; only the fields sent are updated."""
+    host = await _load_host(db, host_id)
+    if not host:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    server = next((s for s in host.upstream_servers if s.id == server_id), None)
+    if not server:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upstream server not found")
+
+    changes = server_data.model_dump(exclude_unset=True)
+    for field in ("host", "port", "weight", "max_fails", "fail_timeout", "backup", "down", "enabled"):
+        if field in changes and changes[field] is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field} can't be null")
+    moved = ("host" in changes and changes["host"] != server.host) or ("port" in changes and changes["port"] != server.port)
+    for field, value in changes.items():
+        setattr(server, field, value)
+    if moved:
+        _reset_health(server)
+
+    _enforce_lb_rules(host.lb_method, host.upstream_servers)
+
     ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
@@ -496,28 +626,70 @@ async def remove_upstream_server(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove upstream server from proxy host"""
-    result = await db.execute(
-        select(UpstreamServer).where(
-            (UpstreamServer.id == server_id) &
-            (UpstreamServer.proxy_host_id == host_id)
-        )
-    )
-    server = result.scalar_one_or_none()
+    """Remove an upstream server from a proxy host.
 
+    Removing the last one returns the host to its single forward host.
+    """
+    host = await _load_host(db, host_id)
+    if not host:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    server = next((s for s in host.upstream_servers if s.id == server_id), None)
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Upstream server not found",
         )
 
-    await db.delete(server)
+    remaining = [s for s in host.upstream_servers if s.id != server_id]
+    _enforce_lb_rules(host.lb_method, remaining)
+    host.upstream_servers.remove(server)
 
     # Upstream changes alter the generated upstream block, so they go through
     # the same validate-then-commit path as every other config change.
     ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+
+@router.get("/{host_id}/upstream-events", response_model=list[UpstreamServerEventResponse])
+async def list_upstream_events(
+    host_id: str,
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recent backend down/recovered events for this host, newest first."""
+    exists = (await db.execute(select(ProxyHost.id).where(ProxyHost.id == host_id))).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    result = await db.execute(
+        select(UpstreamServerEvent)
+        .where(UpstreamServerEvent.proxy_host_id == host_id)
+        .order_by(UpstreamServerEvent.created_at.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.post("/{host_id}/upstreams/check", response_model=list[UpstreamCheckResult])
+async def check_upstream_servers_now(
+    host_id: str,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Probe every enabled upstream server of this host right now.
+
+    Only the configured host:port of each server is contacted (no redirects
+    followed), with the host's health-check type, path and timeout.
+    """
+    from app.services.health_service import check_upstream_servers_now as _check_now
+
+    host = await _load_host(db, host_id)
+    if not host:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    results = await _check_now(db, host)
+    await cache_delete_prefix("proxy_hosts:")
+    return results
 
 
 # ============================================================================

@@ -71,6 +71,14 @@ async def run_retention_cleanup() -> dict:
             cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             deleted = await _batch_delete(session, "traffic_logs", "timestamp", cutoff)
             summary["traffic_logs"] = {"deleted": deleted, "retention_days": days}
+            # The Traffic page's hourly summaries follow the raw rows they describe.
+            try:
+                from app.services.traffic_rollup_service import prune_before
+                await prune_before(session, cutoff)
+                await session.commit()
+            except Exception as e:  # noqa: BLE001 — summaries are rebuildable; never block retention
+                await session.rollback()
+                logger.warning(f"Retention: traffic rollup prune failed: {e}")
             if deleted > 0:
                 logger.info(f"Retention: deleted {deleted} traffic_logs older than {days} days")
 

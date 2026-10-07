@@ -12,6 +12,9 @@ export interface User {
 }
 
 // Proxy Host types
+export type LbMethod = 'round_robin' | 'least_conn' | 'ip_hash' | 'hash_uri' | 'random_two'
+export type HealthStatus = 'unknown' | 'up' | 'down'
+
 export interface UpstreamServer {
   id: string
   proxy_host_id: string
@@ -20,8 +23,53 @@ export interface UpstreamServer {
   weight: number
   max_fails: number
   fail_timeout: number
+  // Only used when every primary server is unavailable
+  backup: boolean
+  // Maintenance: kept in the group but sent no traffic
+  down: boolean
+  max_conns: number | null
   enabled: boolean
+  // Health, written by the background health loop
+  last_check_at: string | null
+  last_status: HealthStatus
+  last_error: string | null
+  last_latency_ms: number | null
+  // Taken out of rotation by the health loop (host has lb_auto_down on)
+  auto_down: boolean
   created_at: string
+}
+
+/** POST /api/proxy-hosts/upstream-preview */
+export interface UpstreamPreview {
+  upstream_block: string
+  location_directives: string
+  errors: string[]
+  warnings: string[]
+}
+
+export interface UpstreamCheckResult {
+  id: string
+  host: string
+  port: number
+  status: HealthStatus
+  latency_ms: number | null
+  error: string | null
+}
+
+/** A backend going down or coming back, and what happened to its alert. */
+export interface UpstreamServerEvent {
+  id: string
+  upstream_server_id: string | null
+  server: string
+  event: 'down' | 'recovered'
+  /** sent; held by flap protection; grouped into the whole-host alert */
+  alert: 'sent' | 'held' | 'grouped'
+  error: string | null
+  latency_ms: number | null
+  healthy: number | null
+  total: number | null
+  auto_down: boolean
+  created_at: string | null
 }
 
 export interface ProxyLocation {
@@ -98,6 +146,18 @@ export interface ProxyHost {
   traffic_logging_enabled: boolean
   honeypot_enabled: boolean
   enabled: boolean
+  // Load balancing (used when upstream_servers has enabled servers)
+  lb_method: LbMethod
+  upstream_keepalive: number
+  health_check_type: 'http' | 'tcp'
+  health_check_path: string
+  health_check_timeout: number
+  lb_auto_down: boolean
+  // Host-level health (the whole group for a load-balanced host)
+  health_check_enabled?: boolean
+  health_status?: HealthStatus
+  health_checked_at?: string | null
+  health_error?: string | null
   upstream_servers: UpstreamServer[]
   locations: ProxyLocation[]
   created_at: string
@@ -209,6 +269,11 @@ export interface AuthWall {
   session_timeout: number
   theme: string
   default_provider_id: string | null
+  /** Who may pass through Google/GitHub sign-in; both empty = any account */
+  allowed_emails: string[]
+  allowed_email_domains: string[]
+  /** An enabled OAuth provider and no allow-list: any account gets in */
+  oauth_open_to_anyone: boolean
   local_users: LocalAuthUser[]
   providers: AuthProvider[]
   ldap_config: LdapConfig | null

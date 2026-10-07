@@ -4,13 +4,14 @@ import { ShieldCheck, ArrowLeft, Loader2, AlertCircle, Key } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { portalUrl, safeRedirect } from '@/lib/redirect'
 import { verifyTotp } from '@/api/client'
 
 export default function Totp() {
   const [searchParams] = useSearchParams()
   const wallId = searchParams.get('wall') || ''
   const sessionId = searchParams.get('session') || ''
-  const redirectUrl = searchParams.get('redirect') || '/'
+  const redirectUrl = safeRedirect(searchParams.get('redirect'))
 
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [isBackupMode, setIsBackupMode] = useState(false)
@@ -93,7 +94,7 @@ export default function Totp() {
     }
   }
 
-  const loginUrl = `/__auth/login?wall=${wallId}&redirect=${encodeURIComponent(redirectUrl)}`
+  const loginUrl = portalUrl('/login', { wall: wallId, redirect: redirectUrl })
 
   return (
     <div className="auth-layout items-center justify-center p-6">

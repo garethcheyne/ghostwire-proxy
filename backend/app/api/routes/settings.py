@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -30,7 +32,44 @@ DEFAULT_SETTINGS = {
     "trusted_ips": "[]",
     "abuseipdb_api_key": "",
     "abuseipdb_auto_report_enabled": "false",
+    # Per-backend-server alerts: at most one down alert per server per window
+    "upstream_alert_flap_minutes": "5",
 }
+
+
+# Secret values are write-only: every reader (admins included) gets a mask,
+# and a masked value sent back unchanged leaves the stored secret alone.
+SECRET_MASK = "\u2022\u2022\u2022\u2022"
+_SECRET_KEY_RE = re.compile(r"(password|secret|token|api_key|private_key|apikey)$")
+
+
+def is_secret_key(key: str) -> bool:
+    return bool(_SECRET_KEY_RE.search(key or ""))
+
+
+def mask_secret(key: str, value):
+    """The masked form of a stored secret: "••••" plus the last 4 characters of a plain key."""
+    if not value:
+        return value
+    if key.endswith("password") or len(value) < 12:
+        return SECRET_MASK
+    return SECRET_MASK + value[-4:]
+
+
+def is_masked(value) -> bool:
+    return isinstance(value, str) and value.startswith(SECRET_MASK)
+
+
+def setting_out(setting: Setting) -> dict:
+    value = setting.value
+    if is_secret_key(setting.key):
+        value = mask_secret(setting.key, value)
+    return {
+        "key": setting.key,
+        "value": value,
+        "description": setting.description,
+        "updated_at": setting.updated_at,
+    }
 
 
 async def ensure_default_settings(db: AsyncSession):
@@ -52,7 +91,7 @@ async def list_settings(
     await ensure_default_settings(db)
 
     result = await db.execute(select(Setting).order_by(Setting.key))
-    return result.scalars().all()
+    return [setting_out(s) for s in result.scalars().all()]
 
 
 # NOTE: these specific paths must stay ABOVE the generic /{key} routes.
@@ -187,7 +226,7 @@ async def get_setting(
                 detail="Setting not found",
             )
 
-    return setting
+    return setting_out(setting)
 
 
 @router.put("/{key}", response_model=SettingResponse)
@@ -207,8 +246,10 @@ async def update_setting(
         setting = Setting(key=key)
         db.add(setting)
 
-    # Update fields
+    # Update fields (a secret sent back in its masked form is left as it is)
     for field, value in setting_data.model_dump(exclude_unset=True).items():
+        if field == "value" and is_secret_key(key) and is_masked(value):
+            continue
         setattr(setting, field, value)
 
     # Audit log
@@ -224,7 +265,7 @@ async def update_setting(
     await db.commit()
     await db.refresh(setting)
 
-    return setting
+    return setting_out(setting)
 
 
 @router.put("/", response_model=list[SettingResponse])
@@ -238,6 +279,8 @@ async def bulk_update_settings(
     updated_settings = []
 
     for key, value in settings_data.settings.items():
+        if is_secret_key(key) and is_masked(value):
+            continue
         result = await db.execute(select(Setting).where(Setting.key == key))
         setting = result.scalar_one_or_none()
 
@@ -263,7 +306,7 @@ async def bulk_update_settings(
     for setting in updated_settings:
         await db.refresh(setting)
 
-    return updated_settings
+    return [setting_out(s) for s in updated_settings]
 
 
 @router.post("/reload-nginx")

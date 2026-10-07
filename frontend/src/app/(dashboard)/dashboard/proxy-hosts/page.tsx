@@ -46,6 +46,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { HostConfigPanel } from '@/components/proxy-hosts/host-config-panel'
+import {
+  BackendsSection,
+  LoadBalancedBadge,
+  backendsFromHost,
+  groupErrors,
+  lbSettingsPayload,
+  serversPayload,
+  type BackendsValue,
+} from '@/components/proxy-hosts/backends-section'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 import { PageHeader } from '@/components/layout/page-header'
@@ -206,6 +215,8 @@ export default function ProxyHostsPage() {
 
   // Form state
   const [formData, setFormData] = useState<FormData>(defaultFormData)
+  // Single backend vs load-balanced upstream group (and its servers)
+  const [backends, setBackends] = useState<BackendsValue>(() => backendsFromHost(null))
   const [domainInput, setDomainInput] = useState('')
 
   // SSL mode: none = no SSL, existing = pick existing cert, letsencrypt = request new LE cert
@@ -230,6 +241,7 @@ export default function ProxyHostsPage() {
 
   const resetForm = () => {
     setFormData(defaultFormData)
+    setBackends(backendsFromHost(null))
     setDomainInput('')
     setError('')
     setActiveTab('details')
@@ -284,6 +296,7 @@ export default function ProxyHostsPage() {
       traffic_logging_enabled: host.traffic_logging_enabled,
     })
     setLocations(host.locations || [])
+    setBackends(backendsFromHost(host))
     setDomainInput('')
     setEditingHost(host)
     setShowDialog(true)
@@ -322,6 +335,27 @@ export default function ProxyHostsPage() {
         return
       }
 
+      const backendProblems = groupErrors(backends)
+      if (backendProblems.length > 0) {
+        setError(backendProblems[0])
+        setActiveTab('details')
+        setIsSubmitting(false)
+        return
+      }
+
+      // A load-balanced host still carries a forward host (the list shows it and
+      // "Open Site Locally" uses it): keep it pointed at the first primary server.
+      const firstPrimary =
+        backends.mode === 'balanced'
+          ? backends.servers.find((s) => s.enabled && !s.backup) ?? backends.servers[0]
+          : undefined
+      const hostFields = {
+        ...formData,
+        ...(firstPrimary ? { forward_host: firstPrimary.host.trim(), forward_port: firstPrimary.port } : {}),
+        ...lbSettingsPayload(backends),
+      }
+      const upstream_servers = serversPayload(backends)
+
       if (sslMode === 'letsencrypt' && !editingHost) {
         // Multi-step: create host without SSL → request LE cert → attach cert
         if (!leEmail) {
@@ -333,7 +367,8 @@ export default function ProxyHostsPage() {
         // Step 1: Create host without SSL so nginx serves the domain for ACME challenge
         setSslProgress('Creating host...')
         const hostRes = await api.post('/api/proxy-hosts', {
-          ...formData,
+          ...hostFields,
+          upstream_servers,
           ssl_enabled: false,
           certificate_id: null,
         })
@@ -373,8 +408,9 @@ export default function ProxyHostsPage() {
 
         // Step 4: Update host to enable SSL with the new cert
         setSslProgress('Enabling SSL on host...')
+        // Servers were created with the host in step 1; leave them as they are
         await api.put(`/api/proxy-hosts/${newHostId}`, {
-          ...formData,
+          ...hostFields,
           ssl_enabled: true,
           certificate_id: certId,
         })
@@ -385,7 +421,7 @@ export default function ProxyHostsPage() {
         toastSuccess('Proxy host created with SSL certificate')
       } else {
         // Normal flow: create/update host directly
-        const submitData = { ...formData }
+        const submitData = { ...hostFields, upstream_servers }
         if (sslMode === 'none') {
           submitData.ssl_enabled = false
           submitData.certificate_id = null
@@ -620,6 +656,7 @@ export default function ProxyHostsPage() {
                             Disabled
                           </span>
                         )}
+                        <LoadBalancedBadge host={host} />
                       </div>
                       <a
                         href={`${host.forward_scheme}://${host.forward_host}:${host.forward_port}`}
@@ -629,6 +666,10 @@ export default function ProxyHostsPage() {
                         data-private="address"
                       >
                         {host.forward_scheme}://{host.forward_host}:{host.forward_port}
+                        {(() => {
+                          const others = (host.upstream_servers || []).filter((u) => u.enabled).length - 1
+                          return others > 0 ? ` +${others} more` : ''
+                        })()}
                       </a>
                     </div>
                   </div>
@@ -924,47 +965,17 @@ export default function ProxyHostsPage() {
                     </div>
                   </div>
 
-                  {/* Forward Settings */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Scheme</label>
-                      <select
-                        value={formData.forward_scheme}
-                        onChange={(e) =>
-                          setFormData({ ...formData, forward_scheme: e.target.value as 'http' | 'https' })
-                        }
-                        className="w-full px-4 py-2 rounded-lg border border-input bg-background"
-                      >
-                        <option value="http">http</option>
-                        <option value="https">https</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Forward Host</label>
-                      <input
-                        type="text"
-                        value={formData.forward_host}
-                        onChange={(e) => setFormData({ ...formData, forward_host: e.target.value })}
-                        className="w-full px-4 py-2 rounded-lg border border-input bg-background"
-                        placeholder="192.168.1.1"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Forward Port</label>
-                      <input
-                        type="number"
-                        value={formData.forward_port}
-                        onChange={(e) =>
-                          setFormData({ ...formData, forward_port: parseInt(e.target.value) || 80 })
-                        }
-                        className="w-full px-4 py-2 rounded-lg border border-input bg-background"
-                        min={1}
-                        max={65535}
-                        required
-                      />
-                    </div>
-                  </div>
+                  {/* Backends: single forward host or a load-balanced group */}
+                  <BackendsSection
+                    value={backends}
+                    onChange={setBackends}
+                    forwardScheme={formData.forward_scheme}
+                    forwardHost={formData.forward_host}
+                    forwardPort={formData.forward_port}
+                    onForwardChange={(patch) => setFormData({ ...formData, ...patch })}
+                    websocketsSupport={formData.websockets_support}
+                    hostId={editingHost?.id}
+                  />
 
                   {/* SSL Settings */}
                   <div className="space-y-4">
@@ -1272,8 +1283,10 @@ export default function ProxyHostsPage() {
 
                   <div className="pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground">
-                      <strong>Default location (/)</strong>: {formData.forward_scheme}://
-                      {formData.forward_host}:{formData.forward_port}
+                      <strong>Default location (/)</strong>:{' '}
+                      {backends.mode === 'balanced'
+                        ? `load balanced across ${backends.servers.filter((s) => s.enabled).length} servers (Details tab)`
+                        : `${formData.forward_scheme}://${formData.forward_host}:${formData.forward_port}`}
                     </p>
                   </div>
                 </div>

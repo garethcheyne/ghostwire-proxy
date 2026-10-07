@@ -7,7 +7,7 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.utils import get_client_ip
 from app.models.user import User
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.preset_service import (
     list_presets, get_preset, apply_preset,
     get_applied_presets, remove_preset, reapply_preset,
@@ -49,7 +49,7 @@ async def apply_preset_route(
     preset_id: str,
     request: Request,
     proxy_host_id: Optional[str] = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Apply a preset — creates rules in the database.
@@ -73,7 +73,7 @@ async def apply_preset_route(
 async def remove_preset_route(
     preset_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove all rules created by a preset."""
@@ -94,7 +94,7 @@ async def reapply_preset_route(
     preset_id: str,
     request: Request,
     proxy_host_id: Optional[str] = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Re-apply a preset — removes existing rules then re-creates from the latest JSON file."""

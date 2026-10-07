@@ -10,7 +10,9 @@ Backups include:
 """
 
 import os
+import re
 import json
+from types import SimpleNamespace
 import tarfile
 import tempfile
 import shutil
@@ -31,6 +33,33 @@ logger = logging.getLogger(__name__)
 
 # Backup storage path
 BACKUP_PATH = os.environ.get("BACKUP_PATH", "/data/backups")
+
+# Meta-commands a plain pg_dump script can contain: \connect, newer pg_dump's
+# \restrict/\unrestrict session keys, and \. ending a COPY block.
+_ALLOWED_DUMP_META = re.compile(r"^\\(connect|c|restrict|unrestrict|\.)(\s|$)")
+
+
+def _check_plain_sql_dump(path: str) -> None:
+    """Refuse a plain-SQL dump containing psql meta-commands other than pg_dump's own.
+
+    COPY ... FROM stdin data blocks are skipped: their lines can legitimately start
+    with a backslash (\\N is NULL) and psql does not interpret them.
+    """
+    in_copy = False
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for lineno, line in enumerate(f, 1):
+            if in_copy:
+                if line.rstrip("\r\n") == "\\.":
+                    in_copy = False
+                continue
+            stripped = line.lstrip()
+            if stripped.upper().startswith("COPY ") and stripped.rstrip().upper().endswith("FROM STDIN;"):
+                in_copy = True
+                continue
+            if stripped.startswith("\\") and not _ALLOWED_DUMP_META.match(stripped):
+                raise ValueError(
+                    f"Refusing to restore: the SQL dump contains a psql meta-command at line {lineno}"
+                )
 
 
 class BackupService:
@@ -168,7 +197,10 @@ class BackupService:
         # Build pg_dump command
         exclude_tables = []
         if not include_traffic_logs:
-            exclude_tables.append("--exclude-table=traffic_logs")
+            # Leave out the rows, keep the table: a dump without the table
+            # restores into a database that has no traffic_logs at all, and
+            # pg_restore --clean cannot drop the tables it references.
+            exclude_tables.append("--exclude-table-data=traffic_logs")
 
         env = os.environ.copy()
         # Extract password from URL for PGPASSWORD
@@ -309,6 +341,19 @@ class BackupService:
         restored_items = []
         warnings = []
 
+        # The database restore terminates every other connection to the
+        # database, this request's own included: release it first (and read
+        # what we need from the row before it is expired).
+        backup = SimpleNamespace(
+            file_path=backup.file_path,
+            includes_database=backup.includes_database,
+            includes_certificates=backup.includes_certificates,
+            includes_letsencrypt=backup.includes_letsencrypt,
+            includes_configs=backup.includes_configs,
+        )
+        await db.rollback()
+        await db.close()
+
         try:
             # Extract backup to temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -320,7 +365,11 @@ class BackupService:
                         abs_member = os.path.realpath(member_path)
                         if not abs_member.startswith(abs_temp + os.sep) and abs_member != abs_temp:
                             raise ValueError(f"Path traversal detected in backup archive: {member.name}")
-                    tar.extractall(temp_dir)
+                    # The "data" filter refuses links that point outside temp_dir, device
+                    # files and absolute paths, and drops setuid bits. The name check above
+                    # alone misses a symlink member followed by a member written through it.
+                    # Relative links inside the archive (Let's Encrypt live/ -> archive/) pass.
+                    tar.extractall(temp_dir, filter="data")
 
                 # Read metadata
                 metadata_path = os.path.join(temp_dir, "metadata.json")
@@ -329,14 +378,18 @@ class BackupService:
                         metadata = json.load(f)
                     logger.info(f"Restoring backup from {metadata.get('created_at')}")
 
-                # Restore database
+                # Restore database. A failure stops the restore here: carrying
+                # on would put this backup's files next to a database that is not
+                # this backup's, and reporting success would hide it.
                 if restore_database and backup.includes_database:
                     try:
                         await self._restore_database(temp_dir)
                         restored_items.append("database")
                     except Exception as e:
-                        warnings.append(f"Database restore failed: {e}")
                         logger.error(f"Database restore failed: {e}")
+                        raise RuntimeError(
+                            f"Database restore failed; nothing else was restored. {e}"
+                        ) from e
 
                 # Restore certificates
                 if restore_certificates and backup.includes_certificates:
@@ -423,7 +476,7 @@ class BackupService:
             "-d", "postgres",
             "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",
         ]
-        subprocess.run(term_cmd, env=env, capture_output=True, text=True)
+        subprocess.run(term_cmd, env=env, capture_output=True, text=True, timeout=60)
         logger.info("Terminated active database connections for restore")
 
         # Restore database
@@ -441,9 +494,13 @@ class BackupService:
                 dump_file,
             ]
         else:
-            # Legacy plain SQL fallback
+            # Legacy plain SQL fallback. psql runs backslash meta-commands from the file
+            # (`\! cmd` is a shell), so an uploaded archive could run commands in this
+            # container; refuse any meta-command a pg_dump script wouldn't contain.
+            _check_plain_sql_dump(dump_file)
             cmd = [
                 "psql",
+                "-X",  # ignore any psqlrc
                 "-h", host,
                 "-p", port,
                 "-U", user,
@@ -452,25 +509,28 @@ class BackupService:
                 "-f", dump_file,
             ]
 
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Database restore timed out after an hour")
 
-        # Log output for debugging
-        if result.returncode != 0 and result.stderr:
-            # pg_restore returns non-zero even for warnings; check for real errors
-            error_lines = [l for l in result.stderr.splitlines() if "ERROR:" in l]
-            if error_lines:
-                logger.warning(f"Database restore had {len(error_lines)} errors. First: {error_lines[0][:200]}")
-            else:
-                logger.info("Database restore completed with warnings")
-        else:
-            logger.info("Database restore completed cleanly")
+        # pg_restore exits non-zero when any statement failed ("errors ignored on
+        # restore: N"); psql with ON_ERROR_STOP=0 exits 0, so look for ERROR lines too.
+        error_lines = [l for l in (result.stderr or "").splitlines() if "ERROR:" in l]
+        if result.returncode != 0 or error_lines:
+            first = (error_lines[0] if error_lines else (result.stderr or "").strip()[:300]) or f"exit code {result.returncode}"
+            logger.error(f"Database restore failed with {len(error_lines)} errors. First: {first[:300]}")
+            raise RuntimeError(
+                f"{len(error_lines) or 'Some'} statements failed. First error: {first[:300]}"
+            )
 
-        logger.info(f"Database restore completed. stderr={len(result.stderr or '')} bytes")
+        logger.info("Database restore completed cleanly")
 
     def _restore_certificates(self, temp_dir: str):
         """Restore SSL certificates."""

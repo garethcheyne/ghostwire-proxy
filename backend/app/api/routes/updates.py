@@ -11,7 +11,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.models.user import User
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.update_service import update_service
 
 router = APIRouter()
@@ -147,7 +147,7 @@ async def check_base_image_updates(
 async def start_app_update(
     request_body: StartAppUpdateRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -178,7 +178,7 @@ async def start_app_update(
 async def start_base_image_update(
     request_body: StartBaseImageUpdateRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -237,7 +237,7 @@ async def get_update_history(
 @router.post("/rollback/{update_id}", response_model=UpdateStatusResponse)
 async def rollback_update(
     update_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -273,7 +273,7 @@ async def get_update_settings(
 @router.put("/settings", response_model=UpdateSettingsResponse)
 async def update_settings(
     settings_update: UpdateSettingsUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update settings."""
@@ -324,7 +324,7 @@ async def get_available_updates(
 
 @router.post("/check-now")
 async def check_now(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

@@ -61,4 +61,8 @@ Optionally configure an AbuseIPDB API key to enrich threat actor data with commu
 |---------|-------------|
 | **API Key** | Your AbuseIPDB API key (free tier: 1,000 lookups/day) |
 
+Secret settings (API keys, passwords, tokens) are write-only: the API returns them masked
+(`••••` plus the last four characters) to every user, admins included. Paste a new value to
+replace one.
+
 When configured, IP intelligence popups across the dashboard show the AbuseIPDB abuse confidence score, total reports, and Tor exit status.

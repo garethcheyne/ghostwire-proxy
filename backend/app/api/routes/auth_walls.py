@@ -82,7 +82,10 @@ async def create_auth_wall(
         name=wall_data.name,
         auth_type=wall_data.auth_type,
         session_timeout=wall_data.session_timeout,
+        theme=wall_data.theme,
         default_provider_id=wall_data.default_provider_id,
+        allowed_emails=wall_data.allowed_emails or [],
+        allowed_email_domains=wall_data.allowed_email_domains or [],
     )
     db.add(auth_wall)
     await db.flush()

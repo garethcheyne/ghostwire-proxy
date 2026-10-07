@@ -15,11 +15,39 @@ from app.schemas.alert import (
     AlertChannelCreate, AlertChannelUpdate, AlertChannelResponse,
     AlertPreferenceCreate, AlertPreferenceUpdate, AlertPreferenceResponse,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
+from app.services.outbound_url import (
+    OutboundUrlError, internal_targets_allowed, validate_outbound_url,
+)
 from app.services.alert_service import dispatch_alert
 from app.services.push_service import push_service
 
 router = APIRouter()
+
+# Config keys holding a URL the API will POST to, per channel type
+_URL_KEYS = {"webhook": ("url",), "slack": ("webhook_url",)}
+
+
+async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) -> None:
+    """Reject webhook/Slack URLs that are not http(s) or point at internal addresses."""
+    keys = _URL_KEYS.get(channel_type)
+    if not keys or not config_json:
+        return
+    import json
+
+    try:
+        config = json.loads(config_json)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Channel config must be valid JSON")
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=422, detail="Channel config must be a JSON object")
+    allow_internal = await internal_targets_allowed(db)
+    for key in keys:
+        if config.get(key):
+            try:
+                await validate_outbound_url(str(config[key]), allow_internal=allow_internal)
+            except OutboundUrlError as e:
+                raise HTTPException(status_code=422, detail=f"{key}: {e}")
 
 
 # ── VAPID Key ─────────────────────────────────────────────────
@@ -105,9 +133,10 @@ async def list_channels(
 async def create_channel(
     data: AlertChannelCreate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _check_channel_urls(db, data.channel_type, data.config)
     channel = AlertChannel(
         user_id=current_user.id,
         channel_type=data.channel_type,
@@ -134,15 +163,15 @@ async def update_channel(
     channel_id: str,
     data: AlertChannelUpdate,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(AlertChannel).where(AlertChannel.id == channel_id))
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Alert channel not found")
-    if channel.user_id and channel.user_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized to modify this channel")
+    if data.config is not None:
+        await _check_channel_urls(db, channel.channel_type, data.config)
 
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(channel, field, value)
@@ -276,7 +305,7 @@ async def delete_preference(
 
 @router.post("/test")
 async def send_test_alert(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a test alert via all configured channels."""

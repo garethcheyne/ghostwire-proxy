@@ -55,6 +55,15 @@ class AlertChannelResponse(BaseModel):
         from_attributes = True
 
 
+# Every alert type a preference can be set for. The per-backend-server types
+# follow the user's host_down preference until they have one of their own
+# (see alert_service.PREFERENCE_FALLBACK).
+ALERT_TYPES = (
+    'threat_detected', 'ip_blocked', 'firewall_pushed', 'cert_expiring', 'host_down',
+    'upstream_server_down', 'upstream_server_recovered',
+)
+
+
 class AlertPreferenceCreate(BaseModel):
     alert_type: str
     min_severity: str = "medium"
@@ -64,9 +73,8 @@ class AlertPreferenceCreate(BaseModel):
     @field_validator('alert_type')
     @classmethod
     def validate_alert_type(cls, v: str) -> str:
-        valid = ('threat_detected', 'ip_blocked', 'firewall_pushed', 'cert_expiring', 'host_down')
-        if v not in valid:
-            raise ValueError(f'Alert type must be one of: {", ".join(valid)}')
+        if v not in ALERT_TYPES:
+            raise ValueError(f'Alert type must be one of: {", ".join(ALERT_TYPES)}')
         return v
 
     @field_validator('min_severity')

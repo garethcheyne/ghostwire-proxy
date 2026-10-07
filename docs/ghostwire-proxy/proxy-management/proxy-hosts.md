@@ -17,6 +17,8 @@ Enter one or more domain names that this proxy host should respond to. All domai
 
 ### Forwarding
 
+With **Backends** set to **Single backend**:
+
 | Field | Description |
 |-------|-------------|
 | **Scheme** | `http` or `https` — the protocol used to connect to your upstream |
@@ -44,11 +46,7 @@ Enter one or more domain names that this proxy host should respond to. All domai
 
 ## Load Balancing
 
-Proxy hosts support multiple upstream servers for load balancing. Add additional upstream entries with:
-
-- **Host** and **Port** for each backend server
-- **Weight** — relative traffic distribution
-- **Health checks** — automatic removal of unhealthy backends
+Switch **Backends** from **Single backend** to **Load balanced** to spread a host's traffic across several servers (for example Node processes on ports 8050–8053), choose a balancing method such as **least connections**, and see each server's health. See [Load Balancing](./load-balancing.md).
 
 ## Locations
 

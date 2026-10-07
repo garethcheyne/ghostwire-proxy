@@ -260,6 +260,25 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
         ["left", "right"],
     )
 
+    node_rows = [n for n in ((report.get("nodes") or {}).get("nodes") or []) if n.get("node")]
+    nodes_section = ""
+    if node_rows:
+        nodes_section = _section("Backend nodes", _table(
+            ["Node", "Share", "Requests", "Errors", "p95", "Failovers in / out"],
+            [
+                [
+                    _escape(n.get("node")) + (f" ({_escape(n['label'])})" if n.get("label") else ""),
+                    f"{n.get('share', 0)}%",
+                    _num(n.get("requests")),
+                    f"{n.get('error_rate', 0)}%",
+                    _ms(n.get("p95")),
+                    f"{_num(n.get('failovers_in'))} / {_num(n.get('failovers_out'))}",
+                ]
+                for n in node_rows[:top_n]
+            ],
+            ["left", "right", "right", "right", "right", "right"],
+        ))
+
     sampled_note = ""
     if clients.get("sampled"):
         sampled_note = (
@@ -281,6 +300,7 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
   {stats}
 
   {_section("Most requested paths", top_paths)}
+  {nodes_section}
   {_section("Security", attack_summary + attackers + targeted)}
   {_section("Browsers", sampled_note + browsers)}
   {_section("Devices", devices)}

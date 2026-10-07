@@ -32,7 +32,11 @@ export function useTrafficStats() {
   return useQuery({
     queryKey: trafficKeys.stats(),
     queryFn: async () => {
-      const response = await api.get<TrafficStats>('/api/traffic/stats')
+      // No screen shows top_ips, and they're the one part the API can't take from
+      // its hourly summaries (a raw scan of 30 days), so skip them.
+      const response = await api.get<TrafficStats>('/api/traffic/stats', {
+        params: { include_top_ips: false },
+      })
       return response.data
     },
     staleTime: 30_000,

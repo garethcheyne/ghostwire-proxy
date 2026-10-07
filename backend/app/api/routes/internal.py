@@ -1,5 +1,6 @@
 """Internal API endpoints for nginx/Lua and updater integration."""
 
+import hmac
 import logging
 import os
 import uuid
@@ -28,6 +29,13 @@ if not _env_token:
 INTERNAL_AUTH_TOKEN = _env_token
 
 
+def internal_token_ok(token: Optional[str]) -> bool:
+    """Constant-time check of an X-Internal-Auth value."""
+    if not token or not INTERNAL_AUTH_TOKEN:
+        return False
+    return hmac.compare_digest(token.encode(), INTERNAL_AUTH_TOKEN.encode())
+
+
 def verify_internal_auth(request: Request) -> None:
     """Shared dependency: reject requests missing or with bad X-Internal-Auth header.
 
@@ -36,8 +44,7 @@ def verify_internal_auth(request: Request) -> None:
     Docker network, the API port can be exposed to the host, so every internal route
     must require this token.
     """
-    auth_token = request.headers.get("X-Internal-Auth")
-    if not auth_token or auth_token != INTERNAL_AUTH_TOKEN:
+    if not internal_token_ok(request.headers.get("X-Internal-Auth")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid internal auth token",
@@ -57,7 +64,9 @@ from app.schemas.auth_wall_session import (
 )
 from sqlalchemy import select
 
-router = APIRouter()
+# Every route here is for co-located services (the proxy's Lua, the updater, the
+# admin UI's server side) and requires the internal token.
+router = APIRouter(dependencies=[Depends(verify_internal_auth)])
 
 
 class TrafficLogRequest(BaseModel):
@@ -75,6 +84,8 @@ class TrafficLogRequest(BaseModel):
     bytes_sent: int = 0
     bytes_received: int = 0
     upstream_addr: Optional[str] = None
+    # nginx's per-attempt lists ("502, 200" / "0.004, 0.120") when it retried
+    upstream_status: Optional[str] = None
     upstream_response_time: Optional[str] = None
     ssl_protocol: Optional[str] = None
     ssl_cipher: Optional[str] = None
@@ -97,9 +108,6 @@ async def log_traffic(
     db: AsyncSession = Depends(get_db),
 ):
     """Receive traffic log from nginx Lua script."""
-    auth_token = request.headers.get("X-Internal-Auth")
-    if auth_token != INTERNAL_AUTH_TOKEN:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal auth token")
 
     # Find proxy host by domain
     result = await db.execute(select(ProxyHost))
@@ -115,15 +123,20 @@ async def log_traffic(
         # Unknown host, skip logging
         return {"status": "skipped", "reason": "unknown host"}
 
-    # Parse upstream response time
-    upstream_time = None
-    if data.upstream_response_time:
-        try:
-            # Can be comma-separated for multiple upstreams
-            times = data.upstream_response_time.split(",")
-            upstream_time = int(float(times[-1].strip()) * 1000)
-        except (ValueError, IndexError):
-            pass
+    # Which backend answered: nginx lists every server it tried, in order, and
+    # the last one produced the response.
+    from app.models.proxy_host import UpstreamServer
+    from app.services.upstream_log import ADDR_MAX, match_upstream_server, parse_upstream
+
+    upstream = parse_upstream(data.upstream_addr, data.upstream_status, data.upstream_response_time)
+    upstream_time = upstream.final_time_ms
+    upstream_server_id = None
+    if upstream.final_addr:
+        servers = (await db.execute(
+            select(UpstreamServer).where(UpstreamServer.proxy_host_id == proxy_host_id)
+        )).scalars().all()
+        if servers:
+            upstream_server_id = await match_upstream_server(upstream.final_addr, servers)
 
     # Classify the client once, at write time, so every later query and rollup
     # can filter on it without re-parsing user agents.
@@ -149,8 +162,13 @@ async def log_traffic(
         response_time=int(data.response_time_ms),
         bytes_sent=data.bytes_sent,
         bytes_received=data.bytes_received,
-        upstream_addr=data.upstream_addr,
+        upstream_addr=data.upstream_addr[:ADDR_MAX] if data.upstream_addr else None,
         upstream_response_time=upstream_time,
+        upstream_status=upstream.final.status if upstream.final else None,
+        upstream_attempts=upstream.count or None,
+        upstream_failover=upstream.failover if upstream.count else None,
+        upstream_attempt_log=[a.as_dict() for a in upstream.attempts] if upstream.count > 1 else None,
+        upstream_server_id=upstream_server_id,
         ssl_protocol=data.ssl_protocol,
         ssl_cipher=data.ssl_cipher,
         user_agent=data.user_agent,
@@ -193,9 +211,6 @@ async def log_threat(
     db: AsyncSession = Depends(get_db),
 ):
     """Receive threat event from nginx WAF Lua script."""
-    auth_token = request.headers.get("X-Internal-Auth")
-    if auth_token != INTERNAL_AUTH_TOKEN:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal auth token")
 
     import json
 
@@ -239,7 +254,7 @@ async def log_threat(
 # WAF / GeoIP / Blocklist Internal Endpoints (called by Lua)
 # ============================================================================
 
-@router.get("/waf/rules", dependencies=[Depends(verify_internal_auth)])
+@router.get("/waf/rules")
 async def get_waf_rules(
     db: AsyncSession = Depends(get_db),
 ):
@@ -265,7 +280,7 @@ async def get_waf_rules(
     ]
 
 
-@router.get("/geoip/rules", dependencies=[Depends(verify_internal_auth)])
+@router.get("/geoip/rules")
 async def get_geoip_rules(
     db: AsyncSession = Depends(get_db),
 ):
@@ -291,7 +306,7 @@ async def get_geoip_rules(
     ]
 
 
-@router.get("/trusted-ips", dependencies=[Depends(verify_internal_auth)])
+@router.get("/trusted-ips")
 async def get_trusted_ips(
     db: AsyncSession = Depends(get_db),
 ):
@@ -313,7 +328,7 @@ async def get_trusted_ips(
         return []
 
 
-@router.get("/blocked-ips", dependencies=[Depends(verify_internal_auth)])
+@router.get("/blocked-ips")
 async def get_blocked_ips(
     db: AsyncSession = Depends(get_db),
 ):
@@ -349,7 +364,7 @@ async def get_blocked_ips(
 # Honeypot Internal Endpoints (called by Lua)
 # ============================================================================
 
-@router.get("/honeypot/traps", dependencies=[Depends(verify_internal_auth)])
+@router.get("/honeypot/traps")
 async def get_honeypot_traps(
     db: AsyncSession = Depends(get_db),
 ):
@@ -395,7 +410,7 @@ class HoneypotHitRequest(BaseModel):
     severity: str = "high"
 
 
-@router.post("/honeypot/hit", dependencies=[Depends(verify_internal_auth)])
+@router.post("/honeypot/hit")
 async def log_honeypot_hit(
     data: HoneypotHitRequest,
     request: Request,
@@ -481,7 +496,7 @@ async def log_honeypot_hit(
     return {"status": action, "ip": data.client_ip}
 
 
-@router.get("/rate-limits", dependencies=[Depends(verify_internal_auth)])
+@router.get("/rate-limits")
 async def get_rate_limit_rules(
     db: AsyncSession = Depends(get_db),
 ):
@@ -650,13 +665,6 @@ async def send_push_notification(
     Send push notification to all users.
     Called by updater sidecar for update status notifications.
     """
-    # Verify internal auth token
-    auth_token = request.headers.get("X-Internal-Auth")
-    if auth_token != INTERNAL_AUTH_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid internal auth token"
-        )
 
     try:
         from app.services.push_service import push_service

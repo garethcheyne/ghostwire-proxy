@@ -33,6 +33,8 @@ class TrafficLogResponse(BaseModel):
     country_name: Optional[str] = None
     city: Optional[str] = None
     auth_user: Optional[str]
+    is_bot: Optional[bool] = None
+    is_streaming: Optional[bool] = None
 
     class Config:
         from_attributes = True

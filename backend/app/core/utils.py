@@ -7,22 +7,14 @@ from fastapi import Request
 
 
 def get_client_ip(request: Request) -> Optional[str]:
-    """
-    Extract client IP address from request headers.
+    """The client's address.
 
-    Handles X-Forwarded-For header for reverse proxy setups.
-    Returns the first IP in the chain (original client IP).
+    TrustedProxyMiddleware has already resolved it: X-Forwarded-For / X-Real-IP
+    count only when the request came through a trusted proxy (TRUSTED_PROXIES),
+    so a client cannot pick its own address by sending those headers.
     """
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        # X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2, ...
-        # The first one is the original client IP
-        return forwarded_for.split(",")[0].strip()
-
-    # Fallback to direct client IP
     if request.client:
         return request.client.host
-
     return None
 
 

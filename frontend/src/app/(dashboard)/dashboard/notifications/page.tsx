@@ -53,7 +53,16 @@ interface AlertChannel {
   created_at: string
 }
 
-const notificationTypes = [
+interface NotificationType {
+  key: string
+  label: string
+  description: string
+  icon: string
+  /** Until you set this type yourself it is on and follows this type's channels and severity. */
+  inheritsFrom?: string
+}
+
+const notificationTypes: NotificationType[] = [
   {
     key: 'threat_detected',
     label: 'Threat Detected',
@@ -83,6 +92,21 @@ const notificationTypes = [
     label: 'Host Down',
     description: 'When a proxy host backend becomes unreachable',
     icon: '🔴',
+  },
+  {
+    key: 'upstream_server_down',
+    label: 'Backend Server Down',
+    description:
+      'One server of a load-balanced host stops answering health checks while the host stays up. Says how many backends are still healthy.',
+    icon: '🟠',
+    inheritsFrom: 'host_down',
+  },
+  {
+    key: 'upstream_server_recovered',
+    label: 'Backend Server Recovered',
+    description: 'A load-balanced server that was reported down answers again.',
+    icon: '🟢',
+    inheritsFrom: 'host_down',
   },
 ]
 
@@ -127,6 +151,7 @@ export default function NotificationsPage() {
   const [formEnabled, setFormEnabled] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [flapMinutes, setFlapMinutes] = useState('5')
   const confirm = useConfirm()
 
   useEffect(() => {
@@ -146,6 +171,10 @@ export default function NotificationsPage() {
       ])
       setPreferences(prefRes.data)
       setChannels(chanRes.data)
+      api
+        .get('/api/settings/upstream_alert_flap_minutes')
+        .then((res) => setFlapMinutes(res.data?.value || '5'))
+        .catch(() => {})
     } catch {
       setNotification({ type: 'error', message: 'Failed to load notification settings' })
     } finally {
@@ -156,6 +185,19 @@ export default function NotificationsPage() {
   // --- Subscription toggles ---
 
   const getPref = (alertType: string) => preferences.find((p) => p.alert_type === alertType)
+  const typeFor = (alertType: string) => notificationTypes.find((t) => t.key === alertType)
+
+  /** A new preference row; inheriting types start from their parent's channels and severity. */
+  const newPref = (alertType: string, patch: { enabled: boolean; min_severity?: string }) => {
+    const parent = typeFor(alertType)?.inheritsFrom
+    const base = parent ? getPref(parent) : undefined
+    return {
+      alert_type: alertType,
+      min_severity: patch.min_severity ?? base?.min_severity ?? 'medium',
+      channels: base?.channels ?? null,
+      enabled: patch.enabled,
+    }
+  }
 
   const toggleSubscription = async (alertType: string) => {
     const existing = getPref(alertType)
@@ -164,7 +206,8 @@ export default function NotificationsPage() {
       if (existing) {
         await api.put(`/api/alerts/preferences/${existing.id}`, { enabled: !existing.enabled })
       } else {
-        await api.post('/api/alerts/preferences', { alert_type: alertType, min_severity: 'medium', enabled: true })
+        // Inheriting types are on until set, so the first click turns them off
+        await api.post('/api/alerts/preferences', newPref(alertType, { enabled: !typeFor(alertType)?.inheritsFrom }))
       }
       const res = await api.get('/api/alerts/preferences')
       setPreferences(res.data)
@@ -184,7 +227,7 @@ export default function NotificationsPage() {
       if (existing) {
         await api.put(`/api/alerts/preferences/${existing.id}`, { min_severity: severity })
       } else {
-        await api.post('/api/alerts/preferences', { alert_type: alertType, min_severity: severity, enabled: true })
+        await api.post('/api/alerts/preferences', newPref(alertType, { enabled: true, min_severity: severity }))
       }
       const res = await api.get('/api/alerts/preferences')
       setPreferences(res.data)
@@ -194,6 +237,17 @@ export default function NotificationsPage() {
       toastError('Failed to update severity')
     } finally {
       setIsSaving(null)
+    }
+  }
+
+  const saveFlapMinutes = async () => {
+    const minutes = Math.max(0, Math.min(1440, parseInt(flapMinutes, 10) || 0))
+    setFlapMinutes(String(minutes))
+    try {
+      await api.put('/api/settings/upstream_alert_flap_minutes', { value: String(minutes) })
+      toastSuccess('Flap protection updated')
+    } catch {
+      toastError('Failed to update flap protection')
     }
   }
 
@@ -368,9 +422,12 @@ export default function NotificationsPage() {
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
             {notificationTypes.map((nt) => {
               const pref = getPref(nt.key)
-              const isEnabled = pref?.enabled ?? false
-              const severity = pref?.min_severity ?? 'medium'
+              const parent = nt.inheritsFrom ? getPref(nt.inheritsFrom) : undefined
+              const inherited = !pref && !!nt.inheritsFrom
+              const isEnabled = pref?.enabled ?? inherited
+              const severity = pref?.min_severity ?? parent?.min_severity ?? 'medium'
               const saving = isSaving === nt.key
+              const parentLabel = nt.inheritsFrom ? typeFor(nt.inheritsFrom)?.label : undefined
 
               return (
                 <div key={nt.key} className="flex items-center justify-between p-4 gap-4">
@@ -379,6 +436,9 @@ export default function NotificationsPage() {
                     <div className="min-w-0">
                       <h3 className="font-medium text-sm">{nt.label}</h3>
                       <p className="text-xs text-muted-foreground">{nt.description}</p>
+                      {inherited && parentLabel && (
+                        <p className="text-xs text-muted-foreground">On by default: uses the same channels as {parentLabel}.</p>
+                      )}
                     </div>
                   </div>
 
@@ -417,6 +477,29 @@ export default function NotificationsPage() {
                 </div>
               )
             })}
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium">Backend alert flap protection</h3>
+              <p className="text-xs text-muted-foreground">
+                At most one Backend Server Down alert per server in this many minutes; a server still down when the time is up is
+                reported then. 0 turns it off.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={1440}
+                value={flapMinutes}
+                onChange={(e) => setFlapMinutes(e.target.value)}
+                onBlur={saveFlapMinutes}
+                aria-label="Flap protection in minutes"
+                className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">minutes</span>
+            </div>
           </div>
 
           {channels.length === 0 && (

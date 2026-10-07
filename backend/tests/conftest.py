@@ -24,14 +24,6 @@ os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Fast rounds for tests
 os.environ.setdefault("BETTER_AUTH_SECRET", "test-better-auth-secret")
 os.environ.setdefault("INTERNAL_AUTH_TOKEN", "test-internal-token")
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from httpx import AsyncClient, ASGITransport
-
-from app.core.database import Base, get_db
-from app.core.security import get_password_hash
-from app.core.auth_session import create_session
-from app.models.user import User
-
 # Test database URL — a dedicated throwaway database, never the ambient one.
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
@@ -51,6 +43,17 @@ if not _target_db.endswith("_test"):
 # Point application code that reads DATABASE_URL at the same throwaway database,
 # so nothing under test can reach the real one.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
+# Only now import application code: app.core.database builds its engine (and
+# AsyncSessionLocal, used directly by background services) from DATABASE_URL at
+# import time, so it must already point at the throwaway database.
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession  # noqa: E402
+from httpx import AsyncClient, ASGITransport  # noqa: E402
+
+from app.core.database import Base, get_db  # noqa: E402
+from app.core.security import get_password_hash  # noqa: E402
+from app.core.auth_session import create_session  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 test_engine = create_async_engine(
     TEST_DATABASE_URL,

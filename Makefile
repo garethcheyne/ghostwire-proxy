@@ -75,10 +75,10 @@ test-local: ## Run backend tests locally (requires venv)
 	cd backend && python -m pytest tests/ -v --tb=short
 
 lint: ## Run frontend linting
-	cd frontend && npm run lint
+	cd frontend && pnpm lint
 
 typecheck: ## Run TypeScript type checking
-	cd frontend && npx tsc --noEmit
+	cd frontend && pnpm exec tsc --noEmit
 
 # ─────────────────────────────────────────────
 # Database
@@ -112,8 +112,8 @@ ifndef V
 endif
 	@echo "Releasing v$(V)..."
 	@echo "$(V)" > VERSION
-	@cd frontend && npm version $(V) --no-git-tag-version --allow-same-version
-	@git add VERSION frontend/package.json frontend/package-lock.json
+	@cd frontend && pnpm pkg set version=$(V)
+	@git add VERSION frontend/package.json
 	@git commit -m "release: v$(V)"
 	@git tag -a "v$(V)" -m "Release v$(V)"
 	@echo ""

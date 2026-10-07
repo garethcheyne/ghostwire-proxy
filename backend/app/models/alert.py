@@ -35,7 +35,7 @@ class AlertPreference(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), nullable=False, index=True)
-    alert_type = Column(String(50), nullable=False)  # threat_detected, ip_blocked, firewall_pushed, cert_expiring
+    alert_type = Column(String(50), nullable=False)  # see app.schemas.alert.ALERT_TYPES
     min_severity = Column(String(20), default="medium")
     channels = Column(Text, nullable=True)  # JSON array of channel IDs
     enabled = Column(Boolean, default=True, nullable=False)

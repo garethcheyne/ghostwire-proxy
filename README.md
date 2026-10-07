@@ -35,6 +35,13 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Custom nginx advanced configuration per host
 - Live config generation and OpenResty hot-reload (zero downtime)
 
+### Load Balancing
+- Spread a host across several backends: round robin, least connections, IP hash (sticky), URI hash or random-of-two
+- Per-server weight, max connections, backup and maintenance (down); upstream keepalive and automatic retry on the next server
+- Per-server health checks (HTTP path or TCP) with latency, optional automatic removal of failed servers
+- Editor helpers: add a port range in one go, copy from the forward host, live preview of the generated `upstream` block
+- API: `upstream_servers` on create/update, `/api/proxy-hosts/{id}/upstreams` CRUD, `/upstreams/check`, `/upstream-preview` — see [docs/ghostwire-proxy/proxy-management/load-balancing.md](docs/ghostwire-proxy/proxy-management/load-balancing.md)
+
 ### SSL / TLS Certificates
 - **Let's Encrypt** automatic issuance and renewal via Certbot
 - Manual certificate upload (custom CA, self-signed)
@@ -94,6 +101,13 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - Backup and restore
 - System health monitoring
 - DNS provider management (Cloudflare integration)
+
+### API Keys & AI Agents (MCP)
+- Scoped API keys (`gwp_…`) for scripts and AI agents; only a hash is stored and the key is shown once
+- Creating a key needs the admin's two-factor code; keys can expire and be revoked at any time
+- Built-in MCP server at `/api/mcp`, so Claude Code (or any MCP client) can list, preview and change proxy hosts, upstreams and certificates
+- Every change goes through the same `nginx -t` check as the UI, supports dry runs with a config diff, and is audited under the key's name
+- See [API keys](docs/ghostwire-proxy/administration/api-keys.md) and [AI agents (MCP)](docs/ghostwire-proxy/administration/ai-agents-mcp.md)
 
 ### Firewall Connector Management
 - Add and configure multiple firewall connectors from the admin UI
@@ -429,8 +443,8 @@ uvicorn app.main:app --reload --port 8000
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ### Full Stack (Docker)

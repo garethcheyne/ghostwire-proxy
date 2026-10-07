@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from app.core.database import get_db
 from app.models.user import User
 from app.models.backup import Backup
-from app.api.deps import get_current_user
+from app.api.deps import get_current_admin_user
 from app.services.backup_service import backup_service, BACKUP_PATH
 from app.schemas.backup import (
     BackupCreate,
@@ -31,7 +31,7 @@ router = APIRouter()
 async def list_backups(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List all backups with pagination."""
@@ -47,7 +47,7 @@ async def list_backups(
 async def create_backup(
     backup_options: BackupCreate,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -81,7 +81,7 @@ async def create_backup(
 @router.post("/upload", response_model=BackupResponse)
 async def upload_backup(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -165,7 +165,7 @@ async def upload_backup(
 @router.get("/{backup_id}", response_model=BackupResponse)
 async def get_backup(
     backup_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single backup by ID."""
@@ -179,7 +179,7 @@ async def get_backup(
 @router.get("/{backup_id}/download")
 async def download_backup(
     backup_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Download a backup file."""
@@ -203,7 +203,7 @@ async def download_backup(
 @router.delete("/{backup_id}")
 async def delete_backup(
     backup_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a backup."""
@@ -217,7 +217,7 @@ async def delete_backup(
 @router.post("/restore", response_model=RestoreResponse)
 async def restore_backup(
     restore_request: RestoreRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -255,7 +255,7 @@ async def restore_backup(
 
 @router.get("/settings/current", response_model=BackupSettingsResponse)
 async def get_backup_settings(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get backup settings."""
@@ -266,7 +266,7 @@ async def get_backup_settings(
 @router.put("/settings/current", response_model=BackupSettingsResponse)
 async def update_backup_settings(
     settings_update: BackupSettingsUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update backup settings."""
@@ -283,7 +283,7 @@ async def update_backup_settings(
 
 @router.post("/cleanup")
 async def cleanup_old_backups(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Manually trigger cleanup of old backups based on retention policy."""

@@ -8,6 +8,12 @@
   "settings": {
     "title": "Settings"
   },
+  "api-keys": {
+    "title": "API Keys"
+  },
+  "ai-agents-mcp": {
+    "title": "AI Agents (MCP)"
+  },
   "backups": {
     "title": "Backups"
   },

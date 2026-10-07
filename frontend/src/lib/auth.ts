@@ -31,12 +31,8 @@ const timestamps = { createdAt: 'created_at', updatedAt: 'updated_at' }
 
 function clientIp(headers?: Headers | null) {
   if (!headers) return null
-  return (
-    headers.get('cf-connecting-ip') ||
-    headers.get('x-real-ip') ||
-    headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-    null
-  )
+  // Set by server-wrapper.cjs from the socket peer and trusted proxies only.
+  return headers.get('x-real-ip') || null
 }
 
 /** Writes to the API's audit_logs table (the Audit page shows these). */
@@ -120,7 +116,10 @@ export const auth = betterAuth({
     useSecureCookies: (process.env.BETTER_AUTH_URL || '').startsWith('https://'),
     // String ids like the API's own rows (the columns have no database default).
     database: { generateId: () => crypto.randomUUID() },
-    ipAddress: { ipAddressHeaders: ['cf-connecting-ip', 'x-real-ip', 'x-forwarded-for'] },
+    // server-wrapper.cjs resolves the client address (forwarding headers count only from
+    // trusted proxies) and puts it in X-Real-IP, so a client cannot pick a new address per
+    // request to dodge the sign-in rate limit.
+    ipAddress: { ipAddressHeaders: ['x-real-ip'] },
   },
   emailAndPassword: {
     enabled: true,

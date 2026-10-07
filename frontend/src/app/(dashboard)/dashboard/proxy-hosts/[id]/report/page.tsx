@@ -484,6 +484,35 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
         />
       </Section>
 
+      {(report.nodes?.nodes || []).some((n: any) => n.node) && (
+        <Section
+          title="Backend nodes"
+          subtitle={`Which upstream served the traffic · ${num(report.nodes?.failovers?.total)} requests failed over to another node`}
+        >
+          <Table
+            headers={['Node', 'Share', 'Requests', 'Errors', 'p50 / p95', 'Failover in / out']}
+            align={['left', 'right', 'right', 'right', 'right', 'right']}
+            rows={(report.nodes?.nodes || [])
+              .filter((n: any) => n.node)
+              .map((n: any) => [
+                <span key="n" className="font-mono text-xs">
+                  {n.node}
+                  {n.label ? <span className="ml-2 text-muted-foreground">{n.label}</span> : null}
+                </span>,
+                `${n.share}%`,
+                num(n.requests),
+                n.server_error_rate >= 5 ? (
+                  <span className="text-red-600 dark:text-red-400">{n.error_rate}%</span>
+                ) : (
+                  `${n.error_rate}%`
+                ),
+                `${ms(n.p50)} / ${ms(n.p95)}`,
+                `${num(n.failovers_in)} / ${num(n.failovers_out)}`,
+              ])}
+          />
+        </Section>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Most requested paths">
           <Table

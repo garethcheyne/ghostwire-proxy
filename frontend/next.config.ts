@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
   generateBuildId: () => getBuildId(),
   reactStrictMode: true,
   poweredByHeader: false,
-  // Dev-server only (ignored by `next build`): allow `npm run dev` to be reached
+  // Dev-server only (ignored by `next build`): allow `pnpm dev` to be reached
   // over the LAN rather than just localhost.
   allowedDevOrigins: ['192.168.0.13'],
   images: {
@@ -61,6 +61,8 @@ const nextConfig: NextConfig = {
         { source: '/api/known-ips', destination: `${backendUrl}/api/known-ips/` },
         { source: '/api/settings', destination: `${backendUrl}/api/settings/` },
         { source: '/api/search', destination: `${backendUrl}/api/search/` },
+        { source: '/api/api-keys', destination: `${backendUrl}/api/api-keys/` },
+        { source: '/api/audit-logs', destination: `${backendUrl}/api/audit-logs/` },
         // WAF and System endpoints don't use trailing slash routes
         { source: '/api/waf/rules', destination: `${backendUrl}/api/waf/rules` },
         { source: '/api/waf/rules/sets', destination: `${backendUrl}/api/waf/rules/sets` },
@@ -75,8 +77,10 @@ const nextConfig: NextConfig = {
         { source: '/version', destination: `${backendUrl}/version` },
       ],
       fallback: [
-        // Generic fallback for API routes not handled by Next.js route handlers
-        { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
+        // Generic fallback for API routes not handled by Next.js route handlers.
+        // /api/internal/* is for co-located services only and is never forwarded
+        // (src/app/api/internal answers 404 as well).
+        { source: '/api/:path((?!internal(?:/|$)).*)', destination: `${backendUrl}/api/:path` },
       ],
     }
   },

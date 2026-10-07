@@ -112,7 +112,8 @@ local function validate_session_api(cookie_value, auth_wall_id)
             signature = signature
         }),
         headers = {
-            ["Content-Type"] = "application/json"
+            ["Content-Type"] = "application/json",
+            ["X-Internal-Auth"] = init.config.internal_auth_token,
         }
     })
 
@@ -132,9 +133,12 @@ local function validate_session_api(cookie_value, auth_wall_id)
         return nil
     end
 
-    ngx.log(ngx.INFO, "Auth wall session validated successfully for: ", body.session and body.session.username or "unknown")
+    -- The API answers with the session fields at the top level
+    -- (SessionValidateResponse); older builds nested them under "session".
+    local session = body.session or body
+    ngx.log(ngx.INFO, "Auth wall session validated successfully for: ", session.username or "unknown")
 
-    return body.session
+    return session
 end
 
 
@@ -188,22 +192,25 @@ local function update_activity(session_id)
     -- Mark as updated
     auth_sessions:set(activity_key, ngx.time(), 60)
 
-    -- Fire async request to update activity
-    local http = require "resty.http"
-    local httpc = http.new()
-    httpc:set_timeout(2000)
-
     local api_url = init.config.api_url .. "/api/internal/auth-wall/update-activity"
 
-    -- Non-blocking request (we don't wait for response)
-    ngx.timer.at(0, function()
+    -- Non-blocking request (we don't wait for response). The HTTP client is
+    -- created inside the timer: a cosocket cannot cross request contexts.
+    ngx.timer.at(0, function(premature)
+        if premature then
+            return
+        end
+        local http = require "resty.http"
+        local httpc = http.new()
+        httpc:set_timeout(2000)
         local res, err = httpc:request_uri(api_url, {
             method = "POST",
             body = cjson.encode({
                 session_id = session_id
             }),
             headers = {
-                ["Content-Type"] = "application/json"
+                ["Content-Type"] = "application/json",
+                ["X-Internal-Auth"] = init.config.internal_auth_token,
             }
         })
         if err then
