@@ -3,17 +3,18 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 import os
 import socket
 
 from app.core.database import get_db
+from app.schemas.access_list import _check_redirect_url
 from app.core.config import settings
 from app.models.user import User
 from app.models.setting import Setting
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.system_service import system_monitor_service
 
 router = APIRouter()
@@ -175,7 +176,7 @@ async def get_containers(
 
 @router.post("/collect")
 async def trigger_metrics_collection(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> dict:
     """
     Manually trigger metrics collection.
@@ -190,7 +191,7 @@ async def trigger_metrics_collection(
 @router.post("/cleanup")
 async def cleanup_old_metrics(
     retention_days: int = Query(90, ge=1, le=365),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> dict:
     """
     Clean up metrics older than the specified retention period.
@@ -206,6 +207,13 @@ class KillSwitchRequest(BaseModel):
     active: bool
     mode: str = "maintenance"  # "maintenance", "redirect", "drop"
     redirect_url: Optional[str] = None
+
+    # The URL is written verbatim into an nginx `return 301` line, so a `;` or `}`
+    # in it would inject config (including Lua) into the internet-facing proxy.
+    @field_validator("redirect_url")
+    @classmethod
+    def validate_redirect_url(cls, v: Optional[str]) -> Optional[str]:
+        return _check_redirect_url(v)
 
 
 class KillSwitchResponse(BaseModel):
@@ -353,7 +361,7 @@ async def get_kill_switch_status(
 @router.post("/kill-switch")
 async def toggle_kill_switch(
     request: KillSwitchRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> KillSwitchResponse:
     """
@@ -491,7 +499,7 @@ async def get_database_health(
 
 @router.post("/retention-cleanup")
 async def trigger_retention_cleanup(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> dict:
     """Manually trigger data retention cleanup (prunes old traffic logs, events, etc.)."""
     from app.services.retention_service import run_retention_cleanup

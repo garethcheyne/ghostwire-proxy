@@ -6,11 +6,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Loader2, LogOut, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export default function LogoutPage() {
   const searchParams = useSearchParams();
   const wallId = searchParams.get("wall");
-  const redirectUrl = searchParams.get("redirect") || "/";
+  const redirectUrl = safeRedirect(searchParams.get("redirect"));
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export default function LogoutPage() {
         setStatus("success");
         // Redirect after a short delay
         setTimeout(() => {
-          window.location.href = `/__auth/login?wall=${wallId}&redirect=${encodeURIComponent(redirectUrl)}`;
+          window.location.href = `/__auth/login?wall=${encodeURIComponent(wallId ?? "")}&redirect=${encodeURIComponent(redirectUrl)}`;
         }, 1500);
       })
       .catch((err) => {
@@ -94,7 +95,7 @@ export default function LogoutPage() {
                 Try again
               </Button>
               <Button asChild>
-                <Link href={`/__auth/login?wall=${wallId}`}>
+                <Link href={`/__auth/login?wall=${encodeURIComponent(wallId ?? "")}`}>
                   Go to login
                 </Link>
               </Button>

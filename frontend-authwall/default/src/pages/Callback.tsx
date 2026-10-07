@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { portalUrl, safeRedirect } from '@/lib/redirect'
 
 type Status = 'loading' | 'success' | 'error'
 
@@ -11,7 +12,7 @@ export default function Callback() {
   const [error, setError] = useState('')
 
   const wallId = searchParams.get('wall') || ''
-  const redirectUrl = searchParams.get('redirect') || '/'
+  const redirectUrl = safeRedirect(searchParams.get('redirect'))
   const errorParam = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
 
@@ -36,7 +37,7 @@ export default function Callback() {
     return () => clearTimeout(timer)
   }, [errorParam, errorDescription, redirectUrl])
 
-  const loginUrl = `/__auth/login?wall=${wallId}&redirect=${encodeURIComponent(redirectUrl)}`
+  const loginUrl = portalUrl('/login', { wall: wallId, redirect: redirectUrl })
 
   return (
     <div className="auth-layout items-center justify-center p-6">

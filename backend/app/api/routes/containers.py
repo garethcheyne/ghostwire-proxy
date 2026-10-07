@@ -53,7 +53,7 @@ async def get_container_security(
 async def get_single_container_security(
     container_name: str,
     include_packages: bool = Query(False, description="Include the full installed package list"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     """One container's posture, optionally with its full package inventory."""
     if not DOCKER_AVAILABLE or scanner.client is None:

@@ -1,8 +1,11 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+import re
+
+from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator
 from datetime import datetime
 from typing import Optional
 
 from app.schemas.access_list import ProxyHostRef
+from app.services.auth_wall_access import clean_list, normalize_domain, normalize_email, open_to_any_account
 
 
 # Local Auth Users (Basic Auth)
@@ -164,7 +167,48 @@ class LdapConfigResponse(BaseModel):
 
 
 # Auth Wall
-class AuthWallBase(BaseModel):
+# The name and theme are written into nginx config (a quoted `set` value and an
+# alias path), so they are limited to characters that cannot break out of it.
+_WALL_NAME_FORBIDDEN = re.compile(r'["\\;{}$`\r\n]')
+_THEME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
+
+
+def _check_wall_name(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    v = v.strip()
+    if not v:
+        raise ValueError("Name is required")
+    if _WALL_NAME_FORBIDDEN.search(v):
+        raise ValueError('Name cannot contain quotes, backslashes, ;, {, }, $ or line breaks')
+    return v
+
+
+def _check_theme(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    if not _THEME_RE.match(v):
+        raise ValueError("Theme must be a portal theme directory name (a-z, 0-9, - and _)")
+    return v
+
+
+class AuthWallAllowList(BaseModel):
+    """Who may pass through an OAuth provider. Both empty = any account."""
+    allowed_emails: Optional[list[str]] = None
+    allowed_email_domains: Optional[list[str]] = None
+
+    @field_validator('allowed_emails')
+    @classmethod
+    def emails_valid(cls, v):
+        return None if v is None else clean_list(v, normalize_email)
+
+    @field_validator('allowed_email_domains')
+    @classmethod
+    def domains_valid(cls, v):
+        return None if v is None else clean_list(v, normalize_domain)
+
+
+class AuthWallBase(AuthWallAllowList):
     name: str
     auth_type: str = "basic"
     session_timeout: int = 3600
@@ -179,6 +223,16 @@ class AuthWallBase(BaseModel):
             raise ValueError(f'Auth type must be one of: {", ".join(valid_types)}')
         return v
 
+    @field_validator('name')
+    @classmethod
+    def name_valid(cls, v):
+        return _check_wall_name(v)
+
+    @field_validator('theme')
+    @classmethod
+    def theme_valid(cls, v):
+        return _check_theme(v)
+
 
 class AuthWallCreate(AuthWallBase):
     local_users: Optional[list[LocalAuthUserCreate]] = None
@@ -186,12 +240,29 @@ class AuthWallCreate(AuthWallBase):
     ldap_configs: Optional[list[LdapConfigCreate]] = None
 
 
-class AuthWallUpdate(BaseModel):
+class AuthWallUpdate(AuthWallAllowList):
     name: Optional[str] = None
     auth_type: Optional[str] = None
     session_timeout: Optional[int] = None
     theme: Optional[str] = None
     default_provider_id: Optional[str] = None
+
+    @field_validator('auth_type')
+    @classmethod
+    def auth_type_valid(cls, v):
+        if v is not None and v not in ('basic', 'oauth', 'ldap', 'multi'):
+            raise ValueError('Auth type must be one of: basic, oauth, ldap, multi')
+        return v
+
+    @field_validator('name')
+    @classmethod
+    def name_valid(cls, v):
+        return _check_wall_name(v)
+
+    @field_validator('theme')
+    @classmethod
+    def theme_valid(cls, v):
+        return _check_theme(v)
 
 
 class AuthWallResponse(BaseModel):
@@ -201,6 +272,8 @@ class AuthWallResponse(BaseModel):
     session_timeout: int
     theme: str = "default"
     default_provider_id: Optional[str]
+    allowed_emails: list[str] = []
+    allowed_email_domains: list[str] = []
     local_users: list[LocalAuthUserResponse] = []
     providers: list[AuthProviderResponse] = Field(default=[], validation_alias="auth_providers")
     ldap_config: Optional[LdapConfigResponse] = Field(default=None, validation_alias="ldap_configs")
@@ -211,6 +284,17 @@ class AuthWallResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
+
+    @field_validator('allowed_emails', 'allowed_email_domains', mode='before')
+    @classmethod
+    def none_is_empty(cls, v):
+        return v or []
+
+    @computed_field
+    @property
+    def oauth_open_to_anyone(self) -> bool:
+        """An enabled Google/GitHub/OIDC provider with no allow-list admits any account."""
+        return open_to_any_account(self, self.providers)
 
     @field_validator('ldap_config', mode='before')
     @classmethod

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, CheckCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { portalUrl, safeRedirect } from '@/lib/redirect'
 import { logout } from '@/api/client'
 
 export default function Logout() {
@@ -9,7 +10,7 @@ export default function Logout() {
   const [isLoggingOut, setIsLoggingOut] = useState(true)
 
   const wallId = searchParams.get('wall') || ''
-  const redirectUrl = searchParams.get('redirect') || '/'
+  const redirectUrl = safeRedirect(searchParams.get('redirect'))
 
   useEffect(() => {
     const doLogout = async () => {
@@ -24,7 +25,7 @@ export default function Logout() {
 
         // Redirect to login after short delay
         setTimeout(() => {
-          const loginUrl = `/__auth/login?wall=${wallId}&redirect=${encodeURIComponent(redirectUrl)}`
+          const loginUrl = portalUrl('/login', { wall: wallId, redirect: redirectUrl })
           window.location.href = loginUrl
         }, 1500)
       }

@@ -5,11 +5,14 @@ WORKDIR /app
 
 ARG BUILD_VERSION=unknown
 
+# pnpm via corepack — version comes from the "packageManager" field in package.json
+RUN corepack enable
+
 # Copy package files
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN npm ci
+RUN pnpm install --frozen-lockfile
 
 # Copy source files
 COPY . .
@@ -18,7 +21,7 @@ COPY . .
 RUN echo "$BUILD_VERSION" > /app/VERSION
 
 # Build the application
-RUN npm run build
+RUN pnpm build
 
 # Production stage
 FROM node:22-alpine AS runner
@@ -38,6 +41,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# Resolves the client address before Next.js sees the request (see the file)
+COPY --from=builder /app/server-wrapper.cjs ./server-wrapper.cjs
 
 # Set ownership
 RUN chown -R nextjs:nodejs /app
@@ -49,4 +54,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["node", "server-wrapper.cjs"]

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getAuthWallConfig, loginLocal, getOAuthStartUrl } from '@/api/client'
 import type { AuthWallConfig } from '@/api/types'
 import { cn } from '@/lib/utils'
+import { safeRedirect } from '@/lib/redirect'
 
 // OAuth provider icons
 const providerIcons: Record<string, React.ReactNode> = {
@@ -39,7 +40,7 @@ const providerIcons: Record<string, React.ReactNode> = {
 export default function Login() {
   const [searchParams] = useSearchParams()
   const wallId = searchParams.get('wall') || ''
-  const redirectUrl = searchParams.get('redirect') || '/'
+  const redirectUrl = safeRedirect(searchParams.get('redirect'))
 
   const [config, setConfig] = useState<AuthWallConfig | null>(null)
   const [loading, setLoading] = useState(true)

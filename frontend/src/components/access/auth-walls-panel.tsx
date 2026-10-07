@@ -25,8 +25,10 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  TriangleAlert,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import type { AuthWall, LocalAuthUser, AuthProvider } from '@/types'
@@ -52,6 +54,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -70,6 +73,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+
+const OAUTH_PROVIDER_TYPES = ['google', 'github', 'azure_ad', 'oidc']
+const OPEN_WALL_WARNING = 'Any Google account can pass this wall — add allowed emails or domains'
+
+/** One entry per line (commas also split), blanks dropped. */
+function parseList(text: string): string[] {
+  return text
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function hasEnabledOAuthProvider(wall: AuthWall | null): boolean {
+  return !!wall?.providers?.some((p) => p.enabled && OAUTH_PROVIDER_TYPES.includes(p.provider_type))
+}
+
+function OpenWallWarning({ className }: { className?: string }) {
+  return (
+    <Alert
+      variant="destructive"
+      className={cn(
+        'border-red-500/60 bg-red-500/10 text-red-700 dark:text-red-400 [&>svg]:text-red-600 dark:[&>svg]:text-red-400',
+        className
+      )}
+    >
+      <TriangleAlert className="h-4 w-4" />
+      <AlertDescription className="font-medium text-red-700 dark:text-red-400">{OPEN_WALL_WARNING}</AlertDescription>
+    </Alert>
+  )
+}
 
 interface AuthSession {
   id: string
@@ -104,6 +137,8 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
   const [wallAuthType, setWallAuthType] = useState<'basic' | 'oauth' | 'ldap' | 'multi'>('basic')
   const [wallTimeout, setWallTimeout] = useState(3600)
   const [wallTheme, setWallTheme] = useState('default')
+  const [wallAllowedEmails, setWallAllowedEmails] = useState('')
+  const [wallAllowedDomains, setWallAllowedDomains] = useState('')
 
   // Provider form state
   const [providerName, setProviderName] = useState('')
@@ -163,6 +198,8 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
     setWallAuthType('basic')
     setWallTimeout(3600)
     setWallTheme('default')
+    setWallAllowedEmails('')
+    setWallAllowedDomains('')
     setError('')
     setEditingWall(null)
     setShowWallDialog(true)
@@ -173,6 +210,9 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
     setWallAuthType(wall.auth_type)
     setWallTimeout(wall.session_timeout)
     setWallTheme(wall.theme || 'default')
+    setWallAllowedEmails((wall.allowed_emails || []).join('\n'))
+    setWallAllowedDomains((wall.allowed_email_domains || []).join('\n'))
+    setError('')
     setEditingWall(wall)
     setShowWallDialog(true)
   }
@@ -188,6 +228,8 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
         auth_type: wallAuthType,
         session_timeout: wallTimeout,
         theme: wallTheme,
+        allowed_emails: parseList(wallAllowedEmails),
+        allowed_email_domains: parseList(wallAllowedDomains),
       }
 
       if (editingWall) {
@@ -200,7 +242,12 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
       fetchAuthWalls()
       toastSuccess(editingWall ? 'Auth wall updated' : 'Auth wall created')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save auth wall')
+      const detail = err.response?.data?.detail
+      setError(
+        Array.isArray(detail)
+          ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join('; ')
+          : detail || 'Failed to save auth wall'
+      )
       toastError('Failed to save auth wall')
     } finally {
       setIsSubmitting(false)
@@ -550,6 +597,8 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                   </DropdownMenu>
                 </div>
 
+                {wall.oauth_open_to_anyone && <OpenWallWarning className="mb-3" />}
+
                 <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
                   <div className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
@@ -723,6 +772,36 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                 The theme used for the login portal. Additional themes can be added in the proxy container.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="allowedEmails">Allowed emails</Label>
+              <Textarea
+                id="allowedEmails"
+                value={wallAllowedEmails}
+                onChange={(e) => setWallAllowedEmails(e.target.value)}
+                placeholder={'alice@example.com\nbob@example.org'}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="allowedDomains">Allowed email domains</Label>
+              <Textarea
+                id="allowedDomains"
+                value={wallAllowedDomains}
+                onChange={(e) => setWallAllowedDomains(e.target.value)}
+                placeholder="example.com"
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Who may sign in with Google or GitHub: one per line. A domain admits every verified address
+                at exactly that domain (not its subdomains). Local users are not affected.
+              </p>
+            </div>
+
+            {hasEnabledOAuthProvider(editingWall) &&
+              parseList(wallAllowedEmails).length === 0 &&
+              parseList(wallAllowedDomains).length === 0 && <OpenWallWarning />}
 
             {error && (
               <Alert variant="destructive">

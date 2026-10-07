@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.models.proxy_host import ProxyHost
 from app.models.report_schedule import ReportSchedule
 from app.models.user import User
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_admin_user
 from app.services.host_report_service import build_host_report, PERIODS
 from app.services.report_email import render_report_email
 from app.services import email_service
@@ -116,7 +116,7 @@ async def send_host_report_now(
     host_id: str,
     payload: dict,
     period: str = Query("7d", pattern="^(24h|7d|30d|90d|365d)$"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a host report by email immediately."""
@@ -155,7 +155,7 @@ async def list_schedules(
 @router.post("/schedules", status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     payload: ScheduleCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     if payload.proxy_host_id:
@@ -181,7 +181,7 @@ async def create_schedule(
 async def update_schedule(
     schedule_id: str,
     payload: ScheduleUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     schedule = (await db.execute(
@@ -205,7 +205,7 @@ async def update_schedule(
 @router.delete("/schedules/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_schedule(
     schedule_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     schedule = (await db.execute(
@@ -220,7 +220,7 @@ async def delete_schedule(
 @router.post("/schedules/{schedule_id}/run")
 async def run_schedule_now(
     schedule_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a scheduled report immediately, without waiting for its next slot."""
@@ -242,7 +242,7 @@ async def run_schedule_now(
 
 @router.get("/smtp")
 async def get_smtp(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await email_service.get_smtp_config(db)
@@ -251,7 +251,7 @@ async def get_smtp(
 @router.put("/smtp")
 async def put_smtp(
     payload: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await email_service.save_smtp_config(db, payload)
@@ -260,7 +260,7 @@ async def put_smtp(
 @router.post("/smtp/test")
 async def test_smtp(
     payload: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     to = (payload.get("to") or "").strip()

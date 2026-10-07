@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Loader2, KeyRound, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export default function TotpPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const wallId = searchParams.get("wall");
   const sessionId = searchParams.get("session");
-  const redirectUrl = searchParams.get("redirect") || "/";
+  const redirectUrl = safeRedirect(searchParams.get("redirect"));
 
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +131,7 @@ export default function TotpPage() {
     <div className="space-y-6">
       {/* Back link */}
       <Link
-        href={`/__auth/login?wall=${wallId}&redirect=${encodeURIComponent(redirectUrl)}`}
+        href={`/__auth/login?wall=${encodeURIComponent(wallId ?? "")}&redirect=${encodeURIComponent(redirectUrl)}`}
         className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />

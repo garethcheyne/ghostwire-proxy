@@ -9,15 +9,11 @@ from fastapi.responses import JSONResponse
 
 
 def get_client_identifier(request: Request) -> str:
-    """
-    Get client identifier for rate limiting.
+    """Rate-limit key: the client address as resolved by TrustedProxyMiddleware.
 
-    Uses X-Forwarded-For header if available (for reverse proxy setups),
-    otherwise falls back to direct client IP.
+    Forwarding headers only count from trusted proxies, so rotating a spoofed
+    X-Forwarded-For does not give a client a fresh allowance.
     """
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
     return get_remote_address(request)
 
 
@@ -37,9 +33,11 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
             "detail": "Rate limit exceeded. Please slow down your requests.",
             "retry_after": exc.detail,
         },
+        # Header values must be strings: request.state.view_rate_limit is a
+        # (limit, keys) tuple, and putting it here turned every 429 into a 500.
         headers={
-            "Retry-After": str(exc.detail),
-            "X-RateLimit-Limit": request.state.view_rate_limit if hasattr(request.state, "view_rate_limit") else "unknown",
+            "Retry-After": "60",
+            "X-RateLimit-Limit": str(exc.detail),
         },
     )
 

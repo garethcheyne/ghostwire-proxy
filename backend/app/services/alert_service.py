@@ -108,6 +108,18 @@ async def dispatch_alert(
     return {"sent": sent_count, "errors": error_count}
 
 
+async def _url_allowed(db: AsyncSession, url: str) -> bool:
+    """Re-check a webhook target at send time (its DNS may have changed since it was saved)."""
+    from app.services.outbound_url import OutboundUrlError, internal_targets_allowed, validate_outbound_url
+
+    try:
+        await validate_outbound_url(url, allow_internal=await internal_targets_allowed(db))
+        return True
+    except OutboundUrlError as e:
+        logger.warning(f"Alert webhook target refused: {e}")
+        return False
+
+
 async def _send_to_channel(
     db: AsyncSession,
     channel: AlertChannel,
@@ -116,6 +128,14 @@ async def _send_to_channel(
     data: Optional[dict] = None,
 ) -> bool:
     """Send alert to a specific channel."""
+    if channel.channel_type in ("webhook", "slack"):
+        try:
+            config = json.loads(channel.config) if channel.config else {}
+        except ValueError:
+            return False
+        url = config.get("url" if channel.channel_type == "webhook" else "webhook_url") or ""
+        if not url or not await _url_allowed(db, url):
+            return False
     if channel.channel_type == "push":
         return await _send_push(db, channel, title, message, data)
     elif channel.channel_type == "webhook":

@@ -131,6 +131,9 @@ services:
       - BETTER_AUTH_URL=${BETTER_AUTH_URL:-}
       # The sign-in plugin asks the API to check two-factor codes (internal endpoints).
       - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
+      # Proxies whose X-Forwarded-For / X-Real-IP are believed (IPs, CIDRs or container names).
+      # Empty = loopback and the ghostwire-proxy-nginx container.
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
       - PGHOST=ghostwire-proxy-postgres
       - PGPORT=5432
       - PGUSER=${POSTGRES_USER:-ghostwire}
@@ -193,6 +196,9 @@ services:
       - GHOSTWIRE_API_KEY=${GHOSTWIRE_API_KEY:-}
       - REDIS_URL=redis://ghostwire-proxy-redis:6379
       - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
+      # Proxies whose X-Forwarded-For / X-Real-IP / X-Forwarded-Proto are believed (IPs, CIDRs or
+      # container names). Empty = loopback, ghostwire-proxy-nginx and ghostwire-proxy-ui.
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_EMAIL=${VAPID_EMAIL:-mailto:admin@ghostwire.local}

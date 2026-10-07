@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Github, Loader2, Mail, Lock, User } from "lucide-react";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 interface AuthWallConfig {
   id: string;
@@ -28,7 +29,7 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const wallId = searchParams.get("wall");
-  const redirectUrl = searchParams.get("redirect") || "/";
+  const redirectUrl = safeRedirect(searchParams.get("redirect"));
 
   const [config, setConfig] = useState<AuthWallConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +88,7 @@ export default function LoginPage() {
       if (data.requires_totp) {
         // Redirect to TOTP verification
         router.push(
-          `/__auth/totp?wall=${wallId}&session=${data.partial_session_id}&redirect=${encodeURIComponent(redirectUrl)}`
+          `/__auth/totp?wall=${encodeURIComponent(wallId ?? "")}&session=${data.partial_session_id}&redirect=${encodeURIComponent(redirectUrl)}`
         );
         return;
       }

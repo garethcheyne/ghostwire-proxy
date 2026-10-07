@@ -29,6 +29,13 @@ Alert channels define how security notifications are delivered outside the admin
 
 Provide a URL that accepts HTTP POST requests. The request body contains a JSON payload with event details (type, summary, severity, timestamp, IP, and host).
 
+Webhook and Slack URLs must be `http://` or `https://` and must not point at an internal address
+(loopback, private ranges, link-local including cloud metadata, carrier-grade NAT). The check runs
+when the channel is saved and again before each delivery. To send to a receiver on your own
+network, set the `alerts_allow_internal_webhooks` setting to `true`.
+
+Creating, editing and testing channels needs an admin account.
+
 ### Email Configuration
 
 Configure SMTP settings for email delivery:

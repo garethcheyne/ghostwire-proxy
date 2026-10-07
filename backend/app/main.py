@@ -717,6 +717,25 @@ async def lifespan(app: FastAPI):
     retention_task = asyncio.create_task(data_retention_loop())
     logger.info("Started data retention cleanup task")
 
+    # Traffic page summaries (traffic_rollup_hourly): bring them up to the current
+    # hour every minute. The first run backfills from the oldest log, a day per step.
+    from app.services.traffic_rollup_service import refresh as refresh_traffic_rollup
+
+    async def traffic_rollup_loop():
+        await asyncio.sleep(20)
+        while True:
+            try:
+                result = await refresh_traffic_rollup()
+                if result.get("steps", 0) > 3:
+                    logger.info(f"Traffic rollup caught up: {result}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Traffic rollup failed: {e}")
+            await asyncio.sleep(60)
+
+    traffic_rollup_task = asyncio.create_task(traffic_rollup_loop())
+
     # Scheduled report emails — per-host traffic reports on a daily/weekly/monthly
     # cadence. Checked hourly; each schedule tracks its own last_sent_at, so a
     # restart or a missed tick doesn't skip a report.
@@ -948,7 +967,8 @@ async def lifespan(app: FastAPI):
     report_task.cancel()
     backup_watchdog_task.cancel()
     container_update_task.cancel()
-    for _task in (report_task, backup_watchdog_task, container_update_task):
+    traffic_rollup_task.cancel()
+    for _task in (report_task, backup_watchdog_task, container_update_task, traffic_rollup_task):
         try:
             await _task
         except asyncio.CancelledError:
@@ -1051,6 +1071,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Outermost: decide the real client address and scheme before anything else
+# (rate limits, audit logs, redirects) looks at them. Only trusted proxies'
+# X-Forwarded-* headers count (TRUSTED_PROXIES, see app/core/client_ip.py).
+from app.core.client_ip import TrustedProxyMiddleware  # noqa: E402
+
+app.add_middleware(TrustedProxyMiddleware)
 
 
 @app.get("/health")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text, ForeignKey, Index
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text, ForeignKey, Index, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
@@ -23,6 +23,12 @@ class AuthWall(Base):
 
     # Optional: Default provider for OAuth
     default_provider_id = Column(String(36), nullable=True)
+
+    # Who may pass through an OAuth provider (Google, GitHub): exact email
+    # addresses and email domains. Both empty = any account the provider
+    # vouches for (the UI warns). See services/auth_wall_access.py.
+    allowed_emails = Column(JSON, nullable=True, default=list)
+    allowed_email_domains = Column(JSON, nullable=True, default=list)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
