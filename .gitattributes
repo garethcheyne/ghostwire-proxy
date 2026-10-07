@@ -1,0 +1,8 @@
+# Files that run inside the Linux images keep LF on every checkout, Windows
+# included: a CRLF shebang makes the container fail with
+# "exec /entrypoint.sh: no such file or directory".
+*.sh text eol=lf
+*.lua text eol=lf
+proxy/nginx.conf text eol=lf
+proxy/conf.d/*.conf text eol=lf
+proxy/logrotate/* text eol=lf
