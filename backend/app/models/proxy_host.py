@@ -83,6 +83,23 @@ class ProxyHost(Base):
     health_checked_at = Column(DateTime(timezone=True), nullable=True)
     health_error = Column(Text, nullable=True)
 
+    # Load balancing (only used when the host has upstream servers; with none,
+    # "/" proxies straight to forward_host:forward_port as it always has).
+    # round_robin, least_conn, ip_hash, hash_uri, random_two
+    lb_method = Column(String(20), default="round_robin", nullable=False)
+    # Idle keepalive connections each worker keeps open to the upstream group;
+    # 0 turns upstream keepalive off.
+    upstream_keepalive = Column(Integer, default=32, nullable=False)
+    # How the health loop probes each upstream server: http (GET the path below)
+    # or tcp (connect only).
+    health_check_type = Column(String(10), default="http", nullable=False)
+    health_check_path = Column(String(255), default="/", nullable=False)
+    health_check_timeout = Column(Integer, default=5, nullable=False)  # seconds
+    # When on, a server the health loop finds down is taken out of the group
+    # (rendered `down`) until it answers again. Off by default: nginx's own
+    # passive max_fails/fail_timeout already route around failing servers.
+    lb_auto_down = Column(Boolean, default=False, nullable=False)
+
     # Status
     enabled = Column(Boolean, default=True, nullable=False)
 
@@ -94,7 +111,11 @@ class ProxyHost(Base):
     certificate = relationship("Certificate", back_populates="proxy_hosts")
     access_list = relationship("AccessList", back_populates="proxy_hosts")
     auth_wall = relationship("AuthWall", back_populates="proxy_hosts")
-    upstream_servers = relationship("UpstreamServer", back_populates="proxy_host", cascade="all, delete-orphan")
+    upstream_servers = relationship(
+        "UpstreamServer", back_populates="proxy_host", cascade="all, delete-orphan",
+        # Stable order, so the generated upstream block doesn't shuffle between renders
+        order_by="[UpstreamServer.created_at, UpstreamServer.port]",
+    )
     locations = relationship("ProxyLocation", back_populates="proxy_host", cascade="all, delete-orphan", order_by="desc(ProxyLocation.priority)")
     traffic_logs = relationship("TrafficLog", back_populates="proxy_host", cascade="all, delete-orphan")
 
@@ -110,8 +131,23 @@ class UpstreamServer(Base):
     weight = Column(Integer, default=1, nullable=False)
     max_fails = Column(Integer, default=3, nullable=False)
     fail_timeout = Column(Integer, default=30, nullable=False)  # seconds
+    # Only receives traffic when every primary server is unavailable.
+    backup = Column(Boolean, default=False, nullable=False)
+    # Maintenance: kept in the group (so ip_hash/hash keep their mapping) but
+    # sent no traffic.
+    down = Column(Boolean, default=False, nullable=False)
+    # Cap on simultaneous connections to this server (None = unlimited).
+    max_conns = Column(Integer, nullable=True)
 
     enabled = Column(Boolean, default=True, nullable=False)
+
+    # Health, written by the background health loop
+    last_check_at = Column(DateTime(timezone=True), nullable=True)
+    last_status = Column(String(20), default="unknown", nullable=False)  # unknown, up, down
+    last_error = Column(Text, nullable=True)
+    last_latency_ms = Column(Integer, nullable=True)
+    # Set by the health loop when the host has lb_auto_down on; never by a person.
+    auto_down = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

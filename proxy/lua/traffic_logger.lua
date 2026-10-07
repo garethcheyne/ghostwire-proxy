@@ -60,7 +60,10 @@ local log_data = {
     bytes_received = tonumber(ngx.var.request_length) or 0,
 
     -- Upstream info
+    -- One entry per server tried ("a:1, b:2"), so a load-balanced request
+    -- records which backend answered and whether nginx failed over.
     upstream_addr = ngx.var.upstream_addr,
+    upstream_status = ngx.var.upstream_status,
     upstream_response_time = ngx.var.upstream_response_time,
 
     -- SSL info
