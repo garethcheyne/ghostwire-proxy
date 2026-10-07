@@ -86,6 +86,38 @@ Each server's status, response time and last error show as a dot in the editor's
 
 The host as a whole counts as up while any server outside maintenance answers, so a host-down alert means every backend is unreachable.
 
+### Alerts for a single backend
+
+When one server of a load-balanced host goes down or comes back, you get a **Backend Server Down**
+or **Backend Server Recovered** alert (types `upstream_server_down` and `upstream_server_recovered`).
+Each one names the host and its domains, the server's `host:port`, the balancing method, the last
+error or response time, how many backends are still healthy ("2 of 4 backends healthy") and
+whether the server was taken out of rotation automatically.
+
+- **Only on changes.** Down is sent after the same two failed checks in a row that mark the server
+  down; recovered on its first good check after that. A server still down a minute later sends
+  nothing new.
+- **Not for maintenance.** Servers in maintenance (**down**) or disabled are never announced, and
+  ending maintenance doesn't send a recovery. A server that has never answered since it was added
+  isn't announced either.
+- **Flap protection.** At most one down alert per server every 5 minutes (setting
+  `upstream_alert_flap_minutes`, on **Notifications → Subscriptions**; 0 turns it off). A drop
+  inside that window is held; if the server is still down when the window ends, the alert goes out
+  then. A recovery is only sent for a down alert that was sent, so alerts always come in pairs.
+- **No double alerts when everything goes down.** If every backend fails in the same check, only
+  the existing **Host Down** alert is sent; the per-server down alerts are folded into it, and when
+  the host recovers the per-server recoveries are folded into **Host Recovered**. A server that is
+  still down when the host recovers gets its own down alert then.
+- **Who gets them.** They are on by default and go wherever **Host Down** alerts go: every push
+  device, plus the channels and minimum severity of your Host Down subscription. Change either
+  type on **Notifications → Subscriptions** to give it its own setting (switching it off there
+  also stops its push notifications). Down alerts are severity high, recoveries medium.
+- Alerts only run for hosts with health checks on, like Host Down.
+
+The editor's Backends section lists the host's recent backend events: when each server went down
+or came back, the error or response time, how many backends were healthy, and whether the alert
+was sent, held by flap protection or covered by the host alert. The newest 50 per host are kept.
+
 ### Taking failed servers out automatically
 
 nginx already skips a server that fails real requests (**max fails**). If you also want health checks to remove a server, turn on **Take failed servers out automatically**: after two failed checks in a row the server is rendered `down` (marked **Auto-down** in the editor), and it goes back in as soon as it answers. The last server standing is never taken out. Each change goes through `nginx -t` before nginx reloads.
@@ -111,6 +143,7 @@ All endpoints are under `/api/proxy-hosts` and need an admin, except reads and t
 | `PUT` / `PATCH` | `/{id}/upstreams/{server_id}` | Change one server (only the fields sent) |
 | `DELETE` | `/{id}/upstreams/{server_id}` | Remove one server |
 | `POST` | `/{id}/upstreams/check` | Probe the servers now |
+| `GET` | `/{id}/upstream-events` | Recent backend down/recovered events, newest first (`limit`, 1–50, default 20) |
 | `POST` | `/upstream-preview` | Render the upstream block for unsaved settings; returns `upstream_block`, `location_directives`, `errors`, `warnings` |
 
 Host fields: `lb_method` (`round_robin`, `least_conn`, `ip_hash`, `hash_uri`, `random_two`), `upstream_keepalive` (0–1024), `health_check_type` (`http`, `tcp`), `health_check_path`, `health_check_timeout` (1–30), `lb_auto_down`.

@@ -200,6 +200,24 @@ class UpstreamCheckResult(BaseModel):
     error: Optional[str]
 
 
+class UpstreamServerEventResponse(BaseModel):
+    """A backend going down or coming back, and what happened to its alert."""
+    id: str
+    upstream_server_id: Optional[str] = None
+    server: str
+    event: str  # down, recovered
+    alert: str  # sent, held (flap protection), grouped (host-down alert covered it)
+    error: Optional[str] = None
+    latency_ms: Optional[int] = None
+    healthy: Optional[int] = None
+    total: Optional[int] = None
+    auto_down: bool = False
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================================
 # ProxyLocation Schemas
 # ============================================================================

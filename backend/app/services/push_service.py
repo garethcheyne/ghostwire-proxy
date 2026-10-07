@@ -121,6 +121,7 @@ class PushService:
         actions: Optional[List[dict]] = None,
         require_interaction: bool = False,
         db: Optional[AsyncSession] = None,
+        exclude_user_ids: Optional[set] = None,
     ) -> dict:
         """
         Send notification to all subscribed users.
@@ -133,6 +134,7 @@ class PushService:
             actions: Action buttons (e.g., [{"action": "view", "title": "View Details"}])
             require_interaction: Keep notification visible until user interacts
             db: Optional database session (creates one if not provided)
+            exclude_user_ids: Users whose devices are skipped (they turned the type off)
 
         Returns:
             {"sent": N, "failed": N, "total": N}
@@ -165,6 +167,8 @@ class PushService:
 
         try:
             subscriptions = await self._get_subscriptions(db)
+            if exclude_user_ids:
+                subscriptions = [s for s in subscriptions if s.user_id not in exclude_user_ids]
             sent = 0
             failed = 0
 

@@ -32,6 +32,8 @@ DEFAULT_SETTINGS = {
     "trusted_ips": "[]",
     "abuseipdb_api_key": "",
     "abuseipdb_auto_report_enabled": "false",
+    # Per-backend-server alerts: at most one down alert per server per window
+    "upstream_alert_flap_minutes": "5",
 }
 
 

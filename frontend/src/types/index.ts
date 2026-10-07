@@ -56,6 +56,22 @@ export interface UpstreamCheckResult {
   error: string | null
 }
 
+/** A backend going down or coming back, and what happened to its alert. */
+export interface UpstreamServerEvent {
+  id: string
+  upstream_server_id: string | null
+  server: string
+  event: 'down' | 'recovered'
+  /** sent; held by flap protection; grouped into the whole-host alert */
+  alert: 'sent' | 'held' | 'grouped'
+  error: string | null
+  latency_ms: number | null
+  healthy: number | null
+  total: number | null
+  auto_down: boolean
+  created_at: string | null
+}
+
 export interface ProxyLocation {
   id: string
   proxy_host_id: string

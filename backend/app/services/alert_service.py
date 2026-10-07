@@ -11,6 +11,48 @@ from app.models.alert import PushSubscription, AlertChannel, AlertPreference
 
 logger = logging.getLogger(__name__)
 
+# Alert types that follow another type's routing until a user sets a
+# preference of their own. Per-backend-server alerts go wherever host-down
+# alerts already go, so they arrive without any configuration.
+PREFERENCE_FALLBACK = {
+    "upstream_server_down": "host_down",
+    "upstream_server_recovered": "host_down",
+}
+
+
+async def preferences_for(db: AsyncSession, alert_type: str) -> list[AlertPreference]:
+    """Enabled preferences for an alert type, with the fallback above applied.
+
+    A user with their own preference for the type (enabled or not) is governed
+    by it; everyone else inherits their preference for the fallback type.
+    """
+    rows = (await db.execute(
+        select(AlertPreference).where(AlertPreference.alert_type == alert_type)
+    )).scalars().all()
+    prefs = [p for p in rows if p.enabled]
+    fallback = PREFERENCE_FALLBACK.get(alert_type)
+    if fallback:
+        own = {p.user_id for p in rows}
+        inherited = (await db.execute(
+            select(AlertPreference).where(
+                AlertPreference.alert_type == fallback,
+                AlertPreference.enabled == True,  # noqa: E712
+            )
+        )).scalars().all()
+        prefs.extend(p for p in inherited if p.user_id not in own)
+    return prefs
+
+
+async def users_opted_out(db: AsyncSession, alert_type: str) -> set[str]:
+    """Users who switched this alert type off themselves (for direct push sends)."""
+    rows = (await db.execute(
+        select(AlertPreference.user_id).where(
+            AlertPreference.alert_type == alert_type,
+            AlertPreference.enabled == False,  # noqa: E712
+        )
+    )).scalars().all()
+    return set(rows)
+
 
 async def dispatch_alert(
     db: AsyncSession,
@@ -34,14 +76,8 @@ async def dispatch_alert(
     severity_levels = {"low": 0, "medium": 1, "high": 2, "critical": 3}
     severity_level = severity_levels.get(severity, 1)
 
-    # Get all preferences matching this alert type
-    result = await db.execute(
-        select(AlertPreference).where(
-            AlertPreference.alert_type == alert_type,
-            AlertPreference.enabled == True,
-        )
-    )
-    preferences = result.scalars().all()
+    # Preferences matching this alert type (or the type it falls back to)
+    preferences = await preferences_for(db, alert_type)
 
     sent_count = 0
     error_count = 0

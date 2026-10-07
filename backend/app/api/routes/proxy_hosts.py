@@ -13,12 +13,12 @@ from app.core.database import get_db
 from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
 from app.models.user import User
-from app.models.proxy_host import ProxyHost, UpstreamServer, ProxyLocation
+from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent, ProxyLocation
 from app.models.audit_log import AuditLog
 from app.schemas.proxy_host import (
     ProxyHostCreate, ProxyHostUpdate, ProxyHostResponse,
     UpstreamServerCreate, UpstreamServerUpdate, UpstreamServerUpsert, UpstreamServerResponse,
-    UpstreamPreviewRequest, UpstreamPreviewResponse, UpstreamCheckResult,
+    UpstreamPreviewRequest, UpstreamPreviewResponse, UpstreamCheckResult, UpstreamServerEventResponse,
     ProxyLocationCreate, ProxyLocationUpdate, ProxyLocationResponse,
     LocationReorderRequest
 )
@@ -649,6 +649,26 @@ async def remove_upstream_server(
     ok, msg = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+
+@router.get("/{host_id}/upstream-events", response_model=list[UpstreamServerEventResponse])
+async def list_upstream_events(
+    host_id: str,
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recent backend down/recovered events for this host, newest first."""
+    exists = (await db.execute(select(ProxyHost.id).where(ProxyHost.id == host_id))).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
+    result = await db.execute(
+        select(UpstreamServerEvent)
+        .where(UpstreamServerEvent.proxy_host_id == host_id)
+        .order_by(UpstreamServerEvent.created_at.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
 
 
 @router.post("/{host_id}/upstreams/check", response_model=list[UpstreamCheckResult])

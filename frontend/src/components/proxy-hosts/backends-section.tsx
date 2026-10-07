@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { formatDistanceToNow } from 'date-fns'
 import {
   Activity,
   AlertTriangle,
@@ -53,6 +54,7 @@ import type {
   ProxyHost,
   UpstreamCheckResult,
   UpstreamPreview,
+  UpstreamServerEvent,
 } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -257,6 +259,70 @@ export function groupErrors(value: BackendsValue): string[] {
 // ---------------------------------------------------------------------------
 // Small pieces
 // ---------------------------------------------------------------------------
+
+const ALERT_NOTE: Record<UpstreamServerEvent['alert'], string> = {
+  sent: 'alert sent',
+  held: 'alert held (flapping)',
+  grouped: 'covered by the host alert',
+}
+
+/** The host's recent backend down/recovered events, newest first. */
+function BackendEvents({ hostId }: { hostId: string }) {
+  const [events, setEvents] = useState<UpstreamServerEvent[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get<UpstreamServerEvent[]>(`/api/proxy-hosts/${hostId}/upstream-events`, { params: { limit: 10 } })
+      .then((res) => {
+        if (!cancelled) setEvents(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hostId])
+
+  if (!events) return null
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-medium">Recent backend events</p>
+      {events.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No backend has gone down or come back yet.</p>
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {events.map((e) => (
+            <li key={e.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs sm:flex-row sm:items-center sm:gap-3">
+              <span className="flex items-center gap-2">
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', e.event === 'down' ? 'bg-red-500' : 'bg-green-500')} />
+                <span className="font-mono">{e.server}</span>
+                <span className={e.event === 'down' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                  {e.event === 'down' ? 'down' : 'recovered'}
+                </span>
+              </span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground" title={e.error ?? undefined}>
+                {[
+                  e.event === 'down' ? e.error : e.latency_ms != null ? `${e.latency_ms} ms` : null,
+                  e.total != null ? `${e.healthy ?? 0} of ${e.total} healthy` : null,
+                  e.auto_down ? 'auto-down' : null,
+                  ALERT_NOTE[e.alert],
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {e.created_at && (
+                <span className="shrink-0 text-muted-foreground" title={new Date(e.created_at).toLocaleString()}>
+                  {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function HealthDot({ server }: { server: ServerDraft }) {
   const status = server.id ? server.last_status ?? 'unknown' : 'unknown'
@@ -958,6 +1024,8 @@ export function BackendsSection({
               {value.health_check_type === 'http' ? ` (GET ${value.health_check_path || '/'})` : ' (TCP connect)'}.
             </p>
           )}
+
+          {hostId && saved.length > 0 && <BackendEvents hostId={hostId} />}
 
           {/* Problems */}
           {(errors.length > 0 || (previewable && (preview?.warnings.length ?? 0) > 0)) && (

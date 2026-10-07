@@ -148,11 +148,41 @@ class UpstreamServer(Base):
     last_latency_ms = Column(Integer, nullable=True)
     # Set by the health loop when the host has lb_auto_down on; never by a person.
     auto_down = Column(Boolean, default=False, nullable=False)
+    # What the per-server alerts last announced: up, down, or host (the
+    # whole-host down alert covered it). NULL until the server is first seen up.
+    alert_status = Column(String(10), nullable=True)
+    # When the last per-server down alert went out (flap protection).
+    alert_down_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     proxy_host = relationship("ProxyHost", back_populates="upstream_servers")
+
+
+class UpstreamServerEvent(Base):
+    """A backend server going down or coming back, as the health loop saw it.
+
+    Kept short (the newest few per host) for the Backends history list. The
+    server is stored by address as well as id so the history still reads after
+    a server is removed.
+    """
+    __tablename__ = "upstream_server_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=False, index=True)
+    upstream_server_id = Column(String(36), nullable=True)
+    server = Column(String(300), nullable=False)  # host:port
+    event = Column(String(20), nullable=False)  # down, recovered
+    # What happened to the alert: sent, held (flap protection), grouped (the
+    # whole-host alert covered it)
+    alert = Column(String(20), nullable=False)
+    error = Column(Text, nullable=True)
+    latency_ms = Column(Integer, nullable=True)
+    healthy = Column(Integer, nullable=True)
+    total = Column(Integer, nullable=True)
+    auto_down = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
 
 class ProxyLocation(Base):

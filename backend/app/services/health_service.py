@@ -14,11 +14,20 @@ row, and the host counts as up while any server that isn't in maintenance
 answers. Probes only ever contact the configured host:port of each server,
 never follow redirects and ignore proxy environment variables, so the probe
 path can't be used to reach anything else.
+
+Per-server alerts (upstream_server_down / upstream_server_recovered) go out
+only when a server changes state: down after the same two-failure rule, back
+on its first good probe. Servers in maintenance and disabled servers are never
+announced. Flap protection allows at most one down alert per server per
+window (setting upstream_alert_flap_minutes, default 5); a server still down
+when its window ends is announced then. When a whole host goes down, the
+host-down alert covers its servers: their per-server down alerts are dropped
+for that cycle, and so are their recoveries when the host recovers.
 """
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -26,8 +35,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.proxy_host import ProxyHost, UpstreamServer
-from app.services.load_balancing import format_server_address
+from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent
+from app.services.load_balancing import LB_METHOD_LABELS, format_server_address
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +46,16 @@ CHECK_TIMEOUT = 5.0
 FAILURES_BEFORE_DOWN = 2
 # Upstreams are checked concurrently, but not unboundedly.
 MAX_CONCURRENT_CHECKS = 10
+# Flap protection for per-server alerts: at most one down alert per server in
+# this many minutes. Overridden by the upstream_alert_flap_minutes setting.
+FLAP_SETTING = "upstream_alert_flap_minutes"
+DEFAULT_FLAP_MINUTES = 5
+# Backend up/down history kept per host.
+EVENTS_KEPT_PER_HOST = 50
+
+# server id -> status before this cycle's probe, for the history list. Only
+# read within the cycle that wrote it.
+_previous_status: dict[str, str] = {}
 
 # host_id -> consecutive failure count. Only used to debounce within a run of
 # checks; the authoritative state is the persisted health_status column.
@@ -199,6 +218,7 @@ async def _check_servers(host: ProxyHost, servers: list[UpstreamServer],
     answering = 0
     first_error = None
     for server, (ok, error, latency) in zip(servers, results):
+        _previous_status[server.id] = server.last_status or "unknown"
         _apply_server_result(server, ok, error, latency, now)
         # A server in maintenance doesn't take traffic, so it can't keep the host up.
         if ok and not server.down:
@@ -236,6 +256,192 @@ async def check_upstream_servers_now(db: AsyncSession, host: ProxyHost) -> list[
         })
     await db.commit()
     return out
+
+
+def _aware(value: Optional[datetime]) -> Optional[datetime]:
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def backend_summary(servers: list[UpstreamServer]) -> tuple[int, int, str]:
+    """(healthy, total, "2 of 4 backends healthy") over the servers taking traffic.
+
+    Servers in maintenance aren't counted; they're mentioned separately.
+    """
+    active = [s for s in servers if s.enabled and not s.down]
+    healthy = sum(1 for s in active if s.last_status == "up")
+    text = f"{healthy} of {len(active)} backend{'' if len(active) == 1 else 's'} healthy"
+    maintenance = sum(1 for s in servers if s.enabled and s.down)
+    if maintenance:
+        text += f" ({maintenance} in maintenance)"
+    return healthy, len(active), text
+
+
+def plan_server_alerts(host: ProxyHost, servers: list[UpstreamServer], host_transition: Optional[str],
+                       now: datetime, flap_window: timedelta,
+                       previous: Optional[dict[str, str]] = None) -> list[dict]:
+    """Decide which per-server alerts this cycle sends, and what the history shows.
+
+    Compares each server's (debounced) status with what was last announced in
+    alert_status, so it works from persisted state and a restart never repeats
+    an alert. Updates alert_status / alert_down_at in place and returns one
+    item per history event: {"server", "event", "alert"} where alert is
+    "sent", "held" (flap protection) or "grouped" (the host alert covered it).
+    `previous` maps server id to its status before this cycle's probe.
+    """
+    previous = previous or {}
+    host_down = host_transition == "down" or (host.health_status == "down" and host_transition != "recovered")
+    items = []
+
+    for server in servers:
+        if not server.enabled:
+            continue
+        if server.down:
+            # Maintenance: someone took it out on purpose. Forget what was
+            # announced so ending maintenance doesn't send a stale recovery.
+            server.alert_status = None
+            continue
+        actual = server.last_status or "unknown"
+        announced = server.alert_status
+        observed = previous.get(server.id)
+
+        if actual == "down":
+            if announced is None or announced == "down":
+                continue  # never seen up yet, or already announced
+            if announced == "host" and host_down:
+                continue  # still covered by the host-down alert
+            if host_down:
+                server.alert_status = "host"
+                items.append({"server": server, "event": "down", "alert": "grouped"})
+                continue
+            last = _aware(server.alert_down_at)
+            if last is not None and now - last < flap_window:
+                # Flapping: hold the alert. Logged once, when the drop is seen.
+                if observed == "up":
+                    items.append({"server": server, "event": "down", "alert": "held"})
+                continue
+            server.alert_status = "down"
+            server.alert_down_at = now
+            items.append({"server": server, "event": "down", "alert": "sent"})
+
+        elif actual == "up":
+            if announced is None:
+                server.alert_status = "up"  # first sighting: the baseline, not news
+                continue
+            if announced == "up":
+                if observed == "down":
+                    # Back before its held down alert was ever sent.
+                    items.append({"server": server, "event": "recovered", "alert": "held"})
+                continue
+            if announced == "host" and host_transition == "recovered":
+                server.alert_status = "up"
+                items.append({"server": server, "event": "recovered", "alert": "grouped"})
+                continue
+            server.alert_status = "up"
+            items.append({"server": server, "event": "recovered", "alert": "sent"})
+    return items
+
+
+def server_alert_content(host: ProxyHost, servers: list[UpstreamServer], server: UpstreamServer,
+                         event: str, now: datetime, down_since: Optional[datetime] = None) -> dict:
+    """Title, message and data for one per-server alert."""
+    domains = list(host.domain_names or [])
+    domain = domains[0] if domains else host.id
+    address = format_server_address(server.host, server.port)
+    method = getattr(host, "lb_method", None) or "round_robin"
+    healthy, total, summary = backend_summary(servers)
+    auto_down = bool(getattr(host, "lb_auto_down", False) and server.auto_down)
+    downtime = None
+    if event == "recovered" and down_since is not None:
+        downtime = _format_duration((now - _aware(down_since)).total_seconds())
+
+    if event == "down":
+        title = f"Backend Down - {domain}"
+        message = f"{address} stopped answering health checks"
+        if server.last_error:
+            message += f" ({server.last_error})"
+        message += f". {summary}."
+        if auto_down:
+            message += " Taken out of rotation automatically."
+    else:
+        title = f"Backend Recovered - {domain}"
+        message = f"{address} is answering again"
+        details = []
+        if server.last_latency_ms is not None:
+            details.append(f"{server.last_latency_ms} ms")
+        if downtime:
+            details.append(f"down for {downtime}")
+        if details:
+            message += f" ({', '.join(details)})"
+        message += f". {summary}."
+
+    data = {
+        "host_id": host.id,
+        "domain": domain,
+        "domains": domains,
+        "server_id": server.id,
+        "server": address,
+        "lb_method": method,
+        "lb_method_label": LB_METHOD_LABELS.get(method, method),
+        "error": server.last_error if event == "down" else None,
+        "latency_ms": server.last_latency_ms,
+        "healthy": healthy,
+        "total": total,
+        "backends": summary,
+        "auto_down": auto_down,
+        "downtime": downtime,
+    }
+    return {"title": title, "message": message, "data": data}
+
+
+async def flap_window(db: AsyncSession) -> timedelta:
+    """The per-server flap window from settings (minutes, 0-1440)."""
+    from app.models.setting import Setting
+
+    try:
+        value = (await db.execute(select(Setting.value).where(Setting.key == FLAP_SETTING))).scalar_one_or_none()
+        minutes = int(str(value).strip()) if value not in (None, "") else DEFAULT_FLAP_MINUTES
+    except (TypeError, ValueError):
+        minutes = DEFAULT_FLAP_MINUTES
+    return timedelta(minutes=max(0, min(minutes, 1440)))
+
+
+def _record_events(db: AsyncSession, host: ProxyHost, servers: list[UpstreamServer], items: list[dict],
+                   now: datetime) -> None:
+    healthy, total, _ = backend_summary(servers)
+    for item in items:
+        server = item["server"]
+        db.add(UpstreamServerEvent(
+            proxy_host_id=host.id,
+            upstream_server_id=server.id,
+            server=format_server_address(server.host, server.port),
+            event=item["event"],
+            alert=item["alert"],
+            error=server.last_error if item["event"] == "down" else None,
+            latency_ms=server.last_latency_ms,
+            healthy=healthy,
+            total=total,
+            auto_down=bool(getattr(host, "lb_auto_down", False) and server.auto_down),
+            created_at=now,
+        ))
+
+
+async def _prune_events(db: AsyncSession, host_ids: set[str]) -> None:
+    from sqlalchemy import delete
+
+    for host_id in host_ids:
+        keep = (
+            select(UpstreamServerEvent.id)
+            .where(UpstreamServerEvent.proxy_host_id == host_id)
+            .order_by(UpstreamServerEvent.created_at.desc())
+            .limit(EVENTS_KEPT_PER_HOST)
+        )
+        await db.execute(
+            delete(UpstreamServerEvent)
+            .where(UpstreamServerEvent.proxy_host_id == host_id, UpstreamServerEvent.id.not_in(keep))
+            .execution_options(synchronize_session=False)
+        )
 
 
 async def _check_one(host: ProxyHost, semaphore: asyncio.Semaphore) -> dict:
@@ -283,6 +489,7 @@ async def _check_one(host: ProxyHost, semaphore: asyncio.Semaphore) -> dict:
 
     return {
         "host": host,
+        "servers": servers,
         "transition": transition,
         "upstream": upstream,
         "error": error,
@@ -315,6 +522,38 @@ async def run_health_checks(db: AsyncSession) -> dict:
     for outcome in outcomes:
         if isinstance(outcome, BaseException):
             logger.error(f"Health check raised: {outcome}")
+
+    # Per-server alerts are decided here, with each host's own transition
+    # known, so a whole-host outage is announced once; their state is
+    # committed with everything else.
+    window = await flap_window(db)
+    now = datetime.now(timezone.utc)
+    server_alerts = []
+    touched_hosts = set()
+    for outcome in outcomes:
+        if not isinstance(outcome, dict) or not outcome["servers"]:
+            continue
+        host = outcome["host"]
+        try:
+            down_since = {s.id: s.alert_down_at for s in outcome["servers"]}
+            items = plan_server_alerts(host, outcome["servers"], outcome["transition"], now, window,
+                                       previous=_previous_status)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.error(f"Backend alert planning failed for host {host.id}: {e}")
+            continue
+        if items:
+            _record_events(db, host, outcome["servers"], items, now)
+            touched_hosts.add(host.id)
+        for item in items:
+            if item["alert"] == "sent":
+                content = server_alert_content(host, outcome["servers"], item["server"], item["event"], now,
+                                               down_since=down_since.get(item["server"].id))
+                content["event"] = item["event"]
+                server_alerts.append(content)
+    _previous_status.clear()
+    if touched_hosts:
+        await db.flush()
+        await _prune_events(db, touched_hosts)
 
     await db.commit()
 
@@ -382,4 +621,45 @@ async def run_health_checks(db: AsyncSession) -> dict:
         except Exception as e:
             logger.error(f"Failed to send health notification for {domain}: {e}")
 
-    return {"checked": len(hosts), "down": down, "recovered": recovered}
+    from app.services.alert_service import users_opted_out
+
+    servers_down = servers_recovered = 0
+    for alert in server_alerts:
+        is_down = alert["event"] == "down"
+        alert_type = "upstream_server_down" if is_down else "upstream_server_recovered"
+        data = alert["data"]
+        try:
+            if is_down:
+                servers_down += 1
+                logger.warning(f"Backend down: {data['domain']} -> {data['server']} ({data['error']})")
+            else:
+                servers_recovered += 1
+                logger.info(f"Backend recovered: {data['domain']} -> {data['server']}")
+            # Push reaches every device, as host-down does, except for anyone
+            # who switched this type off; the other channels follow preferences.
+            await push_service.notify_all(
+                title=alert["title"],
+                body=alert["message"],
+                notification_type=alert_type,
+                data=data,
+                actions=[{"action": "view", "title": "View Host"}],
+                require_interaction=is_down,
+                db=db,
+                exclude_user_ids=await users_opted_out(db, alert_type),
+            )
+            await dispatch_alert(
+                db=db,
+                alert_type=alert_type,
+                severity="high" if is_down else "medium",
+                title=alert["title"],
+                message=alert["message"],
+                data=data,
+                skip_push=True,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send backend notification for {data['server']}: {e}")
+
+    return {
+        "checked": len(hosts), "down": down, "recovered": recovered,
+        "servers_down": servers_down, "servers_recovered": servers_recovered,
+    }
