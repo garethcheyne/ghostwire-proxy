@@ -1,5 +1,13 @@
 import type * as React from "react"
 
+/**
+ * The cookie the sidebar writes its collapsed state to (set by components/ui/sidebar). It lives here,
+ * not in app-shell.tsx, so server layouts can import the real string: a value imported from a
+ * "use client" module is only a client reference on the server.
+ *   defaultOpen={(await cookies()).get(SIDEBAR_COOKIE)?.value !== "false"}
+ */
+export const SIDEBAR_COOKIE = "sidebar_state"
+
 /** Any icon component: lucide icons, or your own that take a className. */
 export type NavIcon = React.ComponentType<{ className?: string }>
 

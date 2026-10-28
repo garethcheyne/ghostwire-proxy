@@ -8,10 +8,9 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppHeader } from "./app-header"
 import { AppSidebar } from "./app-sidebar"
 import { MobileTabBar } from "./mobile-tab-bar"
-import type { AppShellProduct, NavItem, NavSource } from "./types"
+import { SIDEBAR_COOKIE, type AppShellProduct, type NavItem, type NavSource } from "./types"
 
-/** The cookie the sidebar writes its collapsed state to (set by components/ui/sidebar). */
-export const SIDEBAR_COOKIE = "sidebar_state"
+export { SIDEBAR_COOKIE }
 
 export interface AppShellProps {
   product: AppShellProduct

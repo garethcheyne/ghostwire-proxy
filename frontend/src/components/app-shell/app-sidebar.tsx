@@ -145,7 +145,7 @@ function ProductLogo({
   const mark = "h-8 w-8 object-contain"
 
   return (
-    <Link href={product.href} className="flex items-center gap-2" onClick={onNavigate}>
+    <Link href={product.href} className="flex min-w-0 items-center gap-2" onClick={onNavigate}>
       <div className="relative h-8 w-8 shrink-0">
         {product.logoLight ? (
           <>
@@ -157,9 +157,10 @@ function ProductLogo({
         )}
       </div>
       {!collapsed && (
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-xl font-bold leading-tight text-brand-gradient">Ghostwire</span>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {/* One line, always: a long product line is cut with an ellipsis rather than wrapping. */}
+          <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">
             {product.line}
           </span>
         </div>
