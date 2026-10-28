@@ -323,12 +323,9 @@ export default function ThreatsPage() {
     return result
   }, [events, evFilterIp, evFilterSeverity, evFilterCategory])
 
-  const filteredActors = useMemo(() => {
-    let result = actors
-    if (actorFilterIp) result = result.filter(a => a.ip_address.includes(actorFilterIp))
-    if (actorFilterStatus.length > 0) result = result.filter(a => actorFilterStatus.includes(a.current_status))
-    return result
-  }, [actors, actorFilterIp, actorFilterStatus])
+  let filteredActors = actors
+  if (actorFilterIp) filteredActors = filteredActors.filter(a => a.ip_address.includes(actorFilterIp))
+  if (actorFilterStatus.length > 0) filteredActors = filteredActors.filter(a => actorFilterStatus.includes(a.current_status))
 
   const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
     setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])

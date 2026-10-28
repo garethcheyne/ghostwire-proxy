@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useEffectEvent } from 'react'
 
 /**
  * Hook that replaces the common `useEffect(() => { fetchData() }, [deps])` pattern.
@@ -9,12 +9,12 @@ import { useEffect, useRef } from 'react'
  *   usePageData(fetchData, [activeTab, period]) // fetch on mount + deps change + refetch on focus
  */
 export function usePageData(fetcher: () => void, deps: any[] = []) {
-  const fetcherRef = useRef(fetcher)
-  fetcherRef.current = fetcher
+  // Always calls the latest fetcher, without making it an effect dependency.
+  const fetchLatest = useEffectEvent(fetcher)
 
   // Fetch on mount and when deps change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetcherRef.current() }, deps)
+  useEffect(() => { fetchLatest() }, deps)
 
   // Refetch when window regains focus after being hidden
   useEffect(() => {
@@ -23,7 +23,7 @@ export function usePageData(fetcher: () => void, deps: any[] = []) {
       if (document.hidden) {
         hiddenAt = Date.now()
       } else if (hiddenAt && Date.now() - hiddenAt > 2000) {
-        fetcherRef.current()
+        fetchLatest()
       }
     }
     document.addEventListener('visibilitychange', onVisibility)

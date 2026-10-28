@@ -41,6 +41,9 @@ export default function CertificatesPage() {
   const isLoading = isPending
   const fetchCertificates = () =>
     queryClient.invalidateQueries({ queryKey: certificateKeys.all })
+  // One clock reading per visit: expiry is counted in whole days, and reading the clock while
+  // rendering would give a different answer on every re-render.
+  const [now] = useState(() => Date.now())
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [createMode, setCreateMode] = useState<'upload' | 'letsencrypt'>('letsencrypt')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -164,7 +167,7 @@ export default function CertificatesPage() {
   const getDaysUntilExpiry = (expiresAt: string | null) => {
     if (!expiresAt) return null
     return Math.floor(
-      (new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      (new Date(expiresAt).getTime() - now) / (1000 * 60 * 60 * 24)
     )
   }
 
