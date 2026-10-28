@@ -20,7 +20,7 @@ import {
   type KnownIp,
 } from '@/lib/queries/known-ips'
 import { useIpActions } from '@/components/ip-actions-provider'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Tag as HeaderIcon } from 'lucide-react'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']

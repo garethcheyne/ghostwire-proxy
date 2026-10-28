@@ -19,7 +19,7 @@ import {
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Sparkles as HeaderIcon } from 'lucide-react'
 
 interface PresetSummary {
@@ -191,7 +191,6 @@ export default function PresetsPage() {
           variant={!filter ? 'default' : 'outline'}
           size="sm"
           onClick={() => setFilter(null)}
-          className={!filter ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
         >
           All
         </Button>
@@ -204,7 +203,6 @@ export default function PresetsPage() {
               variant={filter === cat ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilter(filter === cat ? null : cat)}
-              className={filter === cat ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
             >
               <Icon className={`h-4 w-4 mr-1 ${config.color}`} />
               {config.label}
@@ -257,7 +255,7 @@ export default function PresetsPage() {
                               {preset.severity}
                             </Badge>
                             {preset.tags.includes('recommended') && (
-                              <Badge className="bg-cyan-500/10 text-brand border-cyan-500/20">
+                              <Badge className="bg-brand/10 text-brand border-brand/20">
                                 recommended
                               </Badge>
                             )}
@@ -306,7 +304,6 @@ export default function PresetsPage() {
                               e.stopPropagation()
                               applyPreset(preset.id)
                             }}
-                            className="bg-cyan-600 hover:bg-cyan-700"
                           >
                             {isApplying ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -330,16 +327,16 @@ export default function PresetsPage() {
                           </div>
                         ) : presetDetail ? (
                           <div className="space-y-3">
-                            <p className="text-sm text-slate-300">{presetDetail.description}</p>
+                            <p className="text-sm text-foreground">{presetDetail.description}</p>
 
-                            <div className="text-xs text-slate-500 flex items-center gap-4">
+                            <div className="text-xs text-muted-foreground flex items-center gap-4">
                               <span>Version {presetDetail.version}</span>
                               <span>by {presetDetail.author}</span>
                             </div>
 
                             {/* Rules Preview */}
                             <div className="space-y-2 mt-3">
-                              <h4 className="text-sm font-medium text-slate-300">
+                              <h4 className="text-sm font-medium text-foreground">
                                 {presetDetail.rules ? 'Rules' : 'Thresholds'} that will be created:
                               </h4>
                               {(presetDetail.rules || presetDetail.thresholds || []).map(
@@ -348,11 +345,11 @@ export default function PresetsPage() {
                                     key={idx}
                                     className="flex items-start gap-2 pl-4 py-1.5 border-l-2 border-border"
                                   >
-                                    <Info className="h-3.5 w-3.5 text-slate-500 mt-0.5 shrink-0" />
+                                    <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                                     <div className="text-sm">
-                                      <span className="text-slate-200">{rule.name}</span>
+                                      <span className="text-foreground">{rule.name}</span>
                                       {(rule.description || rule.notes) && (
-                                        <p className="text-slate-500 text-xs mt-0.5">
+                                        <p className="text-muted-foreground text-xs mt-0.5">
                                           {String(rule.description || rule.notes)}
                                         </p>
                                       )}

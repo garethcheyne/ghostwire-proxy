@@ -28,7 +28,8 @@ import {
 } from 'recharts'
 import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
+import { StatCard } from '@/components/stat-card'
 import { FileBarChart as HeaderIcon } from 'lucide-react'
 
 // Leaflet touches `window` on import, so it cannot be server-rendered.
@@ -65,8 +66,8 @@ const SERIES_REQUESTS = '#3b82f6'
 const SERIES_ERRORS = '#ef4444'
 
 const tooltipStyle = {
-  backgroundColor: 'hsl(var(--card))',
-  border: '1px solid hsl(var(--border))',
+  backgroundColor: 'var(--card)',
+  border: '1px solid var(--border)',
   borderRadius: '8px',
   fontSize: '12px',
 }
@@ -112,23 +113,25 @@ function Stat({
   sub?: string
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-2xl font-semibold mt-1 flex items-baseline gap-2">
-        {value}
-        {change !== null && change !== undefined && (
-          <span
-            className={`text-xs font-medium flex items-center gap-0.5 ${
-              change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-            }`}
-          >
-            {change >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {Math.abs(change).toFixed(1)}%
-          </span>
-        )}
-      </p>
-      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-    </div>
+    <StatCard
+      title={label}
+      value={
+        <span className="flex items-baseline gap-2">
+          {value}
+          {change !== null && change !== undefined && (
+            <span
+              className={`text-xs font-medium flex items-center gap-0.5 ${
+                change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {change >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(change).toFixed(1)}%
+            </span>
+          )}
+        </span>
+      }
+      description={sub}
+    />
   )
 }
 
@@ -242,7 +245,7 @@ function TrafficChart({
         <YAxis tick={{ fontSize: 11 }} width={48} />
         <RTooltip
           contentStyle={tooltipStyle}
-          formatter={(v: number, n: string) => [Number(v).toLocaleString(), n]}
+          formatter={(v, n) => [Number(v).toLocaleString(), n]}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Area
@@ -288,7 +291,7 @@ function CategoryBars({
         <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={92} />
         <RTooltip
           contentStyle={tooltipStyle}
-          formatter={(v: number) => [Number(v).toLocaleString(), 'Requests']}
+          formatter={(v) => [Number(v).toLocaleString(), 'Requests']}
         />
         <Bar dataKey="requests" radius={[0, 4, 4, 0]} maxBarSize={18}>
           {data.map((d) => (
@@ -411,15 +414,16 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
       `}</style>
 
       {/* Header */}
-      <div className="space-y-2">
-      <Link
-        href="/dashboard/proxy-hosts"
-        className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to hosts
-      </Link>
         <PageHeader
+          backButton={
+            <Link
+              href="/dashboard/proxy-hosts"
+              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to hosts
+            </Link>
+          }
           icon={HeaderIcon}
           title={report.host?.primary_domain}
           description={
@@ -458,7 +462,6 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
             </div>
           }
         />
-      </div>
 
       {/* Headline */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">

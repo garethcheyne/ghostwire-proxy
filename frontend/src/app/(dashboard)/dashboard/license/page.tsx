@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { FileText as HeaderIcon } from 'lucide-react'
 
 const LICENSE_TEXT = `MIT License

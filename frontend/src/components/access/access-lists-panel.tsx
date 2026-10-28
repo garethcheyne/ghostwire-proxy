@@ -30,7 +30,7 @@ const BLOCKED_OPTIONS: Array<{ value: AccessListBlockedBehavior; label: string; 
   { value: '444', label: 'Drop Connection', desc: 'Silently close the connection' },
 ]
 import { UsedBy, deleteWarning } from '@/components/access/used-by'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Key as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,

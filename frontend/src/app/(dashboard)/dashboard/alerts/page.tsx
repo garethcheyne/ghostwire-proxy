@@ -23,7 +23,7 @@ import api from '@/lib/api'
 import { Textarea } from '@/components/ui/textarea'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Bell as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,

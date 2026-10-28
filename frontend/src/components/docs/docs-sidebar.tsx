@@ -70,7 +70,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
               className={cn(
                 'w-full justify-start text-sm',
                 pathname === '/dashboard/docs'
-                  ? 'bg-cyan-500/10 text-brand border border-cyan-500/30'
+                  ? 'nav-active'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -125,7 +125,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
                             className={cn(
                               'w-full justify-start text-xs h-8 font-normal',
                               isActive
-                                ? 'bg-cyan-500/10 text-brand border border-cyan-500/30'
+                                ? 'nav-active'
                                 : 'text-muted-foreground hover:text-foreground'
                             )}
                           >

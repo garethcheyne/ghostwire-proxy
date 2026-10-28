@@ -5,7 +5,6 @@ import Image from 'next/image'
 import {
   Globe,
   Shield,
-  Github,
   Heart,
   ExternalLink,
   Server,
@@ -18,10 +17,12 @@ import {
   Download,
   Info,
 } from 'lucide-react'
+import { GithubIcon } from '@/components/icons/github-icon'
 import api from '@/lib/api'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 // Dynamic imports for other tabs
 const LicenseContent = dynamic(() => import('../license/page'), { ssr: false })
@@ -79,44 +80,22 @@ export default function AboutPage() {
       />
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        <button
-          data-value="about"
-          onClick={() => setActiveTab('about')}
-          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'about'
-              ? 'bg-background shadow-xs'
-              : 'hover:bg-background/50 text-muted-foreground'
-          }`}
-        >
-          <Info className="h-4 w-4" />
-          About
-        </button>
-        <button
-          data-value="license"
-          onClick={() => setActiveTab('license')}
-          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'license'
-              ? 'bg-background shadow-xs'
-              : 'hover:bg-background/50 text-muted-foreground'
-          }`}
-        >
-          <FileText className="h-4 w-4" />
-          License
-        </button>
-        <button
-          data-value="updates"
-          onClick={() => setActiveTab('updates')}
-          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'updates'
-              ? 'bg-background shadow-xs'
-              : 'hover:bg-background/50 text-muted-foreground'
-          }`}
-        >
-          <Download className="h-4 w-4" />
-          Updates
-        </button>
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          <TabsTrigger value="about">
+            <Info className="h-4 w-4" />
+            About
+          </TabsTrigger>
+          <TabsTrigger value="license">
+            <FileText className="h-4 w-4" />
+            License
+          </TabsTrigger>
+          <TabsTrigger value="updates">
+            <Download className="h-4 w-4" />
+            Updates
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* License Tab */}
       {activeTab === 'license' && (
@@ -235,9 +214,9 @@ export default function AboutPage() {
           href="https://github.com/garethcheyne/ghostwire-proxy"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-cyan-500/50 transition-colors"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors"
         >
-          <Github className="h-5 w-5 text-muted-foreground" />
+          <GithubIcon className="h-5 w-5 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">Source Code</p>
             <p className="text-xs text-muted-foreground">github.com</p>
@@ -247,7 +226,7 @@ export default function AboutPage() {
 
         <button
           onClick={() => setActiveTab('license')}
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-cyan-500/50 transition-colors text-left"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors text-left"
         >
           <FileText className="h-5 w-5 text-muted-foreground" />
           <div>
@@ -260,7 +239,7 @@ export default function AboutPage() {
           href="https://github.com/garethcheyne/ghostwire-proxy/issues"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-cyan-500/50 transition-colors"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors"
         >
           <Heart className="h-5 w-5 text-muted-foreground" />
           <div>

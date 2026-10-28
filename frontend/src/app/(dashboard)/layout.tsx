@@ -1,33 +1,18 @@
 'use client'
 
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sidebar } from '@/components/layout/sidebar'
-import { MobileSidebar } from '@/components/layout/mobile-sidebar'
-import { Header } from '@/components/layout/header'
+import { AppShell } from '@/components/app-shell'
+import { HeaderSearch } from '@/components/layout/header-search'
+import { HeaderActions } from '@/components/layout/header-actions'
+import { UserMenu } from '@/components/layout/user-menu'
 import { UpdateBanner } from '@/components/layout/update-banner'
-import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
+import { navigation, mobileTabs } from '@/components/layout/nav-config'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { IpActionsProvider } from '@/components/ip-actions-provider'
-import { cn } from '@/lib/utils'
+import api from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
 import { clearLegacySession } from '@/lib/session'
-
-interface SidebarContextType {
-  isCollapsed: boolean
-  setIsCollapsed: (value: boolean) => void
-  isMobileOpen: boolean
-  setIsMobileOpen: (value: boolean) => void
-}
-
-export const SidebarContext = createContext<SidebarContextType>({
-  isCollapsed: false,
-  setIsCollapsed: () => {},
-  isMobileOpen: false,
-  setIsMobileOpen: () => {},
-})
-
-export const useSidebar = () => useContext(SidebarContext)
 
 export default function DashboardLayout({
   children,
@@ -35,9 +20,8 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [version, setVersion] = useState<string | null>(null)
 
   useEffect(() => {
     // Check authentication (Better Auth session cookie)
@@ -62,19 +46,20 @@ export default function DashboardLayout({
     }
   }, [router])
 
-  // Close mobile sidebar on route change
+  // The version for the sidebar footer, once signed in (as the sidebar used to fetch it on mount).
   useEffect(() => {
-    setIsMobileOpen(false)
-  }, [])
+    if (isLoading) return
+    api.get('/version').then(res => setVersion(res.data.version)).catch(() => {})
+  }, [isLoading])
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <div className="relative h-12 w-12">
-            <div className="absolute inset-0 animate-ping rounded-full bg-cyan-500/30" />
-            <div className="absolute inset-2 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-            <div className="absolute inset-4 rounded-full bg-cyan-500/50" />
+            <div className="absolute inset-0 animate-ping rounded-full bg-brand/30" />
+            <div className="absolute inset-2 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+            <div className="absolute inset-4 rounded-full bg-brand/50" />
           </div>
           <p className="text-sm text-muted-foreground animate-pulse">Initializing...</p>
         </div>
@@ -83,42 +68,28 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
-      <ConfirmDialogProvider>
+    <ConfirmDialogProvider>
       <IpActionsProvider>
-      {/* h-screen is 100vh, which on a phone is the viewport *with browser
-          chrome hidden* — taller than what you can actually see. Combined with
-          overflow-hidden that pushes the bottom of the shell under the URL bar
-          and makes it unreachable. dvh tracks the visible height instead;
-          h-screen stays as the fallback for browsers without dvh. */}
-      <div className="flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background">
-        {/* Desktop Sidebar - hidden on mobile */}
-        <div className="hidden md:block">
-          <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
-        </div>
-
-        {/* Mobile Sidebar - sheet overlay */}
-        <MobileSidebar open={isMobileOpen} onOpenChange={setIsMobileOpen} />
-
-        {/* Main content area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Header onMobileMenuClick={() => setIsMobileOpen(true)} />
-          <UpdateBanner />
-          <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-muted/30">
-            {children}
-            {/* Clears the fixed bottom tab bar (and the home indicator below
-                it) so the last element on a page is never unreachable. */}
-            <div
-              aria-hidden
-              className="md:hidden h-[calc(64px+env(safe-area-inset-bottom))]"
-            />
-          </main>
-        </div>
-
-        <MobileTabBar />
-      </div>
+        <AppShell
+          product={{
+            name: 'Ghostwire Proxy',
+            line: 'Reverse Proxy Manager',
+            logo: '/logo.png',
+            logoLight: '/logo-black.png',
+            href: '/dashboard',
+          }}
+          nav={navigation}
+          mobileTabs={mobileTabs}
+          version={version}
+          aboutHref="/dashboard/about"
+          headerStart={<HeaderSearch />}
+          headerActions={<HeaderActions />}
+          userMenu={<UserMenu />}
+          banner={<UpdateBanner />}
+        >
+          {children}
+        </AppShell>
       </IpActionsProvider>
-      </ConfirmDialogProvider>
-    </SidebarContext.Provider>
+    </ConfirmDialogProvider>
   )
 }

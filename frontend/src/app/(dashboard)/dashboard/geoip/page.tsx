@@ -23,7 +23,7 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Earth as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface GeoipRule {
   id: string
@@ -372,21 +373,15 @@ export default function GeoIPPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {(['rules', 'lookup'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${
-              activeTab === tab
-                ? 'bg-background shadow-xs'
-                : 'hover:bg-background/50 text-muted-foreground'
-            }`}
-          >
-            {tab === 'lookup' ? 'IP Lookup' : tab}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          {(['rules', 'lookup'] as const).map((tab) => (
+            <TabsTrigger key={tab} value={tab} className="capitalize">
+              {tab === 'lookup' ? 'IP Lookup' : tab}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {activeTab === 'rules' ? (
         <div className="space-y-3">

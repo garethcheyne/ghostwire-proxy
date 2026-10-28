@@ -69,10 +69,10 @@ export function TrafficTab({
               <XAxis type="number" tick={{ fontSize: 12 }} />
               <YAxis dataKey="method" type="category" tick={{ fontSize: 12 }} width={50} />
               <Tooltip
-                formatter={(value: number) => formatNumber(value)}
+                formatter={(value) => formatNumber(Number(value))}
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
               />
@@ -90,10 +90,10 @@ export function TrafficTab({
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip
                 labelFormatter={(h) => `${h}:00 - ${h}:59`}
-                formatter={(value: number) => formatNumber(value)}
+                formatter={(value) => formatNumber(Number(value))}
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
               />

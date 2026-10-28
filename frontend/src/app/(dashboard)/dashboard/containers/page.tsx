@@ -14,7 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import api from '@/lib/api'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
+import { StatCard } from '@/components/stat-card'
 import { Boxes as HeaderIcon } from 'lucide-react'
 
 interface Pending {
@@ -162,7 +163,7 @@ export default function ContainersPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         icon={HeaderIcon}
         title="Container Security"
@@ -313,39 +314,19 @@ export default function ContainersPage() {
 
       {summary && (
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Containers</p>
-            <p className="text-2xl font-semibold mt-1">{summary.total_containers}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Need attention</p>
-            <p
-              className={`text-2xl font-semibold mt-1 ${
-                summary.needs_attention ? 'text-orange-600 dark:text-orange-400' : ''
-              }`}
-            >
-              {summary.needs_attention}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending updates</p>
-            <p className="text-2xl font-semibold mt-1">{summary.pending_updates_total}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Security updates</p>
-            <p
-              className={`text-2xl font-semibold mt-1 ${
-                summary.security_updates_total ? 'text-red-600 dark:text-red-400' : ''
-              }`}
-            >
-              {summary.security_updates_total}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Stale images</p>
-            <p className="text-2xl font-semibold mt-1">{summary.stale_images}</p>
-            <p className="text-xs text-muted-foreground">over 90 days old</p>
-          </div>
+          <StatCard title="Containers" value={summary.total_containers} />
+          <StatCard
+            title="Need attention"
+            value={summary.needs_attention}
+            tone={summary.needs_attention ? 'warning' : 'default'}
+          />
+          <StatCard title="Pending updates" value={summary.pending_updates_total} />
+          <StatCard
+            title="Security updates"
+            value={summary.security_updates_total}
+            tone={summary.security_updates_total ? 'danger' : 'default'}
+          />
+          <StatCard title="Stale images" value={summary.stale_images} description="over 90 days old" />
         </div>
       )}
 

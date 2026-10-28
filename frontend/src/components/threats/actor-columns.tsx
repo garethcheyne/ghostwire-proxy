@@ -1,6 +1,7 @@
 'use client'
 
-import { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
+import type { DataTableFeatures } from '@/components/data-table'
 import { ArrowUpDown, Ban, Unlock, Trash2, ChevronDown, ChevronUp, Search, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -49,7 +50,7 @@ export function createActorColumns(actions: {
   expandedIp: string | null
   firewallAvailable?: boolean
   enableSelection?: boolean
-}): ColumnDef<ThreatActor>[] {
+}): ColumnDef<DataTableFeatures, ThreatActor>[] {
   return [
     // Row selection checkbox (only when enabled)
     ...(actions.enableSelection ? [{
@@ -72,7 +73,7 @@ export function createActorColumns(actions: {
       ),
       enableSorting: false,
       enableHiding: false,
-    } as ColumnDef<ThreatActor>] : []),
+    } as ColumnDef<DataTableFeatures, ThreatActor>] : []),
     {
       accessorKey: 'ip_address',
       header: 'IP Address',

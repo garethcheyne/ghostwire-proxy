@@ -8,7 +8,7 @@ import api from '@/lib/api'
 import { usePageData } from '@/lib/use-page-data'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

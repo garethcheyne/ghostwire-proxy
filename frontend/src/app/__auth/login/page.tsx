@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { Github, Loader2, Mail, Lock, User } from "lucide-react";
+import { Loader2, Mail, Lock, User } from "lucide-react";
+import { GithubIcon } from "@/components/icons/github-icon";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 interface AuthWallConfig {
@@ -132,7 +133,7 @@ export default function LoginPage() {
           </svg>
         );
       case "github":
-        return <Github className="h-5 w-5" />;
+        return <GithubIcon className="h-5 w-5" />;
       default:
         return <Mail className="h-5 w-5" />;
     }
@@ -141,7 +142,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -252,7 +253,7 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            className="w-full h-11 bg-cyan-600 hover:bg-cyan-700"
+            className="w-full h-11"
             disabled={isSubmitting}
           >
             {isSubmitting ? (

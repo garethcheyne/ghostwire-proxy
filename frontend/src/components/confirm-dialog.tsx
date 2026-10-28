@@ -70,7 +70,7 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirm}
-              className={options.variant === 'destructive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+              variant={options.variant === 'destructive' ? 'destructive' : 'default'}
             >
               {options.confirmLabel || 'Continue'}
             </AlertDialogAction>

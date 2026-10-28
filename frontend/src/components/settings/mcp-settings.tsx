@@ -8,7 +8,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Bot, ShieldAlert } from 'lucide-react'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'

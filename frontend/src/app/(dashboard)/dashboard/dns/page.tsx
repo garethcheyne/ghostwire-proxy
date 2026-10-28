@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Cloud as HeaderIcon } from 'lucide-react'
 
 interface DnsProvider {
@@ -436,7 +436,7 @@ export default function DnsPage() {
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell">
                               <span title={record.proxied ? "Proxied" : "DNS Only"}>
-                                <Cloud className={`h-4 w-4 ${record.proxied ? 'text-orange-500' : 'text-gray-400'}`} />
+                                <Cloud className={`h-4 w-4 ${record.proxied ? 'text-orange-500' : 'text-muted-foreground'}`} />
                               </span>
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell">
