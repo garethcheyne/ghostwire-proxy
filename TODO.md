@@ -22,6 +22,22 @@
 
 ---
 
+## Security detection (added 2026-10-28, after the AKG Tech incident)
+
+`www.akgtech.co.nz` (proxied to 192.168.0.109:3458) was exploited through React2Shell (CVE-2025-55182) and stayed compromised from May to October 2026. Every exploit request passed through this proxy, but the WAF couldn't see it: `check_db_rules()` in `proxy/lua/waf.lua` only matches the URI, query string and User-Agent, while the exploit is a POST with a `Next-Action` header and a crafted multipart body. Full report: `Desktop\AKGTech-Security-Incident-Report-2026-10-28.html`.
+
+- [ ] **WAF: inspect headers and bodies.** Add rule targets `header:<name>`, `headers` (all) and `body` (first N KB, configurable, buffered with `ngx.req.read_body()`; skip large uploads and streaming), alongside the current `uri`/`request_data`/`user_agent`. Add a `target` column to `WafRule` rather than inferring it from `category`.
+- [ ] **Preset rule set "Framework RCE"**: React2Shell (POST with a `Next-Action` header whose multipart body contains the known gadget patterns, such as `__proto__`/`constructor` chains and `$@`/`$B` references to `child_process`/`execSync`), plus the Next.js middleware bypass (`x-middleware-subrequest`, CVE-2025-29927). Log by default; block per host. Keep presets updatable from a signed feed, so new rules ship without a release.
+- [ ] **Per-host "uses Server Actions" flag**: when off, any request carrying `Next-Action` is logged as high severity, or blocked.
+- [ ] **Version exposure check**: read each host's Next.js/React version from its served JS (`/_next/static/chunks`, `version:"x.y.z"`) during the health check. Show it on the host page, flag vulnerable versions, and send them to Ghostwire Secure for CVE/KEV matching. The proxy already knows every site, so it's the natural inventory.
+- [ ] **Outbound indicator block list**: share IP and domain indicators with Ghostwire Secure, and block or alert on proxy traffic to and from them.
+- [ ] **Threat events to Ghostwire Secure**: push `ThreatEvent`s and threshold breaches through the API (or a Redis stream) so Secure can correlate across hosts. Include client IP, host, method, path, matched rule and a body excerpt.
+- [ ] **Request log search for incidents**: filter by host + method + date range + header present (for example "POST to www.akgtech.co.nz with Next-Action, 20–21 May"). Keep raw request logs for at least 12 months, with a body excerpt for flagged requests. Needed now to find the AKG Tech attacker's source IP.
+- [ ] **Watch Ghostwire Secure**: health-check `ghostwire.secure.err403.com` and alert when it's down (it was down 7 days, unnoticed).
+- [ ] **Lock down the admin UI**: put `ghostwire.proxy.err403.com` behind an access list or the auth wall by default.
+
+---
+
 ## Medium Priority (enhancements)
 
 - [ ] **ModSecurity / OWASP CRS** — Optional integration alongside existing Lua WAF rules for deeper detection coverage.
