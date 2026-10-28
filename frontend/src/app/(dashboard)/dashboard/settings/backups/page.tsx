@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Modal, ModalBody } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -27,7 +28,7 @@ import {
 import api from '@/lib/api'
 import { signOutAndRedirect } from '@/lib/session'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { DatabaseBackup as HeaderIcon } from 'lucide-react'
 
 interface Backup {
@@ -692,14 +693,15 @@ export default function BackupsPage() {
                 >
                   Cancel
                 </button>
-                <button
+                <Button
+                  variant="destructive"
+                  size="lg"
                   onClick={handleRestore}
                   disabled={isRestoring}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                 >
                   {isRestoring && <Loader2 className="h-4 w-4 animate-spin" />}
                   Restore
-                </button>
+                </Button>
               </div>
             </div>
         </ModalBody>

@@ -113,7 +113,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
           was clipped with no scrollbar — the bottom entries were unreachable. */}
       <SheetContent
         side="left"
-        className="flex w-[280px] max-w-[85vw] flex-col p-0 bg-card/98 border-border backdrop-blur-xl"
+        className="flex w-[280px] max-w-[85vw] flex-col p-0 bg-card border-border"
       >
         <SheetHeader className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2" onClick={() => onOpenChange(false)}>

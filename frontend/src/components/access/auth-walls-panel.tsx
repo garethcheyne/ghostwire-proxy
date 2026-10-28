@@ -14,7 +14,6 @@ import {
   User,
   Server,
   Shield,
-  Github,
   MonitorSmartphone,
   ShieldCheck,
   Clock,
@@ -27,6 +26,7 @@ import {
   RefreshCw,
   TriangleAlert,
 } from 'lucide-react'
+import { GithubIcon } from '@/components/icons/github-icon'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -64,8 +64,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { UsedBy, deleteWarning } from '@/components/access/used-by'
-import { PageHeader } from '@/components/layout/page-header'
-import { Lock as HeaderIcon } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
+import { Key as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -498,7 +498,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
           </svg>
         )
       case 'github':
-        return <Github className="h-4 w-4" />
+        return <GithubIcon className="h-4 w-4" />
       default:
         return <Server className="h-4 w-4" />
     }

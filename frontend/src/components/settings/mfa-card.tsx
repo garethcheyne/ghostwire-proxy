@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
 
 interface MfaStatus {
   enabled: boolean
@@ -428,13 +429,14 @@ export function MfaCard() {
           >
             Cancel
           </button>
-          <button
+          <Button
+            variant="destructive"
+            size="lg"
             onClick={doDisable}
             disabled={busy || !disablePassword || disableCode.trim().length < 6}
-            className="h-9 px-4 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50"
           >
             Disable
-          </button>
+          </Button>
         </ModalFooter>
       </Modal>
 

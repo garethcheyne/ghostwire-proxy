@@ -1,6 +1,7 @@
 'use client'
 
-import { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
+import type { DataTableFeatures } from '@/components/data-table'
 import { ArrowUpDown, Ban, Globe, Trash2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { IpAddress } from '@/components/ip-address'
@@ -48,7 +49,7 @@ export function createEventColumns(actions: {
   onBlock: (ip: string) => void
   onDelete: (id: string) => void
   onInvestigate?: (ip: string) => void
-}): ColumnDef<ThreatEvent>[] {
+}): ColumnDef<DataTableFeatures, ThreatEvent>[] {
   return [
     {
       accessorKey: 'timestamp',
@@ -86,7 +87,7 @@ export function createEventColumns(actions: {
         const host = row.getValue('host') as string | null
         if (!host) return <span className="text-xs text-muted-foreground">—</span>
         return (
-          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-cyan-500/10 text-brand border border-cyan-500/20 max-w-40 truncate">
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-brand/10 text-brand border border-brand/20 max-w-40 truncate">
             <Globe className="h-3 w-3 shrink-0" />
             <span className="truncate">{host}</span>
           </span>
@@ -123,7 +124,7 @@ export function createEventColumns(actions: {
         )
       },
       filterFn: 'equals',
-      sortingFn: (rowA, rowB) => {
+      sortFn: (rowA, rowB) => {
         const order = { critical: 4, high: 3, medium: 2, low: 1 }
         const a = order[rowA.getValue('severity') as keyof typeof order] || 0
         const b = order[rowB.getValue('severity') as keyof typeof order] || 0

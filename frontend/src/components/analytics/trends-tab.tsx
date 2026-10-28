@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { TrendingUp, Users, ShieldAlert, Gauge, Globe } from 'lucide-react'
+import { StatCard } from '@/components/stat-card'
 import {
   AreaChart,
   Area,
@@ -20,8 +21,8 @@ import {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 const TOOLTIP_STYLE = {
-  backgroundColor: 'hsl(var(--card))',
-  border: '1px solid hsl(var(--border))',
+  backgroundColor: 'var(--card)',
+  border: '1px solid var(--border)',
   borderRadius: '8px',
 } as const
 
@@ -109,14 +110,8 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
           { label: 'Peak daily visitors', value: formatNumber(peakVisitors), icon: Users },
           { label: `Threats (${data.days}d)`, value: formatNumber(totalThreats), icon: ShieldAlert },
           { label: 'Avg response', value: avgRt == null ? '—' : `${avgRt}ms`, icon: Gauge },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Icon className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-wider">{label}</span>
-            </div>
-            <p className="text-2xl font-semibold font-mono">{value}</p>
-          </div>
+        ].map(({ label, value, icon }) => (
+          <StatCard key={label} title={label} value={value} icon={icon} />
         ))}
       </div>
 
@@ -129,10 +124,10 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
         </p>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data.totals}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="date" tickFormatter={shortDate} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tickFormatter={shortDate} stroke="var(--muted-foreground)" fontSize={12} />
+            <YAxis yAxisId="left" stroke="var(--muted-foreground)" fontSize={12} />
+            <YAxis yAxisId="right" orientation="right" stroke="var(--muted-foreground)" fontSize={12} />
             <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Legend />
             <Area yAxisId="left" type="monotone" dataKey="requests" name="Requests"
@@ -153,9 +148,9 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
         </p>
         <ResponsiveContainer width="100%" height={320}>
           <LineChart data={perHostSeries.rows}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="date" tickFormatter={shortDate} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tickFormatter={shortDate} stroke="var(--muted-foreground)" fontSize={12} />
+            <YAxis stroke="var(--muted-foreground)" fontSize={12} />
             <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Legend />
             {perHostSeries.hosts.map((h, i) => (
@@ -172,9 +167,9 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
           <h3 className="font-semibold mb-4">Blocked requests and threats</h3>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={data.totals}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" tickFormatter={shortDate} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tickFormatter={shortDate} stroke="var(--muted-foreground)" fontSize={12} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={12} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend />
               <Area type="monotone" dataKey="blocked" name="Blocked" stackId="1"
@@ -190,9 +185,9 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
           <h3 className="font-semibold mb-4">Bandwidth</h3>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={data.totals}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" tickFormatter={shortDate} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <YAxis tickFormatter={(v) => formatBytes(Number(v))} stroke="hsl(var(--muted-foreground))" fontSize={12} width={70} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tickFormatter={shortDate} stroke="var(--muted-foreground)" fontSize={12} />
+              <YAxis tickFormatter={(v) => formatBytes(Number(v))} stroke="var(--muted-foreground)" fontSize={12} width={70} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => formatBytes(Number(v))} />
               <Legend />
               <Area type="monotone" dataKey="bytes_sent" name="Sent" stackId="1"
@@ -213,9 +208,9 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
         </p>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={data.totals}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="date" tickFormatter={shortDate} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} unit="ms" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tickFormatter={shortDate} stroke="var(--muted-foreground)" fontSize={12} />
+            <YAxis stroke="var(--muted-foreground)" fontSize={12} unit="ms" />
             <Tooltip contentStyle={TOOLTIP_STYLE} />
             <Line type="monotone" dataKey="avg_response_time" name="Avg response"
                   stroke={COLORS[4]} dot={false} strokeWidth={2} connectNulls />
@@ -232,9 +227,9 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={data.top_countries}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="country" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="country" stroke="var(--muted-foreground)" fontSize={12} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={12} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend />
               <Bar dataKey="requests" name="Requests" fill={COLORS[0]} radius={[4, 4, 0, 0]} />

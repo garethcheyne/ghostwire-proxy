@@ -72,9 +72,9 @@ export default function DashboardLayout({
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <div className="relative h-12 w-12">
-            <div className="absolute inset-0 animate-ping rounded-full bg-cyan-500/30" />
-            <div className="absolute inset-2 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-            <div className="absolute inset-4 rounded-full bg-cyan-500/50" />
+            <div className="absolute inset-0 animate-ping rounded-full bg-brand/30" />
+            <div className="absolute inset-2 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+            <div className="absolute inset-4 rounded-full bg-brand/50" />
           </div>
           <p className="text-sm text-muted-foreground animate-pulse">Initializing...</p>
         </div>

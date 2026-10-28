@@ -27,8 +27,10 @@ import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress, CountryBadge } from '@/components/ip-address'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
+import { StatCard } from '@/components/stat-card'
 import { Bug as HeaderIcon } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface HoneypotTrap {
   id: string
@@ -377,21 +379,15 @@ export default function HoneypotPage() {
       />
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {(['overview', 'traps', 'hits', 'intel'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === tab
-                ? 'bg-background text-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab === 'overview' ? 'Overview' : tab === 'traps' ? 'Traps' : tab === 'hits' ? 'Hit Log' : 'IP Intel'}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          {(['overview', 'traps', 'hits', 'intel'] as const).map(tab => (
+            <TabsTrigger key={tab} value={tab}>
+              {tab === 'overview' ? 'Overview' : tab === 'traps' ? 'Traps' : tab === 'hits' ? 'Hit Log' : 'IP Intel'}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {isLoading && activeTab !== 'intel' ? (
         <div className="flex items-center justify-center py-20">
@@ -404,22 +400,13 @@ export default function HoneypotPage() {
             <div className="space-y-6">
               {/* Stats Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-card border rounded-lg p-4">
-                  <div className="text-sm text-muted-foreground">Active Traps</div>
-                  <div className="text-2xl font-bold">{stats.active_traps} <span className="text-sm font-normal text-muted-foreground">/ {stats.total_traps}</span></div>
-                </div>
-                <div className="bg-card border rounded-lg p-4">
-                  <div className="text-sm text-muted-foreground">Total Hits</div>
-                  <div className="text-2xl font-bold text-amber-500">{stats.total_hits}</div>
-                </div>
-                <div className="bg-card border rounded-lg p-4">
-                  <div className="text-sm text-muted-foreground">Hits Today</div>
-                  <div className="text-2xl font-bold text-orange-500">{stats.hits_today}</div>
-                </div>
-                <div className="bg-card border rounded-lg p-4">
-                  <div className="text-sm text-muted-foreground">Unique IPs Caught</div>
-                  <div className="text-2xl font-bold text-red-500">{stats.unique_ips}</div>
-                </div>
+                <StatCard
+                  title="Active Traps"
+                  value={<>{stats.active_traps} <span className="text-sm font-normal text-muted-foreground">/ {stats.total_traps}</span></>}
+                />
+                <StatCard title="Total Hits" value={stats.total_hits} tone="warning" />
+                <StatCard title="Hits Today" value={stats.hits_today} tone="warning" />
+                <StatCard title="Unique IPs Caught" value={stats.unique_ips} tone="danger" />
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">

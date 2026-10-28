@@ -50,8 +50,8 @@ export default function LogoutPage() {
       <div className="text-center space-y-4">
         {status === "loading" && (
           <>
-            <div className="mx-auto w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 text-cyan-500 animate-spin" />
+            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">
               Signing out...

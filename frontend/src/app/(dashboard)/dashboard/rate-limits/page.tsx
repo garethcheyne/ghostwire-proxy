@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Gauge as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,

@@ -31,8 +31,10 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { HoneypotTabs } from '@/components/threats/honeypot-tabs'
 import { Bug } from 'lucide-react'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
+import { StatCard } from '@/components/stat-card'
 import { AlertTriangle as HeaderIcon } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface ThreatStats {
   total_events: number
@@ -371,33 +373,26 @@ export default function ThreatsPage() {
       />
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {[
-          { key: 'overview', label: 'Overview', icon: Shield },
-          { key: 'events', label: 'Events', icon: AlertTriangle },
-          { key: 'actors', label: 'Actors', icon: Eye },
-          { key: 'honeypot', label: 'Honeypot', icon: Bug },
-          { key: 'traps', label: 'Traps', icon: Crosshair },
-          { key: 'hits', label: 'Hits', icon: Flame },
-        ].map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.key}
-              data-value={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-background shadow-xs'
-                  : 'hover:bg-background/50 text-muted-foreground'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          {[
+            { key: 'overview', label: 'Overview', icon: Shield },
+            { key: 'events', label: 'Events', icon: AlertTriangle },
+            { key: 'actors', label: 'Actors', icon: Eye },
+            { key: 'honeypot', label: 'Honeypot', icon: Bug },
+            { key: 'traps', label: 'Traps', icon: Crosshair },
+            { key: 'hits', label: 'Hits', icon: Flame },
+          ].map((tab) => {
+            const Icon = tab.icon
+            return (
+              <TabsTrigger key={tab.key} value={tab.key}>
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
+      </Tabs>
 
       {isLoading ? (
         <div className="flex h-96 items-center justify-center">
@@ -407,34 +402,10 @@ export default function ThreatsPage() {
         <div className="space-y-6">
           {/* Stats Cards */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between pb-2">
-                <p className="text-sm font-medium text-muted-foreground">Total Events</p>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-2xl font-bold">{stats.total_events.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between pb-2">
-                <p className="text-sm font-medium text-muted-foreground">Today</p>
-                <Shield className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-2xl font-bold">{stats.events_today.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between pb-2">
-                <p className="text-sm font-medium text-muted-foreground">Threat Actors</p>
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-2xl font-bold">{stats.total_actors}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between pb-2">
-                <p className="text-sm font-medium text-muted-foreground">Blocked IPs</p>
-                <ShieldBan className="h-4 w-4 text-red-500" />
-              </div>
-              <p className="text-2xl font-bold text-red-500">{stats.blocked_actors}</p>
-            </div>
+            <StatCard title="Total Events" value={stats.total_events.toLocaleString()} icon={AlertTriangle} />
+            <StatCard title="Today" value={stats.events_today.toLocaleString()} icon={Shield} />
+            <StatCard title="Threat Actors" value={stats.total_actors} icon={Eye} />
+            <StatCard title="Blocked IPs" value={stats.blocked_actors} icon={ShieldBan} tone="danger" />
           </div>
 
           {/* Severity Breakdown + Top Categories */}
@@ -626,7 +597,7 @@ export default function ThreatsPage() {
                               {formatDate(event.timestamp)}
                             </span>
                             {event.host && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 text-brand border border-cyan-500/20 shrink-0">
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand/10 text-brand border border-brand/20 shrink-0">
                                 <Globe className="h-3 w-3" />
                                 {event.host}
                               </span>
@@ -717,7 +688,7 @@ export default function ThreatsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 text-xs border-purple-500/30 text-brand-2 hover:bg-purple-500/10 ml-auto"
+                  className="h-9 text-xs border-brand-2/30 text-brand-2 hover:bg-brand-2/10 ml-auto"
                   onClick={handleBulkFirewallBan}
                 >
                   <Flame className="h-3.5 w-3.5 mr-1" />

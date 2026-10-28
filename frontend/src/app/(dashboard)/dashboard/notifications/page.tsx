@@ -24,7 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { useConfirm } from '@/components/confirm-dialog'
 import PushSubscriptionManager from '@/components/notifications/push-subscription'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { BellRing as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -33,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface AlertPreference {
   id: string
@@ -392,25 +393,19 @@ export default function NotificationsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {([
-          { key: 'subscriptions', label: 'Subscriptions' },
-          { key: 'channels', label: 'Channels' },
-          { key: 'devices', label: 'Push Devices' },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-background shadow-xs'
-                : 'hover:bg-background/50 text-muted-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          {([
+            { key: 'subscriptions', label: 'Subscriptions' },
+            { key: 'channels', label: 'Channels' },
+            { key: 'devices', label: 'Push Devices' },
+          ] as const).map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* === SUBSCRIPTIONS TAB === */}
       {activeTab === 'subscriptions' && (

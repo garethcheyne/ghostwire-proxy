@@ -23,8 +23,9 @@ import {
   ChevronUp,
 } from 'lucide-react'
 import api from '@/lib/api'
+import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/components/confirm-dialog'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Download as HeaderIcon } from 'lucide-react'
 
 interface AppVersion {
@@ -364,9 +365,9 @@ export default function UpdatesPage() {
 
       {/* Active Update Progress */}
       {isUpdateInProgress && activeUpdate && (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-6">
+        <div className="rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
             <div>
               <h2 className="font-semibold">
                 {activeUpdate.update_type === 'app' ? 'Application Update' : 'Base Image Update'} in Progress
@@ -379,7 +380,7 @@ export default function UpdatesPage() {
 
           <div className="w-full bg-muted rounded-full h-3">
             <div
-              className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+              className="bg-primary h-3 rounded-full transition-all duration-500"
               style={{ width: `${activeUpdate.progress_percent}%` }}
             />
           </div>
@@ -513,13 +514,13 @@ export default function UpdatesPage() {
           </div>
 
           {appInfo?.update_available && (
-            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-              <p className="text-sm font-medium text-green-700">Update Available</p>
-              <p className="text-xl font-semibold text-green-800">
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm font-medium text-green-600 dark:text-green-400">Update Available</p>
+              <p className="text-xl font-semibold">
                 {appInfo.latest_version}
               </p>
               {appInfo.releases[0]?.published_at && (
-                <p className="text-sm text-green-700/80">
+                <p className="text-sm text-muted-foreground">
                   Released {formatRelativeDate(appInfo.releases[0].published_at)}
                 </p>
               )}
@@ -527,9 +528,9 @@ export default function UpdatesPage() {
           )}
 
           {!appInfo?.update_available && !appInfo?.error && (
-            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-              <p className="text-sm font-medium text-green-700">Up to date</p>
-              <p className="text-xl font-semibold text-green-800">{appInfo?.current_version}</p>
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm font-medium text-green-600 dark:text-green-400">Up to date</p>
+              <p className="text-xl font-semibold">{appInfo?.current_version}</p>
             </div>
           )}
         </div>
@@ -567,14 +568,13 @@ export default function UpdatesPage() {
                   </a>
                 )}
                 {appInfo.update_available && appInfo.latest_version && (
-                  <button
+                  <Button
                     onClick={() => handleStartAppUpdate(appInfo.latest_version!)}
                     disabled={isUpdating || isUpdateInProgress}
-                    className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
                   >
                     <Download className="h-4 w-4" />
                     Update Now
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -596,7 +596,7 @@ export default function UpdatesPage() {
                   </button>
                 </div>
                 {selectedRelease?.version === appInfo.releases[0].version && (
-                  <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900/5 p-4 text-sm text-slate-900 dark:bg-slate-900/10 dark:text-slate-100">
+                  <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted p-4 text-sm text-foreground">
                     {appInfo.releases[0].changelog}
                   </pre>
                 )}
@@ -714,14 +714,14 @@ export default function UpdatesPage() {
                   Check failed
                 </span>
               ) : image.update_available ? (
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => handleStartBaseImageUpdate(image.container)}
                   disabled={isUpdating || isUpdateInProgress}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 disabled:opacity-50"
                 >
                   <Download className="h-4 w-4" />
                   Update
-                </button>
+                </Button>
               ) : (
                 <span className="text-sm text-green-500 flex items-center gap-1">
                   <CheckCircle className="h-4 w-4" />

@@ -140,8 +140,8 @@ export default function TotpPage() {
 
       {/* Header */}
       <div className="text-center space-y-2">
-        <div className="mx-auto w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center mb-4">
-          <ShieldCheck className="h-6 w-6 text-cyan-500" />
+        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <ShieldCheck className="h-6 w-6 text-primary" />
         </div>
         <h2 className="text-2xl font-bold tracking-tight">
           Two-Factor Authentication
@@ -185,7 +185,7 @@ export default function TotpPage() {
 
             <Button
               type="button"
-              className="w-full h-11 bg-cyan-600 hover:bg-cyan-700"
+              className="w-full h-11"
               disabled={isSubmitting || code.join("").length !== 6}
               onClick={() => handleSubmit()}
             >
@@ -240,7 +240,7 @@ export default function TotpPage() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-cyan-600 hover:bg-cyan-700"
+              className="w-full h-11"
               disabled={isSubmitting || backupCode.length !== 8}
             >
               {isSubmitting ? (

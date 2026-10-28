@@ -85,10 +85,10 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
               <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v}ms`} />
               <Tooltip
-                formatter={(value: number) => [`${value.toFixed(2)}ms`, 'Avg Response Time']}
+                formatter={(value) => [`${Number(value).toFixed(2)}ms`, 'Avg Response Time']}
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
               />
@@ -117,10 +117,10 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
             <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatBytes(v)} />
             <Tooltip
-              formatter={(value: number, name: string) => [formatBytes(value), name]}
+              formatter={(value, name) => [formatBytes(Number(value)), name]}
               contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
               }}
             />
@@ -175,7 +175,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
           {/* Errors by Host */}
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 mb-4">
-              <ShieldX className="h-5 w-5 text-red-500" />
+              <ShieldX className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Errors by Host</h3>
             </div>
             {data.errors_by_host.length === 0 ? (
@@ -224,7 +224,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
           {/* Errors by Status Code */}
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Error Status Codes</h3>
             </div>
             {data.errors_by_status.length === 0 ? (

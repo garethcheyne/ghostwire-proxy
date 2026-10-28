@@ -49,7 +49,7 @@ export function NodesPanel({ filters, onNode }: { filters: TrafficFilters; onNod
               <XAxis dataKey="t" tickFormatter={fmtTick} tick={{ fontSize: 11 }} minTickGap={24} />
               <YAxis tickFormatter={(v) => formatCount(v)} tick={{ fontSize: 11 }} width={44} />
               <Tooltip
-                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
                 labelFormatter={(iso) => new Date(String(iso)).toLocaleString()}
               />
               {data.series_nodes.map((n, i) => (

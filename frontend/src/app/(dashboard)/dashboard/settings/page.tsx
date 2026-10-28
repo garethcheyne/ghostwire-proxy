@@ -28,7 +28,7 @@ import api from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
 import { MfaCard } from '@/components/settings/mfa-card'
 import { SmtpCard } from '@/components/settings/smtp-card'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Settings as HeaderIcon } from 'lucide-react'
 
 interface SystemSettings {

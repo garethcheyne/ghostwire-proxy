@@ -254,7 +254,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           variant="ghost"
           size="icon"
           onClick={onToggle}
-          className="absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border border-border bg-muted shadow-md hover:bg-accent hover:border-cyan-500/50"
+          className="absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border border-border bg-muted shadow-md hover:bg-accent hover:border-brand/50"
         >
           {isCollapsed ? (
             <ChevronRight className="h-4 w-4" />

@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { Key, Lock } from 'lucide-react'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Key as HeaderIcon } from 'lucide-react'
 import { AuthWallsPanel } from '@/components/access/auth-walls-panel'
 import { AccessListsPanel } from '@/components/access/access-lists-panel'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type TabType = 'auth-walls' | 'ip-lists'
 
@@ -22,34 +23,20 @@ export default function AccessControlPage() {
       />
 
       {/* Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        <button
-          data-value="auth-walls"
-          onClick={() => setActiveTab('auth-walls')}
-          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'auth-walls'
-              ? 'bg-background shadow-xs'
-              : 'hover:bg-background/50 text-muted-foreground'
-          }`}
-        >
-          <Key className="h-4 w-4" />
-          <span className="hidden sm:inline">Auth Walls</span>
-          <span className="sm:hidden">Auth</span>
-        </button>
-        <button
-          data-value="ip-lists"
-          onClick={() => setActiveTab('ip-lists')}
-          className={`flex items-center justify-center whitespace-nowrap gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'ip-lists'
-              ? 'bg-background shadow-xs'
-              : 'hover:bg-background/50 text-muted-foreground'
-          }`}
-        >
-          <Lock className="h-4 w-4" />
-          <span className="hidden sm:inline">IP Access Lists</span>
-          <span className="sm:hidden">IP Lists</span>
-        </button>
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          <TabsTrigger value="auth-walls">
+            <Key className="h-4 w-4" />
+            <span className="hidden sm:inline">Auth Walls</span>
+            <span className="sm:hidden">Auth</span>
+          </TabsTrigger>
+          <TabsTrigger value="ip-lists">
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">IP Access Lists</span>
+            <span className="sm:hidden">IP Lists</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Tab Content */}
       {activeTab === 'auth-walls' && <AuthWallsPanel embedded />}

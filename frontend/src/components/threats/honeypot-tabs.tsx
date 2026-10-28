@@ -20,6 +20,7 @@ import {
   Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { StatCard } from '@/components/stat-card'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
@@ -222,22 +223,13 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
       <div className="space-y-4 sm:space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-card border rounded-lg p-3 sm:p-4">
-            <div className="text-xs sm:text-sm text-muted-foreground">Active Traps</div>
-            <div className="text-xl sm:text-2xl font-bold">{stats.active_traps} <span className="text-sm font-normal text-muted-foreground">/ {stats.total_traps}</span></div>
-          </div>
-          <div className="bg-card border rounded-lg p-3 sm:p-4">
-            <div className="text-xs sm:text-sm text-muted-foreground">Total Hits</div>
-            <div className="text-xl sm:text-2xl font-bold text-amber-500">{stats.total_hits}</div>
-          </div>
-          <div className="bg-card border rounded-lg p-3 sm:p-4">
-            <div className="text-xs sm:text-sm text-muted-foreground">Hits Today</div>
-            <div className="text-xl sm:text-2xl font-bold text-orange-500">{stats.hits_today}</div>
-          </div>
-          <div className="bg-card border rounded-lg p-3 sm:p-4">
-            <div className="text-xs sm:text-sm text-muted-foreground">Unique IPs</div>
-            <div className="text-xl sm:text-2xl font-bold text-red-500">{stats.unique_ips}</div>
-          </div>
+          <StatCard
+            title="Active Traps"
+            value={<>{stats.active_traps} <span className="text-sm font-normal text-muted-foreground">/ {stats.total_traps}</span></>}
+          />
+          <StatCard title="Total Hits" value={stats.total_hits} tone="warning" />
+          <StatCard title="Hits Today" value={stats.hits_today} tone="warning" />
+          <StatCard title="Unique IPs" value={stats.unique_ips} tone="danger" />
         </div>
 
         <div className="grid md:grid-cols-2 gap-4 sm:gap-6">

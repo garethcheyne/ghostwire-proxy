@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StatCard } from '@/components/stat-card'
 import { cn } from '@/lib/utils'
 import type { TopItem, TrafficOverview } from '@/lib/queries/traffic'
 import { SERIES, formatBytes, formatCount, formatMs, formatPct, statusTone } from './format'
@@ -38,14 +39,8 @@ export function Panel({
   )
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 text-xl font-bold sm:text-2xl', tone)}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
-    </div>
-  )
+function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'warning' | 'danger' }) {
+  return <StatCard title={label} value={value} description={sub} tone={tone} />
 }
 
 export function SummaryCards({ data, loading }: { data?: TrafficOverview; loading: boolean }) {
@@ -61,9 +56,9 @@ export function SummaryCards({ data, loading }: { data?: TrafficOverview; loadin
   const t = data.totals
   const errTone =
     t.server_error_rate >= 5
-      ? 'text-red-600 dark:text-red-400'
+      ? 'danger'
       : t.error_rate >= 10
-        ? 'text-amber-700 dark:text-amber-400'
+        ? 'warning'
         : undefined
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -104,8 +99,8 @@ function tickFormatter(strideSeconds: number) {
 
 const tooltipStyle = {
   contentStyle: {
-    backgroundColor: 'hsl(var(--card))',
-    border: '1px solid hsl(var(--border))',
+    backgroundColor: 'var(--card)',
+    border: '1px solid var(--border)',
     borderRadius: 8,
     fontSize: 12,
   },

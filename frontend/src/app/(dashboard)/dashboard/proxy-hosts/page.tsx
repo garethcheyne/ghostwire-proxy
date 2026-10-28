@@ -57,7 +57,7 @@ import {
 } from '@/components/proxy-hosts/backends-section'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Globe as HeaderIcon } from 'lucide-react'
 
 type TabType = 'details' | 'locations' | 'advanced' | 'config'

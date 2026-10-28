@@ -6,9 +6,8 @@ import {
   Globe,
   Clock,
   AlertTriangle,
-  ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react'
+import { StatCard } from '@/components/stat-card'
 import {
   AreaChart,
   Area,
@@ -71,73 +70,28 @@ export function OverviewTab({ data, formatNumber, formatBytes, formatResponseTim
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Total Requests</p>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatNumber(data.total_requests)}</p>
-          {data.requests_change_percent !== null && (
-            <div className={`flex items-center gap-1 text-xs mt-1 ${
-              data.requests_change_percent >= 0 ? 'text-green-500' : 'text-red-500'
-            }`}>
-              {data.requests_change_percent >= 0 ? (
-                <ArrowUpRight className="h-3 w-3" />
-              ) : (
-                <ArrowDownRight className="h-3 w-3" />
-              )}
-              {Math.abs(data.requests_change_percent)}% vs previous period
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Unique Visitors</p>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatNumber(data.total_unique_visitors)}</p>
-          {data.visitors_change_percent !== null && (
-            <div className={`flex items-center gap-1 text-xs mt-1 ${
-              data.visitors_change_percent >= 0 ? 'text-green-500' : 'text-red-500'
-            }`}>
-              {data.visitors_change_percent >= 0 ? (
-                <ArrowUpRight className="h-3 w-3" />
-              ) : (
-                <ArrowDownRight className="h-3 w-3" />
-              )}
-              {Math.abs(data.visitors_change_percent)}% vs previous period
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Data Transferred</p>
-            <Globe className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatBytes(data.total_bytes_transferred)}</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Avg Response Time</p>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatResponseTime(data.avg_response_time)}</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Error Rate</p>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className={`text-2xl font-bold mt-1 ${
-            data.error_rate > 5 ? 'text-red-500' : data.error_rate > 1 ? 'text-yellow-500' : 'text-green-500'
-          }`}>
-            {data.error_rate.toFixed(2)}%
-          </p>
-        </div>
+        <StatCard
+          title="Total Requests"
+          value={formatNumber(data.total_requests)}
+          icon={Activity}
+          trend={data.requests_change_percent !== null ? (data.requests_change_percent >= 0 ? 'up' : 'down') : null}
+          trendValue={data.requests_change_percent !== null ? `${Math.abs(data.requests_change_percent)}% vs previous period` : undefined}
+        />
+        <StatCard
+          title="Unique Visitors"
+          value={formatNumber(data.total_unique_visitors)}
+          icon={Users}
+          trend={data.visitors_change_percent !== null ? (data.visitors_change_percent >= 0 ? 'up' : 'down') : null}
+          trendValue={data.visitors_change_percent !== null ? `${Math.abs(data.visitors_change_percent)}% vs previous period` : undefined}
+        />
+        <StatCard title="Data Transferred" value={formatBytes(data.total_bytes_transferred)} icon={Globe} />
+        <StatCard title="Avg Response Time" value={formatResponseTime(data.avg_response_time)} icon={Clock} />
+        <StatCard
+          title="Error Rate"
+          value={`${data.error_rate.toFixed(2)}%`}
+          icon={AlertTriangle}
+          tone={data.error_rate > 5 ? 'danger' : data.error_rate > 1 ? 'warning' : 'success'}
+        />
       </div>
 
       {/* Traffic Over Time */}
@@ -160,8 +114,8 @@ export function OverviewTab({ data, formatNumber, formatBytes, formatResponseTim
             <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
               }}
             />
@@ -193,10 +147,10 @@ export function OverviewTab({ data, formatNumber, formatBytes, formatResponseTim
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => formatNumber(value)}
+                  formatter={(value) => formatNumber(Number(value))}
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '8px',
                   }}
                 />

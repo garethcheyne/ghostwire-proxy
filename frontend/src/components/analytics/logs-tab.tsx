@@ -23,6 +23,7 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { Button } from '@/components/ui/button'
+import { StatCard } from '@/components/stat-card'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import type { TrafficLog, ProxyHost } from '@/types'
 
@@ -135,24 +136,13 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
-            <p className="text-xs sm:text-sm text-muted-foreground">Today</p>
-            <p className="text-lg sm:text-2xl font-bold">{stats.requests_today.toLocaleString()}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
-            <p className="text-xs sm:text-sm text-muted-foreground">This Week</p>
-            <p className="text-lg sm:text-2xl font-bold">{stats.requests_this_week.toLocaleString()}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
-            <p className="text-xs sm:text-sm text-muted-foreground">Data Transferred</p>
-            <p className="text-lg sm:text-2xl font-bold">
-              {formatDataBytes(stats.total_bytes_sent + stats.total_bytes_received)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
-            <p className="text-xs sm:text-sm text-muted-foreground">Avg Response</p>
-            <p className="text-lg sm:text-2xl font-bold">{formatTime(stats.avg_response_time)}</p>
-          </div>
+          <StatCard title="Today" value={stats.requests_today.toLocaleString()} />
+          <StatCard title="This Week" value={stats.requests_this_week.toLocaleString()} />
+          <StatCard
+            title="Data Transferred"
+            value={formatDataBytes(stats.total_bytes_sent + stats.total_bytes_received)}
+          />
+          <StatCard title="Avg Response" value={formatTime(stats.avg_response_time)} />
         </div>
       )}
 

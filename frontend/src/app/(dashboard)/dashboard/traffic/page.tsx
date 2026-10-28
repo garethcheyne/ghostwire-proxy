@@ -6,11 +6,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Activity as HeaderIcon, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PageHeader } from '@/components/layout/page-header'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/page-header'
 import { useConfirm } from '@/components/confirm-dialog'
 import api from '@/lib/api'
 import { toastError, toastSuccess } from '@/lib/toast'
-import { cn } from '@/lib/utils'
 import { trafficKeys } from '@/lib/queries/keys'
 import { useProxyHosts } from '@/lib/queries/proxy-hosts'
 import { filtersToParams, parseFilters, type TrafficFilters } from '@/lib/queries/traffic'
@@ -120,21 +120,15 @@ function TrafficPageContent() {
         }
       />
 
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => go({ tab: t.value, drill: null }, true)}
-            className={cn(
-              'whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium',
-              tab === t.value && !drill ? 'bg-background shadow-sm' : 'text-muted-foreground hover:bg-background/50'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={drill ? '' : tab} onValueChange={(v) => go({ tab: v as Tab, drill: null }, true)}>
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       <TrafficFiltersBar
         filters={filters}

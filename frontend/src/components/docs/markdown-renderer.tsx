@@ -37,7 +37,7 @@ export function MarkdownRenderer({ html, className }: MarkdownRendererProps) {
       <div
         ref={containerRef}
         className={cn(
-          'prose prose-invert prose-slate max-w-none',
+          'prose prose-slate dark:prose-invert max-w-none',
           'prose-headings:text-foreground prose-headings:scroll-mt-20',
           'prose-h2:text-xl prose-h2:font-bold prose-h2:mt-8 prose-h2:mb-4',
           'prose-h3:text-lg prose-h3:font-semibold prose-h3:mt-6 prose-h3:mb-3',
@@ -45,7 +45,7 @@ export function MarkdownRenderer({ html, className }: MarkdownRendererProps) {
           'prose-a:text-brand hover:prose-a:text-brand prose-a:underline prose-a:underline-offset-2',
           'prose-strong:text-foreground',
           'prose-code:text-brand prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono',
-          'prose-pre:bg-slate-900 prose-pre:border prose-pre:border-border prose-pre:rounded-lg',
+          'prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-pre:rounded-lg',
           'prose-img:rounded-lg prose-img:border prose-img:border-border prose-img:shadow-lg prose-img:cursor-pointer prose-img:transition-transform prose-img:hover:scale-[1.02]',
           'prose-table:text-sm',
           'prose-th:border prose-th:border-border prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-medium',
@@ -71,7 +71,7 @@ export function MarkdownRenderer({ html, className }: MarkdownRendererProps) {
               className="max-w-full max-h-[90vh] rounded-lg border border-border shadow-2xl object-contain"
             />
             <button
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-800 border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-sm"
+              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-sm"
               onClick={(e) => { e.stopPropagation(); setLightboxSrc(null) }}
             >
               ✕

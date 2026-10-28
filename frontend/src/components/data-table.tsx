@@ -1,17 +1,31 @@
 'use client'
 
 import {
-  ColumnDef,
-  ColumnFiltersState,
-  RowSelectionState,
-  SortingState,
-  VisibilityState,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type ColumnVisibilityState,
+  type RowData,
+  type RowSelectionState,
+  type SortingState,
+  columnFilteringFeature,
+  columnVisibilityFeature,
+  createFilteredRowModel,
+  createPaginatedRowModel,
+  createSortedRowModel,
+  filterFn_equals,
+  filterFn_includesString,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_alphanumericCaseSensitive,
+  sortFn_basic,
+  sortFn_datetime,
+  sortFn_text,
+  sortFn_textCaseSensitive,
+  tableFeatures,
+  useTable,
 } from '@tanstack/react-table'
 import {
   Table,
@@ -25,8 +39,34 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useState, ReactNode } from 'react'
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
+/**
+ * The table features every DataTable uses (TanStack Table v9 registers features explicitly).
+ * Column definitions are typed against it: `ColumnDef<DataTableFeatures, Row>`.
+ */
+export const dataTableFeatures = tableFeatures({
+  columnFilteringFeature,
+  columnVisibilityFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  filterFns: { includesString: filterFn_includesString, equals: filterFn_equals },
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    alphanumericCaseSensitive: sortFn_alphanumericCaseSensitive,
+    basic: sortFn_basic,
+    datetime: sortFn_datetime,
+    text: sortFn_text,
+    textCaseSensitive: sortFn_textCaseSensitive,
+  },
+})
+
+export type DataTableFeatures = typeof dataTableFeatures
+
+interface DataTableProps<TData extends RowData> {
+  columns: ColumnDef<DataTableFeatures, TData>[]
   data: TData[]
   toolbar?: ReactNode
   pageSize?: number
@@ -48,7 +88,7 @@ interface DataTableProps<TData, TValue> {
   getRowId?: (row: TData) => string
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends RowData>({
   columns,
   data,
   toolbar,
@@ -62,10 +102,10 @@ export function DataTable<TData, TValue>({
   rowSelection: controlledRowSelection,
   onRowSelectionChange,
   getRowId,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({})
   const [internalRowSelection, setInternalRowSelection] = useState<RowSelectionState>({})
 
   const rowSelection = controlledRowSelection ?? internalRowSelection
@@ -75,20 +115,17 @@ export function DataTable<TData, TValue>({
     else setInternalRowSelection(newValue)
   }
 
-  const table = useReactTable({
+  const table = useTable({
+    features: dataTableFeatures,
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     enableRowSelection: enableRowSelection ?? false,
     onRowSelectionChange: handleRowSelectionChange,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
-    initialState: { pagination: { pageSize } },
+    initialState: { pagination: { pageIndex: 0, pageSize } },
     getRowId: getRowId ? (row: TData) => getRowId(row) : undefined,
   })
 
@@ -163,7 +200,7 @@ export function DataTable<TData, TValue>({
               <span className="font-medium text-foreground">{Object.keys(rowSelection).length} selected &middot; </span>
             )}
             {table.getFilteredRowModel().rows.length} total &middot; Page{' '}
-            {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
           </p>
           <div className="flex items-center gap-1">
             <Button

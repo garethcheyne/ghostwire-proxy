@@ -23,7 +23,7 @@ import { PerformanceTab } from '@/components/analytics/performance-tab'
 import { LogsTab } from '@/components/analytics/logs-tab'
 import { TrendsTab, type TrendsData } from '@/components/analytics/trends-tab'
 import { FileText } from 'lucide-react'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { BarChart3 as HeaderIcon } from 'lucide-react'
 
 interface AnalyticsDashboard {

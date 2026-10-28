@@ -37,7 +37,7 @@ import { Modal, ModalBody } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { IpAddress } from '@/components/ip-address'
 import { COUNTRIES, COUNTRY_MAP } from '@/lib/countries'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { ShieldAlert as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -46,6 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type TabType = 'waf' | 'geoip' | 'rate-limits' | 'presets'
 
@@ -667,31 +668,24 @@ export default function RulesPage() {
       />
 
       {/* Main Tabs */}
-      <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-        {[
-          { key: 'waf', label: 'WAF Rules', icon: ShieldAlert },
-          { key: 'geoip', label: 'GeoIP', icon: Map },
-          { key: 'rate-limits', label: 'Rate Limits', icon: Gauge },
-          { key: 'presets', label: 'Presets', icon: Sparkles },
-        ].map(tab => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.key}
-              data-value={tab.key}
-              onClick={() => setActiveTab(tab.key as TabType)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-background shadow-xs'
-                  : 'hover:bg-background/50 text-muted-foreground'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          {[
+            { key: 'waf', label: 'WAF Rules', icon: ShieldAlert },
+            { key: 'geoip', label: 'GeoIP', icon: Map },
+            { key: 'rate-limits', label: 'Rate Limits', icon: Gauge },
+            { key: 'presets', label: 'Presets', icon: Sparkles },
+          ].map(tab => {
+            const Icon = tab.icon
+            return (
+              <TabsTrigger key={tab.key} value={tab.key}>
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
+      </Tabs>
 
       {isLoading ? (
         <div className="flex h-64 items-center justify-center">
@@ -813,17 +807,15 @@ export default function RulesPage() {
               </div>
 
               {/* Sub-tabs */}
-              <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-                {(['rules', 'lookup'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setGeoSubTab(tab)}
-                    className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium capitalize transition-colors ${geoSubTab === tab ? 'bg-background shadow-xs' : 'hover:bg-background/50 text-muted-foreground'}`}
-                  >
-                    {tab === 'lookup' ? 'IP Lookup' : 'Rules'}
-                  </button>
-                ))}
-              </div>
+              <Tabs value={geoSubTab} onValueChange={(v) => setGeoSubTab(v as typeof geoSubTab)}>
+                <TabsList>
+                  {(['rules', 'lookup'] as const).map(tab => (
+                    <TabsTrigger key={tab} value={tab} className="capitalize">
+                      {tab === 'lookup' ? 'IP Lookup' : 'Rules'}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
 
               {geoSubTab === 'rules' ? (
                 <div className="space-y-3">
@@ -994,7 +986,7 @@ export default function RulesPage() {
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <span className="font-medium text-sm sm:text-base">{preset.name}</span>
                                 <Badge variant="outline" className={severityColors[preset.severity]}>{preset.severity}</Badge>
-                                {preset.tags.includes('recommended') && <Badge className="bg-cyan-500/10 text-brand border-cyan-500/20">recommended</Badge>}
+                                {preset.tags.includes('recommended') && <Badge className="bg-brand/10 text-brand border-brand/20">recommended</Badge>}
                                 {isApplied && <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"><Check className="h-3 w-3 mr-1" />Applied</Badge>}
                               </div>
                               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{preset.description}</p>

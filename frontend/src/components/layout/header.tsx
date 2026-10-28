@@ -284,7 +284,7 @@ export function Header({ title, onMobileMenuClick }: HeaderProps) {
                 onClick={() => setShowKillSwitchDialog(true)}
                 className={cn(
                   'relative h-9 w-9 transition-all duration-300',
-                  killSwitchActive && 'animate-pulse bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/50'
+                  killSwitchActive && 'animate-pulse bg-red-600 hover:bg-red-700'
                 )}
               >
                 <Power className={cn('h-5 w-5', killSwitchActive && 'text-white')} />

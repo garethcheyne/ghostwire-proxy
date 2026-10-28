@@ -37,7 +37,7 @@ import {
 } from 'recharts'
 import api from '@/lib/api'
 import { UpdatesTab } from '@/components/system/updates-tab'
-import { PageHeader } from '@/components/layout/page-header'
+import { PageHeader } from '@/components/page-header'
 import { Monitor as HeaderIcon } from 'lucide-react'
 
 interface ServiceHealth {
@@ -495,12 +495,12 @@ export default function SystemMonitorPage() {
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
-                labelFormatter={(label) => new Date(label).toLocaleString()}
-                formatter={(value: number) => [`${value?.toFixed(1)}%`]}
+                labelFormatter={(label) => new Date(label as string | number).toLocaleString()}
+                formatter={(value) => [`${(value as number | undefined)?.toFixed(1)}%`]}
               />
               <Legend />
               <Area
@@ -547,11 +547,11 @@ export default function SystemMonitorPage() {
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
-                labelFormatter={(label) => new Date(label).toLocaleString()}
+                labelFormatter={(label) => new Date(label as string | number).toLocaleString()}
               />
               <Legend />
               <Bar dataKey="requests" name="Requests" fill="#3b82f6" radius={[4, 4, 0, 0]} />

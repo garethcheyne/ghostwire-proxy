@@ -27,6 +27,7 @@ import {
 } from 'recharts'
 import api from '@/lib/api'
 import { IpAddress } from '@/components/ip-address'
+import { StatCard } from '@/components/stat-card'
 
 const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), { ssr: false })
 
@@ -196,50 +197,11 @@ export function SecurityTab({ period }: SecurityTabProps) {
     <div className="space-y-6">
       {/* Threat Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Total Threats</p>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatNumber(stats.total_events)}</p>
-          <p className="text-xs text-muted-foreground mt-1">all time</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Today</p>
-            <ShieldAlert className="h-4 w-4 text-yellow-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-yellow-500">{formatNumber(stats.events_today)}</p>
-          <p className="text-xs text-muted-foreground mt-1">events detected</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">This Week</p>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-orange-500">{formatNumber(stats.events_this_week)}</p>
-          <p className="text-xs text-muted-foreground mt-1">events detected</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Threat Actors</p>
-            <Eye className="h-4 w-4 text-blue-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{formatNumber(stats.total_actors)}</p>
-          <p className="text-xs text-muted-foreground mt-1">unique IPs</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Blocked</p>
-            <ShieldBan className="h-4 w-4 text-red-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-red-500">{formatNumber(stats.blocked_actors)}</p>
-          <p className="text-xs text-muted-foreground mt-1">IPs blocked</p>
-        </div>
+        <StatCard title="Total Threats" value={formatNumber(stats.total_events)} icon={Shield} description="all time" />
+        <StatCard title="Today" value={formatNumber(stats.events_today)} icon={ShieldAlert} tone="warning" description="events detected" />
+        <StatCard title="This Week" value={formatNumber(stats.events_this_week)} icon={AlertTriangle} tone="warning" description="events detected" />
+        <StatCard title="Threat Actors" value={formatNumber(stats.total_actors)} icon={Eye} description="unique IPs" />
+        <StatCard title="Blocked" value={formatNumber(stats.blocked_actors)} icon={ShieldBan} tone="danger" description="IPs blocked" />
       </div>
 
       {/* Severity & Category Charts */}
@@ -264,10 +226,10 @@ export function SecurityTab({ period }: SecurityTabProps) {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => formatNumber(value)}
+                  formatter={(value) => formatNumber(Number(value))}
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '8px',
                   }}
                 />
@@ -308,10 +270,10 @@ export function SecurityTab({ period }: SecurityTabProps) {
                   tickFormatter={(v: string) => v.charAt(0).toUpperCase() + v.slice(1)}
                 />
                 <Tooltip
-                  formatter={(value: number) => formatNumber(value)}
+                  formatter={(value) => formatNumber(Number(value))}
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '8px',
                   }}
                 />
@@ -331,7 +293,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
         <div className="rounded-xl border border-border bg-card p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-red-500" />
+              <ShieldAlert className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Most Targeted Hosts</h3>
             </div>
             <span className="text-xs text-muted-foreground">Last {days} {days === 1 ? 'day' : 'days'}</span>
@@ -347,10 +309,10 @@ export function SecurityTab({ period }: SecurityTabProps) {
                 width={120}
               />
               <Tooltip
-                formatter={(value: number, name: string) => [formatNumber(value), name.replace(/_/g, ' ')]}
+                formatter={(value, name) => [formatNumber(Number(value)), String(name).replace(/_/g, ' ')]}
                 contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
               />
@@ -383,16 +345,16 @@ export function SecurityTab({ period }: SecurityTabProps) {
         {authErrors && (
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Ban className="h-5 w-5 text-red-500" />
+              <Ban className="h-5 w-5 text-muted-foreground" />
               <h3 className="font-semibold">Authentication Errors</h3>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="rounded-lg bg-red-500/5 border border-red-500/10 p-3 text-center">
-                <p className="text-2xl font-bold text-red-500">{formatNumber(authErrors.summary.total_401)}</p>
+              <div className="rounded-lg border border-border p-3 text-center">
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatNumber(authErrors.summary.total_401)}</p>
                 <p className="text-xs text-muted-foreground">401 Unauthorized</p>
               </div>
-              <div className="rounded-lg bg-orange-500/5 border border-orange-500/10 p-3 text-center">
-                <p className="text-2xl font-bold text-orange-500">{formatNumber(authErrors.summary.total_403)}</p>
+              <div className="rounded-lg border border-border p-3 text-center">
+                <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{formatNumber(authErrors.summary.total_403)}</p>
                 <p className="text-xs text-muted-foreground">403 Forbidden</p>
               </div>
             </div>
@@ -424,7 +386,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
         {/* Top Threat Actors */}
         <div className="rounded-xl border border-border bg-card p-6">
           <div className="flex items-center gap-2 mb-4">
-            <ShieldAlert className="h-5 w-5 text-orange-500" />
+            <ShieldAlert className="h-5 w-5 text-muted-foreground" />
             <h3 className="font-semibold">Top Threat Actors</h3>
           </div>
           {stats.top_actors.length === 0 ? (
