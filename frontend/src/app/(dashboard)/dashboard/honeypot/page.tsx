@@ -143,7 +143,6 @@ export default function HoneypotPage() {
   const [error, setError] = useState('')
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [installingDefaults, setInstallingDefaults] = useState(false)
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // IP Intel
   const [lookupIp, setLookupIp] = useState('')
@@ -171,12 +170,6 @@ export default function HoneypotPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [hostDropdownOpen])
-
-  useEffect(() => {
-    if (!notification) return
-    const timer = setTimeout(() => setNotification(null), 5000)
-    return () => clearTimeout(timer)
-  }, [notification])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -207,11 +200,9 @@ export default function HoneypotPage() {
     setInstallingDefaults(true)
     try {
       const res = await api.post('/api/honeypot/traps/install-defaults')
-      setNotification({ type: 'success', message: `Installed ${res.data.count} default traps` })
       toastSuccess(`Installed ${res.data.count} default traps`)
       fetchData()
     } catch {
-      setNotification({ type: 'error', message: 'Failed to install defaults' })
       toastError('Failed to install defaults')
     } finally {
       setInstallingDefaults(false)
@@ -229,7 +220,7 @@ export default function HoneypotPage() {
       setLookupIp(targetIp)
       setActiveTab('intel')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to look up IP' })
+      toastError('Failed to look up IP')
     } finally {
       setLoadingIntel(false)
     }
@@ -325,7 +316,6 @@ export default function HoneypotPage() {
       fetchData()
       toastSuccess('Trap deleted')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to delete trap' })
       toastError('Failed to delete trap')
     }
   }
@@ -336,7 +326,6 @@ export default function HoneypotPage() {
       fetchData()
       toastSuccess(trap.enabled ? 'Trap disabled' : 'Trap enabled')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to toggle trap' })
       toastError('Failed to toggle trap')
     }
   }
@@ -349,15 +338,6 @@ export default function HoneypotPage() {
 
   return (
     <div className="space-y-6">
-      {/* Notification banner */}
-      {notification && (
-        <div className={`rounded-md px-4 py-3 text-sm flex items-center justify-between ${
-          notification.type === 'success' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-destructive/15 text-destructive'
-        }`}>
-          <span>{notification.message}</span>
-          <button onClick={() => setNotification(null)} className="ml-4 hover:opacity-70">&times;</button>
-        </div>
-      )}
       {/* Header */}
       <PageHeader
         icon={HeaderIcon}

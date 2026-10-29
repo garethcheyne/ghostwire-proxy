@@ -208,7 +208,7 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 |-------|-----------|
 | **Proxy Engine** | OpenResty (Nginx + Lua) on Alpine |
 | **Frontend** | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
-| **Backend API** | Python 3.12, FastAPI, SQLAlchemy |
+| **Backend API** | Python 3.15, FastAPI, SQLAlchemy |
 | **Database** | PostgreSQL 16 (via asyncpg) |
 | **Auth** | Better Auth (admin), JWT + TOTP (auth walls) |
 | **Containers** | Docker Compose |
@@ -447,6 +447,23 @@ pnpm dev
 
 ```bash
 docker compose up --build
+```
+
+### Checks (what CI runs)
+
+```bash
+ruff check . && ruff format --check .          # Python lint and format (ruff 0.17.3, ruff.toml)
+cd frontend && pnpm lint && pnpm typecheck && pnpm build
+cd frontend-authwall/default && pnpm build     # then copy dist/. into proxy/auth-portal/default/
+```
+
+The backend tests need PostgreSQL and Redis. They drop every table after each test, so they only run
+against a database whose name ends in `_test`:
+
+```bash
+cd backend
+TEST_DATABASE_URL=postgresql+asyncpg://ghostwire:<password>@localhost:5432/ghostwire_test \
+REDIS_URL=redis://localhost:6379 python -m pytest tests/ -q
 ```
 
 ---

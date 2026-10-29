@@ -10,7 +10,7 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 ### Frontend (Next.js)
 - **Follow the suite design guide**: `../design/README.md` (colours, light/dark rules, page header,
   tabs, menus). Brand colours are `text-brand` / `text-brand-2`, never hard-coded `cyan-400`; every
-  page starts with `PageHeader` (`src/components/layout/page-header.tsx`).
+  page starts with `PageHeader` (`src/components/page-header.tsx`, a registry copy: don't edit it).
 - **ALWAYS use shadcn/ui components** - Never create custom UI components from scratch
 - Install components via: `pnpm dlx shadcn@latest add <component>`
 - Available shadcn components: button, input, form, table, dialog, dropdown-menu, card, tabs, badge, alert, toast, etc.
@@ -21,7 +21,7 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 |-------|------|
 | Proxy | OpenResty (nginx + Lua) on Alpine |
 | Frontend | Next.js 16+, TypeScript, Tailwind CSS, shadcn/ui |
-| Backend | Python 3.12, FastAPI |
+| Backend | Python 3.15, FastAPI |
 | Database | PostgreSQL 16 (asyncpg, Alembic migrations) |
 | Auth | Admin: Better Auth in the UI (`frontend/src/lib/auth.ts`), API reads its session (`backend/app/core/auth_session.py`); admin 2FA stays in the API (`admin_mfa_service`), asked for by the `auth-admin-mfa` plugin. Auth walls: JWT, TOTP |
 

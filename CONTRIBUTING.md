@@ -22,32 +22,13 @@ feat/xyz ──────●──●     fix/abc ──●
 
 ### Commit Messages
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+Plain English, like the rest of the history: a short summary line that says what changed for
+someone running or reading the app, a blank line, then a body explaining why.
 
 ```
-<type>(<scope>): <description>
+Auth-wall sign-in is limited per client address
 
-[optional body]
-```
-
-**Types:**
-- `feat` — New feature
-- `fix` — Bug fix
-- `refactor` — Code change that neither fixes a bug nor adds a feature
-- `perf` — Performance improvement
-- `docs` — Documentation only
-- `chore` — Build, CI, deps, tooling
-- `test` — Adding or fixing tests
-
-**Scopes:** `api`, `ui`, `proxy`, `lua`, `db`, `docker`, `ci`
-
-**Examples:**
-```
-feat(api): add rate limiting per proxy host
-fix(lua): wrap WAF regex in pcall to prevent crashes
-chore(docker): pin postgres to 16.2-alpine
-refactor(ui): split analytics page into tab components
-docs: update README with upgrade instructions
+Neither the password nor the TOTP step had a rate limit, so ...
 ```
 
 ### Pull Requests
@@ -104,21 +85,13 @@ make version       # Show current version
 
 ## Releasing
 
+Releases are dated, like every Ghostwire app (`ghostwire-suite/CONVENTIONS.md`): `VERSION` holds
+`YYYY.MM.DD.HHMM`. To release, change it and push to `main`; when every CI job passes, CI tags
+`v<VERSION>` and publishes the GitHub release. Don't tag by hand.
+
 ```bash
-# 1. Merge develop into main
-git checkout main
-git merge develop
-
-# 2. Cut the release (updates VERSION, tags)
-make release V=1.2.0
-
-# 3. Push (triggers CI + GitHub Release)
-git push origin main --tags
-
-# 4. Merge main back to develop
-git checkout develop
-git merge main
-git push origin develop
+make release        # writes the dated VERSION and commits it
+git push origin main
 ```
 
 ## Upgrading a Running Instance

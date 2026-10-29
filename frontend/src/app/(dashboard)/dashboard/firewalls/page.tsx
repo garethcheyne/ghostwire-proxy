@@ -86,7 +86,6 @@ export default function FirewallsPage() {
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [blockTestResults, setBlockTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [syncingId, setSyncingId] = useState<string | null>(null)
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [findingsDialog, setFindingsDialog] = useState<{
     connectorName: string
     success: boolean
@@ -269,15 +268,12 @@ export default function FirewallsPage() {
       const res = await api.post('/api/firewalls/blocklist/deduplicate')
       const { removed, duplicate_ips } = res.data
       if (removed > 0) {
-        setNotification({ type: 'success', message: `Removed ${removed} duplicate entries across ${duplicate_ips} IPs` })
-        toastSuccess(`Removed ${removed} duplicate entries`)
+        toastSuccess(`Removed ${removed} duplicate entries across ${duplicate_ips} IPs`)
         fetchData()
       } else {
-        setNotification({ type: 'success', message: 'No duplicates found' })
         toastInfo('No duplicates found')
       }
     } catch (error) {
-      setNotification({ type: 'error', message: 'Failed to deduplicate' })
       toastError('Failed to deduplicate')
     }
   }
@@ -289,14 +285,6 @@ export default function FirewallsPage() {
 
   return (
     <div className="space-y-6">
-      {notification && (
-        <div className={`rounded-lg px-4 py-3 text-sm flex items-center justify-between ${
-          notification.type === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-        }`}>
-          {notification.message}
-          <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">&times;</button>
-        </div>
-      )}
       <PageHeader
         icon={HeaderIcon}
         title="Firewall Integration"

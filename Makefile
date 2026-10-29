@@ -78,7 +78,7 @@ lint: ## Run frontend linting
 	cd frontend && pnpm lint
 
 typecheck: ## Run TypeScript type checking
-	cd frontend && pnpm exec tsc --noEmit
+	cd frontend && pnpm typecheck
 
 # ─────────────────────────────────────────────
 # Database
@@ -106,19 +106,12 @@ backup: ## Create a backup via API
 # ─────────────────────────────────────────────
 # Release (run locally to cut a release)
 # ─────────────────────────────────────────────
-release: ## Create a new release tag (usage: make release V=1.2.0)
-ifndef V
-	$(error Usage: make release V=1.2.0)
-endif
-	@echo "Releasing v$(V)..."
-	@echo "$(V)" > VERSION
-	@cd frontend && pnpm pkg set version=$(V)
-	@git add VERSION frontend/package.json
-	@git commit -m "release: v$(V)"
-	@git tag -a "v$(V)" -m "Release v$(V)"
+release: ## Write a dated VERSION and commit it; CI tags and publishes it once pushed to main
+	@date +%Y.%m.%d.%H%M > VERSION
+	@git add VERSION
+	@git commit -m "Release v$$(cat VERSION)"
 	@echo ""
-	@echo "Release v$(V) created locally."
-	@echo "Push with:  git push origin main --tags"
+	@echo "Release v$$(cat VERSION) committed. Push to main; CI tags it when every job passes."
 
 version: ## Show current version
 	@echo "$(VERSION)"
