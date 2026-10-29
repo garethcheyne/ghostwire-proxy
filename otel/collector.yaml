@@ -1,0 +1,154 @@
+# The OpenTelemetry Collector for every Ghostwire stack (container ghostwire-<app>-otel).
+# Identical in every stack; copy it, don't edit it per app. See README.md beside it, and
+# ghostwire-suite/docs/analytics-reporting.md for the spec.
+#
+# It measures the stack's containers (docker_stats) and the host (host_metrics), and sends them to
+# the app's internal OTLP relay, which adds the Analytics URL and ingest key from the app's Settings
+# (or answers 404 while monitoring is off, and the batch is dropped). No URL or key lives here.
+#
+# Environment:
+#   OTLP_RELAY_ENDPOINT  the app's relay base, e.g. http://ghostwire-secure-api:8000/internal/otlp
+#                        (the exporter adds /v1/metrics)
+#   SERVICE_NAMESPACE    the app, e.g. ghostwire-secure. Also the stack's compose project name
+#                        (`name: ghostwire-<app>`), which picks this stack's containers out of all
+#                        the containers on the host
+#
+# Components use the snake_case names introduced in collector 0.164 (host_metrics, otlp_http, ...).
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133 # the container healthcheck; only on the stack's network
+
+receivers:
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 30s
+    timeout: 10s
+    container_labels_to_metric_labels:
+      com.docker.compose.project: compose.project
+      com.docker.compose.service: compose.service
+    metrics:
+      container.restarts:
+        enabled: true
+      container.uptime:
+        enabled: true
+
+  host_metrics:
+    root_path: /hostfs
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      load: {}
+      disk: {}
+      network: {}
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+        exclude_fs_types:
+          match_type: strict
+          fs_types: [autofs, binfmt_misc, bpf, cgroup, cgroup2, configfs, debugfs, devpts, devtmpfs, fusectl,
+                     hugetlbfs, mqueue, nsfs, overlay, proc, procfs, pstore, rpc_pipefs, securityfs, selinuxfs,
+                     squashfs, sysfs, tmpfs, tracefs]
+        exclude_mount_points:
+          match_type: regexp
+          mount_points: ["/dev/.*", "/proc/.*", "/sys/.*", "/run/.*", "/var/lib/docker/.*", "/var/lib/containerd/.*",
+                         "/snap/.*", "/boot/efi"]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # The Docker socket shows every container on the host; keep this stack's (by compose project).
+  filter/stack:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'resource.attributes["compose.project"] != "${env:SERVICE_NAMESPACE}"'
+
+  # Each container reports as its own service (named after the container), the host as "host".
+  resource/containers:
+    attributes:
+      - key: service.name
+        from_attribute: container.name
+        action: insert
+  resource/host:
+    attributes:
+      - key: service.name
+        value: host
+        action: insert
+
+  resource:
+    attributes:
+      - key: service.namespace
+        value: ${env:SERVICE_NAMESPACE}
+        action: upsert
+
+  # host.name from the Docker daemon (the machine, not this container), then the OS as a fallback.
+  resource_detection:
+    detectors: [env, docker, system]
+    timeout: 5s
+    override: false
+
+  # Counters as per-interval deltas, the same as the apps' own SDKs send, which is what Analytics
+  # rolls up per minute.
+  cumulative_to_delta: {}
+
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+exporters:
+  otlp_http:
+    endpoint: ${env:OTLP_RELAY_ENDPOINT}
+    compression: none # local hop; the relay forwards the body as it is
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 120s
+    sending_queue:
+      enabled: true
+      queue_size: 200
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics/containers:
+      receivers: [docker_stats]
+      processors: [memory_limiter, filter/stack, resource/containers, resource, resource_detection, cumulative_to_delta, batch]
+      exporters: [otlp_http]
+    metrics/host:
+      receivers: [host_metrics]
+      processors: [memory_limiter, resource/host, resource, resource_detection, cumulative_to_delta, batch]
+      exporters: [otlp_http]
+  telemetry:
+    logs:
+      level: warn
+    # The Collector's own health (accepted, refused and failed points, queue size, memory) through
+    # the same relay, as service "otel-collector".
+    resource:
+      attributes:
+        - name: service.name
+          value: otel-collector
+        - name: service.namespace
+          value: ${env:SERVICE_NAMESPACE}
+    metrics:
+      level: normal
+      readers:
+        - periodic:
+            interval: 60000
+            timeout: 10000
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: ${env:OTLP_RELAY_ENDPOINT}/v1/metrics
+                temporality_preference: delta

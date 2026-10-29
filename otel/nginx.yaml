@@ -1,0 +1,36 @@
+# Ghostwire Proxy only: OpenResty's own counters for the stack's Collector (ghostwire-proxy-otel).
+#
+# collector.yaml beside this file is the suite's shared config, copied verbatim (don't edit it).
+# This file is merged over it: the Collector is started with --config twice (docker-compose.yml),
+# and adds one receiver, one processor and one pipeline that reuse the shared processors and the
+# relay exporter defined there.
+#
+# OpenResty answers stub_status on port 8090, which isn't published, so only the stack's Docker
+# network reaches it (proxy/nginx.conf). It sends, as service "ghostwire-proxy-nginx" (the same
+# service as that container's docker_stats metrics):
+#   nginx.requests                 requests handled (a delta per interval)
+#   nginx.connections_accepted     connections accepted (delta)
+#   nginx.connections_handled      connections handled (delta; less than accepted means refused)
+#   nginx.connections_current      open connections by state: active, reading, writing, waiting
+#
+# Per-host requests, status codes and latency are the Proxy's own traffic analytics (traffic_logs),
+# so they aren't repeated here.
+
+receivers:
+  nginx:
+    endpoint: http://ghostwire-proxy-nginx:8090/nginx-status
+    collection_interval: 30s
+
+processors:
+  resource/nginx:
+    attributes:
+      - key: service.name
+        value: ghostwire-proxy-nginx
+        action: insert
+
+service:
+  pipelines:
+    metrics/nginx:
+      receivers: [nginx]
+      processors: [memory_limiter, resource/nginx, resource, resource_detection, cumulative_to_delta, batch]
+      exporters: [otlp_http]

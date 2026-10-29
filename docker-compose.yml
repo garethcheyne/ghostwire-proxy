@@ -1,3 +1,7 @@
+# The compose project is ghostwire-proxy wherever the repository is checked out: it labels the
+# containers, and the OpenTelemetry Collector picks this stack's containers out by it.
+name: ghostwire-proxy
+
 services:
   # PostgreSQL Database (hardened — no external access)
   ghostwire-proxy-postgres:
@@ -312,6 +316,41 @@ services:
         condition: service_healthy
       ghostwire-proxy-api:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # OpenTelemetry Collector for system monitoring with Ghostwire Analytics: this stack's containers
+  # (docker_stats), the host (host_metrics) and OpenResty's own counters (otel/nginx.yaml). It sends
+  # only to the API's internal relay, which adds the Analytics URL and key from Settings, and drops
+  # everything while monitoring is off (the default). See ghostwire-suite/telemetry/collector/README.md.
+  ghostwire-proxy-otel:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    container_name: ghostwire-proxy-otel
+    restart: unless-stopped
+    user: "0:0" # the image's own user can't read the Docker socket
+    # collector.yaml is the suite's shared config (copied verbatim); nginx.yaml is merged over it.
+    command: ["--config=/etc/otelcol-contrib/config.yaml", "--config=/etc/otelcol-contrib/nginx.yaml"]
+    environment:
+      # The API's relay on the stack's network (the exporter adds /v1/metrics)
+      - OTLP_RELAY_ENDPOINT=http://ghostwire-proxy-api:8000/internal/otlp
+      # The app, and this stack's compose project name (`name:` at the top of this file)
+      - SERVICE_NAMESPACE=ghostwire-proxy
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./otel/nginx.yaml:/etc/otelcol-contrib/nginx.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/hostfs:ro
+    # Listens on nothing that needs publishing; only on the stack's network.
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - ghostwire-proxy-network
+    depends_on:
+      - ghostwire-proxy-api
+      - ghostwire-proxy-nginx
     deploy:
       resources:
         limits:
