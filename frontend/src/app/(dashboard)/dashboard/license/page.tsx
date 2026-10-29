@@ -57,7 +57,7 @@ export default function LicensePage() {
       <div className="rounded-xl border border-border bg-card">
         <div className="border-b border-border p-4 flex items-center justify-between">
           <h2 className="font-semibold">MIT License</h2>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
             Open Source
           </span>
         </div>

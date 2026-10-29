@@ -114,9 +114,9 @@ const notificationTypes: NotificationType[] = [
 
 const severityLevels = [
   { value: 'low', label: 'All', color: 'text-muted-foreground' },
-  { value: 'medium', label: 'Medium+', color: 'text-yellow-500' },
-  { value: 'high', label: 'High+', color: 'text-orange-500' },
-  { value: 'critical', label: 'Critical', color: 'text-red-500' },
+  { value: 'medium', label: 'Medium+', color: 'text-yellow-700 dark:text-yellow-400' },
+  { value: 'high', label: 'High+', color: 'text-orange-700 dark:text-orange-400' },
+  { value: 'critical', label: 'Critical', color: 'text-red-600 dark:text-red-400' },
 ]
 
 const channelIcons: Record<string, typeof Mail> = {
@@ -128,11 +128,11 @@ const channelIcons: Record<string, typeof Mail> = {
 }
 
 const channelColors: Record<string, string> = {
-  email: 'bg-blue-500/10 text-blue-500',
+  email: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   webhook: 'bg-cyan-500/10 text-brand',
   slack: 'bg-purple-500/10 text-brand-2',
-  telegram: 'bg-sky-500/10 text-sky-500',
-  push: 'bg-green-500/10 text-green-500',
+  telegram: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  push: 'bg-green-500/10 text-green-600 dark:text-green-400',
 }
 
 export default function NotificationsPage() {
@@ -561,7 +561,7 @@ export default function NotificationsPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => handleDeleteChannel(channel)}
-                            className="gap-2 text-red-500 focus:text-red-500"
+                            className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                           >
                             <Trash2 className="h-4 w-4" />
                             Delete

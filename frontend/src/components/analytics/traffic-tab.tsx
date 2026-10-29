@@ -151,7 +151,7 @@ export function TrafficTab({
                   <td className="px-4 py-3 text-right font-mono hidden md:table-cell">{formatResponseTime(host.avg_response_time)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={`font-mono ${
-                      host.error_rate > 5 ? 'text-red-500' : host.error_rate > 1 ? 'text-yellow-500' : 'text-green-500'
+                      host.error_rate > 5 ? 'text-red-600 dark:text-red-400' : host.error_rate > 1 ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                     }`}>
                       {host.error_rate.toFixed(2)}%
                     </span>

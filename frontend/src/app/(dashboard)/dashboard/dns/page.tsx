@@ -239,15 +239,15 @@ export default function DnsPage() {
   const getRecordTypeColor = (type: string) => {
     switch (type) {
       case 'A':
-        return 'bg-blue-500/10 text-blue-500'
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
       case 'AAAA':
         return 'bg-purple-500/10 text-brand-2'
       case 'CNAME':
-        return 'bg-green-500/10 text-green-500'
+        return 'bg-green-500/10 text-green-600 dark:text-green-400'
       case 'TXT':
-        return 'bg-yellow-500/10 text-yellow-500'
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
       case 'MX':
-        return 'bg-orange-500/10 text-orange-500'
+        return 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
       default:
         return 'bg-gray-500/10 text-gray-500'
     }
@@ -436,13 +436,13 @@ export default function DnsPage() {
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell">
                               <span title={record.proxied ? "Proxied" : "DNS Only"}>
-                                <Cloud className={`h-4 w-4 ${record.proxied ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                                <Cloud className={`h-4 w-4 ${record.proxied ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground'}`} />
                               </span>
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell">
                               {record.linked_proxy_host_id ? (
                                 <span title="Linked to proxy host">
-                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground">-</span>
@@ -458,7 +458,7 @@ export default function DnsPage() {
                                 </button>
                                 <button
                                   onClick={() => handleDeleteRecord(record)}
-                                  className="p-1 rounded hover:bg-muted text-red-500"
+                                  className="p-1 rounded hover:bg-muted text-red-600 dark:text-red-400"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>

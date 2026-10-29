@@ -116,12 +116,12 @@ export function HeaderActions() {
             <DialogTitle className="flex items-center gap-2">
               {killSwitchActive ? (
                 <>
-                  <Power className="h-5 w-5 text-green-500" />
+                  <Power className="h-5 w-5 text-green-600 dark:text-green-400" />
                   Deactivate Kill Switch
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                   Activate Kill Switch
                 </>
               )}
@@ -129,12 +129,12 @@ export function HeaderActions() {
             <DialogDescription className="pt-2">
               {killSwitchActive ? (
                 <span>
-                  The kill switch is currently <strong className="text-red-500">ACTIVE</strong> in <strong>{killSwitchMode}</strong> mode.
+                  The kill switch is currently <strong className="text-red-600 dark:text-red-400">ACTIVE</strong> in <strong>{killSwitchMode}</strong> mode.
                   Deactivating will restore normal traffic flow.
                 </span>
               ) : (
                 <span>
-                  Activating the kill switch will <strong className="text-red-500">immediately affect ALL proxy traffic</strong>.
+                  Activating the kill switch will <strong className="text-red-600 dark:text-red-400">immediately affect ALL proxy traffic</strong>.
                   Choose how traffic should be handled.
                 </span>
               )}
@@ -152,7 +152,7 @@ export function HeaderActions() {
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
                     killSwitchMode === 'maintenance'
-                      ? 'border-orange-500 bg-orange-500/10 text-orange-500'
+                      ? 'border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400'
                       : 'border-muted hover:border-muted-foreground/50'
                   )}
                 >
@@ -166,7 +166,7 @@ export function HeaderActions() {
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
                     killSwitchMode === 'redirect'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                       : 'border-muted hover:border-muted-foreground/50'
                   )}
                 >
@@ -180,7 +180,7 @@ export function HeaderActions() {
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
                     killSwitchMode === 'drop'
-                      ? 'border-red-500 bg-red-500/10 text-red-500'
+                      ? 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400'
                       : 'border-muted hover:border-muted-foreground/50'
                   )}
                 >

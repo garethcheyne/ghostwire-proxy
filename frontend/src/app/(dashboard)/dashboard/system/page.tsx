@@ -196,29 +196,29 @@ export default function SystemMonitorPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'healthy':
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />
+        return <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
       case 'unhealthy':
-        return <XCircle className="h-5 w-5 text-red-500" />
+        return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
       default:
-        return <AlertCircle className="h-5 w-5 text-yellow-500" />
+        return <AlertCircle className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'healthy':
-        return 'bg-green-500/10 border-green-500/20 text-green-500'
+        return 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
       case 'unhealthy':
-        return 'bg-red-500/10 border-red-500/20 text-red-500'
+        return 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
       default:
-        return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'
+        return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400'
     }
   }
 
   const getPercentColor = (percent: number) => {
-    if (percent >= 90) return 'text-red-500'
-    if (percent >= 70) return 'text-yellow-500'
-    return 'text-green-500'
+    if (percent >= 90) return 'text-red-600 dark:text-red-400'
+    if (percent >= 70) return 'text-yellow-700 dark:text-yellow-400'
+    return 'text-green-600 dark:text-green-400'
   }
 
   const getProgressColor = (percent: number) => {
@@ -239,7 +239,7 @@ export default function SystemMonitorPage() {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <XCircle className="h-12 w-12 text-red-600 dark:text-red-400 mx-auto mb-4" />
           <p className="text-muted-foreground">{error}</p>
           <Button
             size="lg"
@@ -370,7 +370,7 @@ export default function SystemMonitorPage() {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-blue-500" />
+                <Cpu className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <span className="font-semibold">CPU</span>
               </div>
               <span className={`text-lg font-bold ${getPercentColor(status.resources.cpu.usage)}`}>
@@ -414,7 +414,7 @@ export default function SystemMonitorPage() {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-orange-500" />
+                <HardDrive className="h-5 w-5 text-orange-700 dark:text-orange-400" />
                 <span className="font-semibold">Disk</span>
               </div>
               <span className={`text-lg font-bold ${getPercentColor(status.resources.disk.percent)}`}>
@@ -611,10 +611,10 @@ export default function SystemMonitorPage() {
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         container.status === 'running'
-                          ? 'bg-green-500/10 text-green-500'
+                          ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                           : container.status === 'exited'
-                          ? 'bg-red-500/10 text-red-500'
-                          : 'bg-yellow-500/10 text-yellow-500'
+                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                          : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                       }`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${
                           container.status === 'running' ? 'bg-green-500' : 'bg-red-500'
@@ -648,9 +648,9 @@ export default function SystemMonitorPage() {
                     <td className="px-4 py-3 text-right hidden md:table-cell">
                       {container.network_rx_bytes !== undefined ? (
                         <div className="text-xs font-mono">
-                          <span className="text-green-500">{formatBytes(container.network_rx_bytes)}</span>
+                          <span className="text-green-600 dark:text-green-400">{formatBytes(container.network_rx_bytes)}</span>
                           <span className="text-muted-foreground mx-1">/</span>
-                          <span className="text-blue-500">{formatBytes(container.network_tx_bytes || 0)}</span>
+                          <span className="text-blue-600 dark:text-blue-400">{formatBytes(container.network_tx_bytes || 0)}</span>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>

@@ -231,9 +231,9 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                     )}
                   </Button>
                   {list.mode === 'whitelist' ? (
-                    <ShieldCheck className="h-5 w-5 text-green-500" />
+                    <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
                   ) : (
-                    <ShieldX className="h-5 w-5 text-red-500" />
+                    <ShieldX className="h-5 w-5 text-red-600 dark:text-red-400" />
                   )}
                   <div>
                     <h3 className="font-semibold">{list.name}</h3>
@@ -241,7 +241,7 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                       {list.entries.length} {list.entries.length === 1 ? 'entry' : 'entries'} •{' '}
                       <span
                         className={
-                          list.mode === 'whitelist' ? 'text-green-500' : 'text-red-500'
+                          list.mode === 'whitelist' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                         }
                       >
                         {list.mode === 'whitelist' ? 'Whitelist' : 'Blacklist'}
@@ -276,7 +276,7 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => handleDelete(list)}
-                        className="gap-2 text-red-500 focus:text-red-500"
+                        className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete
@@ -303,8 +303,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                           <span
                             className={`text-xs px-2 py-1 rounded-full ${
                               entry.action === 'allow'
-                                ? 'bg-green-500/10 text-green-500'
-                                : 'bg-red-500/10 text-red-500'
+                                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                                : 'bg-red-500/10 text-red-600 dark:text-red-400'
                             }`}
                           >
                             {entry.action}
@@ -463,8 +463,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
                             entry.action === 'allow'
-                              ? 'bg-green-500/10 text-green-500'
-                              : 'bg-red-500/10 text-red-500'
+                              ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                              : 'bg-red-500/10 text-red-600 dark:text-red-400'
                           }`}
                         >
                           {entry.action}

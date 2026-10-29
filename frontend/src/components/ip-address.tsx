@@ -94,8 +94,8 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
             <span
               className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${
                 known.trusted
-                  ? 'bg-green-500/10 text-green-500'
-                  : 'bg-blue-500/10 text-blue-500'
+                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
               }`}
               title={known.category ? `${known.label} (${known.category})` : known.label}
             >
@@ -108,7 +108,7 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
       <HoverCardContent side="top" align="start" className="w-80 p-0">
         <div className="p-3 border-b bg-muted/30">
           <div className="flex items-center gap-2">
-            <Crosshair className="h-4 w-4 text-blue-500 shrink-0" />
+            <Crosshair className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
             <code className="text-sm font-bold">{ip}</code>
           </div>
         </div>
@@ -173,9 +173,9 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
                     />
                   </div>
                   <span className={`text-xs font-bold ${
-                    data.abuse_score > 75 ? 'text-red-500' :
-                    data.abuse_score > 50 ? 'text-orange-500' :
-                    data.abuse_score > 25 ? 'text-yellow-500' : 'text-green-500'
+                    data.abuse_score > 75 ? 'text-red-600 dark:text-red-400' :
+                    data.abuse_score > 50 ? 'text-orange-700 dark:text-orange-400' :
+                    data.abuse_score > 25 ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                   }`}>
                     {data.abuse_score}%
                   </span>
@@ -228,7 +228,7 @@ function Flag({ label, value }: { label: string; value: boolean | null }) {
   if (value === null || value === undefined) return null
   if (!value) return null
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 font-medium">
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-medium">
       {label}
     </span>
   )

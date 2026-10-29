@@ -26,9 +26,9 @@ export interface ThreatActor {
 
 const statusColors: Record<string, string> = {
   monitored: 'bg-slate-500/10 text-muted-foreground',
-  warned: 'bg-yellow-500/10 text-yellow-500',
-  temp_blocked: 'bg-orange-500/10 text-orange-500',
-  perm_blocked: 'bg-red-500/10 text-red-500',
+  warned: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  temp_blocked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  perm_blocked: 'bg-red-500/10 text-red-600 dark:text-red-400',
   firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
@@ -116,7 +116,7 @@ export function createActorColumns(actions: {
       ),
       cell: ({ row }) => {
         const score = row.getValue('threat_score') as number
-        const color = score >= 100 ? 'text-red-500' : score >= 50 ? 'text-orange-500' : score >= 25 ? 'text-yellow-500' : 'text-muted-foreground'
+        const color = score >= 100 ? 'text-red-600 dark:text-red-400' : score >= 50 ? 'text-orange-700 dark:text-orange-400' : score >= 25 ? 'text-yellow-700 dark:text-yellow-400' : 'text-muted-foreground'
         return <span className={`text-sm font-semibold tabular-nums ${color}`}>{score}</span>
       },
     },
@@ -198,7 +198,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-500/10"
+                className="h-7 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-500/10"
                 onClick={() => actions.onInvestigate!(actor.ip_address)}
                 title="Investigate IP"
               >
@@ -210,7 +210,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-green-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-500/10"
+                className="h-7 text-xs text-green-600 dark:text-green-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-500/10"
                 onClick={() => actions.onUnblock(actor.ip_address)}
               >
                 <Unlock className="h-3.5 w-3.5 mr-1" />
@@ -220,7 +220,7 @@ export function createActorColumns(actions: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
+                className="h-7 text-xs text-red-600 dark:text-red-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
                 onClick={() => actions.onBlock(actor.ip_address)}
               >
                 <Ban className="h-3.5 w-3.5 mr-1" />

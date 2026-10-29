@@ -159,7 +159,7 @@ export function ApiKeysSettings() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            className="text-red-500 focus:text-red-500"
+                            className="text-red-600 dark:text-red-400 focus:text-red-500"
                             onClick={() => revoke(key)}
                           >
                             <Ban className="mr-2 h-4 w-4" />

@@ -659,7 +659,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
         <div className="grid gap-5 lg:grid-cols-2">
           <div>
             <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-              <ShieldAlert className="h-4 w-4 text-amber-500" />
+              <ShieldAlert className="h-4 w-4 text-amber-700 dark:text-amber-400" />
               Top attackers
             </h3>
             <Table

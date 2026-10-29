@@ -115,18 +115,18 @@ const trapTypeLabels: Record<string, string> = {
 }
 
 const trapTypeColors: Record<string, string> = {
-  wordpress: 'bg-blue-500/10 text-blue-500',
-  phpmyadmin: 'bg-orange-500/10 text-orange-500',
-  admin: 'bg-red-500/10 text-red-500',
+  wordpress: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  phpmyadmin: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  admin: 'bg-red-500/10 text-red-600 dark:text-red-400',
   api: 'bg-purple-500/10 text-brand-2',
   generic: 'bg-slate-500/10 text-muted-foreground',
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 export default function HoneypotPage() {
@@ -393,7 +393,7 @@ export default function HoneypotPage() {
                 {/* Top Traps */}
                 <div className="bg-card border rounded-lg p-4">
                   <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Crosshair className="h-4 w-4 text-amber-500" /> Most Triggered Traps
+                    <Crosshair className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Most Triggered Traps
                   </h3>
                   {stats.top_traps.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No hits yet</p>
@@ -402,7 +402,7 @@ export default function HoneypotPage() {
                       {stats.top_traps.map((t, i) => (
                         <div key={i} className="flex items-center justify-between text-sm">
                           <code className="bg-muted px-2 py-0.5 rounded text-xs">{t.path}</code>
-                          <span className="font-mono font-bold text-amber-500">{t.hit_count}</span>
+                          <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{t.hit_count}</span>
                         </div>
                       ))}
                     </div>
@@ -412,7 +412,7 @@ export default function HoneypotPage() {
                 {/* Top Attackers */}
                 <div className="bg-card border rounded-lg p-4">
                   <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-500" /> Top Attackers
+                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /> Top Attackers
                   </h3>
                   {stats.top_attackers.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No attackers caught yet</p>
@@ -426,7 +426,7 @@ export default function HoneypotPage() {
                               <span className="text-xs text-muted-foreground">{a.country}</span>
                             )}
                           </div>
-                          <span className="font-mono font-bold text-red-500">{a.hits} hits</span>
+                          <span className="font-mono font-bold text-red-600 dark:text-red-400">{a.hits} hits</span>
                         </div>
                       ))}
                     </div>
@@ -481,12 +481,12 @@ export default function HoneypotPage() {
                               {trap.severity}
                             </span>
                             {trap.auto_block && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
                                 <Shield className="h-3 w-3 inline mr-1" />auto-block
                               </span>
                             )}
                           </div>
-                          <code className="text-sm text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">{trap.path}</code>
+                          <code className="text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{trap.path}</code>
                           {trap.description && (
                             <p className="text-sm text-muted-foreground mt-1">{trap.description}</p>
                           )}
@@ -496,13 +496,13 @@ export default function HoneypotPage() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Button variant="ghost" size="icon" onClick={() => toggleTrap(trap)}>
-                            {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4" />}
+                            {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => openEditForm(trap)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => deleteTrap(trap)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                           </Button>
                         </div>
                       </div>
@@ -561,7 +561,7 @@ export default function HoneypotPage() {
                             <td className="px-4 py-2">
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
                                 hit.action_taken === 'blocked'
-                                  ? 'bg-red-500/10 text-red-500'
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                                   : 'bg-slate-500/10 text-muted-foreground'
                               }`}>
                                 {hit.action_taken}
@@ -622,7 +622,7 @@ export default function HoneypotPage() {
                   {/* Location */}
                   <div className="bg-card border rounded-lg p-5">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-blue-500" /> Location
+                      <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Location
                     </h3>
                     <div className="space-y-3 text-sm">
                       <InfoRow label="IP Address" value={enrichment.ip_address} mono />
@@ -655,7 +655,7 @@ export default function HoneypotPage() {
                   {/* Reputation */}
                   <div className="bg-card border rounded-lg p-5">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500" /> Reputation
+                      <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Reputation
                     </h3>
                     <div className="space-y-3 text-sm">
                       {enrichment.abuse_score !== null ? (
@@ -674,9 +674,9 @@ export default function HoneypotPage() {
                                 />
                               </div>
                               <span className={`font-bold ${
-                                enrichment.abuse_score > 75 ? 'text-red-500' :
-                                enrichment.abuse_score > 50 ? 'text-orange-500' :
-                                enrichment.abuse_score > 25 ? 'text-yellow-500' : 'text-green-500'
+                                enrichment.abuse_score > 75 ? 'text-red-600 dark:text-red-400' :
+                                enrichment.abuse_score > 50 ? 'text-orange-700 dark:text-orange-400' :
+                                enrichment.abuse_score > 25 ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                               }`}>
                                 {enrichment.abuse_score}%
                               </span>
@@ -696,7 +696,7 @@ export default function HoneypotPage() {
                   {/* Flags */}
                   <div className="bg-card border rounded-lg p-5">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <Crosshair className="h-4 w-4 text-red-500" /> Indicators
+                      <Crosshair className="h-4 w-4 text-red-600 dark:text-red-400" /> Indicators
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       <FlagBadge label="Tor" value={enrichment.is_tor} />
@@ -734,7 +734,7 @@ export default function HoneypotPage() {
           <ModalBody className="p-6">
             <h2 className="text-lg font-bold mb-4">{editingTrap ? 'Edit' : 'Create'} Honeypot Trap</h2>
 
-            {error && <div className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
+            {error && <div className="text-sm text-red-600 dark:text-red-400 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
 
             <div className="space-y-3">
               <div>
@@ -876,8 +876,8 @@ function FlagBadge({ label, value }: { label: string; value: boolean | null }) {
   return (
     <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
       value
-        ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-        : 'bg-green-500/10 text-green-500 border border-green-500/20'
+        ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+        : 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
     }`}>
       {label}: {value ? 'Yes' : 'No'}
     </span>

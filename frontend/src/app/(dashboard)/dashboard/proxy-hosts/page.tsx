@@ -689,7 +689,7 @@ export default function ProxyHostsPage() {
                     <button
                       type="button"
                       onClick={() => handleToggleEnabled(host)}
-                      className={`rounded-lg p-2 hover:bg-muted ${host.enabled ? '' : 'text-green-500'}`}
+                      className={`rounded-lg p-2 hover:bg-muted ${host.enabled ? '' : 'text-green-600 dark:text-green-400'}`}
                       title={host.enabled ? 'Disable host' : 'Enable host'}
                     >
                       {host.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
@@ -751,7 +751,7 @@ export default function ProxyHostsPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => handleDelete(host)}
-                          className="text-red-500 focus:text-red-500"
+                          className="text-red-600 dark:text-red-400 focus:text-red-500"
                         >
                           <Trash2 className="h-4 w-4" />
                           Delete
@@ -764,15 +764,15 @@ export default function ProxyHostsPage() {
                 {/* Row 2: Feature indicators */}
                 <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
                   {/* SSL / HSTS / HTTP2 */}
-                  <span className={`flex items-center gap-1 ${host.ssl_enabled ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.ssl_enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground/50'}`}>
                     <Shield className="h-3.5 w-3.5" />
                     SSL
                   </span>
-                  <span className={`flex items-center gap-1 ${host.hsts_enabled ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.hsts_enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground/50'}`}>
                     <Lock className="h-3.5 w-3.5" />
                     HSTS
                   </span>
-                  <span className={`flex items-center gap-1 ${host.http2_support ? 'text-green-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.http2_support ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground/50'}`}>
                     <Zap className="h-3.5 w-3.5" />
                     HTTP/2
                   </span>
@@ -784,15 +784,15 @@ export default function ProxyHostsPage() {
                     <Cable className="h-3.5 w-3.5" />
                     WebSocket
                   </span>
-                  <span className={`flex items-center gap-1 ${host.block_exploits ? 'text-orange-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.block_exploits ? 'text-orange-700 dark:text-orange-400' : 'text-muted-foreground/50'}`}>
                     <Bug className="h-3.5 w-3.5" />
                     Block Exploits
                   </span>
-                  <span className={`flex items-center gap-1 ${host.honeypot_enabled ? 'text-amber-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.honeypot_enabled ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground/50'}`}>
                     <ArrowRightLeft className="h-3.5 w-3.5" />
                     Honeypot
                   </span>
-                  <span className={`flex items-center gap-1 ${host.traffic_logging_enabled ? 'text-blue-500' : 'text-muted-foreground/50'}`}>
+                  <span className={`flex items-center gap-1 ${host.traffic_logging_enabled ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground/50'}`}>
                     <FileText className="h-3.5 w-3.5" />
                     Logging
                   </span>
@@ -805,7 +805,7 @@ export default function ProxyHostsPage() {
                     </span>
                   )}
                   {host.rate_limit_enabled && (
-                    <span className="flex items-center gap-1 text-yellow-500">
+                    <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400">
                       <Gauge className="h-3.5 w-3.5" />
                       Rate Limit
                     </span>
@@ -817,19 +817,19 @@ export default function ProxyHostsPage() {
                     </span>
                   )}
                   {hasAdvanced && (
-                    <span className="flex items-center gap-1 text-violet-500">
+                    <span className="flex items-center gap-1 text-violet-600 dark:text-violet-400">
                       <Settings className="h-3.5 w-3.5" />
                       Advanced
                     </span>
                   )}
                   {authWall && (
-                    <span className="flex items-center gap-1 text-rose-500">
+                    <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
                       <Shield className="h-3.5 w-3.5" />
                       {authWall.name}
                     </span>
                   )}
                   {accessList && (
-                    <span className="flex items-center gap-1 text-teal-500">
+                    <span className="flex items-center gap-1 text-teal-600 dark:text-teal-400">
                       <Lock className="h-3.5 w-3.5" />
                       {accessList.name}
                     </span>
@@ -1272,7 +1272,7 @@ export default function ProxyHostsPage() {
                             </button>
                             <button
                               onClick={() => handleDeleteLocation(loc)}
-                              className="p-1.5 rounded hover:bg-muted text-red-500"
+                              className="p-1.5 rounded hover:bg-muted text-red-600 dark:text-red-400"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

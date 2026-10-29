@@ -267,7 +267,7 @@ export default function AnalyticsPage() {
                 <button
                   onClick={() => setAutoRefresh(!autoRefresh)}
                   className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                    autoRefresh ? 'text-green-500' : 'text-muted-foreground'
+                    autoRefresh ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
                   }`}
                   title={autoRefresh ? 'Disable auto-refresh' : 'Enable auto-refresh'}
                 >
@@ -301,22 +301,22 @@ export default function AnalyticsPage() {
             <span className="text-sm font-medium">Live</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <Zap className="h-4 w-4 text-yellow-500" />
+            <Zap className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
             <span className="text-muted-foreground">Req/min:</span>
             <span className="font-mono font-medium">{realtime.requests_per_minute}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4 text-blue-500" />
+            <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <span className="text-muted-foreground">Active:</span>
             <span className="font-mono font-medium">{realtime.active_visitors}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <Activity className="h-4 w-4 text-green-500" />
+            <Activity className="h-4 w-4 text-green-600 dark:text-green-400" />
             <span className="text-muted-foreground">5 min:</span>
             <span className="font-mono font-medium">{realtime.requests_last_5min}</span>
           </div>
           {realtime.recent_errors > 0 && (
-            <div className="flex items-center gap-2 text-sm text-red-500">
+            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
               <AlertTriangle className="h-4 w-4" />
               <span>{realtime.recent_errors} errors</span>
             </div>

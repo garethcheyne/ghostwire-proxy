@@ -104,10 +104,10 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
   }
 
   const getStatusColor = (status: number) => {
-    if (status >= 500) return 'text-red-500 bg-red-500/10'
-    if (status >= 400) return 'text-yellow-500 bg-yellow-500/10'
-    if (status >= 300) return 'text-blue-500 bg-blue-500/10'
-    return 'text-green-500 bg-green-500/10'
+    if (status >= 500) return 'text-red-600 dark:text-red-400 bg-red-500/10'
+    if (status >= 400) return 'text-yellow-700 dark:text-yellow-400 bg-yellow-500/10'
+    if (status >= 300) return 'text-blue-600 dark:text-blue-400 bg-blue-500/10'
+    return 'text-green-600 dark:text-green-400 bg-green-500/10'
   }
 
   const formatTime = (ms: number) => {
@@ -188,7 +188,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="ml-1.5 hidden sm:inline">Refresh</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handlePurgeLogs} className="border-red-500/30 text-red-500 hover:bg-red-500/10">
+          <Button variant="outline" size="sm" onClick={handlePurgeLogs} className="border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10">
             <Trash2 className="h-4 w-4" />
             <span className="ml-1.5 hidden sm:inline">Purge</span>
           </Button>
@@ -236,10 +236,10 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
                     </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
                       <span className={`inline-flex px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
-                        log.request_method === 'GET' ? 'bg-green-500/10 text-green-500' :
-                        log.request_method === 'POST' ? 'bg-blue-500/10 text-blue-500' :
-                        log.request_method === 'PUT' ? 'bg-yellow-500/10 text-yellow-500' :
-                        log.request_method === 'DELETE' ? 'bg-red-500/10 text-red-500' :
+                        log.request_method === 'GET' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                        log.request_method === 'POST' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                        log.request_method === 'PUT' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
+                        log.request_method === 'DELETE' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
                         'bg-gray-500/10 text-gray-500'
                       }`}>
                         {log.request_method}
@@ -323,8 +323,8 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
                 <div>
                   <p className="text-xs sm:text-sm text-muted-foreground">Method</p>
                   <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                    selectedLog.request_method === 'GET' ? 'bg-green-500/10 text-green-500' :
-                    selectedLog.request_method === 'POST' ? 'bg-blue-500/10 text-blue-500' :
+                    selectedLog.request_method === 'GET' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                    selectedLog.request_method === 'POST' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
                     'bg-gray-500/10 text-gray-500'
                   }`}>
                     {selectedLog.request_method}

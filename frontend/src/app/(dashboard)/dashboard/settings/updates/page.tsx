@@ -270,14 +270,14 @@ export default function UpdatesPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />
+        return <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
       case 'failed':
-        return <XCircle className="h-5 w-5 text-red-500" />
+        return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
       case 'in_progress':
       case 'pending':
-        return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        return <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" />
       default:
-        return <Clock className="h-5 w-5 text-yellow-500" />
+        return <Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
     }
   }
 
@@ -355,7 +355,7 @@ export default function UpdatesPage() {
       )}
 
       {success && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-500 flex items-center gap-2">
+        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-600 dark:text-green-400 flex items-center gap-2">
           <CheckCircle className="h-5 w-5 flex-shrink-0" />
           <span className="flex-1">{success}</span>
           <button onClick={() => setSuccess(null)} className="text-xs underline">
@@ -684,7 +684,7 @@ export default function UpdatesPage() {
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-            <Server className="h-5 w-5 text-orange-500" />
+            <Server className="h-5 w-5 text-orange-700 dark:text-orange-400" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">Base Image Updates</h2>
@@ -724,7 +724,7 @@ export default function UpdatesPage() {
                   Update
                 </Button>
               ) : (
-                <span className="text-sm text-green-500 flex items-center gap-1">
+                <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
                   <CheckCircle className="h-4 w-4" />
                   Up to date
                 </span>
@@ -778,7 +778,7 @@ export default function UpdatesPage() {
                       {formatDate(update.started_at)}
                     </p>
                     {update.error_message && (
-                      <p className="text-sm text-red-500 mt-1">{update.error_message}</p>
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{update.error_message}</p>
                     )}
                   </div>
                 </div>
@@ -800,10 +800,10 @@ export default function UpdatesPage() {
                   )}
 
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    update.status === 'completed' ? 'bg-green-500/10 text-green-500' :
-                    update.status === 'failed' ? 'bg-red-500/10 text-red-500' :
-                    update.status === 'in_progress' ? 'bg-blue-500/10 text-blue-500' :
-                    'bg-yellow-500/10 text-yellow-500'
+                    update.status === 'completed' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                    update.status === 'failed' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
+                    update.status === 'in_progress' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                    'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                   }`}>
                     {update.status}
                   </span>

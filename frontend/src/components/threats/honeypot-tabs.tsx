@@ -67,9 +67,9 @@ interface HoneypotStats {
 }
 
 const trapTypeColors: Record<string, string> = {
-  wordpress: 'bg-blue-500/10 text-blue-500',
-  phpmyadmin: 'bg-orange-500/10 text-orange-500',
-  admin: 'bg-red-500/10 text-red-500',
+  wordpress: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  phpmyadmin: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  admin: 'bg-red-500/10 text-red-600 dark:text-red-400',
   api: 'bg-purple-500/10 text-brand-2',
   generic: 'bg-slate-500/10 text-muted-foreground',
 }
@@ -79,10 +79,10 @@ const trapTypeLabels: Record<string, string> = {
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 interface HoneypotTabsProps {
@@ -236,7 +236,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
           {/* Top Traps */}
           <div className="bg-card border rounded-lg p-4 sm:p-5">
             <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base">
-              <Crosshair className="h-4 w-4 text-amber-500" /> Most Triggered
+              <Crosshair className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Most Triggered
             </h3>
             {stats.top_traps.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hits yet</p>
@@ -245,7 +245,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                 {stats.top_traps.map((t, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                     <code className="bg-muted px-2 py-0.5 rounded text-xs truncate max-w-[200px]">{t.path}</code>
-                    <span className="font-mono font-bold text-amber-500">{t.hit_count}</span>
+                    <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{t.hit_count}</span>
                   </div>
                 ))}
               </div>
@@ -255,7 +255,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
           {/* Top Attackers */}
           <div className="bg-card border rounded-lg p-4 sm:p-5">
             <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base">
-              <AlertTriangle className="h-4 w-4 text-red-500" /> Top Attackers
+              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /> Top Attackers
             </h3>
             {stats.top_attackers.length === 0 ? (
               <p className="text-sm text-muted-foreground">No attackers yet</p>
@@ -267,7 +267,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                       <button onClick={() => onInvestigateIp(a.ip)} className="hover:underline"><IpAddress ip={a.ip} /></button>
                       {a.country && <span className="text-xs text-muted-foreground">{a.country}</span>}
                     </div>
-                    <span className="font-mono font-bold text-red-500">{a.hits}</span>
+                    <span className="font-mono font-bold text-red-600 dark:text-red-400">{a.hits}</span>
                   </div>
                 ))}
               </div>
@@ -331,25 +331,25 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                         {trap.severity}
                       </span>
                       {trap.auto_block && (
-                        <span className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/10 text-red-500">
+                        <span className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
                           <Shield className="h-3 w-3 inline mr-0.5" />auto-block
                         </span>
                       )}
                     </div>
-                    <code className="text-xs sm:text-sm text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">{trap.path}</code>
+                    <code className="text-xs sm:text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{trap.path}</code>
                     <div className="text-xs text-muted-foreground mt-1.5">
                       {trap.hit_count} hits · Response: {trap.response_code}
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-2">
                     <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => toggleTrap(trap)}>
-                      {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4" />}
+                      {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => openEditForm(trap)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => deleteTrap(trap)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </Button>
                   </div>
                 </div>
@@ -367,7 +367,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
         >
             <ModalBody className="p-4 sm:p-6">
               <h2 className="text-lg font-bold mb-4">{editingTrap ? 'Edit' : 'Create'} Trap</h2>
-              {error && <div className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
+              {error && <div className="text-sm text-red-600 dark:text-red-400 bg-red-500/10 px-3 py-2 rounded mb-3">{error}</div>}
               <div className="space-y-3">
                 <div>
                   <label className="text-sm font-medium">Name</label>
@@ -457,7 +457,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                         {hit.country_code ? <CountryBadge code={hit.country_code} name={hit.country_name} /> : '-'}
                       </td>
                       <td className="px-2 sm:px-4 py-2">
-                        <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${hit.action_taken === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-muted-foreground'}`}>
+                        <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${hit.action_taken === 'blocked' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-slate-500/10 text-muted-foreground'}`}>
                           {hit.action_taken}
                         </span>
                       </td>

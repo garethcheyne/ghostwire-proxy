@@ -158,9 +158,9 @@ export default function UsersPage() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
-        return 'bg-red-500/10 text-red-500'
+        return 'bg-red-500/10 text-red-600 dark:text-red-400'
       case 'user':
-        return 'bg-blue-500/10 text-blue-500'
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
       case 'viewer':
         return 'bg-gray-500/10 text-gray-500'
       default:
@@ -254,7 +254,7 @@ export default function UsersPage() {
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
                           user.is_active
-                            ? 'bg-green-500/10 text-green-500'
+                            ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                             : 'bg-gray-500/10 text-gray-500'
                         }`}
                       >
@@ -285,7 +285,7 @@ export default function UsersPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onSelect={() => handleDelete(user)}
-                            className="gap-2 text-red-500 focus:text-red-500"
+                            className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                           >
                             <Trash2 className="h-4 w-4" />
                             Delete

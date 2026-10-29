@@ -273,13 +273,13 @@ export default function BackupsPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />
+        return <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
       case 'failed':
-        return <XCircle className="h-5 w-5 text-red-500" />
+        return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
       case 'in_progress':
-        return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        return <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" />
       default:
-        return <Clock className="h-5 w-5 text-yellow-500" />
+        return <Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
     }
   }
 
@@ -352,7 +352,7 @@ export default function BackupsPage() {
       )}
 
       {success && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-500 flex items-center gap-2">
+        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-600 dark:text-green-400 flex items-center gap-2">
           <CheckCircle className="h-5 w-5" />
           {success}
           <button onClick={() => setSuccess(null)} className="ml-auto text-xs underline">
@@ -369,7 +369,7 @@ export default function BackupsPage() {
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">
                 Auto Backup:{' '}
-                <span className={settings.auto_backup_enabled ? 'text-green-500' : 'text-muted-foreground'}>
+                <span className={settings.auto_backup_enabled ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
                   {settings.auto_backup_enabled ? 'Enabled' : 'Disabled'}
                 </span>
               </span>
@@ -441,9 +441,9 @@ export default function BackupsPage() {
                   <td className="px-4 py-3 hidden md:table-cell">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                       backup.backup_type === 'scheduled'
-                        ? 'bg-blue-500/10 text-blue-500'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         : backup.backup_type === 'uploaded'
-                        ? 'bg-orange-500/10 text-orange-500'
+                        ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
                         : 'bg-purple-500/10 text-brand-2'
                     }`}>
                       {backup.backup_type}
@@ -492,7 +492,7 @@ export default function BackupsPage() {
                               setRestoreBackupId(backup.id)
                               setShowRestoreDialog(true)
                             }}
-                            className="p-2 rounded hover:bg-muted text-blue-500"
+                            className="p-2 rounded hover:bg-muted text-blue-600 dark:text-blue-400"
                             title="Restore"
                           >
                             <RotateCcw className="h-4 w-4" />
@@ -501,7 +501,7 @@ export default function BackupsPage() {
                       )}
                       <button
                         onClick={() => handleDelete(backup)}
-                        className="p-2 rounded hover:bg-muted text-red-500"
+                        className="p-2 rounded hover:bg-muted text-red-600 dark:text-red-400"
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />

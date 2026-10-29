@@ -51,7 +51,7 @@ export default function DashboardError({
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="w-full max-w-md rounded-xl border border-red-500/30 bg-red-500/5 p-6 text-center">
-        <AlertTriangle className="mx-auto h-10 w-10 text-red-500" />
+        <AlertTriangle className="mx-auto h-10 w-10 text-red-600 dark:text-red-400" />
         <h2 className="mt-4 text-lg font-semibold">This page failed to load</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {error.message || 'An unexpected error occurred while rendering this page.'}

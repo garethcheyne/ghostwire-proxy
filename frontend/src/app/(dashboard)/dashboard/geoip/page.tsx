@@ -69,14 +69,14 @@ interface LookupResult {
 }
 
 const modeColors: Record<string, string> = {
-  blocklist: 'bg-red-500/10 text-red-500',
-  allowlist: 'bg-green-500/10 text-green-500',
+  blocklist: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  allowlist: 'bg-green-500/10 text-green-600 dark:text-green-400',
 }
 
 const actionColors: Record<string, string> = {
-  block: 'bg-red-500/10 text-red-500',
+  block: 'bg-red-500/10 text-red-600 dark:text-red-400',
   log: 'bg-slate-500/10 text-muted-foreground',
-  challenge: 'bg-yellow-500/10 text-yellow-500',
+  challenge: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
 }
 
 
@@ -350,11 +350,11 @@ export default function GeoIPPage() {
               <div className="flex items-center gap-1.5 mt-1">
                 {dbInfo.installed ? (
                   <>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-sm font-medium text-green-500">Installed</span>
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-600 dark:text-green-400">Installed</span>
                   </>
                 ) : (
-                  <span className="text-sm font-medium text-red-500">Not Installed</span>
+                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Not Installed</span>
                 )}
               </div>
             </div>
@@ -404,7 +404,7 @@ export default function GeoIPPage() {
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <button onClick={() => handleToggle(rule)} className="shrink-0">
                         {rule.enabled ? (
-                          <ToggleRight className="h-6 w-6 text-green-500" />
+                          <ToggleRight className="h-6 w-6 text-green-600 dark:text-green-400" />
                         ) : (
                           <ToggleLeft className="h-6 w-6 text-muted-foreground" />
                         )}
@@ -418,7 +418,7 @@ export default function GeoIPPage() {
                           <span className={`text-xs px-2 py-0.5 rounded-full ${actionColors[rule.action] || actionColors.block}`}>
                             {rule.action}
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                             {rule.proxy_host_id ? hosts.find(h => h.id === rule.proxy_host_id)?.domain_names[0] || 'Specific host' : 'All hosts'}
                           </span>
                         </div>
@@ -454,7 +454,7 @@ export default function GeoIPPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => handleDelete(rule)}
-                            className="gap-2 text-red-500 focus:text-red-500"
+                            className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                           >
                             <Trash2 className="h-4 w-4" />
                             Delete

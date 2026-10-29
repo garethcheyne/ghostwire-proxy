@@ -72,10 +72,10 @@ const categoryConfig: Record<string, { label: string; icon: React.ComponentType<
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 export default function PresetsPage() {

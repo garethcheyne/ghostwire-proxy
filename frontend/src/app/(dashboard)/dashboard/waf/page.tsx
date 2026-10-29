@@ -60,30 +60,30 @@ interface ProxyHostBasic {
 }
 
 const categoryColors: Record<string, string> = {
-  sqli: 'bg-red-500/10 text-red-500',
-  xss: 'bg-orange-500/10 text-orange-500',
-  path_traversal: 'bg-yellow-500/10 text-yellow-500',
+  sqli: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  xss: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  path_traversal: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   rce: 'bg-purple-500/10 text-brand-2',
-  scanner: 'bg-blue-500/10 text-blue-500',
-  probe: 'bg-indigo-500/10 text-indigo-500',
+  scanner: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  probe: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   protocol: 'bg-slate-500/10 text-muted-foreground',
-  file_upload: 'bg-amber-500/10 text-amber-500',
+  file_upload: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   injection: 'bg-red-500/10 text-red-600 dark:text-red-400',
   recon: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
-  dos: 'bg-pink-500/10 text-pink-500',
+  dos: 'bg-pink-500/10 text-pink-600 dark:text-pink-400',
   custom: 'bg-cyan-500/10 text-brand',
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 const actionColors: Record<string, string> = {
   log: 'bg-slate-500/10 text-muted-foreground',
-  block: 'bg-red-500/10 text-red-500',
+  block: 'bg-red-500/10 text-red-600 dark:text-red-400',
   blocklist: 'bg-purple-500/10 text-brand-2',
 }
 
@@ -334,7 +334,7 @@ export default function WafPage() {
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <button onClick={() => handleToggle(rule)} className="shrink-0">
                     {rule.enabled ? (
-                      <ToggleRight className="h-6 w-6 text-green-500" />
+                      <ToggleRight className="h-6 w-6 text-green-600 dark:text-green-400" />
                     ) : (
                       <ToggleLeft className="h-6 w-6 text-muted-foreground" />
                     )}
@@ -351,7 +351,7 @@ export default function WafPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${actionColors[rule.action] || actionColors.log}`}>
                         {rule.action}
                       </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                         {rule.proxy_host_id ? hosts.find(h => h.id === rule.proxy_host_id)?.domain_names[0] || 'Specific host' : 'All hosts'}
                       </span>
                     </div>
@@ -379,7 +379,7 @@ export default function WafPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => handleDelete(rule)}
-                        className="gap-2 text-red-500 focus:text-red-500"
+                        className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete

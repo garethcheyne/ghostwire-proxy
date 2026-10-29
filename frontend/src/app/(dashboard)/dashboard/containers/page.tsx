@@ -431,9 +431,9 @@ export default function ContainersPage() {
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
                         {c.auto_update?.enabled ? (
-                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                         ) : (
-                          <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         )}
                         Automatic updates
                       </p>

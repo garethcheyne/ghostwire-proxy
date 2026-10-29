@@ -187,7 +187,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       {host.ssl_enabled && (
-                        <Shield className="h-4 w-4 text-green-500" />
+                        <Shield className="h-4 w-4 text-green-600 dark:text-green-400" />
                       )}
                     </div>
                   </div>
@@ -224,11 +224,11 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                         {cert.status === 'valid' ? (
-                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 shrink-0" />
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400 shrink-0" />
                         ) : cert.status === 'error' ? (
-                          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 shrink-0" />
+                          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 dark:text-red-400 shrink-0" />
                         ) : (
-                          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 shrink-0" />
+                          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-700 dark:text-yellow-400 shrink-0" />
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm sm:text-base truncate" data-private="domain">{cert.name}</p>
@@ -243,9 +243,9 @@ export default function DashboardPage() {
                         <span
                           className={`text-xs sm:text-sm shrink-0 ${
                             daysUntilExpiry <= 7
-                              ? 'text-red-500'
+                              ? 'text-red-600 dark:text-red-400'
                               : daysUntilExpiry <= 30
-                              ? 'text-yellow-500'
+                              ? 'text-yellow-700 dark:text-yellow-400'
                               : 'text-muted-foreground'
                           }`}
                         >
@@ -376,7 +376,7 @@ export default function DashboardPage() {
                     {authErrors.recent_events.slice(0, 15).map((evt, idx) => (
                       <div key={idx} className="flex items-start gap-3 rounded-lg border border-border p-2.5 text-sm">
                         <span className={`shrink-0 text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
-                          evt.status === 403 ? 'bg-orange-500/10 text-orange-500' : 'bg-yellow-500/10 text-yellow-500'
+                          evt.status === 403 ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400' : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                         }`}>
                           {evt.status}
                         </span>
@@ -445,7 +445,7 @@ export default function DashboardPage() {
                         <div key={idx} className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm">
                           <div className="flex items-center gap-3 min-w-0">
                             <span className={`text-[11px] sm:text-xs px-1.5 py-0.5 rounded-full ${
-                              login.type === 'admin' ? 'bg-red-500/10 text-red-500' : 'bg-yellow-500/10 text-yellow-500'
+                              login.type === 'admin' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                             }`}>
                               {login.type}
                             </span>

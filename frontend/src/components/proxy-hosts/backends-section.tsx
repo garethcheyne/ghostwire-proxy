@@ -1001,7 +1001,7 @@ export function BackendsSection({
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                className="text-red-500 focus:text-red-500"
+                                className="text-red-600 dark:text-red-400 focus:text-red-500"
                                 onClick={() => set({ servers: value.servers.filter((x) => x.key !== s.key) })}
                               >
                                 <Trash2 className="h-4 w-4" />

@@ -175,7 +175,7 @@ function MapContent({ data, threatData, cityData, showCountry, showCity, showThr
               <div className="text-sm font-medium">
                 <CountryBadge code={item.country_code} name={item.country_name} /> {item.country_name}
               </div>
-              <div className="text-xs text-red-500">
+              <div className="text-xs text-red-600 dark:text-red-400">
                 {item.count.toLocaleString()} threats
               </div>
             </Tooltip>
@@ -207,7 +207,7 @@ function MapContent({ data, threatData, cityData, showCountry, showCity, showThr
                 <div className="text-xs text-muted-foreground">
                   {item.country_name}
                 </div>
-                <div className="text-xs text-amber-500">
+                <div className="text-xs text-amber-700 dark:text-amber-400">
                   {item.count.toLocaleString()} requests &middot; {item.unique_ips} IPs
                 </div>
               </Tooltip>

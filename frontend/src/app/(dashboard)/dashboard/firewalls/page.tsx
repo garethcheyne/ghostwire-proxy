@@ -67,9 +67,9 @@ const typeLabels: Record<string, string> = {
 }
 
 const typeColors: Record<string, string> = {
-  routeros: 'bg-blue-500/10 text-blue-500',
+  routeros: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   unifi: 'bg-cyan-500/10 text-brand',
-  pfsense: 'bg-orange-500/10 text-orange-500',
+  pfsense: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
   opnsense: 'bg-purple-500/10 text-brand-2',
 }
 
@@ -367,14 +367,14 @@ export default function FirewallsPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Connection test result */}
                     {testResults[connector.id] && (
-                      <span className={`text-xs flex items-center gap-1 ${testResults[connector.id].success ? 'text-green-500' : 'text-red-500'}`}>
+                      <span className={`text-xs flex items-center gap-1 ${testResults[connector.id].success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {testResults[connector.id].success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                         {testResults[connector.id].success ? 'Connected' : 'Failed'}
                       </span>
                     )}
                     {/* Block test result */}
                     {blockTestResults[connector.id] && (
-                      <span className={`text-xs flex items-center gap-1 ${blockTestResults[connector.id].success ? 'text-green-500' : 'text-red-500'}`}>
+                      <span className={`text-xs flex items-center gap-1 ${blockTestResults[connector.id].success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {blockTestResults[connector.id].success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                         {blockTestResults[connector.id].success ? 'Block OK' : blockTestResults[connector.id].message}
                       </span>
@@ -419,7 +419,7 @@ export default function FirewallsPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => handleDelete(connector)}
-                            className="gap-2 text-red-500 focus:text-red-500"
+                            className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                           >
                             <Trash2 className="h-4 w-4" />
                             Delete
@@ -446,8 +446,8 @@ export default function FirewallsPage() {
                 <div>
                   <IpAddress ip={entry.ip_address} />
                   <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                    entry.status === 'pushed' ? 'bg-green-500/10 text-green-500' :
-                    entry.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
+                    entry.status === 'pushed' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                    entry.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' :
                     'bg-slate-500/10 text-muted-foreground'
                   }`}>
                     {entry.status}
@@ -455,7 +455,7 @@ export default function FirewallsPage() {
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {entry.pushed_at ? `Pushed: ${formatDate(entry.pushed_at)}` : 'Pending'}
-                  {entry.error_message && <span className="text-red-500 ml-2">{entry.error_message}</span>}
+                  {entry.error_message && <span className="text-red-600 dark:text-red-400 ml-2">{entry.error_message}</span>}
                 </div>
               </div>
             ))
@@ -476,7 +476,7 @@ export default function FirewallsPage() {
               <h2 className="text-xl font-semibold">
                 Test Results — {findingsDialog.connectorName}
               </h2>
-              <span className={`text-xs px-2 py-1 rounded-full ${findingsDialog.success ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+              <span className={`text-xs px-2 py-1 rounded-full ${findingsDialog.success ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
                 {findingsDialog.success ? 'Passed' : 'Issues Found'}
               </span>
             </div>
@@ -485,20 +485,20 @@ export default function FirewallsPage() {
                 <p className="text-sm text-muted-foreground">{findingsDialog.info}</p>
               )}
               {findingsDialog.error && (
-                <p className="text-sm text-red-500">{findingsDialog.error}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{findingsDialog.error}</p>
               )}
               <div className="space-y-2">
                 {findingsDialog.findings.map((f, i) => (
                   <div key={i} className="flex items-start gap-3 rounded-lg border border-border p-3">
                     <div className="shrink-0 mt-0.5">
                       {f.status === 'ok' ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                       ) : f.status === 'missing' ? (
-                        <XCircle className="h-4 w-4 text-yellow-500" />
+                        <XCircle className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
                       ) : f.status === 'warning' ? (
-                        <XCircle className="h-4 w-4 text-yellow-500" />
+                        <XCircle className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-red-500" />
+                        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                       )}
                     </div>
                     <div className="min-w-0">

@@ -105,9 +105,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   monitored: 'bg-slate-500/10 text-muted-foreground',
-  warned: 'bg-yellow-500/10 text-yellow-500',
-  temp_blocked: 'bg-orange-500/10 text-orange-500',
-  perm_blocked: 'bg-red-500/10 text-red-500',
+  warned: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  temp_blocked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  perm_blocked: 'bg-red-500/10 text-red-600 dark:text-red-400',
   firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
@@ -406,7 +406,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                   </span>
                   <span className="text-xs text-muted-foreground w-16 text-right">{actor.events} events</span>
                   <span className={`text-xs font-mono w-10 text-right font-bold ${
-                    actor.score >= 80 ? 'text-red-500' : actor.score >= 50 ? 'text-orange-500' : actor.score >= 20 ? 'text-yellow-500' : 'text-blue-500'
+                    actor.score >= 80 ? 'text-red-600 dark:text-red-400' : actor.score >= 50 ? 'text-orange-700 dark:text-orange-400' : actor.score >= 20 ? 'text-yellow-700 dark:text-yellow-400' : 'text-blue-600 dark:text-blue-400'
                   }`}>
                     {actor.score}
                   </span>
@@ -484,7 +484,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
                     </td>
                     <td className="px-3 py-2">
                       <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                        event.blocked ? 'bg-red-500/10 text-red-500' : 'bg-yellow-500/10 text-yellow-500'
+                        event.blocked ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                       }`}>
                         {event.blocked ? 'Blocked' : 'Logged'}
                       </span>

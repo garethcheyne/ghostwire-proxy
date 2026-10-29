@@ -136,33 +136,33 @@ interface ProxyHostBasic {
 // ═══════════════════════════════════════════════════════════════
 
 const wafCategoryColors: Record<string, string> = {
-  sqli: 'bg-red-500/10 text-red-500',
-  xss: 'bg-orange-500/10 text-orange-500',
-  path_traversal: 'bg-yellow-500/10 text-yellow-500',
+  sqli: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  xss: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  path_traversal: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   rce: 'bg-purple-500/10 text-brand-2',
-  scanner: 'bg-blue-500/10 text-blue-500',
+  scanner: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   custom: 'bg-cyan-500/10 text-brand',
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 const actionColors: Record<string, string> = {
   log: 'bg-slate-500/10 text-muted-foreground',
-  block: 'bg-red-500/10 text-red-500',
+  block: 'bg-red-500/10 text-red-600 dark:text-red-400',
   blocklist: 'bg-purple-500/10 text-brand-2',
-  reject: 'bg-red-500/10 text-red-500',
-  delay: 'bg-yellow-500/10 text-yellow-500',
-  challenge: 'bg-yellow-500/10 text-yellow-500',
+  reject: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  delay: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  challenge: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
 }
 
 const geoModeColors: Record<string, string> = {
-  blocklist: 'bg-red-500/10 text-red-500',
-  allowlist: 'bg-green-500/10 text-green-500',
+  blocklist: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  allowlist: 'bg-green-500/10 text-green-600 dark:text-green-400',
 }
 
 const presetCategoryConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
@@ -728,7 +728,7 @@ export default function RulesPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                           <button onClick={() => handleToggleWaf(rule)} className="shrink-0">
-                            {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
+                            {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
                           </button>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -754,7 +754,7 @@ export default function RulesPage() {
                               <DropdownMenuItem onSelect={() => handleEditWaf(rule)} className="gap-2">
                                 <Pencil className="h-4 w-4" /> Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => handleDeleteWaf(rule)} className="gap-2 text-red-500 focus:text-red-500">
+                              <DropdownMenuItem onSelect={() => handleDeleteWaf(rule)} className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500">
                                 <Trash2 className="h-4 w-4" /> Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -791,7 +791,7 @@ export default function RulesPage() {
                     <div className="rounded-lg border border-border p-2 sm:p-3">
                       <p className="text-xs text-muted-foreground">Status</p>
                       <div className="flex items-center gap-1 mt-1">
-                        {geoDbInfo.installed ? <><CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /><span className="text-xs sm:text-sm font-medium text-green-500">OK</span></> : <span className="text-xs sm:text-sm text-red-500">Missing</span>}
+                        {geoDbInfo.installed ? <><CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 dark:text-green-400" /><span className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400">OK</span></> : <span className="text-xs sm:text-sm text-red-600 dark:text-red-400">Missing</span>}
                       </div>
                     </div>
                     <div className="rounded-lg border border-border p-2 sm:p-3">
@@ -832,7 +832,7 @@ export default function RulesPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                               <button onClick={() => handleToggleGeo(rule)} className="shrink-0">
-                                {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
+                                {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
                               </button>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -857,7 +857,7 @@ export default function RulesPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40">
                                   <DropdownMenuItem onSelect={() => handleEditGeo(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => handleDeleteGeo(rule)} className="gap-2 text-red-500 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleDeleteGeo(rule)} className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -909,13 +909,13 @@ export default function RulesPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                         <button onClick={() => handleToggleRateLimit(rule)} className="shrink-0">
-                          {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
+                          {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
                         </button>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <h3 className="font-semibold text-sm sm:text-base">{rule.name}</h3>
                             <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${actionColors[rule.action]}`}>{rule.action}</span>
-                            <span className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                            <span className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                               {rule.proxy_host_id ? hosts.find(h => h.id === rule.proxy_host_id)?.domain_names[0] || 'Host' : 'All'}
                             </span>
                           </div>
@@ -936,7 +936,7 @@ export default function RulesPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuItem onSelect={() => handleEditRateLimit(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => handleDeleteRateLimit(rule)} className="gap-2 text-red-500 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDeleteRateLimit(rule)} className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"><Trash2 className="gap-2" /> Delete</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

@@ -181,11 +181,11 @@ export function UpdatesTab() {
 
   const statusBadge = (status: string) => {
     const variants: Record<string, string> = {
-      completed: 'bg-green-500/10 text-green-500 border-green-500/20',
-      failed: 'bg-red-500/10 text-red-500 border-red-500/20',
-      in_progress: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-      rolled_back: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+      completed: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
+      failed: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+      in_progress: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+      pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+      rolled_back: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
     }
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${variants[status] || 'bg-muted text-muted-foreground'}`}>
@@ -274,7 +274,7 @@ export function UpdatesTab() {
                 </>
               )}
               {!appCheck.update_available && !appCheck.error && (
-                <div className="flex items-center gap-2 text-green-500">
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="text-sm">You&apos;re on the latest version</span>
                 </div>
@@ -301,7 +301,7 @@ export function UpdatesTab() {
                         <div className="flex items-center gap-3">
                           <span className="font-mono font-medium">v{release.version}</span>
                           {release.prerelease && (
-                            <Badge variant="outline" className="text-yellow-500 border-yellow-500/30">
+                            <Badge variant="outline" className="text-yellow-700 dark:text-yellow-400 border-yellow-500/30">
                               pre-release
                             </Badge>
                           )}
@@ -389,7 +389,7 @@ export function UpdatesTab() {
                       </Button>
                     </>
                   ) : (
-                    <span className="text-xs text-green-500 flex items-center gap-1">
+                    <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                       <CheckCircle2 className="h-3 w-3" /> Up to date
                     </span>
                   )}
@@ -487,11 +487,11 @@ export function UpdatesTab() {
               <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-3">
                 <div className="flex items-center gap-3">
                   {item.status === 'completed' ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                   ) : item.status === 'failed' ? (
-                    <XCircle className="h-4 w-4 text-red-500" />
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                   ) : (
-                    <Activity className="h-4 w-4 text-blue-500" />
+                    <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   )}
                   <div>
                     <p className="text-sm font-medium">

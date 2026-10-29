@@ -48,26 +48,26 @@ interface ThreatStats {
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 const statusColors: Record<string, string> = {
   monitored: 'bg-slate-500/10 text-muted-foreground',
-  warned: 'bg-yellow-500/10 text-yellow-500',
-  temp_blocked: 'bg-orange-500/10 text-orange-500',
-  perm_blocked: 'bg-red-500/10 text-red-500',
+  warned: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  temp_blocked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  perm_blocked: 'bg-red-500/10 text-red-600 dark:text-red-400',
   firewall_banned: 'bg-purple-500/10 text-brand-2',
 }
 
 const categoryColors: Record<string, string> = {
-  sqli: 'bg-red-500/10 text-red-500',
-  xss: 'bg-orange-500/10 text-orange-500',
-  path_traversal: 'bg-yellow-500/10 text-yellow-500',
+  sqli: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  xss: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  path_traversal: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   rce: 'bg-purple-500/10 text-brand-2',
-  scanner: 'bg-blue-500/10 text-blue-500',
+  scanner: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
 }
 
 export default function ThreatsPage() {
@@ -474,7 +474,7 @@ export default function ThreatsPage() {
           data={filteredEvents}
           pageSize={25}
           emptyMessage="No threat events found"
-          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-500 opacity-50" />}
+          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-600 dark:text-green-400 opacity-50" />}
           toolbar={
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <div className="flex flex-wrap gap-2 items-center">
@@ -541,7 +541,7 @@ export default function ThreatsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
+                className="h-9 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                 onClick={handlePurgeEvents}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -563,7 +563,7 @@ export default function ThreatsPage() {
           data={filteredActors}
           pageSize={25}
           emptyMessage="No threat actors tracked"
-          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-500 opacity-50" />}
+          emptyIcon={<ShieldCheck className="h-10 w-10 text-green-600 dark:text-green-400 opacity-50" />}
           expandedRowId={expandedActorIp}
           getRowExpansionId={(actor) => actor.ip_address}
           enableRowSelection
@@ -697,7 +697,7 @@ export default function ThreatsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`h-9 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 ${!firewallAvailable ? 'ml-auto' : ''}`}
+                  className={`h-9 text-xs border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500/10 ${!firewallAvailable ? 'ml-auto' : ''}`}
                   onClick={handleBulkUnblock}
                 >
                   <Unlock className="h-3.5 w-3.5 mr-1" />
@@ -709,7 +709,7 @@ export default function ThreatsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
+                  className="h-9 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                   onClick={handleBulkDelete}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -728,7 +728,7 @@ export default function ThreatsPage() {
         <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l shadow-2xl overflow-y-auto">
           <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between z-10">
             <h3 className="font-semibold flex items-center gap-2">
-              <Crosshair className="h-4 w-4 text-blue-500" />
+              <Crosshair className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               IP Intelligence: <code className="text-sm">{intelIp}</code>
             </h3>
             <div className="flex items-center gap-1">
@@ -752,7 +752,7 @@ export default function ThreatsPage() {
                 {/* Location */}
                 <div className="bg-card border rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Globe className="h-3.5 w-3.5 text-blue-500" /> Location
+                    <Globe className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /> Location
                   </h4>
                   <div className="space-y-2 text-sm">
                     <IntelRow label="Country" value={intelData.country_name ? `${intelData.country_name} (${intelData.country_code})` : null} />
@@ -784,7 +784,7 @@ export default function ThreatsPage() {
                 {/* Reputation */}
                 <div className="bg-card border rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Reputation
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Reputation
                   </h4>
                   <div className="space-y-2 text-sm">
                     {intelData.abuse_score !== null && intelData.abuse_score !== undefined ? (
@@ -792,9 +792,9 @@ export default function ThreatsPage() {
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">Abuse Score</span>
                           <span className={`font-bold ${
-                            intelData.abuse_score > 75 ? 'text-red-500' :
-                            intelData.abuse_score > 50 ? 'text-orange-500' :
-                            intelData.abuse_score > 25 ? 'text-yellow-500' : 'text-green-500'
+                            intelData.abuse_score > 75 ? 'text-red-600 dark:text-red-400' :
+                            intelData.abuse_score > 50 ? 'text-orange-700 dark:text-orange-400' :
+                            intelData.abuse_score > 25 ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                           }`}>
                             {intelData.abuse_score}%
                           </span>
@@ -810,7 +810,7 @@ export default function ThreatsPage() {
                 {/* Indicators */}
                 <div className="bg-card border rounded-lg p-4">
                   <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Crosshair className="h-3.5 w-3.5 text-red-500" /> Indicators
+                    <Crosshair className="h-3.5 w-3.5 text-red-600 dark:text-red-400" /> Indicators
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     <IntelFlag label="Tor" value={intelData.is_tor} />
@@ -854,8 +854,8 @@ function IntelFlag({ label, value }: { label: string; value: boolean | null }) {
   return (
     <span className={`text-xs px-2 py-1 rounded-full font-medium ${
       value
-        ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-        : 'bg-green-500/10 text-green-500 border border-green-500/20'
+        ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+        : 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
     }`}>
       {label}: {value ? 'Yes' : 'No'}
     </span>

@@ -327,8 +327,8 @@ export default function SettingsPage() {
         <div
           className={`flex items-center gap-2 p-4 rounded-lg ${
             message.type === 'success'
-              ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-              : 'bg-red-500/10 text-red-500 border border-red-500/20'
+              ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+              : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
           }`}
         >
           {message.type === 'success' ? (
@@ -719,7 +719,7 @@ export default function SettingsPage() {
               )}
             </div>
             {abuseIpDbKeyHasValue && (
-              <p className="text-xs text-green-500 mt-2 flex items-center gap-1">
+              <p className="text-xs text-green-600 dark:text-green-400 mt-2 flex items-center gap-1">
                 <CheckCircle className="h-3 w-3" /> API key is configured — AbuseIPDB lookups are active
               </p>
             )}

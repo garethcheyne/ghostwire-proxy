@@ -153,7 +153,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
                         {formatResponseTime(host.avg_response_time)}
                       </span>
                       <span className={`text-xs font-mono ${
-                        host.error_rate > 5 ? 'text-red-500' : host.error_rate > 1 ? 'text-yellow-500' : 'text-green-500'
+                        host.error_rate > 5 ? 'text-red-600 dark:text-red-400' : host.error_rate > 1 ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                       }`}>
                         {host.error_rate.toFixed(1)}% err
                       </span>
@@ -202,11 +202,11 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
                               key={code}
                               className={`text-xs px-1.5 py-0.5 rounded font-mono ${
                                 parseInt(code) >= 500
-                                  ? 'bg-red-500/10 text-red-500'
+                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                                   : code === '403'
-                                  ? 'bg-orange-500/10 text-orange-500'
+                                  ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
                                   : code === '404'
-                                  ? 'bg-yellow-500/10 text-yellow-500'
+                                  ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                                   : 'bg-slate-500/10 text-muted-foreground'
                               }`}
                             >
@@ -237,7 +237,7 @@ export function PerformanceTab({ data, formatNumber, formatBytes, formatResponse
                   return (
                     <div key={item.status} className="flex items-center gap-3">
                       <span className={`text-xs font-mono w-8 font-bold ${
-                        item.status >= 500 ? 'text-red-500' : item.status === 403 ? 'text-orange-500' : 'text-yellow-500'
+                        item.status >= 500 ? 'text-red-600 dark:text-red-400' : item.status === 403 ? 'text-orange-700 dark:text-orange-400' : 'text-yellow-700 dark:text-yellow-400'
                       }`}>
                         {item.status}
                       </span>

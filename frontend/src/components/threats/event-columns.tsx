@@ -25,24 +25,24 @@ export interface ThreatEvent {
 }
 
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  low: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
 }
 
 const categoryColors: Record<string, string> = {
-  sqli: 'bg-red-500/10 text-red-500',
-  xss: 'bg-orange-500/10 text-orange-500',
-  path_traversal: 'bg-yellow-500/10 text-yellow-500',
+  sqli: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  xss: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  path_traversal: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   rce: 'bg-purple-500/10 text-brand-2',
-  scanner: 'bg-blue-500/10 text-blue-500',
-  probe: 'bg-indigo-500/10 text-indigo-500',
+  scanner: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  probe: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   sensitive_data: 'bg-cyan-500/10 text-brand',
   injection: 'bg-red-500/10 text-red-600 dark:text-red-400',
   recon: 'bg-slate-500/10 text-muted-foreground',
-  dos: 'bg-amber-500/10 text-amber-500',
-  blocked_ip: 'bg-red-500/10 text-red-500',
+  dos: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  blocked_ip: 'bg-red-500/10 text-red-600 dark:text-red-400',
 }
 
 export function createEventColumns(actions: {
@@ -138,7 +138,7 @@ export function createEventColumns(actions: {
         const action = row.getValue('action_taken') as string
         return (
           <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
-            action === 'blocked' ? 'bg-red-500/10 text-red-500' : 'bg-slate-500/10 text-muted-foreground'
+            action === 'blocked' ? 'bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-slate-500/10 text-muted-foreground'
           }`}>
             {action}
           </span>

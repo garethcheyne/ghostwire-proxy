@@ -45,8 +45,8 @@ interface RateLimitRule {
 }
 
 const actionColors: Record<string, string> = {
-  reject: 'bg-red-500/10 text-red-500',
-  delay: 'bg-yellow-500/10 text-yellow-500',
+  reject: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  delay: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   log: 'bg-slate-500/10 text-muted-foreground',
 }
 
@@ -257,7 +257,7 @@ export default function RateLimitsPage() {
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <button onClick={() => handleToggle(rule)} className="shrink-0">
                     {rule.enabled ? (
-                      <ToggleRight className="h-6 w-6 text-green-500" />
+                      <ToggleRight className="h-6 w-6 text-green-600 dark:text-green-400" />
                     ) : (
                       <ToggleLeft className="h-6 w-6 text-muted-foreground" />
                     )}
@@ -269,12 +269,12 @@ export default function RateLimitsPage() {
                         {rule.action}
                       </span>
                       {!rule.proxy_host_id && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                           All hosts
                         </span>
                       )}
                       {rule.proxy_host_id && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                           {hosts.find(h => h.id === rule.proxy_host_id)?.domain_names[0] || 'Specific host'}
                         </span>
                       )}
@@ -322,7 +322,7 @@ export default function RateLimitsPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => handleDelete(rule)}
-                        className="gap-2 text-red-500 focus:text-red-500"
+                        className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete

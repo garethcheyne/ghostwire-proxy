@@ -588,7 +588,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => handleDeleteWall(wall)}
-                        className="gap-2 text-red-500 focus:text-red-500"
+                        className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete
@@ -658,7 +658,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-amber-500"
+                                  className="h-7 w-7 text-amber-700 dark:text-amber-400"
                                   onClick={() => handleDisableTotp(wall.id, user.id)}
                                   title="Disable 2FA"
                                 >
@@ -680,7 +680,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-red-500"
+                                className="h-7 w-7 text-red-600 dark:text-red-400"
                                 onClick={() => handleDeleteUser(wall.id, user.id)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -983,7 +983,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-red-500"
+                            className="text-red-600 dark:text-red-400"
                             onClick={() => handleRevokeSession(session.id)}
                           >
                             Revoke

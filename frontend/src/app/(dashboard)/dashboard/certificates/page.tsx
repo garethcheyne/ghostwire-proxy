@@ -173,11 +173,11 @@ export default function CertificatesPage() {
   }
 
   const getStatusColor = (status: string, daysUntilExpiry: number | null) => {
-    if (status === 'error') return 'text-red-500'
-    if (status === 'pending') return 'text-yellow-500'
-    if (daysUntilExpiry !== null && daysUntilExpiry <= 7) return 'text-red-500'
-    if (daysUntilExpiry !== null && daysUntilExpiry <= 30) return 'text-yellow-500'
-    return 'text-green-500'
+    if (status === 'error') return 'text-red-600 dark:text-red-400'
+    if (status === 'pending') return 'text-yellow-700 dark:text-yellow-400'
+    if (daysUntilExpiry !== null && daysUntilExpiry <= 7) return 'text-red-600 dark:text-red-400'
+    if (daysUntilExpiry !== null && daysUntilExpiry <= 30) return 'text-yellow-700 dark:text-yellow-400'
+    return 'text-green-600 dark:text-green-400'
   }
 
   if (isLoading) {
@@ -232,17 +232,17 @@ export default function CertificatesPage() {
                     {cert.status === 'valid' ? (
                       <CheckCircle className={`h-5 w-5 ${statusColor}`} />
                     ) : cert.status === 'error' ? (
-                      <AlertTriangle className="h-5 w-5 text-red-500" />
+                      <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                     ) : (
-                      <Clock className="h-5 w-5 text-yellow-500" />
+                      <Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
                     )}
                     <div>
                       <h3 className="font-semibold" data-private="domain">{cert.name}</h3>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           cert.is_letsencrypt
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-blue-500/10 text-blue-500'
+                            ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         }`}
                       >
                         {cert.is_letsencrypt ? "Let's Encrypt" : 'Custom'}
@@ -267,7 +267,7 @@ export default function CertificatesPage() {
                       )}
                       <DropdownMenuItem
                         onSelect={() => handleDelete(cert)}
-                        className="gap-2 text-red-500 focus:text-red-500"
+                        className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete

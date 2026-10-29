@@ -46,7 +46,7 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
         <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between z-10">
           <div className="min-w-0">
             <h3 className="font-semibold flex flex-wrap items-center gap-2">
-              <Activity className="h-4 w-4 text-blue-500 shrink-0" />
+              <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
               <span>Traffic report</span>
               <code className="text-sm font-mono" data-private="ip">{ip}</code>
             </h3>
@@ -138,7 +138,7 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
 
             {data.threats?.length > 0 && (
               <section>
-                <h4 className="font-medium mb-2 flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-500" /> Threats</h4>
+                <h4 className="font-medium mb-2 flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /> Threats</h4>
                 <div className="space-y-1">
                   {data.threats.map((th: Record<string, unknown>, i: number) => (
                     <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm">
@@ -162,7 +162,7 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
                       <span className="font-mono shrink-0">
                         {Number(h.requests).toLocaleString()}
                         {Number(h.errors) > 0 && (
-                          <span className="text-red-500 ml-2">{String(h.errors)} err</span>
+                          <span className="text-red-600 dark:text-red-400 ml-2">{String(h.errors)} err</span>
                         )}
                       </span>
                     </div>

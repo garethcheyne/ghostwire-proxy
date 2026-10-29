@@ -203,7 +203,7 @@ export default function KnownIpsPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{k.label}</span>
                         {k.trusted && (
-                          <ShieldCheck className="h-4 w-4 text-green-500" aria-label="Recognised as benign" />
+                          <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" aria-label="Recognised as benign" />
                         )}
                       </div>
                     </td>
