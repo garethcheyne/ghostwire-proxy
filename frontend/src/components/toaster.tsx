@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { registerToastSetter, type ToastItem } from '@/lib/toast'
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 const icons = {
   success: CheckCircle2,
@@ -10,10 +11,11 @@ const icons = {
   info: Info,
 }
 
-const styles = {
-  success: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
-  error: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-  info: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+// A plain popover-coloured card; the icon carries the status colour.
+const iconStyles = {
+  success: 'text-green-600 dark:text-green-400',
+  error: 'text-red-600 dark:text-red-400',
+  info: 'text-sky-600 dark:text-sky-400',
 }
 
 export function Toaster() {
@@ -43,16 +45,20 @@ export function Toaster() {
         return (
           <div
             key={t.id}
-            className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg backdrop-blur-xs animate-in slide-in-from-bottom-2 fade-in duration-200 ${styles[t.type]}`}
+            role={t.type === 'error' ? 'alert' : 'status'}
+            className="flex items-start gap-3 rounded-lg border bg-popover px-4 py-3 text-popover-foreground shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-200"
           >
-            <Icon className="h-4 w-4 mt-0.5 shrink-0" />
+            <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${iconStyles[t.type]}`} />
             <p className="text-sm flex-1">{t.message}</p>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={() => dismiss(t.id)}
-              className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label="Dismiss"
+              className="-mr-1 shrink-0 text-muted-foreground"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              <X />
+            </Button>
           </div>
         )
       })}

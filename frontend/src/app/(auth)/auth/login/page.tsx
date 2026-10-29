@@ -1,10 +1,12 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { Loader2, AlertCircle, ShieldCheck, KeyRound } from 'lucide-react'
 import api from '@/lib/api'
+import { Button } from '@/components/ui/button'
 import { authClient } from '@/lib/auth-client'
 import { clearLegacySession } from '@/lib/session'
 
@@ -23,8 +25,22 @@ function messageOf(error: { message?: string; status?: number } | null | undefin
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isSetupMode, setIsSetupMode] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  // First run (no admin yet) shows the create-account form. If the check fails, assume login mode.
+  const setupQuery = useQuery({
+    queryKey: ['setup', 'check'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/api/setup/check')
+        return Boolean(response.data.setup_required)
+      } catch {
+        return false
+      }
+    },
+    retry: false,
+    staleTime: 0,
+  })
+  const isSetupMode = setupQuery.data ?? false
+  const isLoading = setupQuery.isPending
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -43,22 +59,6 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-
-  const checkSetup = async () => {
-    try {
-      const response = await api.get('/api/setup/check')
-      setIsSetupMode(response.data.setup_required)
-    } catch {
-      // If check fails, assume login mode
-      setIsSetupMode(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    checkSetup()
-  }, [])
 
   const finishSignIn = () => {
     clearLegacySession()
@@ -313,14 +313,15 @@ function LoginForm() {
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full h-10 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+          size="lg"
+          className="w-full"
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSetupMode ? 'Create Account' : 'Sign in'}
-        </button>
+        </Button>
       </form>
       )}
 
@@ -352,22 +353,24 @@ function LoginForm() {
             </p>
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={isSubmitting || totpCode.trim().length < 6}
-            className="w-full h-10 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+            size="lg"
+            className="w-full"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Verify
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
             onClick={() => restart()}
-            className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            variant="ghost"
+            className="w-full text-muted-foreground"
           >
             Back to sign in
-          </button>
+          </Button>
         </form>
       )}
 
@@ -446,23 +449,25 @@ function LoginForm() {
             </li>
           </ol>
 
-          <button
+          <Button
             type="submit"
             disabled={isSubmitting || !savedCodes || totpCode.trim().length < 6}
-            className="w-full h-10 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+            size="lg"
+            className="w-full"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             <KeyRound className="h-4 w-4" />
             Enable and sign in
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
             onClick={() => restart()}
-            className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            variant="ghost"
+            className="w-full text-muted-foreground"
           >
             Cancel
-          </button>
+          </Button>
         </form>
       )}
     </div>

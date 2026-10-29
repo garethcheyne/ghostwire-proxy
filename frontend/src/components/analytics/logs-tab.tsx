@@ -24,6 +24,7 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { Button } from '@/components/ui/button'
 import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import type { TrafficLog, ProxyHost } from '@/types'
 
@@ -62,7 +63,9 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
   const {
     data: logsData,
     isPending: isLoading,
+    isError: logsFailed,
     isFetching: isRefreshing,
+    refetch: refetchLogs,
   } = useTrafficLogs({
     page,
     limit,
@@ -124,11 +127,11 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading logs...</div>
-      </div>
-    )
+    return <ContentSkeleton stats={4} rows={6} />
+  }
+
+  if (logsFailed && !logsData) {
+    return <LoadError what="traffic logs" onRetry={() => refetchLogs()} />
   }
 
   return (
@@ -188,7 +191,7 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="ml-1.5 hidden sm:inline">Refresh</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handlePurgeLogs} className="border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+          <Button variant="destructive" size="sm" onClick={handlePurgeLogs}>
             <Trash2 className="h-4 w-4" />
             <span className="ml-1.5 hidden sm:inline">Purge</span>
           </Button>
@@ -260,13 +263,16 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
                       {log.response_time ? formatTime(log.response_time) : '-'}
                     </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-3">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={(e) => { e.stopPropagation(); handleDeleteLog(log.id) }}
-                        className="rounded-lg p-1 sm:p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500"
+                        className="text-red-600 hover:text-red-600 dark:text-red-400"
                         title="Delete"
+                        aria-label="Delete log entry"
                       >
-                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </button>
+                        <Trash2 />
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -280,12 +286,12 @@ export function LogsTab({ formatBytes, formatResponseTime }: LogsTabProps) {
           <div className="flex items-center justify-between border-t border-border px-3 sm:px-4 py-2 sm:py-3">
             <p className="text-xs sm:text-sm text-muted-foreground">Page {page} of {totalPages}</p>
             <div className="flex flex-wrap gap-1 sm:gap-2">
-              <button onClick={() => setPage(page - 1)} disabled={page === 1} className="rounded-lg p-1.5 sm:p-2 hover:bg-muted disabled:opacity-50">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button onClick={() => setPage(page + 1)} disabled={page === totalPages} className="rounded-lg p-1.5 sm:p-2 hover:bg-muted disabled:opacity-50">
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <Button variant="ghost" size="icon-sm" onClick={() => setPage(page - 1)} disabled={page === 1} aria-label="Previous page">
+                <ChevronLeft />
+              </Button>
+              <Button variant="ghost" size="icon-sm" onClick={() => setPage(page + 1)} disabled={page === totalPages} aria-label="Next page">
+                <ChevronRight />
+              </Button>
             </div>
           </div>
         )}

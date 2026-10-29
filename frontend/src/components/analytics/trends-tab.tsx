@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { TrendingUp, Users, ShieldAlert, Gauge, Globe } from 'lucide-react'
 import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import {
   AreaChart,
   Area,
@@ -47,6 +48,9 @@ export interface TrendsData {
 interface TrendsTabProps {
   data: TrendsData | null
   isLoading: boolean
+  /** The last load failed (shown instead of "no trend data yet" when there is nothing to show). */
+  failed?: boolean
+  onRetry?: () => void
   formatNumber: (n: number) => string
   formatBytes: (n: number) => string
 }
@@ -57,7 +61,7 @@ function shortDate(date: string) {
   return m && d ? `${d}/${m}` : date
 }
 
-export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: TrendsTabProps) {
+export function TrendsTab({ data, isLoading, failed, onRetry, formatNumber, formatBytes }: TrendsTabProps) {
   // Merge each host's series into one row per date so Recharts can draw them
   // as comparable lines rather than separate charts.
   const perHostSeries = useMemo(() => {
@@ -77,7 +81,11 @@ export function TrendsTab({ data, isLoading, formatNumber, formatBytes }: Trends
   }, [data])
 
   if (isLoading) {
-    return <div className="animate-pulse text-muted-foreground py-12 text-center">Loading trends…</div>
+    return <ContentSkeleton stats={4} rows={2} />
+  }
+
+  if (!data && failed) {
+    return <LoadError what="trends" onRetry={onRetry} />
   }
 
   if (!data || data.totals.length === 0) {

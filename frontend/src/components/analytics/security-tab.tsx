@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import {
   Shield,
@@ -28,6 +28,8 @@ import {
 import api from '@/lib/api'
 import { IpAddress } from '@/components/ip-address'
 import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
+import { usePageData } from '@/lib/use-page-data'
 
 const GeoHeatmap = dynamic(() => import('@/components/geo-heatmap'), { ssr: false })
 
@@ -144,9 +146,7 @@ export function SecurityTab({ period }: SecurityTabProps) {
     }
   }, [period, days])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  usePageData(fetchData, [period])
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
@@ -154,12 +154,12 @@ export function SecurityTab({ period }: SecurityTabProps) {
     return num.toString()
   }
 
-  if (isLoading || !stats) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading security analytics...</div>
-      </div>
-    )
+  if (isLoading && !stats) {
+    return <ContentSkeleton stats={5} rows={3} />
+  }
+
+  if (!stats) {
+    return <LoadError what="security analytics" onRetry={fetchData} />
   }
 
   const severityData = Object.entries(stats.severity_breakdown)
@@ -349,14 +349,8 @@ export function SecurityTab({ period }: SecurityTabProps) {
               <h3 className="font-semibold">Authentication Errors</h3>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="rounded-lg border border-border p-3 text-center">
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatNumber(authErrors.summary.total_401)}</p>
-                <p className="text-xs text-muted-foreground">401 Unauthorized</p>
-              </div>
-              <div className="rounded-lg border border-border p-3 text-center">
-                <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{formatNumber(authErrors.summary.total_403)}</p>
-                <p className="text-xs text-muted-foreground">403 Forbidden</p>
-              </div>
+              <StatCard title="401 Unauthorized" value={formatNumber(authErrors.summary.total_401)} tone="danger" />
+              <StatCard title="403 Forbidden" value={formatNumber(authErrors.summary.total_403)} tone="warning" />
             </div>
             {authErrors.top_offenders.length > 0 && (
               <>

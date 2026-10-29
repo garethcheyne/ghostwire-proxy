@@ -174,26 +174,18 @@ export function OverviewTab({ data, formatNumber, formatBytes, formatResponseTim
         <div className="rounded-xl border border-border bg-card p-6">
           <h3 className="font-semibold mb-4">Period Summary</h3>
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-xs text-muted-foreground mb-1">Total Bandwidth</p>
-              <p className="text-lg font-bold">{formatBytes(data.total_bytes_transferred)}</p>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-xs text-muted-foreground mb-1">Success Rate</p>
-              <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                {data.total_requests > 0
+            <StatCard title="Total Bandwidth" value={formatBytes(data.total_bytes_transferred)} />
+            <StatCard
+              title="Success Rate"
+              tone="success"
+              value={`${
+                data.total_requests > 0
                   ? ((data.status_breakdown.status_2xx / data.total_requests) * 100).toFixed(1)
-                  : '0'}%
-              </p>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-xs text-muted-foreground mb-1">Client Errors</p>
-              <p className="text-lg font-bold text-yellow-700 dark:text-yellow-400">{formatNumber(data.status_breakdown.status_4xx)}</p>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-xs text-muted-foreground mb-1">Server Errors</p>
-              <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatNumber(data.status_breakdown.status_5xx)}</p>
-            </div>
+                  : '0'
+              }%`}
+            />
+            <StatCard title="Client Errors" value={formatNumber(data.status_breakdown.status_4xx)} tone="warning" />
+            <StatCard title="Server Errors" value={formatNumber(data.status_breakdown.status_5xx)} tone="danger" />
           </div>
         </div>
       </div>

@@ -88,13 +88,13 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
 
             return (
               <div key={section.slug}>
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => toggle(section.slug)}
+                  aria-expanded={isExpanded}
                   className={cn(
-                    'flex items-center w-full px-3 py-2 text-sm rounded-md transition-colors',
-                    isInSection
-                      ? 'text-brand font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    'h-auto w-full justify-start gap-0 px-3 py-2 font-normal',
+                    isInSection ? 'font-medium text-brand hover:text-brand' : 'text-muted-foreground'
                   )}
                 >
                   <Icon className="mr-2 h-4 w-4 shrink-0" />
@@ -108,7 +108,7 @@ export function DocsSidebar({ navigation }: { navigation: NavSection[] }) {
                       )}
                     </span>
                   )}
-                </button>
+                </Button>
 
                 {/* Children */}
                 {isExpanded && section.children && (

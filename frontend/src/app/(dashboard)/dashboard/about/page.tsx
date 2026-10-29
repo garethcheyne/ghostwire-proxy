@@ -214,7 +214,7 @@ export default function AboutPage() {
           href="https://github.com/garethcheyne/ghostwire-proxy"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/50"
         >
           <GithubIcon className="h-5 w-5 text-muted-foreground" />
           <div>
@@ -226,7 +226,7 @@ export default function AboutPage() {
 
         <button
           onClick={() => setActiveTab('license')}
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors text-left"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/50 text-left"
         >
           <FileText className="h-5 w-5 text-muted-foreground" />
           <div>
@@ -239,7 +239,7 @@ export default function AboutPage() {
           href="https://github.com/garethcheyne/ghostwire-proxy/issues"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand/50 transition-colors"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/50"
         >
           <Heart className="h-5 w-5 text-muted-foreground" />
           <div>

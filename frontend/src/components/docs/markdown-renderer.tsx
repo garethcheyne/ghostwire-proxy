@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 
 interface MarkdownRendererProps {
   html: string
@@ -46,7 +47,7 @@ export function MarkdownRenderer({ html, className }: MarkdownRendererProps) {
           'prose-strong:text-foreground',
           'prose-code:text-brand prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono',
           'prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-pre:rounded-lg',
-          'prose-img:rounded-lg prose-img:border prose-img:border-border prose-img:shadow-lg prose-img:cursor-pointer prose-img:transition-transform prose-img:hover:scale-[1.02]',
+          'prose-img:rounded-lg prose-img:border prose-img:border-border prose-img:shadow-lg prose-img:cursor-pointer',
           'prose-table:text-sm',
           'prose-th:border prose-th:border-border prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-medium',
           'prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2',
@@ -58,27 +59,19 @@ export function MarkdownRenderer({ html, className }: MarkdownRendererProps) {
         dangerouslySetInnerHTML={{ __html: html }}
       />
 
-      {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs cursor-pointer"
-          onClick={() => setLightboxSrc(null)}
-        >
-          <div className="relative max-w-[90vw] max-h-[90vh]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+      <Dialog open={lightboxSrc !== null} onOpenChange={(open) => { if (!open) setLightboxSrc(null) }}>
+        <DialogContent className="w-fit max-w-[90vw] p-2 sm:max-w-[90vw]">
+          <DialogTitle className="sr-only">{lightboxAlt || 'Image'}</DialogTitle>
+          {lightboxSrc && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={lightboxSrc}
               alt={lightboxAlt}
-              className="max-w-full max-h-[90vh] rounded-lg border border-border shadow-2xl object-contain"
+              className="max-h-[85vh] max-w-full rounded-lg object-contain"
             />
-            <button
-              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-sm"
-              onClick={(e) => { e.stopPropagation(); setLightboxSrc(null) }}
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

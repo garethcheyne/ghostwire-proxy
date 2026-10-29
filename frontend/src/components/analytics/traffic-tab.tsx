@@ -15,6 +15,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { Button } from '@/components/ui/button'
 import { IpAddress } from '@/components/ip-address'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
@@ -132,14 +133,15 @@ export function TrafficTab({
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
                       {onSelectHost ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="link"
                           onClick={(e) => { e.stopPropagation(); onSelectHost(host.host_id) }}
-                          className="font-medium text-left hover:underline"
+                          className="h-auto p-0 font-medium text-foreground"
                           data-private="domain"
                         >
                           {host.host_name}
-                        </button>
+                        </Button>
                       ) : (
                         <span className="font-medium" data-private="domain">{host.host_name}</span>
                       )}

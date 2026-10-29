@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { LogOut, Settings, Activity } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -17,20 +17,12 @@ import { signOutAndRedirect } from '@/lib/session'
 
 /** The signed-in admin's avatar and account menu, at the far right of the header. */
 export function UserMenu() {
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null)
-
-  const fetchUser = async () => {
-    try {
-      const response = await api.get('/api/users/me')
-      setUser(response.data)
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  useEffect(() => {
-    fetchUser()
-  }, [])
+  // A failed lookup just leaves the placeholder name and email in place.
+  const { data: user = null } = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: async () => (await api.get<{ name: string; email: string }>('/api/users/me')).data,
+    retry: false,
+  })
 
   const handleLogout = async () => {
     // Ends the Better Auth session (audit-logged by the auth server) and clears the client.

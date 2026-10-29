@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   Bell,
@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Ban,
   Wrench,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,7 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import api from '@/lib/api'
+import { usePageData } from '@/lib/use-page-data'
 import { cn } from '@/lib/utils'
 
 /** The proxy's own header buttons: the kill switch (with its dialog and banner) and traffic logs. */
@@ -48,9 +51,7 @@ export function HeaderActions() {
     }
   }
 
-  useEffect(() => {
-    fetchKillSwitchStatus()
-  }, [])
+  usePageData(fetchKillSwitchStatus)
 
   const toggleKillSwitch = async () => {
     if (!killSwitchActive && killSwitchMode === 'redirect' && !killSwitchRedirectUrl.trim()) return
@@ -79,12 +80,9 @@ export function HeaderActions() {
             variant={killSwitchActive ? 'destructive' : 'ghost'}
             size="icon"
             onClick={() => setShowKillSwitchDialog(true)}
-            className={cn(
-              'relative h-9 w-9 transition-all duration-300',
-              killSwitchActive && 'animate-pulse bg-red-600 hover:bg-red-700'
-            )}
+            className="relative h-9 w-9"
           >
-            <Power className={cn('h-5 w-5', killSwitchActive && 'text-white')} />
+            <Power className="h-5 w-5" />
             {killSwitchActive && (
               <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-400 animate-ping" />
             )}
@@ -145,50 +143,21 @@ export function HeaderActions() {
           {!killSwitchActive && (
             <div className="space-y-3 pt-2">
               <Label className="text-sm font-medium">Mode</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setKillSwitchMode('maintenance')}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
-                    killSwitchMode === 'maintenance'
-                      ? 'border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-400'
-                      : 'border-muted hover:border-muted-foreground/50'
-                  )}
-                >
-                  <Wrench className="h-5 w-5" />
-                  <span className="font-medium">Maintenance</span>
-                  <span className="text-[10px] text-muted-foreground">503 page</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKillSwitchMode('redirect')}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
-                    killSwitchMode === 'redirect'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                      : 'border-muted hover:border-muted-foreground/50'
-                  )}
-                >
-                  <ExternalLink className="h-5 w-5" />
-                  <span className="font-medium">Redirect</span>
-                  <span className="text-[10px] text-muted-foreground">301 to URL</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKillSwitchMode('drop')}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-sm transition-colors',
-                    killSwitchMode === 'drop'
-                      ? 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400'
-                      : 'border-muted hover:border-muted-foreground/50'
-                  )}
-                >
-                  <Ban className="h-5 w-5" />
-                  <span className="font-medium">Drop</span>
-                  <span className="text-[10px] text-muted-foreground">No response</span>
-                </button>
-              </div>
+              <Tabs value={killSwitchMode} onValueChange={setKillSwitchMode}>
+                <TabsList aria-label="Kill switch mode" className="grid w-full grid-cols-3 sm:w-full">
+                  {([
+                    { value: 'maintenance', label: 'Maintenance', hint: '503 page', icon: Wrench },
+                    { value: 'redirect', label: 'Redirect', hint: '301 to URL', icon: ExternalLink },
+                    { value: 'drop', label: 'Drop', hint: 'No response', icon: Ban },
+                  ] as const).map(({ value, label, hint, icon: Icon }) => (
+                    <TabsTrigger key={value} value={value} className="h-auto flex-col gap-1 py-2.5">
+                      <Icon className="size-5" />
+                      <span>{label}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">{hint}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
 
               {killSwitchMode === 'redirect' && (
                 <div className="space-y-1.5">
@@ -216,16 +185,13 @@ export function HeaderActions() {
               variant={killSwitchActive ? 'default' : 'destructive'}
               onClick={toggleKillSwitch}
               disabled={isToggling || (!killSwitchActive && killSwitchMode === 'redirect' && !killSwitchRedirectUrl.trim())}
-              className={cn(
-                'min-w-[140px]',
-                !killSwitchActive && 'bg-red-600 hover:bg-red-700'
-              )}
+              className="min-w-[140px]"
             >
               {isToggling ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <>
+                  <Loader2 className="animate-spin" />
                   Processing...
-                </span>
+                </>
               ) : killSwitchActive ? (
                 'Restore Traffic'
               ) : (

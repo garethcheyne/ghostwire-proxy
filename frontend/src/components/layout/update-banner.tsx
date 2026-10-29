@@ -5,6 +5,7 @@ import { ArrowUpCircle, Shield, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
+import { usePageData } from '@/lib/use-page-data'
 
 interface UpdateInfo {
   checked: boolean
@@ -30,8 +31,9 @@ export function UpdateBanner() {
     }
   }, [])
 
+  usePageData(checkForUpdates)
+
   useEffect(() => {
-    checkForUpdates()
     // Poll every 5 minutes
     const interval = setInterval(checkForUpdates, 300000)
     return () => clearInterval(interval)
@@ -80,13 +82,15 @@ export function UpdateBanner() {
           >
             View Updates
           </Button>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={() => setDismissed(true)}
-            className="text-muted-foreground hover:text-foreground"
             title="Dismiss"
+            aria-label="Dismiss"
           >
-            <X className="h-4 w-4" />
-          </button>
+            <X />
+          </Button>
         </div>
       </div>
     </div>
