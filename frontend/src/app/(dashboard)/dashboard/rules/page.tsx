@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -14,8 +14,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   Search,
   Database,
   RefreshCw,
@@ -33,6 +31,9 @@ import {
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { IpAddress } from '@/components/ip-address'
@@ -181,6 +182,7 @@ export default function RulesPage() {
   const [activeTab, setActiveTab] = useState<TabType>('waf')
   const [hosts, setHosts] = useState<ProxyHostBasic[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   // WAF State
   const [wafRules, setWafRules] = useState<WafRule[]>([])
@@ -227,13 +229,11 @@ export default function RulesPage() {
     name: '', mode: 'blocklist', countries: [] as string[], action: 'block', enabled: true, hostIds: [] as string[]
   })
   const [countrySearch, setCountrySearch] = useState('')
-  const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
 
   // Form state for Rate Limits
   const [rateLimitForm, setRateLimitForm] = useState({
     name: '', rps: '', rpm: '', rph: '', burst: '10', action: 'reject', enabled: true, hostIds: [] as string[]
   })
-  const [rlHostDropdownOpen, setRlHostDropdownOpen] = useState(false)
 
   // ─────────────────────────────────────────────────────────────
   // DATA FETCHING
@@ -241,6 +241,7 @@ export default function RulesPage() {
 
   const fetchData = async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       if (activeTab === 'waf') {
         const params = wafFilterCategory ? `?category=${wafFilterCategory}` : ''
@@ -262,6 +263,7 @@ export default function RulesPage() {
       }
     } catch (error) {
       console.error('Failed to fetch data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -271,20 +273,6 @@ export default function RulesPage() {
     fetchData()
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
   }, [activeTab, wafFilterCategory])
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    if (!hostDropdownOpen && !rlHostDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-host-dropdown]')) {
-        setHostDropdownOpen(false)
-        setRlHostDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [hostDropdownOpen, rlHostDropdownOpen])
 
   // ─────────────────────────────────────────────────────────────
   // WAF HANDLERS
@@ -376,7 +364,6 @@ export default function RulesPage() {
   const resetGeoForm = () => {
     setGeoForm({ name: '', mode: 'blocklist', countries: [], action: 'block', enabled: true, hostIds: [] })
     setCountrySearch('')
-    setHostDropdownOpen(false)
     setError('')
   }
 
@@ -495,7 +482,6 @@ export default function RulesPage() {
 
   const resetRateLimitForm = () => {
     setRateLimitForm({ name: '', rps: '', rpm: '', rph: '', burst: '10', action: 'reject', enabled: true, hostIds: [] })
-    setRlHostDropdownOpen(false)
     setError('')
   }
 
@@ -657,9 +643,10 @@ export default function RulesPage() {
                   else if (activeTab === 'geoip') handleCreateGeo()
                   else if (activeTab === 'rate-limits') handleCreateRateLimit()
                 }}
-                className="shrink-0"
+                size="lg"
+                disabled={isLoading}
               >
-                <Plus className="h-4 w-4 mr-1" />
+                <Plus className="h-4 w-4" />
                 Add Rule
               </Button>
             )}
@@ -688,9 +675,12 @@ export default function RulesPage() {
       </Tabs>
 
       {isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <ContentSkeleton rows={5} />
+      ) : loadError ? (
+        <LoadError
+          what={activeTab === 'waf' ? 'WAF rules' : activeTab === 'geoip' ? 'GeoIP rules' : activeTab === 'rate-limits' ? 'rate limits' : 'presets'}
+          onRetry={fetchData}
+        />
       ) : (
         <>
           {/* ════════════════ WAF TAB ════════════════ */}
@@ -698,20 +688,23 @@ export default function RulesPage() {
             <div className="space-y-4">
               {/* Category Filters */}
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
+                  size="sm"
+                  variant={!wafFilterCategory ? 'default' : 'outline'}
                   onClick={() => setWafFilterCategory('')}
-                  className={`rounded-lg px-3 py-1.5 text-sm ${!wafFilterCategory ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
                 >
                   All
-                </button>
+                </Button>
                 {wafCategories.map(cat => (
-                  <button
+                  <Button
                     key={cat}
+                    size="sm"
+                    variant={wafFilterCategory === cat ? 'default' : 'outline'}
                     onClick={() => setWafFilterCategory(cat)}
-                    className={`rounded-lg px-3 py-1.5 text-sm capitalize ${wafFilterCategory === cat ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
+                    className="capitalize"
                   >
                     {cat.replace('_', ' ')}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -727,9 +720,7 @@ export default function RulesPage() {
                     <div key={rule.id} className="rounded-xl border border-border bg-card p-3 sm:p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                          <button onClick={() => handleToggleWaf(rule)} className="shrink-0">
-                            {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
-                          </button>
+                          <Switch checked={rule.enabled} onCheckedChange={() => handleToggleWaf(rule)} aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                               <h3 className="font-semibold text-sm sm:text-base truncate">{rule.name}</h3>
@@ -788,20 +779,20 @@ export default function RulesPage() {
                 </div>
                 {geoDbInfo && (
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-                    <div className="rounded-lg border border-border p-2 sm:p-3">
-                      <p className="text-xs text-muted-foreground">Status</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        {geoDbInfo.installed ? <><CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 dark:text-green-400" /><span className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400">OK</span></> : <span className="text-xs sm:text-sm text-red-600 dark:text-red-400">Missing</span>}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-border p-2 sm:p-3">
-                      <p className="text-xs text-muted-foreground">Size</p>
-                      <p className="text-xs sm:text-sm font-medium mt-1">{geoDbInfo.size_bytes ? `${(geoDbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-2 sm:p-3">
-                      <p className="text-xs text-muted-foreground">Updated</p>
-                      <p className="text-xs sm:text-sm font-medium mt-1">{geoDbInfo.last_modified ? new Date(geoDbInfo.last_modified).toLocaleDateString() : '-'}</p>
-                    </div>
+                    <StatCard
+                      title="Status"
+                      value={geoDbInfo.installed ? 'OK' : 'Missing'}
+                      icon={geoDbInfo.installed ? CheckCircle : Database}
+                      tone={geoDbInfo.installed ? 'success' : 'danger'}
+                    />
+                    <StatCard
+                      title="Size"
+                      value={geoDbInfo.size_bytes ? `${(geoDbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}
+                    />
+                    <StatCard
+                      title="Updated"
+                      value={geoDbInfo.last_modified ? new Date(geoDbInfo.last_modified).toLocaleDateString() : '-'}
+                    />
                   </div>
                 )}
               </div>
@@ -831,9 +822,7 @@ export default function RulesPage() {
                         <div key={rule.id} className="rounded-xl border border-border bg-card p-3 sm:p-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                              <button onClick={() => handleToggleGeo(rule)} className="shrink-0">
-                                {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
-                              </button>
+                              <Switch checked={rule.enabled} onCheckedChange={() => handleToggleGeo(rule)} aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`} />
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                   <h3 className="font-semibold text-sm sm:text-base">{rule.name}</h3>
@@ -908,9 +897,7 @@ export default function RulesPage() {
                   <div key={rule.id} className="rounded-xl border border-border bg-card p-3 sm:p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                        <button onClick={() => handleToggleRateLimit(rule)} className="shrink-0">
-                          {rule.enabled ? <ToggleRight className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />}
-                        </button>
+                        <Switch checked={rule.enabled} onCheckedChange={() => handleToggleRateLimit(rule)} aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`} />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <h3 className="font-semibold text-sm sm:text-base">{rule.name}</h3>

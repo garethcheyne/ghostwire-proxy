@@ -20,6 +20,7 @@ import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Sparkles as HeaderIcon } from 'lucide-react'
 
 interface PresetSummary {
@@ -81,6 +82,7 @@ const severityColors: Record<string, string> = {
 export default function PresetsPage() {
   const [presets, setPresets] = useState<PresetSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [expandedPreset, setExpandedPreset] = useState<string | null>(null)
   const [presetDetail, setPresetDetail] = useState<PresetDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -91,10 +93,12 @@ export default function PresetsPage() {
 
   const fetchPresets = async () => {
     try {
+      setLoadError(false)
       const { data } = await api.get('/api/presets')
       setPresets(data)
     } catch (err) {
       console.error('Failed to fetch presets:', err)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -168,14 +172,6 @@ export default function PresetsPage() {
     {} as Record<string, PresetSummary[]>,
   )
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-brand" />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -185,6 +181,12 @@ export default function PresetsPage() {
         description="Best-practice security templates. Preview rules before applying — presets are additive and never remove existing rules."
       />
 
+      {loading ? (
+        <ContentSkeleton rows={5} />
+      ) : loadError ? (
+        <LoadError what="security presets" onRetry={fetchPresets} />
+      ) : (
+      <>
       {/* Category Filters */}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -232,7 +234,7 @@ export default function PresetsPage() {
                 return (
                   <div
                     key={preset.id}
-                    className="border border-border rounded-lg bg-muted/50 overflow-hidden"
+                    className="rounded-xl border border-border bg-card overflow-hidden"
                   >
                     {/* Preset Header */}
                     <div
@@ -371,9 +373,11 @@ export default function PresetsPage() {
       })}
 
       {presets.length === 0 && (
-        <div className="text-center text-slate-500 py-12">
+        <div className="text-center text-muted-foreground py-12">
           No presets available.
         </div>
+      )}
+      </>
       )}
     </div>
   )

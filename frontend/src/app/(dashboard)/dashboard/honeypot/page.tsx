@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -10,8 +10,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   Download,
   Search,
   Globe,
@@ -22,6 +20,9 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { HostMultiPicker } from '@/components/host-multi-picker'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import api from '@/lib/api'
@@ -137,6 +138,7 @@ export default function HoneypotPage() {
   const [hits, setHits] = useState<HoneypotHit[]>([])
   const [hosts, setHosts] = useState<Array<{ id: string; domain_names: string[] }>>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingTrap, setEditingTrap] = useState<HoneypotTrap | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -159,20 +161,10 @@ export default function HoneypotPage() {
   const [formAutoBlock, setFormAutoBlock] = useState(true)
   const [formEnabled, setFormEnabled] = useState(true)
   const [formHostIds, setFormHostIds] = useState<string[]>([])
-  const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
-
-  useEffect(() => {
-    if (!hostDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-host-dropdown]')) setHostDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [hostDropdownOpen])
 
   const fetchData = async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       if (activeTab === 'overview') {
         const res = await api.get('/api/honeypot/stats')
@@ -186,6 +178,7 @@ export default function HoneypotPage() {
       }
     } catch (error) {
       console.error('Failed to fetch honeypot data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -236,7 +229,6 @@ export default function HoneypotPage() {
     setFormAutoBlock(true)
     setFormEnabled(true)
     setFormHostIds([])
-    setHostDropdownOpen(false)
     setEditingTrap(null)
     setError('')
   }
@@ -345,15 +337,13 @@ export default function HoneypotPage() {
         description="Fake endpoints that catch scanners and gather attacker intelligence"
         actions={
           <>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={installDefaults} disabled={installingDefaults}>
-                {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
-                Install Defaults
-              </Button>
-              <Button size="sm" onClick={() => { resetForm(); setShowCreateDialog(true) }}>
-                <Plus className="h-4 w-4 mr-1" /> Add Trap
-              </Button>
-            </div>
+            <Button variant="outline" size="lg" onClick={installDefaults} disabled={installingDefaults}>
+              {installingDefaults ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Install Defaults
+            </Button>
+            <Button size="lg" onClick={() => { resetForm(); setShowCreateDialog(true) }}>
+              <Plus className="h-4 w-4" /> Add Trap
+            </Button>
           </>
         }
       />
@@ -370,9 +360,12 @@ export default function HoneypotPage() {
       </Tabs>
 
       {isLoading && activeTab !== 'intel' ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <ContentSkeleton stats={activeTab === 'overview' ? 4 : 0} rows={activeTab === 'overview' ? 3 : 5} />
+      ) : loadError && activeTab !== 'intel' ? (
+        <LoadError
+          what={activeTab === 'overview' ? 'honeypot statistics' : activeTab === 'traps' ? 'honeypot traps' : 'honeypot hits'}
+          onRetry={fetchData}
+        />
       ) : (
         <>
           {/* ── Overview Tab ── */}
@@ -495,14 +488,17 @@ export default function HoneypotPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => toggleTrap(trap)}>
-                            {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
+                          <Switch
+                            checked={trap.enabled}
+                            onCheckedChange={() => toggleTrap(trap)}
+                            aria-label={trap.enabled ? `Disable ${trap.name}` : `Enable ${trap.name}`}
+                            className="mr-1"
+                          />
+                          <Button variant="ghost" size="icon-sm" onClick={() => openEditForm(trap)} aria-label={`Edit ${trap.name}`}>
+                            <Pencil />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => openEditForm(trap)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteTrap(trap)}>
-                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          <Button variant="ghost" size="icon-sm" className="text-red-600 hover:text-red-600 dark:text-red-400" onClick={() => deleteTrap(trap)} aria-label={`Delete ${trap.name}`}>
+                            <Trash2 />
                           </Button>
                         </div>
                       </div>
@@ -570,12 +566,12 @@ export default function HoneypotPage() {
                             <td className="px-4 py-2 hidden md:table-cell">
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
+                                size="icon-sm"
                                 onClick={() => lookupIpIntel(hit.client_ip)}
                                 title="Full IP intel lookup"
+                                aria-label={`IP intel for ${hit.client_ip}`}
                               >
-                                <Eye className="h-3 w-3" />
+                                <Eye />
                               </Button>
                             </td>
                           </tr>
@@ -792,50 +788,9 @@ export default function HoneypotPage() {
                   </label>
                 </div>
               </div>
-              <div className="relative" data-host-dropdown>
+              <div>
                 <label className="text-sm font-medium">Apply to Host</label>
-                <button
-                  type="button"
-                  onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full h-9 px-3 rounded-md border bg-background text-sm text-left flex items-center justify-between"
-                >
-                  <span className="truncate">
-                    {formHostIds.length === 0
-                      ? 'All Hosts (global)'
-                      : formHostIds.length === 1
-                        ? hosts.find(h => h.id === formHostIds[0])?.domain_names[0] || '1 host'
-                        : `${formHostIds.length} hosts selected`}
-                  </span>
-                  <svg className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${hostDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {hostDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                    <label className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer border-b">
-                      <input
-                        type="checkbox"
-                        checked={formHostIds.length === 0}
-                        onChange={() => { setFormHostIds([]); setHostDropdownOpen(false) }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">All Hosts (global)</span>
-                    </label>
-                    {hosts.map(h => (
-                      <label key={h.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formHostIds.includes(h.id)}
-                          onChange={() => {
-                            setFormHostIds(prev =>
-                              prev.includes(h.id) ? prev.filter(id => id !== h.id) : [...prev, h.id]
-                            )
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-sm truncate">{h.domain_names[0]}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                <HostMultiPicker hosts={hosts} value={formHostIds} onChange={setFormHostIds} />
               </div>
             </div>
 

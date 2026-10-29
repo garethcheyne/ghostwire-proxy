@@ -11,8 +11,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
@@ -29,6 +27,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { HostMultiPicker } from '@/components/host-multi-picker'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface WafRule {
   id: string
@@ -96,6 +97,7 @@ export default function WafPage() {
   const [ruleSets, setRuleSets] = useState<WafRuleSet[]>([])
   const [hosts, setHosts] = useState<ProxyHostBasic[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingRule, setEditingRule] = useState<WafRule | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -111,7 +113,6 @@ export default function WafPage() {
   const [formAction, setFormAction] = useState('log')
   const [formEnabled, setFormEnabled] = useState(true)
   const [formHostIds, setFormHostIds] = useState<string[]>([])
-  const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
   useEffect(() => {
@@ -125,18 +126,9 @@ export default function WafPage() {
     }
   }, [highlightId, isLoading])
 
-  useEffect(() => {
-    if (!hostDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-host-dropdown]')) setHostDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [hostDropdownOpen])
-
   const fetchData = async () => {
     try {
+      setLoadError(false)
       const params = filterCategory ? `?category=${filterCategory}` : ''
       const [rulesRes, setsRes] = await Promise.all([
         api.get(`/api/waf/rules${params}`),
@@ -146,6 +138,7 @@ export default function WafPage() {
       setRuleSets(setsRes.data)
     } catch (error) {
       console.error('Failed to fetch WAF data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -162,7 +155,6 @@ export default function WafPage() {
     setFormAction('log')
     setFormEnabled(true)
     setFormHostIds([])
-    setHostDropdownOpen(false)
     setError('')
   }
 
@@ -261,14 +253,6 @@ export default function WafPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading WAF rules...</div>
-      </div>
-    )
-  }
-
   const categories = ['sqli', 'xss', 'path_traversal', 'rce', 'scanner', 'custom']
 
   return (
@@ -282,6 +266,7 @@ export default function WafPage() {
             <Button
               size="lg"
               onClick={handleCreate}
+              disabled={isLoading}
             >
               <Plus className="h-4 w-4" />
               Add Rule
@@ -292,26 +277,33 @@ export default function WafPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
+          size="sm"
+          variant={!filterCategory ? 'default' : 'outline'}
           onClick={() => setFilterCategory('')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${!filterCategory ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
         >
           All
-        </button>
+        </Button>
         {categories.map((cat) => (
-          <button
+          <Button
             key={cat}
+            size="sm"
+            variant={filterCategory === cat ? 'default' : 'outline'}
             onClick={() => setFilterCategory(cat)}
-            className={`rounded-lg px-3 py-1.5 text-sm capitalize ${filterCategory === cat ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
+            className="capitalize"
           >
             {cat.replace('_', ' ')}
-          </button>
+          </Button>
         ))}
       </div>
 
       {/* Rules List */}
       <div className="space-y-3">
-        {rules.length === 0 ? (
+        {isLoading ? (
+          <ContentSkeleton rows={5} />
+        ) : loadError ? (
+          <LoadError what="WAF rules" onRetry={fetchData} />
+        ) : rules.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-12 text-center">
             <Shield className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
             <p className="text-muted-foreground">No WAF rules configured</p>
@@ -332,13 +324,7 @@ export default function WafPage() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <button onClick={() => handleToggle(rule)} className="shrink-0">
-                    {rule.enabled ? (
-                      <ToggleRight className="h-6 w-6 text-green-600 dark:text-green-400" />
-                    ) : (
-                      <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                    )}
-                  </button>
+                  <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold truncate">{rule.name}</h3>
@@ -494,50 +480,9 @@ export default function WafPage() {
                 <label htmlFor="enabled" className="text-sm">Enabled</label>
               </div>
 
-              <div className="relative" data-host-dropdown>
+              <div>
                 <label className="block text-sm font-medium mb-2">Apply to Host</label>
-                <button
-                  type="button"
-                  onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-hidden focus:ring-2 focus:ring-primary"
-                >
-                  <span className="truncate">
-                    {formHostIds.length === 0
-                      ? 'All Hosts (global)'
-                      : formHostIds.length === 1
-                        ? hosts.find(h => h.id === formHostIds[0])?.domain_names[0] || '1 host'
-                        : `${formHostIds.length} hosts selected`}
-                  </span>
-                  <svg className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${hostDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {hostDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                    <label className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer border-b">
-                      <input
-                        type="checkbox"
-                        checked={formHostIds.length === 0}
-                        onChange={() => { setFormHostIds([]); setHostDropdownOpen(false) }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">All Hosts (global)</span>
-                    </label>
-                    {hosts.map(h => (
-                      <label key={h.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formHostIds.includes(h.id)}
-                          onChange={() => {
-                            setFormHostIds(prev =>
-                              prev.includes(h.id) ? prev.filter(id => id !== h.id) : [...prev, h.id]
-                            )
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-sm truncate">{h.domain_names[0]}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                <HostMultiPicker hosts={hosts} value={formHostIds} onChange={setFormHostIds} />
               </div>
 
               {error && (

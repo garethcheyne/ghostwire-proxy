@@ -11,8 +11,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   RefreshCw,
   Zap,
   CheckCircle,
@@ -23,6 +21,7 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { IpAddress } from '@/components/ip-address'
 import { PageHeader } from '@/components/page-header'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Flame as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -79,6 +78,7 @@ export default function FirewallsPage() {
   const [connectors, setConnectors] = useState<FirewallConnector[]>([])
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingConnector, setEditingConnector] = useState<FirewallConnector | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -108,6 +108,7 @@ export default function FirewallsPage() {
 
   const fetchData = async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       if (activeTab === 'connectors') {
         const res = await api.get('/api/firewalls')
@@ -118,6 +119,7 @@ export default function FirewallsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch firewall data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -326,9 +328,9 @@ export default function FirewallsPage() {
       </Tabs>
 
       {isLoading ? (
-        <div className="flex h-96 items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
-        </div>
+        <ContentSkeleton rows={4} />
+      ) : loadError ? (
+        <LoadError what={activeTab === 'connectors' ? 'firewall connectors' : 'the firewall blocklist'} onRetry={fetchData} />
       ) : activeTab === 'connectors' ? (
         <div className="space-y-3">
           {connectors.length === 0 ? (
@@ -379,28 +381,34 @@ export default function FirewallsPage() {
                         {blockTestResults[connector.id].success ? 'Block OK' : blockTestResults[connector.id].message}
                       </span>
                     )}
-                    <button
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
                       onClick={() => handleTest(connector)}
                       title="Test Connection"
-                      className="rounded-lg px-3 py-1.5 text-xs border border-input hover:bg-muted"
+                      aria-label="Test connection"
                     >
-                      <Zap className="h-3.5 w-3.5" />
-                    </button>
-                    <button
+                      <Zap />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
                       onClick={() => handleTestBlock(connector)}
                       title="Test Block (adds and removes test IP)"
-                      className="rounded-lg px-3 py-1.5 text-xs border border-input hover:bg-muted"
+                      aria-label="Test block"
                     >
-                      <ShieldBan className="h-3.5 w-3.5" />
-                    </button>
-                    <button
+                      <ShieldBan />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
                       onClick={() => handleSync(connector)}
                       disabled={syncingId === connector.id}
                       title="Sync Blocklist"
-                      className="rounded-lg px-3 py-1.5 text-xs border border-input hover:bg-muted disabled:opacity-50"
+                      aria-label="Sync blocklist"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${syncingId === connector.id ? 'animate-spin' : ''}`} />
-                    </button>
+                      <RefreshCw className={syncingId === connector.id ? 'animate-spin' : undefined} />
+                    </Button>
 
                     <div onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>

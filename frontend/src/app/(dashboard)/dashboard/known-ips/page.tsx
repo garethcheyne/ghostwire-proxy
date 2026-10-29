@@ -21,6 +21,8 @@ import {
 } from '@/lib/queries/known-ips'
 import { useIpActions } from '@/components/ip-actions-provider'
 import { PageHeader } from '@/components/page-header'
+import { LoadError } from '@/components/load-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tag as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -39,7 +41,7 @@ export default function KnownIpsPage() {
   const [lookupIp, setLookupIp] = useState('')
   const { showReport } = useIpActions()
 
-  const { data, isPending } = useKnownIps({
+  const { data, isPending, isError, refetch } = useKnownIps({
     search: debouncedSearch || undefined,
     group_name: groupFilter || undefined,
     limit: 500,
@@ -188,7 +190,17 @@ export default function KnownIpsPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {isPending ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">Loading…</td></tr>
+                Array.from({ length: 4 }, (_, i) => (
+                  <tr key={i}>
+                    <td colSpan={6} className="px-4 py-3"><Skeleton className="h-6" /></td>
+                  </tr>
+                ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={6} className="p-4">
+                    <LoadError what="known IPs" onRetry={() => refetch()} className="border-0" />
+                  </td>
+                </tr>
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
@@ -210,13 +222,14 @@ export default function KnownIpsPage() {
                     <td className="px-4 py-3 font-mono text-sm" data-private="ip">{k.ip_address}</td>
                     <td className="px-4 py-3">
                       {k.group_name && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="xs"
                           onClick={() => setGroupFilter(k.group_name!)}
-                          className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20"
                           title={`Show only ${k.group_name}`}
                         >
                           {k.group_name}
-                        </button>
+                        </Button>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
@@ -231,18 +244,22 @@ export default function KnownIpsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => showReport(k.ip_address)} title="View traffic"
-                         >
+                        <Button variant="ghost" size="icon-sm" onClick={() => showReport(k.ip_address)} title="View traffic" aria-label="View traffic">
                           <BarChart3 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(k)} title="Edit"
-                         >
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(k)} title="Edit" aria-label="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <button onClick={() => handleDelete(k)} title="Remove label"
-                          className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-red-600 hover:text-red-600 dark:text-red-400"
+                          onClick={() => handleDelete(k)}
+                          title="Remove label"
+                          aria-label="Remove label"
+                        >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

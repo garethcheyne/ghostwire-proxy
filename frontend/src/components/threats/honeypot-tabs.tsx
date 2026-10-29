@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
   Bug,
@@ -8,8 +9,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   Download,
   Search,
   Shield,
@@ -20,6 +19,8 @@ import {
   Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { StatCard } from '@/components/stat-card'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
@@ -97,6 +98,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
   const [hits, setHits] = useState<HoneypotHit[]>([])
   const [hosts, setHosts] = useState<Array<{ id: string; domain_names: string[] }>>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
   const [editingTrap, setEditingTrap] = useState<HoneypotTrap | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -111,6 +113,7 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
 
   const fetchData = async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       if (activeSubTab === 'overview') {
         const res = await api.get('/api/honeypot/stats')
@@ -124,15 +127,16 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
       }
     } catch (error) {
       console.error('Failed to fetch honeypot data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
+  usePageData(() => {
     fetchData()
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [activeSubTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSubTab])
 
   const installDefaults = async () => {
     setInstallingDefaults(true)
@@ -214,7 +218,12 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
   const formatDate = (d: string) => new Date(d).toLocaleString()
 
   if (isLoading) {
-    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+    return <ContentSkeleton stats={activeSubTab === 'overview' ? 4 : 0} rows={activeSubTab === 'overview' ? 3 : 5} />
+  }
+
+  if (loadError) {
+    const what = activeSubTab === 'overview' ? 'honeypot statistics' : activeSubTab === 'traps' ? 'honeypot traps' : 'honeypot hits'
+    return <LoadError what={what} onRetry={fetchData} />
   }
 
   // ─── OVERVIEW TAB ───────────────────────────────────────────
@@ -264,7 +273,10 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                 {stats.top_attackers.map((a, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => onInvestigateIp(a.ip)} className="hover:underline"><IpAddress ip={a.ip} /></button>
+                      <IpAddress ip={a.ip} />
+                      <Button variant="ghost" size="icon-xs" onClick={() => onInvestigateIp(a.ip)} title="Investigate" aria-label={`Investigate ${a.ip}`}>
+                        <Eye />
+                      </Button>
                       {a.country && <span className="text-xs text-muted-foreground">{a.country}</span>}
                     </div>
                     <span className="font-mono font-bold text-red-600 dark:text-red-400">{a.hits}</span>
@@ -285,7 +297,12 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
               {stats.recent_hits.map((h, i) => (
                 <div key={i} className="flex items-center gap-3 text-xs sm:text-sm py-1 border-b border-border/50 last:border-0 flex-wrap">
                   <span className="text-muted-foreground w-32 sm:w-36 shrink-0">{formatDate(h.timestamp)}</span>
-                  <button onClick={() => onInvestigateIp(h.ip)} className="hover:underline"><IpAddress ip={h.ip} /></button>
+                  <span className="flex items-center gap-1">
+                    <IpAddress ip={h.ip} />
+                    <Button variant="ghost" size="icon-xs" onClick={() => onInvestigateIp(h.ip)} title="Investigate" aria-label={`Investigate ${h.ip}`}>
+                      <Eye />
+                    </Button>
+                  </span>
                   <code className="bg-muted px-2 py-0.5 rounded text-xs">{h.path}</code>
                 </div>
               ))}
@@ -342,14 +359,17 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-2">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => toggleTrap(trap)}>
-                      {trap.enabled ? <ToggleRight className="h-4 w-4 text-green-600 dark:text-green-400" /> : <ToggleLeft className="h-4 w-4" />}
+                    <Switch
+                      checked={trap.enabled}
+                      onCheckedChange={() => toggleTrap(trap)}
+                      aria-label={trap.enabled ? `Disable ${trap.name}` : `Enable ${trap.name}`}
+                      className="mr-1"
+                    />
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEditForm(trap)} aria-label={`Edit ${trap.name}`}>
+                      <Pencil />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => openEditForm(trap)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => deleteTrap(trap)}>
-                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    <Button variant="ghost" size="icon-sm" className="text-red-600 hover:text-red-600 dark:text-red-400" onClick={() => deleteTrap(trap)} aria-label={`Delete ${trap.name}`}>
+                      <Trash2 />
                     </Button>
                   </div>
                 </div>
@@ -462,8 +482,8 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
                         </span>
                       </td>
                       <td className="px-2 sm:px-4 py-2">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-7 sm:w-7" onClick={() => onInvestigateIp(hit.client_ip)} title="Investigate">
-                          <Eye className="h-3 w-3" />
+                        <Button variant="ghost" size="icon-xs" onClick={() => onInvestigateIp(hit.client_ip)} title="Investigate" aria-label={`Investigate ${hit.client_ip}`}>
+                          <Eye />
                         </Button>
                       </td>
                     </tr>

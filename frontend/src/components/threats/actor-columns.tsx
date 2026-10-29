@@ -132,13 +132,17 @@ export function createActorColumns(actions: {
         const actor = row.original
         const isExpanded = actions.expandedIp === actor.ip_address
         return (
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => actions.onToggleExpand(actor.ip_address)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="-ml-2 text-muted-foreground"
+            aria-expanded={isExpanded}
+            title={isExpanded ? 'Hide events' : 'Show events'}
           >
-            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {isExpanded ? <ChevronUp /> : <ChevronDown />}
             <span className="underline underline-offset-2 tabular-nums">{actor.total_events}</span>
-          </button>
+          </Button>
         )
       },
     },

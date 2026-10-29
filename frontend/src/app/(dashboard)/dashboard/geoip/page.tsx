@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
@@ -11,8 +11,6 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  ToggleLeft,
-  ToggleRight,
   Search,
   Globe,
   Database,
@@ -34,6 +32,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { StatCard } from '@/components/stat-card'
+import { HostMultiPicker } from '@/components/host-multi-picker'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface GeoipRule {
   id: string
@@ -86,6 +88,7 @@ export default function GeoIPPage() {
   const [hosts, setHosts] = useState<ProxyHostBasic[]>([])
   const [settings, setSettings] = useState<GeoipSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingRule, setEditingRule] = useState<GeoipRule | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -101,7 +104,6 @@ export default function GeoIPPage() {
   const [formAction, setFormAction] = useState('block')
   const [formEnabled, setFormEnabled] = useState(true)
   const [formHostIds, setFormHostIds] = useState<string[]>([])
-  const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const [countrySearch, setCountrySearch] = useState('')
 
   // Lookup state
@@ -110,18 +112,9 @@ export default function GeoIPPage() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const confirm = useConfirm()
 
-  useEffect(() => {
-    if (!hostDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-host-dropdown]')) setHostDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [hostDropdownOpen])
-
   const fetchData = async () => {
     try {
+      setLoadError(false)
       const [rulesRes, settingsRes, dbRes] = await Promise.all([
         api.get('/api/geoip/rules'),
         api.get('/api/geoip/settings').catch(() => ({ data: null })),
@@ -132,6 +125,7 @@ export default function GeoIPPage() {
       if (dbRes.data) setDbInfo(dbRes.data)
     } catch (error) {
       console.error('Failed to fetch GeoIP data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -149,7 +143,6 @@ export default function GeoIPPage() {
     setFormAction('block')
     setFormEnabled(true)
     setFormHostIds([])
-    setHostDropdownOpen(false)
     setCountrySearch('')
     setError('')
   }
@@ -275,14 +268,6 @@ export default function GeoIPPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading GeoIP settings...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -295,6 +280,7 @@ export default function GeoIPPage() {
               <Button
                 size="lg"
                 onClick={handleCreate}
+                disabled={isLoading}
               >
                 <Plus className="h-4 w-4" />
                 Add Rule
@@ -304,6 +290,10 @@ export default function GeoIPPage() {
         }
       />
 
+      {isLoading ? (
+        <ContentSkeleton rows={4} />
+      ) : (
+      <>
       {/* GeoIP Database Status */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center justify-between">
@@ -345,31 +335,20 @@ export default function GeoIPPage() {
         </div>
         {dbInfo && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-muted-foreground">Status</p>
-              <div className="flex items-center gap-1.5 mt-1">
-                {dbInfo.installed ? (
-                  <>
-                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-green-600 dark:text-green-400">Installed</span>
-                  </>
-                ) : (
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Not Installed</span>
-                )}
-              </div>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-muted-foreground">Size</p>
-              <p className="text-sm font-medium mt-1">
-                {dbInfo.size_bytes ? `${(dbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs text-muted-foreground">Last Updated</p>
-              <p className="text-sm font-medium mt-1">
-                {dbInfo.last_modified ? new Date(dbInfo.last_modified).toLocaleDateString() : '-'}
-              </p>
-            </div>
+            <StatCard
+              title="Status"
+              value={dbInfo.installed ? 'Installed' : 'Not Installed'}
+              icon={dbInfo.installed ? CheckCircle : Database}
+              tone={dbInfo.installed ? 'success' : 'danger'}
+            />
+            <StatCard
+              title="Size"
+              value={dbInfo.size_bytes ? `${(dbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '-'}
+            />
+            <StatCard
+              title="Last Updated"
+              value={dbInfo.last_modified ? new Date(dbInfo.last_modified).toLocaleDateString() : '-'}
+            />
           </div>
         )}
       </div>
@@ -387,7 +366,9 @@ export default function GeoIPPage() {
 
       {activeTab === 'rules' ? (
         <div className="space-y-3">
-          {rules.length === 0 ? (
+          {loadError ? (
+            <LoadError what="GeoIP rules" onRetry={fetchData} />
+          ) : rules.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-12 text-center">
               <Map className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
               <p className="text-muted-foreground">No GeoIP rules configured</p>
@@ -402,13 +383,7 @@ export default function GeoIPPage() {
                 <div key={rule.id} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <button onClick={() => handleToggle(rule)} className="shrink-0">
-                        {rule.enabled ? (
-                          <ToggleRight className="h-6 w-6 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </button>
+                      <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold">{rule.name}</h3>
@@ -507,6 +482,8 @@ export default function GeoIPPage() {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
 
       {/* Create/Edit Dialog */}
@@ -632,50 +609,9 @@ export default function GeoIPPage() {
                 <label htmlFor="enabled" className="text-sm">Enabled</label>
               </div>
 
-              <div className="relative" data-host-dropdown>
+              <div>
                 <label className="block text-sm font-medium mb-2">Apply to Host</label>
-                <button
-                  type="button"
-                  onClick={() => setHostDropdownOpen(!hostDropdownOpen)}
-                  className="w-full px-4 py-2 rounded-lg border border-input bg-background text-sm text-left flex items-center justify-between focus:outline-hidden focus:ring-2 focus:ring-primary"
-                >
-                  <span className="truncate">
-                    {formHostIds.length === 0
-                      ? 'All Hosts (global)'
-                      : formHostIds.length === 1
-                        ? hosts.find(h => h.id === formHostIds[0])?.domain_names[0] || '1 host'
-                        : `${formHostIds.length} hosts selected`}
-                  </span>
-                  <svg className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${hostDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {hostDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                    <label className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer border-b">
-                      <input
-                        type="checkbox"
-                        checked={formHostIds.length === 0}
-                        onChange={() => { setFormHostIds([]); setHostDropdownOpen(false) }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">All Hosts (global)</span>
-                    </label>
-                    {hosts.map(h => (
-                      <label key={h.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formHostIds.includes(h.id)}
-                          onChange={() => {
-                            setFormHostIds(prev =>
-                              prev.includes(h.id) ? prev.filter(id => id !== h.id) : [...prev, h.id]
-                            )
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-sm truncate">{h.domain_names[0]}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                <HostMultiPicker hosts={hosts} value={formHostIds} onChange={setFormHostIds} />
               </div>
 
               {error && (

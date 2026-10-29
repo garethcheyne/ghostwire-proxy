@@ -35,6 +35,14 @@ import { PageHeader } from '@/components/page-header'
 import { StatCard } from '@/components/stat-card'
 import { AlertTriangle as HeaderIcon } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ChevronDown } from 'lucide-react'
 
 interface ThreatStats {
   total_events: number
@@ -77,6 +85,7 @@ export default function ThreatsPage() {
   const [events, setEvents] = useState<ThreatEvent[]>([])
   const [actors, setActors] = useState<ThreatActor[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   // Firewall connector status
   const [firewallAvailable, setFirewallAvailable] = useState(false)
@@ -89,9 +98,6 @@ export default function ThreatsPage() {
   // Actor filters
   const [actorFilterIp, setActorFilterIp] = useState('')
   const [actorFilterStatus, setActorFilterStatus] = useState<string[]>([])
-
-  // Multi-select dropdown open state
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
   // Actor expanded events
   const [expandedActorIp, setExpandedActorIp] = useState<string | null>(null)
@@ -113,19 +119,9 @@ export default function ThreatsPage() {
       .catch(() => setFirewallAvailable(false))
   }, [])
 
-  // Close multi-select dropdowns on outside click
-  useEffect(() => {
-    if (!openDropdown) return
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-dropdown]')) setOpenDropdown(null)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [openDropdown])
-
   const fetchData = async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       if (activeTab === 'overview') {
         const res = await api.get('/api/waf/stats')
@@ -139,6 +135,7 @@ export default function ThreatsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch threat data:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -361,6 +358,9 @@ export default function ThreatsPage() {
 
   // ── Render ───────────────────────────────────────────────────
 
+  // The honeypot tabs load their own data.
+  const isHoneypotTab = activeTab === 'honeypot' || activeTab === 'traps' || activeTab === 'hits'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -391,10 +391,10 @@ export default function ThreatsPage() {
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
-        <div className="flex h-96 items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
-        </div>
+      {isLoading && !isHoneypotTab ? (
+        <ContentSkeleton stats={activeTab === 'overview' ? 4 : 0} rows={activeTab === 'overview' ? 3 : 6} />
+      ) : loadError && !isHoneypotTab ? (
+        <LoadError what={activeTab === 'overview' ? 'threat statistics' : `threat ${activeTab}`} onRetry={fetchData} />
       ) : activeTab === 'overview' && stats ? (
         <div className="space-y-6">
           {/* Stats Cards */}
@@ -487,64 +487,72 @@ export default function ThreatsPage() {
                     className="w-44 pl-8 h-9 text-sm"
                   />
                 </div>
-                <div className="relative" data-dropdown>
-                  <button
-                    type="button"
-                    onClick={() => setOpenDropdown(openDropdown === 'severity' ? null : 'severity')}
-                    className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${evFilterSeverity.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
-                    title="Filter by severity"
-                  >
-                    {evFilterSeverity.length === 0 ? 'All Severities' : `${evFilterSeverity.length} selected`}
-                  </button>
-                  {openDropdown === 'severity' && (
-                    <div className="absolute top-full left-0 z-20 mt-1 w-44 rounded-lg border border-border bg-card shadow-lg p-1">
-                      {[{v:'critical',l:'Critical'},{v:'high',l:'High'},{v:'medium',l:'Medium'},{v:'low',l:'Low'}].map(o => (
-                        <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
-                          <input type="checkbox" checked={evFilterSeverity.includes(o.v)} onChange={() => toggleFilter(setEvFilterSeverity, o.v)} className="h-3.5 w-3.5" />
-                          {o.l}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="relative" data-dropdown>
-                  <button
-                    type="button"
-                    onClick={() => setOpenDropdown(openDropdown === 'category' ? null : 'category')}
-                    className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${evFilterCategory.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
-                    title="Filter by category"
-                  >
-                    {evFilterCategory.length === 0 ? 'All Categories' : `${evFilterCategory.length} selected`}
-                  </button>
-                  {openDropdown === 'category' && (
-                    <div className="absolute top-full left-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg p-1 max-h-64 overflow-y-auto">
-                      {[{v:'sqli',l:'SQL Injection'},{v:'xss',l:'XSS'},{v:'path_traversal',l:'Path Traversal'},{v:'rce',l:'RCE'},{v:'scanner',l:'Scanner'},{v:'injection',l:'Injection'},{v:'sensitive_data',l:'Sensitive Data'},{v:'recon',l:'Recon'},{v:'dos',l:'DoS'},{v:'blocked_ip',l:'Blocked IP'}].map(o => (
-                        <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
-                          <input type="checkbox" checked={evFilterCategory.includes(o.v)} onChange={() => toggleFilter(setEvFilterCategory, o.v)} className="h-3.5 w-3.5" />
-                          {o.l}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className={evFilterSeverity.length > 0 ? undefined : 'text-muted-foreground'}
+                      title="Filter by severity"
+                    >
+                      {evFilterSeverity.length === 0 ? 'All Severities' : `${evFilterSeverity.length} selected`}
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44">
+                    {[{v:'critical',l:'Critical'},{v:'high',l:'High'},{v:'medium',l:'Medium'},{v:'low',l:'Low'}].map(o => (
+                      <DropdownMenuCheckboxItem
+                        key={o.v}
+                        checked={evFilterSeverity.includes(o.v)}
+                        onCheckedChange={() => toggleFilter(setEvFilterSeverity, o.v)}
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {o.l}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className={evFilterCategory.length > 0 ? undefined : 'text-muted-foreground'}
+                      title="Filter by category"
+                    >
+                      {evFilterCategory.length === 0 ? 'All Categories' : `${evFilterCategory.length} selected`}
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-64 w-48">
+                    {[{v:'sqli',l:'SQL Injection'},{v:'xss',l:'XSS'},{v:'path_traversal',l:'Path Traversal'},{v:'rce',l:'RCE'},{v:'scanner',l:'Scanner'},{v:'injection',l:'Injection'},{v:'sensitive_data',l:'Sensitive Data'},{v:'recon',l:'Recon'},{v:'dos',l:'DoS'},{v:'blocked_ip',l:'Blocked IP'}].map(o => (
+                      <DropdownMenuCheckboxItem
+                        key={o.v}
+                        checked={evFilterCategory.includes(o.v)}
+                        onCheckedChange={() => toggleFilter(setEvFilterCategory, o.v)}
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {o.l}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {(evFilterIp || evFilterSeverity.length > 0 || evFilterCategory.length > 0) && (
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-9 text-xs"
-                    onClick={() => { setEvFilterIp(''); setEvFilterSeverity([]); setEvFilterCategory([]); setOpenDropdown(null) }}
+                    size="lg"
+                    onClick={() => { setEvFilterIp(''); setEvFilterSeverity([]); setEvFilterCategory([]) }}
                   >
-                    <X className="h-3 w-3 mr-1" /> Clear
+                    <X /> Clear
                   </Button>
                 )}
               </div>
               <Button
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                variant="destructive"
+                size="lg"
                 onClick={handlePurgeEvents}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                <Trash2 />
                 Purge All
               </Button>
             </div>
@@ -623,12 +631,13 @@ export default function ThreatsPage() {
                             )}
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                              size="icon-xs"
+                              className="text-red-600 hover:text-red-600 dark:text-red-400"
                               onClick={() => handleDeleteEvent(event.id)}
                               title="Delete event"
+                              aria-label="Delete event"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 />
                             </Button>
                           </div>
                         </div>
@@ -650,45 +659,49 @@ export default function ThreatsPage() {
                   className="w-44 pl-8 h-9 text-sm"
                 />
               </div>
-              <div className="relative" data-dropdown>
-                <button
-                  type="button"
-                  onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
-                  className={`h-9 rounded-md border border-input bg-background px-3 text-sm flex items-center gap-1 ${actorFilterStatus.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}
-                  title="Filter by status"
-                >
-                  {actorFilterStatus.length === 0 ? 'All Statuses' : `${actorFilterStatus.length} selected`}
-                </button>
-                {openDropdown === 'status' && (
-                  <div className="absolute top-full left-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg p-1">
-                    {[{v:'monitored',l:'Monitored'},{v:'warned',l:'Warned'},{v:'temp_blocked',l:'Temp Blocked'},{v:'perm_blocked',l:'Perm Blocked'},{v:'firewall_banned',l:'Firewall Banned'}].map(o => (
-                      <label key={o.v} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-muted cursor-pointer">
-                        <input type="checkbox" checked={actorFilterStatus.includes(o.v)} onChange={() => toggleFilter(setActorFilterStatus, o.v)} className="h-3.5 w-3.5" />
-                        {o.l}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className={actorFilterStatus.length > 0 ? undefined : 'text-muted-foreground'}
+                    title="Filter by status"
+                  >
+                    {actorFilterStatus.length === 0 ? 'All Statuses' : `${actorFilterStatus.length} selected`}
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  {[{v:'monitored',l:'Monitored'},{v:'warned',l:'Warned'},{v:'temp_blocked',l:'Temp Blocked'},{v:'perm_blocked',l:'Perm Blocked'},{v:'firewall_banned',l:'Firewall Banned'}].map(o => (
+                    <DropdownMenuCheckboxItem
+                      key={o.v}
+                      checked={actorFilterStatus.includes(o.v)}
+                      onCheckedChange={() => toggleFilter(setActorFilterStatus, o.v)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {o.l}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {(actorFilterIp || actorFilterStatus.length > 0) && (
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-9 text-xs"
-                    onClick={() => { setActorFilterIp(''); setActorFilterStatus([]); setOpenDropdown(null) }}
+                  size="lg"
+                  onClick={() => { setActorFilterIp(''); setActorFilterStatus([]) }}
                 >
-                  <X className="h-3 w-3 mr-1" /> Clear
+                  <X /> Clear
                 </Button>
               )}
               {/* Bulk FW Ban button */}
               {firewallAvailable && Object.keys(actorRowSelection).length > 0 && (
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="h-9 text-xs border-brand-2/30 text-brand-2 hover:bg-brand-2/10 ml-auto"
+                  size="lg"
+                  className="ml-auto"
                   onClick={handleBulkFirewallBan}
                 >
-                  <Flame className="h-3.5 w-3.5 mr-1" />
+                  <Flame />
                   FW Ban ({Object.keys(actorRowSelection).length})
                 </Button>
               )}
@@ -696,23 +709,22 @@ export default function ThreatsPage() {
               {Object.keys(actorRowSelection).length > 0 && (
                 <Button
                   variant="outline"
-                  size="sm"
-                  className={`h-9 text-xs border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500/10 ${!firewallAvailable ? 'ml-auto' : ''}`}
+                  size="lg"
+                  className={!firewallAvailable ? 'ml-auto' : undefined}
                   onClick={handleBulkUnblock}
                 >
-                  <Unlock className="h-3.5 w-3.5 mr-1" />
+                  <Unlock />
                   Unblock ({Object.keys(actorRowSelection).length})
                 </Button>
               )}
               {/* Bulk Delete button */}
               {Object.keys(actorRowSelection).length > 0 && (
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 text-xs border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                  variant="destructive"
+                  size="lg"
                   onClick={handleBulkDelete}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  <Trash2 />
                   Delete ({Object.keys(actorRowSelection).length})
                 </Button>
               )}
@@ -732,10 +744,10 @@ export default function ThreatsPage() {
               IP Intelligence: <code className="text-sm">{intelIp}</code>
             </h3>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleInvestigateIp(intelIp)} title="Refresh">
+              <Button variant="ghost" size="icon" onClick={() => handleInvestigateIp(intelIp)} title="Refresh" aria-label="Refresh">
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setIntelIp(null); setIntelData(null) }}>
+              <Button variant="ghost" size="icon" onClick={() => { setIntelIp(null); setIntelData(null) }} aria-label="Close">
                 <X className="h-4 w-4" />
               </Button>
             </div>
