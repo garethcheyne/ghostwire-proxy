@@ -2,7 +2,6 @@
 /api/mcp route with real API keys and tools."""
 
 import pytest
-
 from app.core.rate_limiter import limiter
 from app.mcp.protocol import LATEST_PROTOCOL_VERSION, RPC, McpTool, ServerInfo, handle_message
 from app.models.proxy_host import ProxyHost, UpstreamServer

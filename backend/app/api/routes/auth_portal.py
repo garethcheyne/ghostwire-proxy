@@ -6,35 +6,31 @@ These endpoints are accessed via /__auth/* paths through nginx.
 
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.core.utils import get_client_ip
-from app.services.auth_portal_redirect import safe_redirect_target, request_origin
-from app.services.auth_wall_access import is_email_allowed
-from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider
 from app.models.audit_log import AuditLog
-from app.services.session_service import SessionService, get_cookie_header, get_clear_cookie_header
-from app.services.auth_providers import ProviderFactory, LocalAuthProvider
+from app.models.auth_wall import AuthProvider, AuthWall
 from app.schemas.auth_wall_session import (
+    AuthWallConfigProvider,
+    AuthWallConfigResponse,
     LocalLoginRequest,
     LocalLoginResponse,
-    TotpLoginRequest,
     OAuthStartResponse,
-    OAuthCallbackRequest,
-    OAuthCallbackResponse,
-    AuthWallConfigResponse,
-    AuthWallConfigProvider,
+    TotpLoginRequest,
 )
+from app.services.auth_portal_redirect import request_origin, safe_redirect_target
+from app.services.auth_providers import LocalAuthProvider, ProviderFactory
+from app.services.auth_wall_access import is_email_allowed
+from app.services.session_service import SessionService, get_clear_cookie_header, get_cookie_header
 
 router = APIRouter()
 
@@ -52,7 +48,7 @@ async def _set_oauth_state(state: str, data: dict, ttl_seconds: int = 600):
     await r.setex(f"{_OAUTH_STATE_PREFIX}{state}", ttl_seconds, json.dumps(data_copy))
 
 
-async def _get_oauth_state(state: str) -> Optional[dict]:
+async def _get_oauth_state(state: str) -> dict | None:
     """Get OAuth state from Redis."""
     r = await get_redis()
     raw = await r.get(f"{_OAUTH_STATE_PREFIX}{state}")
@@ -77,7 +73,7 @@ async def _set_partial_session(partial_id: str, data: dict, ttl_seconds: int = 3
     await r.setex(f"{_PARTIAL_SESSION_PREFIX}{partial_id}", ttl_seconds, json.dumps(data_copy))
 
 
-async def _get_partial_session(partial_id: str) -> Optional[dict]:
+async def _get_partial_session(partial_id: str) -> dict | None:
     """Get partial session from Redis."""
     r = await get_redis()
     raw = await r.get(f"{_PARTIAL_SESSION_PREFIX}{partial_id}")
@@ -214,7 +210,7 @@ async def local_login(
                 "username": user.username,
                 "email": user.email,
                 "display_name": user.display_name,
-                "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+                "expires_at": datetime.now(UTC) + timedelta(minutes=5),
             },
         )
         return LocalLoginResponse(
@@ -282,7 +278,7 @@ async def totp_login(
     if not partial or partial["auth_wall_id"] != auth_wall_id:
         return LocalLoginResponse(success=False, message="Invalid or expired session")
 
-    if partial["expires_at"] < datetime.now(timezone.utc):
+    if partial["expires_at"] < datetime.now(UTC):
         await _del_partial_session(totp_data.partial_session_id)
         return LocalLoginResponse(success=False, message="Session expired")
 
@@ -379,9 +375,9 @@ async def start_oauth(
     auth_wall_id: str,
     provider_id: str,
     request: Request,
-    redirect: Optional[str] = Query(None),
-    redirect_url: Optional[str] = Query(None),
-    format: Optional[str] = Query(None, description="'json' returns the URL instead of redirecting"),
+    redirect: str | None = Query(None),
+    redirect_url: str | None = Query(None),
+    format: str | None = Query(None, description="'json' returns the URL instead of redirecting"),
     db: AsyncSession = Depends(get_db),
 ):
     """Start OAuth flow - redirect the browser to the provider."""
@@ -416,7 +412,7 @@ async def start_oauth(
             "provider_id": provider_id,
             "redirect_url": target,
             "callback_url": callback_url,
-            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+            "expires_at": datetime.now(UTC) + timedelta(minutes=10),
         },
     )
 
@@ -448,7 +444,7 @@ async def oauth_callback(
     if state_data["auth_wall_id"] != auth_wall_id:
         raise HTTPException(status_code=400, detail="State mismatch")
 
-    if state_data["expires_at"] < datetime.now(timezone.utc):
+    if state_data["expires_at"] < datetime.now(UTC):
         await _del_oauth_state(state)
         raise HTTPException(status_code=400, detail="State expired")
 

@@ -21,12 +21,9 @@ proxy) are flagged, because a vulnerable package there is reachable by anyone.
 """
 
 import asyncio
-import json
 import logging
 import re
-import shlex
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +99,7 @@ class ContainerSecurityScanner:
         info["pretty_name"] = fields.get("PRETTY_NAME") or fields.get("NAME")
         return info
 
-    def _detect_package_manager(self, container) -> Optional[str]:
+    def _detect_package_manager(self, container) -> str | None:
         checks = " ; ".join(f"command -v {pm} >/dev/null 2>&1 && echo {pm}" for pm in _PACKAGE_MANAGERS)
         code, output = self._exec(container, checks)
         for line in (output or "").split():
@@ -302,7 +299,7 @@ class ContainerSecurityScanner:
         status["detail"] = "No automatic update mechanism detected"
         return status
 
-    def _stale_process_count(self, container) -> Optional[int]:
+    def _stale_process_count(self, container) -> int | None:
         """How many running processes still map libraries that have been
         replaced on disk.
 
@@ -356,7 +353,7 @@ class ContainerSecurityScanner:
                 cleaned = re.sub(r"\.(\d{6})\d+", r".\1", created).replace("Z", "+00:00")
                 created_at = datetime.fromisoformat(cleaned)
                 info["image_created"] = created_at.isoformat()
-                info["image_age_days"] = (datetime.now(timezone.utc) - created_at).days
+                info["image_age_days"] = (datetime.now(UTC) - created_at).days
         except Exception as e:
             logger.debug("Could not read image info: %s", e)
 
@@ -382,7 +379,7 @@ class ContainerSecurityScanner:
             "name": container.name,
             "id": container.short_id,
             "status": container.status,
-            "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "scanned_at": datetime.now(UTC).isoformat(),
             "is_edge": self._is_edge(container),
         }
         result.update(self._image_info(container))
@@ -579,7 +576,7 @@ class UpgradeResult(dict):
     """Plain dict; named for readability at call sites."""
 
 
-def _apply_command(manager: str, security_only: bool) -> Optional[str]:
+def _apply_command(manager: str, security_only: bool) -> str | None:
     """The upgrade command for a package manager.
 
     Non-interactive throughout — an upgrade that stops to ask a question inside
@@ -609,14 +606,14 @@ def _apply_command(manager: str, security_only: bool) -> Optional[str]:
 
 def apply_updates_sync(
     container,
-    manager: Optional[str] = None,
+    manager: str | None = None,
     security_only: bool = True,
 ) -> dict:
     """Upgrade OS packages inside one running container. Blocking."""
     name = container.name
     result: dict = {
         "container": name,
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "applied": False,
         "manager": manager,
     }
@@ -663,7 +660,7 @@ def apply_updates_sync(
             # The tail is what a human needs to see when it goes wrong; the whole
             # transcript of an apt run is noise in an alert.
             "output_tail": output.strip().splitlines()[-15:] if output.strip() else [],
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
     )
     if code != 0:
@@ -675,7 +672,7 @@ def apply_updates_sync(
 async def apply_updates(
     container_name: str,
     security_only: bool = True,
-    excluded: Optional[set[str]] = None,
+    excluded: set[str] | None = None,
     restart_if_needed: bool = True,
 ) -> dict:
     """Upgrade one container by name, and restart it if it is still running
@@ -727,7 +724,7 @@ async def apply_updates(
 async def apply_updates_all(
     name_filter: str = "ghostwire-proxy",
     security_only: bool = True,
-    excluded: Optional[set[str]] = None,
+    excluded: set[str] | None = None,
     restart_if_needed: bool = True,
 ) -> list[dict]:
     """Upgrade every matching container, one at a time.
@@ -761,7 +758,7 @@ async def apply_updates_all(
             continue
         try:
             results.append(await apply_updates(container.name, security_only, excluded, restart_if_needed))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results.append(
                 {
                     "container": container.name,

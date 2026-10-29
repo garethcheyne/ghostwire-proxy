@@ -6,9 +6,8 @@ The database is compatible with MaxMindDB format used by lua-resty-maxminddb.
 
 import gzip
 import logging
-import os
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -26,7 +25,7 @@ DBIP_URL_TEMPLATE = "https://download.db-ip.com/free/dbip-country-lite-{year}-{m
 
 def _get_download_url() -> str:
     """Get the download URL for the current month's database."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return DBIP_URL_TEMPLATE.format(year=now.year, month=now.month)
 
 
@@ -45,7 +44,7 @@ def get_db_info() -> dict:
         "installed": True,
         "path": str(DB_PATH),
         "size_bytes": stat.st_size,
-        "last_modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        "last_modified": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
     }
 
 

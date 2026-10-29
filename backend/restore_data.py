@@ -2,11 +2,10 @@
 """Restore proxy hosts and certificates from nginx config files."""
 
 import asyncio
-import json
 from datetime import datetime
-from app.core.database import AsyncSessionLocal, engine
-from app.models import ProxyHost, Certificate
-from sqlalchemy import text
+
+from app.core.database import AsyncSessionLocal
+from app.models import Certificate, ProxyHost
 
 # Certificate data extracted from nginx configs
 CERTIFICATES = [

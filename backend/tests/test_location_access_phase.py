@@ -13,7 +13,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer
 from app.services.openresty_service import generate_server_block
 

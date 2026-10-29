@@ -5,7 +5,6 @@ All auth providers must implement this interface.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -14,11 +13,11 @@ class UserInfo:
 
     user_id: str  # Unique identifier from provider
     username: str
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    email: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
     provider_type: str = ""
-    raw_data: Optional[dict] = None  # Original provider response
+    raw_data: dict | None = None  # Original provider response
 
 
 class AuthProviderBase(ABC):
@@ -31,7 +30,7 @@ class AuthProviderBase(ABC):
         pass
 
     @abstractmethod
-    async def authenticate(self, credentials: dict) -> Optional[UserInfo]:
+    async def authenticate(self, credentials: dict) -> UserInfo | None:
         """
         Authenticate user with provided credentials.
 

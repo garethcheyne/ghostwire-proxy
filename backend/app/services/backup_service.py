@@ -9,25 +9,24 @@ Backups include:
 - Optionally: Traffic logs (large)
 """
 
+import json
+import logging
 import os
 import re
-import json
-from types import SimpleNamespace
-import tarfile
-import tempfile
 import shutil
 import subprocess
-import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+import tarfile
+import tempfile
 import uuid
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
 
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal
-from app.models.backup import Backup, BackupSettings as BackupSettingsModel
+from app.models.backup import Backup
+from app.models.backup import BackupSettings as BackupSettingsModel
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ def _check_plain_sql_dump(path: str) -> None:
     with a backslash (\\N is NULL) and psql does not interpret them.
     """
     in_copy = False
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         for lineno, line in enumerate(f, 1):
             if in_copy:
                 if line.rstrip("\r\n") == "\\.":
@@ -73,7 +72,7 @@ class BackupService:
     async def create_backup(
         self,
         db: AsyncSession,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         backup_type: str = "manual",
         include_database: bool = True,
         include_certificates: bool = True,
@@ -87,7 +86,7 @@ class BackupService:
         Returns:
             Backup object with metadata
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timestamp = now.strftime("%Y%m%d_%H%M%S")
         filename = f"ghostwire_backup_{timestamp}.tar.gz"
         file_path = os.path.join(BACKUP_PATH, filename)
@@ -160,7 +159,7 @@ class BackupService:
             file_size = os.path.getsize(file_path)
             backup.file_size = file_size
             backup.status = "completed"
-            backup.completed_at = datetime.now(timezone.utc)
+            backup.completed_at = datetime.now(UTC)
 
             await db.commit()
             await db.refresh(backup)
@@ -376,7 +375,7 @@ class BackupService:
                 # Read metadata
                 metadata_path = os.path.join(temp_dir, "metadata.json")
                 if os.path.exists(metadata_path):
-                    with open(metadata_path, "r") as f:
+                    with open(metadata_path) as f:
                         metadata = json.load(f)
                     logger.info(f"Restoring backup from {metadata.get('created_at')}")
 
@@ -631,7 +630,7 @@ class BackupService:
 
         return backups, total
 
-    async def get_backup(self, db: AsyncSession, backup_id: str) -> Optional[Backup]:
+    async def get_backup(self, db: AsyncSession, backup_id: str) -> Backup | None:
         """Get a single backup by ID."""
         result = await db.execute(select(Backup).where(Backup.id == backup_id))
         return result.scalar_one_or_none()
@@ -671,11 +670,11 @@ class BackupService:
     async def update_settings(
         self,
         db: AsyncSession,
-        auto_backup_enabled: Optional[bool] = None,
-        schedule_cron: Optional[str] = None,
-        retention_days: Optional[int] = None,
-        retention_count: Optional[int] = None,
-        include_traffic_logs: Optional[bool] = None,
+        auto_backup_enabled: bool | None = None,
+        schedule_cron: str | None = None,
+        retention_days: int | None = None,
+        retention_count: int | None = None,
+        include_traffic_logs: bool | None = None,
     ) -> BackupSettingsModel:
         """Update backup settings."""
         settings_obj = await self.get_settings(db)
@@ -691,7 +690,7 @@ class BackupService:
         if include_traffic_logs is not None:
             settings_obj.include_traffic_logs = include_traffic_logs
 
-        settings_obj.updated_at = datetime.now(timezone.utc)
+        settings_obj.updated_at = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(settings_obj)
@@ -709,7 +708,7 @@ class BackupService:
         if len(backups) <= settings_obj.retention_count:
             return  # Keep at least retention_count backups
 
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=settings_obj.retention_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=settings_obj.retention_days)
 
         for i, backup in enumerate(backups):
             # Always keep minimum count

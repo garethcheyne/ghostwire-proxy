@@ -1,21 +1,18 @@
 """Tests for model creation and basic validation."""
 
-import pytest
 import uuid
-from datetime import datetime, timezone
 
-from app.models.user import User
+import pytest
+from app.models.access_list import AccessList
+from app.models.alert import AlertChannel, AlertPreference
 from app.models.audit_log import AuditLog
-from app.models.setting import Setting
-from app.models.rate_limit import RateLimitRule, GeoipRule
-from app.models.waf import WafRuleSet, WafRule, ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.certificate import Certificate
 from app.models.proxy_host import ProxyHost
-from app.models.access_list import AccessList, AccessListEntry
-from app.models.backup import Backup
+from app.models.rate_limit import RateLimitRule
+from app.models.setting import Setting
 from app.models.traffic_log import TrafficLog
-from app.models.alert import AlertChannel, AlertPreference
-from app.models.analytics import AnalyticsHourly, AnalyticsDaily
+from app.models.user import User
+from app.models.waf import ThreatActor, ThreatThreshold, WafRule, WafRuleSet
 
 
 class TestUserModel:

@@ -1,16 +1,16 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.database import get_db
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.setting import Setting
 from app.models.audit_log import AuditLog
-from app.schemas.setting import SettingUpdate, SettingResponse, SettingsBulkUpdate
-from app.api.deps import get_current_user, get_current_admin_user
+from app.models.setting import Setting
+from app.models.user import User
+from app.schemas.setting import SettingResponse, SettingsBulkUpdate, SettingUpdate
 
 router = APIRouter()
 
@@ -177,15 +177,16 @@ async def update_default_site(
     await db.commit()
 
     # Regenerate and apply the default site config
+    import os
+
+    from app.core.config import settings as app_settings
     from app.services.openresty_service import (
+        backup_configs,
         generate_default_site_config,
         reload_nginx,
-        test_nginx_config,
-        backup_configs,
         restore_configs,
+        test_nginx_config,
     )
-    import os
-    from app.core.config import settings as app_settings
 
     # Backup current configs before writing the new default
     backup_configs()

@@ -1,21 +1,20 @@
 """Tests for openresty service — nginx config generation."""
 
-import pytest
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock, AsyncMock
-from sqlalchemy.ext.asyncio import AsyncSession
+from unittest.mock import MagicMock, patch
 
+import pytest
+from app.models.certificate import Certificate
+from app.models.proxy_host import ProxyHost
+from app.models.setting import Setting
 from app.services.openresty_service import (
-    generate_upstream_block,
-    generate_server_block,
     generate_default_site_config,
-    test_nginx_config,
+    generate_server_block,
+    generate_upstream_block,
     reload_nginx,
     remove_config,
+    test_nginx_config,
 )
-from app.models.proxy_host import ProxyHost
-from app.models.certificate import Certificate
-from app.models.setting import Setting
 
 
 class TestGenerateUpstreamBlock:

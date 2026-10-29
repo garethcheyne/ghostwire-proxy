@@ -18,12 +18,11 @@ import io
 import ipaddress
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.waf import ThreatActor, ThreatEvent
 
@@ -96,7 +95,7 @@ def _categories_for(categories_seen: set[str]) -> str:
 
 
 def _build_comment(
-    categories_seen: set[str], event_count: int, sample_uri: Optional[str], sample_method: Optional[str]
+    categories_seen: set[str], event_count: int, sample_uri: str | None, sample_method: str | None
 ) -> str:
     """PII-stripped summary - category/count/path only, never raw headers,
     cookies, or User-Agent strings (per AbuseIPDB's PII guidance)."""
@@ -118,10 +117,10 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
 
     result = await db.execute(select(func.max(ThreatActor.abuseipdb_reported_at)))
     last_run = result.scalar()
-    if not force and last_run and (datetime.now(timezone.utc) - last_run) < REPORT_SYNC_MIN_INTERVAL:
+    if not force and last_run and (datetime.now(UTC) - last_run) < REPORT_SYNC_MIN_INTERVAL:
         return {"status": "skipped", "reason": "reported recently", "last_run_at": last_run}
 
-    cutoff = datetime.now(timezone.utc) - ACTIVITY_WINDOW
+    cutoff = datetime.now(UTC) - ACTIVITY_WINDOW
     result = await db.execute(
         select(ThreatActor).where(
             ThreatActor.current_status.in_(REPORTABLE_STATUSES),
@@ -166,7 +165,7 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
             {
                 "ip": actor.ip_address,
                 "categories": _categories_for(categories_seen),
-                "report_date": (actor.last_seen or datetime.now(timezone.utc)).isoformat(),
+                "report_date": (actor.last_seen or datetime.now(UTC)).isoformat(),
                 "comment": _build_comment(
                     categories_seen,
                     len(events) or actor.total_events or 1,
@@ -203,7 +202,7 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
     # for "Duplicate IP"/"Invalid IP", the row's IP either way in practice).
     rejected_ips = {r.get("input") for r in rejected} if rejected else set()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     reported_count = 0
     for actor in reportable:
         if actor.ip_address in rejected_ips:

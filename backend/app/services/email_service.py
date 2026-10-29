@@ -15,12 +15,11 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import decrypt_data, encrypt_data
 from app.models.setting import Setting
 
 logger = logging.getLogger(__name__)
@@ -137,7 +136,7 @@ async def send_email(
     to: list[str],
     subject: str,
     text_body: str,
-    html_body: Optional[str] = None,
+    html_body: str | None = None,
 ) -> None:
     """Send one message. Raises on failure so callers can report it honestly."""
     config = await get_smtp_config(db, include_password=True)

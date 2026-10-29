@@ -11,17 +11,17 @@ import os
 import shutil
 import socket
 import subprocess
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.security import decrypt_data
-from app.models.proxy_host import ProxyHost, ProxyLocation
-from app.models.certificate import Certificate
-from app.models.auth_wall import AuthWall
 from app.models.access_list import AccessList
+from app.models.certificate import Certificate
+from app.models.proxy_host import ProxyHost, ProxyLocation
 from app.services.load_balancing import (
     BACKUP_METHODS,
     DEFAULT_FAIL_TIMEOUT,
@@ -33,7 +33,6 @@ from app.services.load_balancing import (
     MAX_NEXT_UPSTREAM_TRIES,
     format_server_address,
 )
-
 
 # Which request header carries the true client IP for each front-facing service.
 # nginx only honours these from addresses listed in set_real_ip_from (see
@@ -552,7 +551,7 @@ def _generate_default_location(host: ProxyHost, backend: str, indent: str = "   
 
 
 def _generate_server_block_content(
-    host: ProxyHost, backend: str, is_https: bool = False, cert: Optional[Certificate] = None, indent: str = "    "
+    host: ProxyHost, backend: str, is_https: bool = False, cert: Certificate | None = None, indent: str = "    "
 ) -> list[str]:
     """Generate server block content (shared between HTTP and HTTPS)"""
     lines = []
@@ -705,7 +704,7 @@ def _generate_server_block_content(
     return lines
 
 
-def generate_server_block(host: ProxyHost, cert: Optional[Certificate] = None) -> str:
+def generate_server_block(host: ProxyHost, cert: Certificate | None = None) -> str:
     """Generate complete nginx server block for a proxy host"""
     domains = " ".join(host.domain_names)
     config_lines = []
@@ -836,7 +835,7 @@ def ensure_default_certificate() -> None:
     key = os.path.join(cert_dir, "default.key")
     if os.path.exists(crt) and os.path.exists(key):
         return
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
@@ -846,7 +845,7 @@ def ensure_default_certificate() -> None:
     os.makedirs(cert_dir, exist_ok=True)
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ghostwire-proxy-default")])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -1085,7 +1084,7 @@ def _docker_api(request: bytes, read_timeout: float = 20.0) -> bytes:
         while True:
             try:
                 data = sock.recv(65536)
-            except socket.timeout:
+            except TimeoutError:
                 break
             if not data:
                 break
@@ -1198,7 +1197,7 @@ def test_nginx_config() -> tuple[bool, str]:
         # The exec has exited by now, so its exit code is available.
         inspected = _http_body(
             _docker_api(
-                "GET /exec/{}/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".format(exec_id).encode(),
+                f"GET /exec/{exec_id}/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode(),
                 read_timeout=10.0,
             )
         )

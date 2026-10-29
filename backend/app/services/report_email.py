@@ -8,15 +8,13 @@ Deliberately table-based, inline-styled HTML — that is what survives Outlook,
 Gmail and Apple Mail. No external CSS, no web fonts, no images.
 """
 
-from typing import Optional
-
 BRAND = "#0ea5e9"
 INK = "#0f172a"
 MUTED = "#64748b"
 LINE = "#e2e8f0"
 
 
-def _bytes_human(value: Optional[int]) -> str:
+def _bytes_human(value: int | None) -> str:
     n = float(value or 0)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if abs(n) < 1024:
@@ -43,7 +41,7 @@ def _ms(value) -> str:
         return str(value)
 
 
-def _change(value: Optional[float]) -> str:
+def _change(value: float | None) -> str:
     if value is None:
         return ""
     arrow = "▲" if value >= 0 else "▼"
@@ -73,7 +71,7 @@ def _section(title: str, body: str) -> str:
     )
 
 
-def _table(headers: list[str], rows: list[list[str]], aligns: Optional[list[str]] = None) -> str:
+def _table(headers: list[str], rows: list[list[str]], aligns: list[str] | None = None) -> str:
     if not rows:
         return f"<p style='font:14px sans-serif;color:{MUTED};margin:4px 0'>No data for this period.</p>"
 
@@ -208,7 +206,7 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
     )
 
     attack_summary = (
-        f"<table style='width:100%;border-collapse:separate;border-spacing:0 12px'><tr>"
+        "<table style='width:100%;border-collapse:separate;border-spacing:0 12px'><tr>"
         + _stat("Security events", _num(sec.get("total_events")), _change(sec.get("events_change_percent")))
         + "<td style='width:12px'></td>"
         + _stat("Unique attackers", _num(sec.get("unique_attackers")))

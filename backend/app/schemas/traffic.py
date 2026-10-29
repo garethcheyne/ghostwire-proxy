@@ -1,40 +1,40 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class TrafficLogResponse(BaseModel):
     id: str
     proxy_host_id: str
-    host_name: Optional[str] = None  # Virtual host domain name
+    host_name: str | None = None  # Virtual host domain name
 
     timestamp: datetime
     client_ip: str
 
     request_method: str
     request_uri: str
-    query_string: Optional[str]
+    query_string: str | None
 
     status: int
-    response_time: Optional[int]
-    bytes_sent: Optional[int]
-    bytes_received: Optional[int]
+    response_time: int | None
+    bytes_sent: int | None
+    bytes_received: int | None
 
-    upstream_addr: Optional[str]
-    upstream_response_time: Optional[int]
+    upstream_addr: str | None
+    upstream_response_time: int | None
 
-    ssl_protocol: Optional[str]
-    ssl_cipher: Optional[str]
+    ssl_protocol: str | None
+    ssl_cipher: str | None
 
-    user_agent: Optional[str]
-    referer: Optional[str]
+    user_agent: str | None
+    referer: str | None
 
-    country_code: Optional[str]
-    country_name: Optional[str] = None
-    city: Optional[str] = None
-    auth_user: Optional[str]
-    is_bot: Optional[bool] = None
-    is_streaming: Optional[bool] = None
+    country_code: str | None
+    country_name: str | None = None
+    city: str | None = None
+    auth_user: str | None
+    is_bot: bool | None = None
+    is_streaming: bool | None = None
 
     class Config:
         from_attributes = True
@@ -46,7 +46,7 @@ class TrafficStatsResponse(BaseModel):
     requests_this_week: int
     requests_by_status: dict[str, int]  # {"2xx": 100, "4xx": 20, ...}
     requests_by_method: dict[str, int]  # {"GET": 100, "POST": 20, ...}
-    avg_response_time: Optional[float]
+    avg_response_time: float | None
     total_bytes_sent: int
     total_bytes_received: int
     top_ips: list[dict]  # [{"ip": "1.2.3.4", "count": 100}, ...]
@@ -54,11 +54,11 @@ class TrafficStatsResponse(BaseModel):
 
 
 class TrafficQueryParams(BaseModel):
-    proxy_host_id: Optional[str] = None
-    client_ip: Optional[str] = None
-    status_min: Optional[int] = None
-    status_max: Optional[int] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    proxy_host_id: str | None = None
+    client_ip: str | None = None
+    status_min: int | None = None
+    status_max: int | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     skip: int = 0
     limit: int = 50

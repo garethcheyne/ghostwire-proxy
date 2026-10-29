@@ -1,16 +1,16 @@
 """Global search endpoint — searches across proxy hosts, threat actors, blocklist, and certificates."""
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, cast, String, or_
 
-from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.models.user import User
-from app.models.proxy_host import ProxyHost
-from app.models.waf import ThreatActor
-from app.models.firewall import FirewallBlocklist
+from app.core.database import get_db
 from app.models.certificate import Certificate
+from app.models.firewall import FirewallBlocklist
+from app.models.proxy_host import ProxyHost
+from app.models.user import User
+from app.models.waf import ThreatActor
 
 router = APIRouter()
 
@@ -45,7 +45,7 @@ async def global_search(
                 "id": h.id,
                 "title": ", ".join(domains[:2]) or h.forward_host,
                 "subtitle": f"→ {h.forward_host}:{h.forward_port}",
-                "url": f"/dashboard/proxy-hosts",
+                "url": "/dashboard/proxy-hosts",
                 "enabled": h.enabled,
             }
         )
@@ -71,7 +71,7 @@ async def global_search(
                 "title": a.ip_address,
                 "subtitle": f"Score: {a.threat_score} · {a.current_status}"
                 + (f" · {a.country_name}" if a.country_name else ""),
-                "url": f"/dashboard/threats",
+                "url": "/dashboard/threats",
             }
         )
 
@@ -96,7 +96,7 @@ async def global_search(
                 "id": b.id,
                 "title": b.ip_address,
                 "subtitle": f"Status: {b.status}" + (f" · {b.error_message}" if b.error_message else ""),
-                "url": f"/dashboard/firewalls",
+                "url": "/dashboard/firewalls",
             }
         )
 
@@ -120,7 +120,7 @@ async def global_search(
                 "id": c.id,
                 "title": c.name or ", ".join(domains[:2]),
                 "subtitle": ", ".join(domains[:3]),
-                "url": f"/dashboard/certificates",
+                "url": "/dashboard/certificates",
             }
         )
 

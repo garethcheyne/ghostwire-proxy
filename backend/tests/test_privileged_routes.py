@@ -2,7 +2,6 @@
 session are validated."""
 
 import pytest
-
 from app.services.backup_service import _check_plain_sql_dump
 
 

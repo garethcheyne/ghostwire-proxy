@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +78,7 @@ RAW_STATEMENT_TIMEOUT_MS = 20_000
 # Counting matches of a filter the rollup can't answer stops here.
 COUNT_CAP = 10_000
 
-ORIGIN = datetime(2000, 1, 3, tzinfo=timezone.utc)  # a Monday, UTC midnight
+ORIGIN = datetime(2000, 1, 3, tzinfo=UTC)  # a Monday, UTC midnight
 
 _PRESETS = {
     "15m": timedelta(minutes=15),
@@ -105,15 +106,15 @@ def ceil_hour(dt: datetime) -> datetime:
 
 
 def resolve_range(
-    range_: Optional[str],
-    start: Optional[datetime],
-    end: Optional[datetime],
+    range_: str | None,
+    start: datetime | None,
+    end: datetime | None,
     *,
-    default: Optional[str] = "24h",
-    now: Optional[datetime] = None,
-) -> tuple[Optional[datetime], Optional[datetime]]:
+    default: str | None = "24h",
+    now: datetime | None = None,
+) -> tuple[datetime | None, datetime | None]:
     """Turn a preset ("24h") or explicit start/end into aware UTC datetimes."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if start or end:
         s = _aware(start) if start else None
         e = _aware(end) if end else None
@@ -129,30 +130,30 @@ def resolve_range(
 
 
 def _aware(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
 
 
 @dataclass
 class TrafficFilters:
-    start: Optional[datetime] = None  # inclusive
-    end: Optional[datetime] = None  # exclusive; None = now
+    start: datetime | None = None  # inclusive
+    end: datetime | None = None  # exclusive; None = now
     host_ids: list[str] = field(default_factory=list)
     # Backends: "10.0.0.5:8080" matches that upstream exactly, "10.0.0.5" every
     # port on that machine.
     backends: list[str] = field(default_factory=list)
     status_classes: list[int] = field(default_factory=list)  # 1..5
     statuses: list[int] = field(default_factory=list)
-    status_min: Optional[int] = None  # legacy range filter
-    status_max: Optional[int] = None
+    status_min: int | None = None  # legacy range filter
+    status_max: int | None = None
     methods: list[str] = field(default_factory=list)
-    path: Optional[str] = None
+    path: str | None = None
     path_mode: str = "contains"  # contains | prefix
-    client_ip: Optional[str] = None  # address or CIDR
+    client_ip: str | None = None  # address or CIDR
     countries: list[str] = field(default_factory=list)
-    user_agent: Optional[str] = None
-    bot: Optional[bool] = None
-    min_response_ms: Optional[int] = None
-    search: Optional[str] = None  # legacy free text: URI, client IP, user agent
+    user_agent: str | None = None
+    bot: bool | None = None
+    min_response_ms: int | None = None
+    search: str | None = None  # legacy free text: URI, client IP, user agent
 
     def __post_init__(self) -> None:
         if self.path_mode not in ("contains", "prefix"):
@@ -295,7 +296,7 @@ def _raw_only_filters(f: TrafficFilters, p: _Params) -> list[str]:
     return out
 
 
-def raw_where(f: TrafficFilters, p: _Params, ranges: Optional[list[tuple]] = None) -> str:
+def raw_where(f: TrafficFilters, p: _Params, ranges: list[tuple] | None = None) -> str:
     """WHERE body over traffic_logs (unqualified columns) for the filters.
 
     ``ranges`` replaces the filter's own time window with explicit [start, end)
@@ -323,25 +324,25 @@ def raw_where(f: TrafficFilters, p: _Params, ranges: Optional[list[tuple]] = Non
 # ─── Rollup coverage ────────────────────────────────────────────────────────
 
 
-async def rolled_until(db: AsyncSession) -> Optional[datetime]:
+async def rolled_until(db: AsyncSession) -> datetime | None:
     try:
         return (await db.execute(text("SELECT rolled_until FROM traffic_rollup_state WHERE id = 1"))).scalar()
-    except Exception:  # noqa: BLE001 — table missing on a half-migrated DB: just use raw rows
+    except Exception:
         await db.rollback()
         return None
 
 
 @dataclass
 class _Plan:
-    rollup: Optional[tuple[Optional[datetime], datetime]]  # [start, end) of buckets, start None = all
-    raw: list[tuple[Optional[datetime], Optional[datetime]]]
+    rollup: tuple[datetime | None, datetime] | None  # [start, end) of buckets, start None = all
+    raw: list[tuple[datetime | None, datetime | None]]
 
 
 def plan_sources(
     f: TrafficFilters,
-    watermark: Optional[datetime],
+    watermark: datetime | None,
     *,
-    stride: Optional[timedelta] = None,
+    stride: timedelta | None = None,
     rollup_ok: bool = True,
 ) -> _Plan:
     """Split the window between the rollup (whole, summarised hours) and raw rows."""
@@ -354,7 +355,7 @@ def plan_sources(
     re_ = min(floor_hour(f.end), watermark) if f.end else watermark
     if rs is not None and rs >= re_:
         return _Plan(None, whole)
-    raw: list[tuple[Optional[datetime], Optional[datetime]]] = []
+    raw: list[tuple[datetime | None, datetime | None]] = []
     if f.start is not None and f.start < rs:
         raw.append((f.start, rs))
     raw.append((re_, f.end))
@@ -420,10 +421,10 @@ async def aggregate(
     f: TrafficFilters,
     dims: Iterable[str] = (),
     *,
-    stride: Optional[timedelta] = None,
+    stride: timedelta | None = None,
     order: str = "requests",
-    limit: Optional[int] = None,
-    watermark: Optional[datetime] = None,
+    limit: int | None = None,
+    watermark: datetime | None = None,
     use_rollup: bool = True,
 ) -> list[dict]:
     """Aggregate requests for ``f`` grouped by ``dims`` (and time, if ``stride``).
@@ -509,7 +510,7 @@ async def _raw_timeout(db: AsyncSession) -> None:
 
 
 async def method_counts(
-    db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None, limit: int = 20
+    db: AsyncSession, f: TrafficFilters, *, watermark: datetime | None = None, limit: int = 20
 ) -> list[dict]:
     """Requests per method; from the method rollup when only time/host filter."""
     if watermark is None:
@@ -544,7 +545,7 @@ async def method_counts(
 
 
 # Raw-only "top N" dimensions: value expression, extra label expression.
-TOP_RAW: dict[str, tuple[str, Optional[str]]] = {
+TOP_RAW: dict[str, tuple[str, str | None]] = {
     "path": ("request_uri", None),
     "client_ip": ("client_ip", "max(country_code)"),
     "country": ("coalesce(country_code, '')", "max(country_name)"),
@@ -611,9 +612,7 @@ async def failover_pairs(db: AsyncSession, f: TrafficFilters, *, limit: int = 20
     return [{"from": r["from_node"], "to": r["to_node"], "requests": int(r["requests"])} for r in rows]
 
 
-async def count_matching(
-    db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None
-) -> tuple[int, bool]:
+async def count_matching(db: AsyncSession, f: TrafficFilters, *, watermark: datetime | None = None) -> tuple[int, bool]:
     """Total rows matching ``f``: exact from the rollup when it can answer,
     otherwise a raw count capped at COUNT_CAP. Returns (count, capped)."""
     if f.rollup_compatible:
@@ -673,7 +672,7 @@ async def list_logs(db: AsyncSession, f: TrafficFilters, *, skip: int, limit: in
 # ─── Derived figures ────────────────────────────────────────────────────────
 
 
-def percentile(hist: list[int], q: float) -> Optional[float]:
+def percentile(hist: list[int], q: float) -> float | None:
     """Estimate the q-quantile (0..1) of response time from a histogram."""
     total = sum(hist)
     if total <= 0:
@@ -721,10 +720,10 @@ def latency_summary(m: dict) -> dict:
     }
 
 
-def auto_stride(start: Optional[datetime], end: Optional[datetime], now: Optional[datetime] = None) -> timedelta:
+def auto_stride(start: datetime | None, end: datetime | None, now: datetime | None = None) -> timedelta:
     """A chart bucket size giving roughly 24–120 points; whole hours from 2 days up,
     so longer windows can come from the hourly rollup."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     span = (end or now) - (start or (now - timedelta(days=30)))
     if span <= timedelta(hours=1):
         return timedelta(minutes=1)

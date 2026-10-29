@@ -2,14 +2,11 @@
 auth portal redirects, OAuth allow-lists and backup/restore safety."""
 
 import json
-import subprocess
+from datetime import UTC
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
-
 from app.core.client_ip import TrustedProxies, TrustedProxyMiddleware
 from app.models.setting import Setting
 from app.services.auth_portal_redirect import is_safe_redirect
@@ -21,7 +18,8 @@ from app.services.auth_wall_access import (
     open_to_any_account,
 )
 from app.services.outbound_url import OutboundUrlError, validate_outbound_url
-
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 # ── /api/internal/* ──────────────────────────────────────────────────────
 
@@ -138,6 +136,7 @@ class TestMfaRateLimitNotBypassedBySpoofing:
         from app.core.database import get_db
         from app.core.rate_limiter import limiter
         from app.main import app
+
         from tests.conftest import _override_get_db
 
         reset_trusted_proxies("127.0.0.1")
@@ -334,8 +333,8 @@ class TestRedirectTargets:
         assert not is_safe_redirect(target, "app.example.test")
 
     async def test_oauth_start_never_stores_offsite_redirect(self, client, db_session):
-        from app.models.auth_wall import AuthProvider, AuthWall
         from app.core.security import encrypt_data
+        from app.models.auth_wall import AuthProvider, AuthWall
 
         wall = AuthWall(name="W", auth_type="oauth")
         db_session.add(wall)
@@ -484,7 +483,8 @@ class TestOAuthCallbackEnforcesAllowList:
         return wall, provider
 
     async def _callback(self, client, wall, provider, email):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
+
         from app.services.auth_providers.base import UserInfo
 
         state = {
@@ -492,7 +492,7 @@ class TestOAuthCallbackEnforcesAllowList:
             "provider_id": provider.id,
             "redirect_url": "/home",
             "callback_url": "https://app.example.test/cb",
-            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
         info = UserInfo(
             user_id="1", username="u", email=email, provider_type="google", raw_data={"email_verified": True}

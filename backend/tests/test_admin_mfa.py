@@ -9,8 +9,7 @@ import json
 
 import pyotp
 import pytest
-
-from app.core.security import get_password_hash, decrypt_data
+from app.core.security import decrypt_data, get_password_hash
 from app.models.user import User
 from app.services import admin_mfa_service as mfa
 

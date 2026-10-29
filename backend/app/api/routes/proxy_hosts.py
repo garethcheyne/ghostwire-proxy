@@ -1,49 +1,49 @@
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent, ProxyLocation
 from app.models.audit_log import AuditLog
+from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer, UpstreamServerEvent
+from app.models.user import User
 from app.schemas.proxy_host import (
+    LocationReorderRequest,
     ProxyHostCreate,
-    ProxyHostUpdate,
     ProxyHostResponse,
-    UpstreamServerCreate,
-    UpstreamServerUpdate,
-    UpstreamServerUpsert,
-    UpstreamServerResponse,
+    ProxyHostUpdate,
+    ProxyLocationCreate,
+    ProxyLocationResponse,
+    ProxyLocationUpdate,
+    UpstreamCheckResult,
     UpstreamPreviewRequest,
     UpstreamPreviewResponse,
-    UpstreamCheckResult,
+    UpstreamServerCreate,
     UpstreamServerEventResponse,
-    ProxyLocationCreate,
-    ProxyLocationUpdate,
-    ProxyLocationResponse,
-    LocationReorderRequest,
+    UpstreamServerResponse,
+    UpstreamServerUpdate,
+    UpstreamServerUpsert,
 )
 from app.services.load_balancing import check_lb_rules
-from app.api.deps import get_current_user, get_current_admin_user
 from app.services.openresty_service import (
-    generate_all_configs,
-    reload_nginx,
-    remove_config,
     backup_configs,
-    restore_configs,
-    test_nginx_config,
+    generate_all_configs,
     generate_upstream_block,
     generate_upstream_connection_map,
     generate_upstream_location_directives,
+    reload_nginx,
+    remove_config,
+    restore_configs,
+    test_nginx_config,
     upstream_name,
 )
 
@@ -273,9 +273,9 @@ async def get_proxy_host_config(
     if not os.path.isfile(path):
         return {"exists": False, "enabled": row.enabled, "path": path, "content": None, "modified_at": None}
 
-    with open(path, "r", encoding="utf-8", newline="") as f:
+    with open(path, encoding="utf-8", newline="") as f:
         content = f.read()
-    modified_at = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc)
+    modified_at = datetime.fromtimestamp(os.path.getmtime(path), tz=UTC)
     return {"exists": True, "enabled": row.enabled, "path": path, "content": content, "modified_at": modified_at}
 
 

@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from typing import Any, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any
 
 # Method key -> the directive it renders (None = nginx's default round robin).
-LB_METHODS: dict[str, Optional[str]] = {
+LB_METHODS: dict[str, str | None] = {
     "round_robin": None,
     "least_conn": "least_conn;",
     "ip_hash": "ip_hash;",
@@ -101,7 +102,7 @@ def _get(server: Any, name: str, default: Any = None) -> Any:
     return getattr(server, name, default)
 
 
-def check_lb_rules(method: Optional[str], servers: Iterable[Any]) -> tuple[list[str], list[str]]:
+def check_lb_rules(method: str | None, servers: Iterable[Any]) -> tuple[list[str], list[str]]:
     """Cross-field checks for a host's upstream group.
 
     Returns (errors, warnings). Errors block a save; warnings are shown in the

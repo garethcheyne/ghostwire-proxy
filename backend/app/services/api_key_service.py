@@ -28,7 +28,7 @@ import string
 import time
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -188,7 +188,7 @@ async def create_key(
     else:  # pragma: no cover - 36^10 prefixes
         raise RuntimeError("Could not allocate a unique key prefix")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     row = ApiKey(
         name=name.strip(),
         prefix=prefix,
@@ -204,7 +204,7 @@ async def create_key(
 
 
 def key_status(key: ApiKey, now: datetime | None = None) -> str:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if key.revoked_at is not None:
         return "revoked"
     if key.expires_at is not None and key.expires_at <= now:
@@ -315,7 +315,7 @@ async def authenticate(db: AsyncSession, token: str, client_ip: str | None) -> A
     if user.role != "admin":
         raise ApiKeyError(403, "The account that created this API key is no longer an admin")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if row.last_used_at is None or now - row.last_used_at >= LAST_USED_WRITE_INTERVAL or row.last_used_ip != client_ip:
         row.last_used_at = now
         row.last_used_ip = client_ip

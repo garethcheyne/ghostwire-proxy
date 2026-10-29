@@ -1,17 +1,16 @@
 """Tests for firewall connector services."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-import httpx
 
+import pytest
+from app.models.firewall import FirewallConnector
 from app.services.firewall_service import (
+    OPNsenseConnector,
+    PfSenseConnector,
     RouterOSConnector,
     UniFiConnector,
-    PfSenseConnector,
-    OPNsenseConnector,
     get_connector,
 )
-from app.models.firewall import FirewallConnector
 
 
 @pytest.fixture

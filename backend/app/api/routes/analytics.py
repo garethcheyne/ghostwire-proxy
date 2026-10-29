@@ -1,20 +1,19 @@
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, distinct, case, text, cast, String
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 from pydantic import BaseModel
+from sqlalchemy import String, and_, case, cast, distinct, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db, AsyncSessionLocal
-from app.core.cache import cached_json
-from app.models.user import User
-from app.models.traffic_log import TrafficLog
-from app.models.proxy_host import ProxyHost
-from app.models.analytics import AnalyticsDaily, AnalyticsGeo
 from app.api.deps import get_current_user
+from app.core.cache import cached_json
+from app.core.database import AsyncSessionLocal, get_db
+from app.models.analytics import AnalyticsDaily, AnalyticsGeo
+from app.models.proxy_host import ProxyHost
+from app.models.traffic_log import TrafficLog
+from app.models.user import User
 
 router = APIRouter()
 
@@ -138,7 +137,7 @@ def parse_user_agent(user_agent: str | None) -> str:
 @router.get("/dashboard", response_model=AnalyticsDashboard)
 async def get_analytics_dashboard(
     period: str = Query("7d", pattern="^(24h|7d|30d|90d)$"),
-    proxy_host_id: Optional[str] = None,
+    proxy_host_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -156,10 +155,10 @@ async def get_analytics_dashboard(
     return result
 
 
-async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: Optional[str]) -> AnalyticsDashboard:
+async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: str | None) -> AnalyticsDashboard:
 
     # Calculate time ranges
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     period_map = {
         "24h": timedelta(hours=24),
@@ -434,7 +433,7 @@ async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: Optio
         if bucket_ts is None:
             continue
         if isinstance(bucket_ts, (int, float)):
-            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=UTC)
         time_series.append(
             TimeSeriesPoint(
                 timestamp=bucket_ts.strftime(time_format),
@@ -546,7 +545,7 @@ async def get_realtime_stats(
     """Get real-time stats for the last 5 minutes."""
 
     async def _compute():
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         five_min_ago = now - timedelta(minutes=5)
         one_min_ago = now - timedelta(minutes=1)
 
@@ -591,7 +590,7 @@ async def get_auth_errors(
     cache_key = f"analytics:auth_errors:{period}"
 
     async def _compute() -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         period_map = {
             "1h": timedelta(hours=1),
             "24h": timedelta(hours=24),
@@ -771,9 +770,9 @@ class TrendPoint(BaseModel):
     threats: int
     bytes_sent: int
     bytes_received: int
-    avg_response_time: Optional[int] = None
-    p95_response_time: Optional[int] = None
-    p99_response_time: Optional[int] = None
+    avg_response_time: int | None = None
+    p95_response_time: int | None = None
+    p99_response_time: int | None = None
     bot_requests: int = 0
 
 
@@ -793,7 +792,7 @@ class TrendsResponse(BaseModel):
 @router.get("/trends", response_model=TrendsResponse)
 async def get_trends(
     days: int = Query(90, ge=1, le=730),
-    proxy_host_id: Optional[str] = None,
+    proxy_host_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -805,7 +804,7 @@ async def get_trends(
     cache_key = f"analytics:trends:{proxy_host_id or 'all'}:{days}"
 
     async def _compute() -> dict:
-        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        since = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
 
         rows_q = select(AnalyticsDaily).where(AnalyticsDaily.date >= since)
         if proxy_host_id:

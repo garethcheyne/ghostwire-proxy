@@ -15,12 +15,11 @@ import asyncio
 import os
 
 import pytest
+from app.models.waf import ThreatActor, ThreatEvent
+from app.services.threat_service import record_threat_event
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-
-from app.models.waf import ThreatActor, ThreatEvent
-from app.services.threat_service import record_threat_event
 
 IP = "198.51.100.200"
 

@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from app.core.redis import get_redis
 
@@ -39,7 +40,7 @@ async def cache_get(key: str) -> Any | None:
         if raw is None:
             return None
         return json.loads(raw)
-    except Exception as e:  # noqa: BLE001 - cache must never break a request
+    except Exception as e:
         logger.debug("cache_get failed for %s: %s", key, e)
         return None
 
@@ -52,7 +53,7 @@ async def cache_set(key: str, value: Any, ttl: int = 30) -> None:
             json.dumps(value, default=_default),
             ex=ttl,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.debug("cache_set failed for %s: %s", key, e)
 
 
@@ -62,7 +63,7 @@ async def cache_delete(*keys: str) -> None:
     try:
         client = await get_redis()
         await client.delete(*[_CACHE_PREFIX + k for k in keys])
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.debug("cache_delete failed: %s", e)
 
 
@@ -79,7 +80,7 @@ async def cache_delete_prefix(prefix: str) -> None:
                 await client.delete(*batch)
             if cursor == 0:
                 break
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.debug("cache_delete_prefix(%s) failed: %s", prefix, e)
 
 

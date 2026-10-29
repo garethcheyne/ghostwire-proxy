@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel, EmailStr
 
 
@@ -29,8 +27,8 @@ class LoginChallengeResponse(BaseModel):
     # "totp"  -> user is enrolled, must supply a code at /auth/login/totp
     # "enrol" -> MFA is required org-wide but this user has not enrolled yet
     challenge: str
-    challenge_token: Optional[str] = None
-    enrolment_token: Optional[str] = None
+    challenge_token: str | None = None
+    enrolment_token: str | None = None
     message: str
 
 
@@ -42,7 +40,7 @@ class TotpLoginRequest(BaseModel):
 class MfaStatusResponse(BaseModel):
     enabled: bool
     verified: bool
-    enrolled_at: Optional[str] = None
+    enrolled_at: str | None = None
     backup_codes_remaining: int
     required_org_wide: bool
 
@@ -52,7 +50,7 @@ class MfaSetupResponse(BaseModel):
 
     secret: str
     provisioning_uri: str
-    qr_code: Optional[str] = None  # inline PNG data URI
+    qr_code: str | None = None  # inline PNG data URI
     backup_codes: list[str]
 
 
@@ -66,8 +64,8 @@ class MfaVerifiedResponse(BaseModel):
 
     success: bool
     message: str
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
+    access_token: str | None = None
+    refresh_token: str | None = None
 
 
 class MfaDisableRequest(BaseModel):

@@ -31,10 +31,9 @@ Usage:
 
 import json
 import logging
-from typing import Optional, List
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -65,7 +64,7 @@ class PushService:
         """Check if VAPID keys are configured."""
         return bool(settings.vapid_public_key and settings.vapid_private_key)
 
-    async def _get_subscriptions(self, db: AsyncSession, user_id: Optional[str] = None) -> List[PushSubscription]:
+    async def _get_subscriptions(self, db: AsyncSession, user_id: str | None = None) -> list[PushSubscription]:
         """Get push subscriptions from database."""
         query = select(PushSubscription)
         if user_id:
@@ -79,8 +78,6 @@ class PushService:
             return False
 
         try:
-            from pywebpush import WebPushException
-
             self.webpush(
                 subscription_info={
                     "endpoint": subscription.endpoint,
@@ -110,11 +107,11 @@ class PushService:
         title: str,
         body: str,
         notification_type: str = "general",
-        data: Optional[dict] = None,
-        actions: Optional[List[dict]] = None,
+        data: dict | None = None,
+        actions: list[dict] | None = None,
         require_interaction: bool = False,
-        db: Optional[AsyncSession] = None,
-        exclude_user_ids: Optional[set] = None,
+        db: AsyncSession | None = None,
+        exclude_user_ids: set | None = None,
     ) -> dict:
         """
         Send notification to all subscribed users.
@@ -183,8 +180,8 @@ class PushService:
         title: str,
         body: str,
         notification_type: str = "general",
-        data: Optional[dict] = None,
-        db: Optional[AsyncSession] = None,
+        data: dict | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Send notification to a specific user."""
         if not self.is_configured():
@@ -233,8 +230,8 @@ class PushService:
         ip: str,
         threat_type: str,
         severity: str = "high",
-        threat_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        threat_id: str | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about a detected threat."""
         return await self.notify_all(
@@ -259,8 +256,8 @@ class PushService:
         self,
         attack_type: str,
         requests_per_minute: int,
-        source_ips: Optional[List[str]] = None,
-        db: Optional[AsyncSession] = None,
+        source_ips: list[str] | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about an ongoing attack."""
         return await self.notify_all(
@@ -283,9 +280,9 @@ class PushService:
         self,
         domain: str,
         upstream: str,
-        error: Optional[str] = None,
-        host_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        error: str | None = None,
+        host_id: str | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify that a proxy host's upstream stopped responding."""
         body = f"{upstream} is not responding"
@@ -314,9 +311,9 @@ class PushService:
         self,
         domain: str,
         upstream: str,
-        downtime: Optional[str] = None,
-        host_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        downtime: str | None = None,
+        host_id: str | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify that a previously-down proxy host is answering again."""
         body = f"{upstream} is responding again"
@@ -340,8 +337,8 @@ class PushService:
         self,
         ip: str,
         reason: str,
-        duration: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        duration: str | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about a blocked IP."""
         body = f"Blocked {ip}: {reason}"
@@ -359,8 +356,8 @@ class PushService:
     async def notify_update_available(
         self,
         version: str,
-        release_notes_url: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        release_notes_url: str | None = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about an available update."""
         return await self.notify_all(
@@ -382,7 +379,7 @@ class PushService:
     async def notify_update_completed(
         self,
         version: str,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about a completed update."""
         return await self.notify_all(
@@ -397,7 +394,7 @@ class PushService:
         self,
         domain: str,
         days: int,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about an expiring certificate."""
         return await self.notify_all(
@@ -416,7 +413,7 @@ class PushService:
         self,
         backup_id: str,
         size_mb: float,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about a completed backup."""
         return await self.notify_all(
@@ -430,7 +427,7 @@ class PushService:
     async def notify_backup_failed(
         self,
         error: str,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> dict:
         """Notify about a failed backup."""
         return await self.notify_all(

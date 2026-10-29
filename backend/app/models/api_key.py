@@ -4,10 +4,10 @@ A key is `gwp_<prefix>_<secret>`. Only the prefix (to find the row and to show i
 SHA-256 hash of the whole key are stored; the key itself is shown once, when it is created.
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
 
-from sqlalchemy import Column, DateTime, JSON, String
+from sqlalchemy import JSON, Column, DateTime, String
 
 from app.core.database import Base
 
@@ -27,7 +27,7 @@ class ApiKey(Base):
     # The admin who created it; the key acts with that user's identity and stops
     # working if the user is disabled or loses the admin role.
     created_by = Column(String(36), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     last_used_ip = Column(String(45), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)

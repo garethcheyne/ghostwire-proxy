@@ -9,7 +9,6 @@ control characters) becomes "/".
 from __future__ import annotations
 
 import re
-from typing import Optional
 from urllib.parse import urlsplit
 
 from fastapi import Request
@@ -17,7 +16,7 @@ from fastapi import Request
 _CONTROL = re.compile(r"[\x00-\x1f\x7f\\]")
 
 
-def _host_only(value: Optional[str]) -> str:
+def _host_only(value: str | None) -> str:
     value = (value or "").strip().lower()
     if value.startswith("["):
         return value.split("]", 1)[0] + "]"
@@ -33,7 +32,7 @@ def request_origin(request: Request) -> str:
     return f"{scheme}://{request_host(request)}"
 
 
-def is_safe_redirect(target: Optional[str], host: str) -> bool:
+def is_safe_redirect(target: str | None, host: str) -> bool:
     if not target or _CONTROL.search(target) or target != target.strip():
         return False
     if target.startswith("/"):
@@ -47,5 +46,5 @@ def is_safe_redirect(target: Optional[str], host: str) -> bool:
     return bool(host) and _host_only(parts.netloc) == _host_only(host)
 
 
-def safe_redirect_target(target: Optional[str], request: Request) -> str:
+def safe_redirect_target(target: str | None, request: Request) -> str:
     return target if is_safe_redirect(target, request_host(request)) else "/"

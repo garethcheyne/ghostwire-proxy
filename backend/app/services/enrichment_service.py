@@ -10,14 +10,13 @@ import asyncio
 import json
 import logging
 import socket
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import httpx
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, insert
 
-from app.models.honeypot import IpEnrichment, AbuseIPDBBlacklistEntry
+from app.models.honeypot import AbuseIPDBBlacklistEntry, IpEnrichment
 from app.models.traffic_log import TrafficLog
 
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ async def _lookup_ip_api(ip: str) -> dict:
     return {}
 
 
-async def _reverse_dns(ip: str) -> Optional[str]:
+async def _reverse_dns(ip: str) -> str | None:
     """Perform reverse DNS lookup."""
     try:
         loop = asyncio.get_event_loop()
@@ -73,12 +72,12 @@ async def _reverse_dns(ip: str) -> Optional[str]:
 # continuing to ask, and each rejected call still counts against some plans.
 # One global cooldown, rather than a per-IP backoff, so a quota exhaustion is
 # not multiplied by the number of addresses we happen to see next.
-_ABUSE_RATE_LIMITED_UNTIL: Optional[datetime] = None
+_ABUSE_RATE_LIMITED_UNTIL: datetime | None = None
 ABUSE_RATE_LIMIT_COOLDOWN = timedelta(hours=6)
 
 
 def _abuse_is_rate_limited() -> bool:
-    return bool(_ABUSE_RATE_LIMITED_UNTIL and datetime.now(timezone.utc) < _ABUSE_RATE_LIMITED_UNTIL)
+    return bool(_ABUSE_RATE_LIMITED_UNTIL and datetime.now(UTC) < _ABUSE_RATE_LIMITED_UNTIL)
 
 
 async def _lookup_abuseipdb(ip: str, api_key: str) -> tuple[dict, bool]:
@@ -107,7 +106,7 @@ async def _lookup_abuseipdb(ip: str, api_key: str) -> tuple[dict, bool]:
             if resp.status_code == 200:
                 return resp.json().get("data", {}), True
             if resp.status_code == 429:
-                _ABUSE_RATE_LIMITED_UNTIL = datetime.now(timezone.utc) + ABUSE_RATE_LIMIT_COOLDOWN
+                _ABUSE_RATE_LIMITED_UNTIL = datetime.now(UTC) + ABUSE_RATE_LIMIT_COOLDOWN
                 logger.warning(
                     "AbuseIPDB daily quota exhausted (HTTP 429) — pausing lookups until %s",
                     _ABUSE_RATE_LIMITED_UNTIL.isoformat(timespec="minutes"),
@@ -144,7 +143,7 @@ async def sync_abuseipdb_blacklist(
     result = await db.execute(select(func.max(AbuseIPDBBlacklistEntry.synced_at)))
     last_synced = result.scalar()
     if not force and last_synced:
-        age = datetime.now(timezone.utc) - last_synced
+        age = datetime.now(UTC) - last_synced
         if age < BLACKLIST_SYNC_MIN_INTERVAL:
             return {"status": "skipped", "reason": "synced recently", "last_synced_at": last_synced}
 
@@ -163,7 +162,7 @@ async def sync_abuseipdb_blacklist(
         logger.warning("AbuseIPDB blacklist sync failed: %s", e)
         return {"status": "failed", "error": str(e)}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         {
             "ip_address": item["ipAddress"],
@@ -191,7 +190,7 @@ async def sync_abuseipdb_blacklist(
     return {"status": "synced", "count": len(rows), "synced_at": now}
 
 
-async def check_local_blacklist(db: AsyncSession, ip: str) -> Optional[AbuseIPDBBlacklistEntry]:
+async def check_local_blacklist(db: AsyncSession, ip: str) -> AbuseIPDBBlacklistEntry | None:
     """Look up an IP in the local AbuseIPDB blacklist cache - free, no API call."""
     result = await db.execute(select(AbuseIPDBBlacklistEntry).where(AbuseIPDBBlacklistEntry.ip_address == ip))
     return result.scalar_one_or_none()
@@ -201,7 +200,7 @@ async def enrich_ip(
     db: AsyncSession,
     ip: str,
     force: bool = False,
-    abuseipdb_key: Optional[str] = None,
+    abuseipdb_key: str | None = None,
 ) -> IpEnrichment:
     """Enrich an IP address with all available intelligence.
 
@@ -212,7 +211,7 @@ async def enrich_ip(
     existing = result.scalar_one_or_none()
 
     if existing and not force:
-        age = datetime.now(timezone.utc) - (existing.updated_at or existing.enriched_at)
+        age = datetime.now(UTC) - (existing.updated_at or existing.enriched_at)
         # abuse_score can be legitimately None for two very different reasons:
         # (a) no AbuseIPDB key was configured yet when this record was first
         #     enriched - worth catching up on once a key shows up, or
@@ -272,7 +271,7 @@ async def enrich_ip(
         abuse_answered = True
 
     # Build enrichment record
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     raw_combined = {
         "ip_api": ip_api_data if isinstance(ip_api_data, dict) else {},
@@ -343,7 +342,7 @@ async def enrich_ip(
         return enrichment
 
 
-async def get_enrichment(db: AsyncSession, ip: str) -> Optional[IpEnrichment]:
+async def get_enrichment(db: AsyncSession, ip: str) -> IpEnrichment | None:
     """Get existing enrichment data for an IP, or None."""
     result = await db.execute(select(IpEnrichment).where(IpEnrichment.ip_address == ip))
     return result.scalar_one_or_none()
@@ -415,7 +414,7 @@ async def cleanup_stale_enrichments(db: AsyncSession) -> int:
     referenced by any traffic log or threat actor. Returns count of deleted rows."""
     from sqlalchemy import delete
 
-    cutoff = datetime.now(timezone.utc) - ENRICHMENT_MAX_AGE
+    cutoff = datetime.now(UTC) - ENRICHMENT_MAX_AGE
     result = await db.execute(delete(IpEnrichment).where(IpEnrichment.updated_at < cutoff))
     await db.commit()
     deleted = result.rowcount

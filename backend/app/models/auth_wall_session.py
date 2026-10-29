@@ -3,10 +3,11 @@ Auth Wall Session model for server-side session management.
 Sessions are stored in the database for instant revocation capability.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey, Index
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 import secrets
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -42,9 +43,9 @@ class AuthWallSession(Base):
     user_agent = Column(String(500), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
-    last_activity_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_activity_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     # Revocation
     revoked = Column(Boolean, default=False, nullable=False, index=True)
@@ -64,7 +65,7 @@ class AuthWallSession(Base):
         """Check if session is currently valid."""
         if self.revoked:
             return False
-        if datetime.now(timezone.utc) > self.expires_at:
+        if datetime.now(UTC) > self.expires_at:
             return False
         return True
 

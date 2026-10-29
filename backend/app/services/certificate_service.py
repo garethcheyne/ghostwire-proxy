@@ -5,10 +5,10 @@ Handles Let's Encrypt certificate requests and renewals.
 
 import os
 import subprocess
-from datetime import datetime, timezone
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import encrypt_data
@@ -97,10 +97,10 @@ async def request_letsencrypt_certificate(
             await db.commit()
             return False, "Certificate files not found"
 
-        with open(cert_path, "r") as f:
+        with open(cert_path) as f:
             certificate_content = f.read()
 
-        with open(key_path, "r") as f:
+        with open(key_path) as f:
             key_content = f.read()
 
         # Update certificate record
@@ -108,7 +108,7 @@ async def request_letsencrypt_certificate(
         cert.certificate_key = encrypt_data(key_content)
         cert.status = "valid"
         cert.error_message = None
-        cert.last_renewed_at = datetime.now(timezone.utc)
+        cert.last_renewed_at = datetime.now(UTC)
 
         cert.expires_at = _parse_certificate_expiry(certificate_content)
 
@@ -178,10 +178,10 @@ async def renew_certificate(
         cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
         key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
 
-        with open(cert_path, "r") as f:
+        with open(cert_path) as f:
             certificate_content = f.read()
 
-        with open(key_path, "r") as f:
+        with open(key_path) as f:
             key_content = f.read()
 
         # Update certificate record
@@ -189,7 +189,7 @@ async def renew_certificate(
         cert.certificate_key = encrypt_data(key_content)
         cert.status = "valid"
         cert.error_message = None
-        cert.last_renewed_at = datetime.now(timezone.utc)
+        cert.last_renewed_at = datetime.now(UTC)
         cert.expires_at = _parse_certificate_expiry(certificate_content)
 
         await db.commit()
@@ -217,7 +217,7 @@ async def renew_and_deploy_certificate(cert_id: str) -> tuple[bool, str]:
     a scheduler loop that doesn't already have one.
     """
     from app.core.database import async_session_maker
-    from app.services.openresty_service import generate_all_configs, write_certificate_files, reload_nginx
+    from app.services.openresty_service import generate_all_configs, reload_nginx, write_certificate_files
 
     async with async_session_maker() as db:
         success, message = await renew_certificate(db, cert_id)
@@ -244,7 +244,7 @@ async def check_expiring_certificates(
     """
     from datetime import timedelta
 
-    expiry_threshold = datetime.now(timezone.utc) + timedelta(days=days_before_expiry)
+    expiry_threshold = datetime.now(UTC) + timedelta(days=days_before_expiry)
 
     result = await db.execute(
         select(Certificate).where(
@@ -263,7 +263,7 @@ async def check_expiring_certificates(
             from app.services.push_service import push_service
 
             for cert in expiring_certs:
-                days_left = (cert.expires_at - datetime.now(timezone.utc)).days
+                days_left = (cert.expires_at - datetime.now(UTC)).days
                 if days_left <= 7:  # Only notify for certs expiring within 7 days
                     domain = cert.domain_names[0] if cert.domain_names else "Unknown"
                     await push_service.notify_certificate_expiring(
@@ -277,7 +277,7 @@ async def check_expiring_certificates(
     return expiring_certs
 
 
-def validate_certificate_pem(certificate_pem: str, key_pem: str) -> tuple[bool, Optional[str], Optional[datetime]]:
+def validate_certificate_pem(certificate_pem: str, key_pem: str) -> tuple[bool, str | None, datetime | None]:
     """
     Validate a certificate and key pair.
     Returns (is_valid, error_message, expiry_date)

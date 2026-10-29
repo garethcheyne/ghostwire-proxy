@@ -1,19 +1,18 @@
 """Tests for security core module (password hashing, JWT, encryption)."""
 
-import pytest
 from datetime import timedelta
-from unittest.mock import patch
 
+import pytest
 from app.core.security import (
-    get_password_hash,
-    verify_password,
+    _truncate_password,
     create_access_token,
     create_refresh_token,
     decode_token,
-    encrypt_data,
     decrypt_data,
+    encrypt_data,
+    get_password_hash,
     hash_sensitive_data,
-    _truncate_password,
+    verify_password,
 )
 
 

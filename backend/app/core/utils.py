@@ -2,11 +2,11 @@
 
 import secrets
 import string
-from typing import Optional
+
 from fastapi import Request
 
 
-def get_client_ip(request: Request) -> Optional[str]:
+def get_client_ip(request: Request) -> str | None:
     """The client's address.
 
     TrustedProxyMiddleware has already resolved it: X-Forwarded-For / X-Real-IP

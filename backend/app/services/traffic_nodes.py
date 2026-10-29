@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +17,7 @@ def empty_meta() -> dict:
     return {"label": None, "configured_for": [], "health": []}
 
 
-def host_part(backend: Optional[str]) -> str:
+def host_part(backend: str | None) -> str:
     backend = backend or ""
     return tq.host_of(backend) if tq.BACKEND_WITH_PORT.match(backend) else backend
 
@@ -90,7 +89,7 @@ async def backend_meta(db: AsyncSession, backends: list[str]) -> dict[str, dict]
     return out
 
 
-def buckets(start: Optional[datetime], end: datetime, stride: timedelta, present: dict) -> list[datetime]:
+def buckets(start: datetime | None, end: datetime, stride: timedelta, present: dict) -> list[datetime]:
     """Every bucket in the window (so the chart shows zeros, not gaps), or only the
     ones with data when the window is open-ended."""
     if start is None:

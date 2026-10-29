@@ -2,8 +2,6 @@
 
 import pytest
 
-from app.models.user import User
-
 
 class TestListPresets:
     """Tests for GET /api/presets."""

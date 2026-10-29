@@ -1,22 +1,20 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+import asyncio
 import json
 import logging
 import os
-import asyncio
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
-from slowapi import _rate_limit_exceeded_handler
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
-from app.core.config import settings
-from app.core.database import engine, Base
-from app.core.redis import close_redis
-from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
-from app.core.version import APP_VERSION
 from app.api import router as api_router
+from app.core.config import settings
+from app.core.database import engine
+from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
+from app.core.redis import close_redis
+from app.core.version import APP_VERSION
 
 # Configure logging
 logging.basicConfig(
@@ -36,14 +34,16 @@ async def _auto_provision_admin_proxy():
     This makes the admin panel accessible via https://fqdn instead of
     requiring direct IP:port access.
     """
-    from urllib.parse import urlparse
     import ipaddress
-    from app.core.database import AsyncSessionLocal
-    from app.models.proxy_host import ProxyHost
-    from app.models.certificate import Certificate
-    from app.services.openresty_service import generate_all_configs, reload_nginx
-    from app.services.certificate_service import request_letsencrypt_certificate
+    from urllib.parse import urlparse
+
     from sqlalchemy import select
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.certificate import Certificate
+    from app.models.proxy_host import ProxyHost
+    from app.services.certificate_service import request_letsencrypt_certificate
+    from app.services.openresty_service import generate_all_configs, reload_nginx
 
     nextauth_url = os.environ.get("NEXTAUTH_URL", "")
     if not nextauth_url:
@@ -178,9 +178,10 @@ async def lifespan(app: FastAPI):
     logger.info("Database migrations handled by Alembic via entrypoint")
 
     # Check if setup is required
-    from app.models.user import User
+    from sqlalchemy import func, select
+
     from app.core.database import AsyncSessionLocal
-    from sqlalchemy import select, func
+    from app.models.user import User
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(func.count(User.id)))
@@ -213,8 +214,9 @@ async def lifespan(app: FastAPI):
     logger.info("Started background metrics collection task")
 
     # Scheduled backup task
-    from app.services.backup_service import backup_service
     from croniter import croniter
+
+    from app.services.backup_service import backup_service
 
     async def scheduled_backup_loop():
         """Check and run scheduled backups based on cron settings.
@@ -245,7 +247,7 @@ async def lifespan(app: FastAPI):
                     # drift eventually pushes every tick past the window and
                     # the backup is skipped for the day. get_prev() has no such
                     # edge.
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     try:
                         slot = croniter(settings_obj.schedule_cron, now).get_prev(datetime)
                     except ValueError, KeyError:
@@ -287,8 +289,8 @@ async def lifespan(app: FastAPI):
                             # A silent backup failure is how the August purge became
                             # unrecoverable. Make it loud on every channel.
                             try:
-                                from app.services.push_service import push_service
                                 from app.services.alert_service import dispatch_alert
+                                from app.services.push_service import push_service
 
                                 await push_service.notify_backup_failed(error=str(e), db=session)
                                 await dispatch_alert(
@@ -373,7 +375,7 @@ async def lifespan(app: FastAPI):
         from app.services.geoip_service import get_db_info, update_database
 
         async def check_and_update():
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             info = get_db_info()
             if not info["installed"]:
                 logger.info("GeoIP database not found, downloading...")
@@ -410,8 +412,8 @@ async def lifespan(app: FastAPI):
     logger.info("Started GeoIP auto-update task")
 
     # Update check loop — checks GitHub releases + Docker Hub digests
-    from app.services.update_service import update_service
     from app.core.redis import get_redis as _get_redis
+    from app.services.update_service import update_service
 
     async def update_check_loop():
         """Periodically check for app and base image updates."""
@@ -426,7 +428,7 @@ async def lifespan(app: FastAPI):
                         continue
 
                     # Check if enough time has elapsed since last check
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     if (
                         update_settings.last_check
                         and (now - update_settings.last_check).total_seconds()
@@ -525,8 +527,9 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 async with AsyncSessionLocal() as session:
-                    from app.models.setting import Setting as _Setting
                     from sqlalchemy import select as _select
+
+                    from app.models.setting import Setting as _Setting
 
                     _row = (
                         await session.execute(_select(_Setting).where(_Setting.key == "enrichment_backfill_enabled"))
@@ -651,12 +654,12 @@ async def lifespan(app: FastAPI):
     logger.info("Started AbuseIPDB report task")
 
     # Data retention cleanup — prune old traffic_logs, threat_events, audit_logs daily
-    from app.services.retention_service import run_retention_cleanup
     from app.services.analytics_service import (
-        aggregate_hourly,
         aggregate_daily,
         aggregate_geo,
+        aggregate_hourly,
     )
+    from app.services.retention_service import run_retention_cleanup
 
     async def roll_up_analytics(hours_back: int = 3, days_back: int = 2) -> None:
         """Summarise traffic_logs into the analytics_* tables.
@@ -764,16 +767,17 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 async with AsyncSessionLocal() as session:
-                    from sqlalchemy import select as _select, func as _func
+                    from sqlalchemy import func as _func
+                    from sqlalchemy import select as _select
 
                     last = (
                         await session.execute(_select(_func.max(Backup.created_at)).where(Backup.status == "completed"))
                     ).scalar()
 
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     if last is not None:
                         if last.tzinfo is None:
-                            last = last.replace(tzinfo=timezone.utc)
+                            last = last.replace(tzinfo=UTC)
                         age_hours = (now - last).total_seconds() / 3600
                     else:
                         age_hours = None
@@ -822,7 +826,7 @@ async def lifespan(app: FastAPI):
     # swapping libraries under a running database is not worth the risk when
     # watchtower already replaces that image wholesale.
     async def container_auto_update_loop():
-        from app.api.routes.containers import get_auto_update_policy, _set_setting
+        from app.api.routes.containers import _set_setting, get_auto_update_policy
         from app.services.container_security_service import apply_updates_all
 
         last_fired_slot: datetime | None = None
@@ -836,7 +840,7 @@ async def lifespan(app: FastAPI):
                         await asyncio.sleep(300)
                         continue
 
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     try:
                         slot = croniter(policy["cron"], now).get_prev(datetime)
                     except ValueError, KeyError:

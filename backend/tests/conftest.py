@@ -1,10 +1,9 @@
 """Shared test fixtures for Ghostwire Proxy tests."""
 
 import os
-import pytest
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
+
+import pytest
 
 # Override settings BEFORE importing app modules
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-testing-only")
@@ -47,13 +46,12 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Only now import application code: app.core.database builds its engine (and
 # AsyncSessionLocal, used directly by background services) from DATABASE_URL at
 # import time, so it must already point at the throwaway database.
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession  # noqa: E402
-from httpx import AsyncClient, ASGITransport  # noqa: E402
-
+from app.core.auth_session import create_session  # noqa: E402
 from app.core.database import Base, get_db  # noqa: E402
 from app.core.security import get_password_hash  # noqa: E402
-from app.core.auth_session import create_session  # noqa: E402
 from app.models.user import User  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 
 test_engine = create_async_engine(
     TEST_DATABASE_URL,

@@ -1,14 +1,13 @@
 """Tests for deps module — sign-in through Better Auth sessions."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 import pytest
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.auth_session import create_session, sign
 from fastapi import HTTPException
 from starlette.requests import Request
-
-from app.api.deps import get_current_user, get_current_admin_user
-from app.core.auth_session import create_session, sign
 
 
 def make_request(cookies: dict[str, str] | None = None, bearer: str | None = None) -> Request:
@@ -77,7 +76,7 @@ class TestGetCurrentUser:
     @pytest.mark.asyncio
     async def test_expired_session_rejected(self, db_session, admin_user):
         session = await create_session(db_session, admin_user.id)
-        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
         await db_session.commit()
 
         with pytest.raises(HTTPException) as exc:

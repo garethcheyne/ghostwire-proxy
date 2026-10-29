@@ -18,13 +18,11 @@ sections cover the lifetime span.
 """
 
 import asyncio
-import json
 import logging
-from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, func, and_, distinct, case
+from sqlalchemy import and_, case, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -32,7 +30,7 @@ from app.models.analytics import AnalyticsDaily, AnalyticsGeo
 from app.models.proxy_host import ProxyHost
 from app.models.traffic_log import TrafficLog
 from app.models.waf import ThreatEvent
-from app.services.client_classifier import parse_browser, parse_os, parse_device_type, classify_bot
+from app.services.client_classifier import classify_bot, parse_browser, parse_device_type, parse_os
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +58,7 @@ def _percent(part: int, whole: int) -> float:
     return round(part / whole * 100, 2) if whole else 0.0
 
 
-def _f(value, places: int = 1) -> Optional[float]:
+def _f(value, places: int = 1) -> float | None:
     """Coerce a SQL aggregate to a plain rounded float.
 
     Postgres returns Decimal for avg()/percentile_cont(). Decimal is not JSON
@@ -89,7 +87,7 @@ async def build_host_report(
     period: str = "30d",
 ) -> dict:
     """Assemble the full report for one host."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     delta = PERIODS.get(period, PERIODS["30d"])
     start = now - delta
     prev_start = start - delta
@@ -163,7 +161,7 @@ async def _nodes(host_id: str, start: datetime) -> dict:
 
     async with AsyncSessionLocal() as s:
         f = traffic_query.TrafficFilters(start=start, host_ids=[host_id])
-        return await traffic_nodes.node_summary(s, f, now=datetime.now(timezone.utc))
+        return await traffic_nodes.node_summary(s, f, now=datetime.now(UTC))
 
 
 async def _overview(window, prev_window) -> dict:
@@ -215,7 +213,7 @@ async def _overview(window, prev_window) -> dict:
     prev_requests = prev[0] or 0
     prev_visitors = prev[1] or 0
 
-    def change(current: int, previous: int) -> Optional[float]:
+    def change(current: int, previous: int) -> float | None:
         if not previous:
             return None
         return round((current - previous) / previous * 100, 1)

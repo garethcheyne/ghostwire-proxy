@@ -4,12 +4,12 @@ These routes are only accessible when no users exist in the database.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.core.auth_session import set_password
+from app.core.database import get_db
 from app.models.user import User
 
 router = APIRouter()

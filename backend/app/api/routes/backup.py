@@ -1,28 +1,29 @@
 """Backup API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File
-from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+import json
 import os
 import tarfile
-import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from app.core.database import get_db
-from app.models.user import User
-from app.models.backup import Backup
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_current_admin_user
-from app.services.backup_service import backup_service, BACKUP_PATH
+from app.core.database import get_db
+from app.models.backup import Backup
+from app.models.user import User
 from app.schemas.backup import (
     BackupCreate,
-    BackupResponse,
     BackupListResponse,
+    BackupResponse,
     BackupSettingsResponse,
     BackupSettingsUpdate,
     RestoreRequest,
     RestoreResponse,
 )
+from app.services.backup_service import BACKUP_PATH, backup_service
 
 router = APIRouter()
 
@@ -100,7 +101,7 @@ async def upload_backup(
 
     # Save to temp location first, then validate
     backup_id = str(uuid.uuid4())
-    safe_filename = f"uploaded_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.tar.gz"
+    safe_filename = f"uploaded_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.tar.gz"
     file_path = os.path.join(BACKUP_PATH, safe_filename)
 
     try:
@@ -140,8 +141,8 @@ async def upload_backup(
             includes_traffic_logs=includes.get("traffic_logs", False),
             status="completed",
             created_by=current_user.id,
-            created_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
 
         db.add(backup)

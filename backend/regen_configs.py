@@ -2,6 +2,7 @@
 """Regenerate all nginx configs from database."""
 
 import asyncio
+
 from app.core.database import AsyncSessionLocal
 from app.services.openresty_service import generate_all_configs, reload_nginx
 

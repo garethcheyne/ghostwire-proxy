@@ -1,9 +1,9 @@
-from logging.config import fileConfig
 import os
 import sys
+from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Ensure the backend directory is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,9 +19,9 @@ if os.path.exists(env_file):
                 os.environ.setdefault(key.strip(), value.strip())
 
 # Now import the app's Base and settings
-from app.core.database import Base  # noqa: E402
-from app.core.config import settings  # noqa: E402
 import app.models  # noqa: F401, E402 - registers all models
+from app.core.config import settings  # noqa: E402
+from app.core.database import Base  # noqa: E402
 
 # Alembic Config object
 config = context.config

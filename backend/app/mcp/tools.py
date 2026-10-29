@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -26,7 +26,7 @@ UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 LB_METHODS = ["round_robin", "least_conn", "ip_hash", "hash_uri", "random_two"]
 
 
-def _result(value: Any, summary: Optional[str] = None) -> ToolResult:
+def _result(value: Any, summary: str | None = None) -> ToolResult:
     structured = value if isinstance(value, dict) else {"items": value}
     text = json.dumps(structured, indent=2, default=str)
     if summary:

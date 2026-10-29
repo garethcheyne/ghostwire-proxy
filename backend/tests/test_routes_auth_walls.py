@@ -3,7 +3,6 @@
 import secrets
 
 import pytest
-
 from app.models.auth_wall import AuthWall
 
 

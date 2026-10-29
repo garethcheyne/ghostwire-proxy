@@ -18,7 +18,7 @@ import os
 import socket
 import threading
 import time
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ _REFRESH_SECONDS = 60
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 
-def _parse_ip(value: Optional[str]):
+def _parse_ip(value: str | None):
     if not value:
         return None
     value = value.strip().strip('"')
@@ -49,7 +49,7 @@ def _parse_ip(value: Optional[str]):
 class TrustedProxies:
     """A list of trusted proxy networks, with host names resolved lazily."""
 
-    def __init__(self, spec: Optional[str] = None, resolver=None):
+    def __init__(self, spec: str | None = None, resolver=None):
         self.spec = spec if spec is not None else (os.environ.get("TRUSTED_PROXIES") or DEFAULT_TRUSTED_PROXIES)
         self._resolver = resolver or self._resolve
         self._static: list[IPNetwork] = []
@@ -94,10 +94,10 @@ class TrustedProxies:
 
     def client_ip(
         self,
-        peer: Optional[str],
-        forwarded_for: Optional[str] = None,
-        real_ip: Optional[str] = None,
-    ) -> Optional[str]:
+        peer: str | None,
+        forwarded_for: str | None = None,
+        real_ip: str | None = None,
+    ) -> str | None:
         """The client address for a request from `peer` carrying these headers.
 
         From an untrusted peer: the peer. From a trusted one: walk
@@ -129,7 +129,7 @@ class TrustedProxies:
         return str(peer_ip)
 
 
-_trusted: Optional[TrustedProxies] = None
+_trusted: TrustedProxies | None = None
 
 
 def trusted_proxies() -> TrustedProxies:
@@ -139,14 +139,14 @@ def trusted_proxies() -> TrustedProxies:
     return _trusted
 
 
-def reset_trusted_proxies(spec: Optional[str] = None) -> TrustedProxies:
+def reset_trusted_proxies(spec: str | None = None) -> TrustedProxies:
     """Re-read TRUSTED_PROXIES (tests)."""
     global _trusted
     _trusted = TrustedProxies(spec)
     return _trusted
 
 
-def _header(headers: Iterable[tuple[bytes, bytes]], name: bytes) -> Optional[str]:
+def _header(headers: Iterable[tuple[bytes, bytes]], name: bytes) -> str | None:
     values = [v.decode("latin-1") for k, v in headers if k.lower() == name]
     return ",".join(values) if values else None
 
@@ -159,7 +159,7 @@ class TrustedProxyMiddleware:
     real client for every route, rate limiter and audit log.
     """
 
-    def __init__(self, app, proxies: Optional[TrustedProxies] = None):
+    def __init__(self, app, proxies: TrustedProxies | None = None):
         self.app = app
         self._proxies = proxies
 

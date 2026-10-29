@@ -7,7 +7,7 @@ They reuse admin_mfa_service, so secrets, backup codes and the org-wide policy s
 Internal only: every call needs the X-Internal-Auth token (the UI container has it).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

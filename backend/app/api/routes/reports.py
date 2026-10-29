@@ -2,23 +2,21 @@
 
 import json
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
 
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.cache import cached_json
 from app.core.database import get_db
 from app.models.proxy_host import ProxyHost
 from app.models.report_schedule import ReportSchedule
 from app.models.user import User
-from app.api.deps import get_current_user, get_current_admin_user
-from app.services.host_report_service import build_host_report, PERIODS
-from app.services.report_email import render_report_email
 from app.services import email_service
+from app.services.host_report_service import build_host_report
+from app.services.report_email import render_report_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,24 +24,24 @@ router = APIRouter()
 
 class ScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    proxy_host_id: Optional[str] = None
+    proxy_host_id: str | None = None
     frequency: str = Field("weekly", pattern="^(daily|weekly|monthly)$")
     send_hour: int = Field(7, ge=0, le=23)
-    send_day: Optional[int] = None
+    send_day: int | None = None
     period: str = Field("7d", pattern="^(24h|7d|30d|90d|365d)$")
     recipients: list[EmailStr]
     enabled: bool = True
 
 
 class ScheduleUpdate(BaseModel):
-    name: Optional[str] = None
-    proxy_host_id: Optional[str] = None
-    frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly)$")
-    send_hour: Optional[int] = Field(None, ge=0, le=23)
-    send_day: Optional[int] = None
-    period: Optional[str] = Field(None, pattern="^(24h|7d|30d|90d|365d)$")
-    recipients: Optional[list[EmailStr]] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    proxy_host_id: str | None = None
+    frequency: str | None = Field(None, pattern="^(daily|weekly|monthly)$")
+    send_hour: int | None = Field(None, ge=0, le=23)
+    send_day: int | None = None
+    period: str | None = Field(None, pattern="^(24h|7d|30d|90d|365d)$")
+    recipients: list[EmailStr] | None = None
+    enabled: bool | None = None
 
 
 def _schedule_json(s: ReportSchedule) -> dict:

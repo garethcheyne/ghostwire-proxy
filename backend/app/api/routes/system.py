@@ -1,20 +1,20 @@
 """System monitoring API endpoints."""
 
-from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel, field_validator
-from typing import Optional
-from datetime import datetime
 import os
 import socket
+from datetime import datetime
 
-from app.core.database import get_db
-from app.schemas.access_list import _check_redirect_url
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, field_validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
-from app.models.user import User
+from app.core.database import get_db
 from app.models.setting import Setting
-from app.api.deps import get_current_user, get_current_admin_user
+from app.models.user import User
+from app.schemas.access_list import _check_redirect_url
 from app.services.system_service import system_monitor_service
 
 router = APIRouter()
@@ -22,10 +22,10 @@ router = APIRouter()
 
 class ServiceHealth(BaseModel):
     status: str  # healthy, unhealthy, unknown
-    uptime: Optional[int] = None
-    error: Optional[str] = None
-    container_status: Optional[str] = None
-    process: Optional[bool] = None
+    uptime: int | None = None
+    error: str | None = None
+    container_status: str | None = None
+    process: bool | None = None
 
 
 class CpuMetrics(BaseModel):
@@ -48,39 +48,39 @@ class DiskMetrics(BaseModel):
 
 
 class NetworkMetrics(BaseModel):
-    bytes_sent_total: Optional[int] = None
-    bytes_recv_total: Optional[int] = None
-    bytes_sent_rate: Optional[int] = None
-    bytes_recv_rate: Optional[int] = None
+    bytes_sent_total: int | None = None
+    bytes_recv_total: int | None = None
+    bytes_sent_rate: int | None = None
+    bytes_recv_rate: int | None = None
 
 
 class ResourceMetrics(BaseModel):
     cpu: CpuMetrics
     memory: MemoryMetrics
     disk: DiskMetrics
-    network: Optional[NetworkMetrics] = None
+    network: NetworkMetrics | None = None
 
 
 class ContainerInfo(BaseModel):
     name: str
-    id: Optional[str] = None
+    id: str | None = None
     status: str
-    cpu_percent: Optional[float] = None
-    memory_used: Optional[int] = None
-    memory_limit: Optional[int] = None
-    memory_percent: Optional[float] = None
-    network_rx_bytes: Optional[int] = None
-    network_tx_bytes: Optional[int] = None
-    started_at: Optional[str] = None
-    uptime: Optional[str] = None
-    error: Optional[str] = None
+    cpu_percent: float | None = None
+    memory_used: int | None = None
+    memory_limit: int | None = None
+    memory_percent: float | None = None
+    network_rx_bytes: int | None = None
+    network_tx_bytes: int | None = None
+    started_at: str | None = None
+    uptime: str | None = None
+    error: str | None = None
 
 
 class DatabaseStats(BaseModel):
-    size_bytes: Optional[int] = None
-    connections: Optional[int] = None
-    table_counts: Optional[dict] = None
-    error: Optional[str] = None
+    size_bytes: int | None = None
+    connections: int | None = None
+    table_counts: dict | None = None
+    error: str | None = None
 
 
 class SystemStatusResponse(BaseModel):
@@ -93,15 +93,15 @@ class SystemStatusResponse(BaseModel):
 
 class MetricsPoint(BaseModel):
     timestamp: str
-    cpu_usage: Optional[float] = None
-    memory_percent: Optional[float] = None
-    memory_used: Optional[int] = None
-    disk_percent: Optional[float] = None
-    disk_used: Optional[int] = None
-    network_bytes_sent: Optional[int] = None
-    network_bytes_recv: Optional[int] = None
-    request_count: Optional[int] = None
-    active_connections: Optional[int] = None
+    cpu_usage: float | None = None
+    memory_percent: float | None = None
+    memory_used: int | None = None
+    disk_percent: float | None = None
+    disk_used: int | None = None
+    network_bytes_sent: int | None = None
+    network_bytes_recv: int | None = None
+    request_count: int | None = None
+    active_connections: int | None = None
 
 
 class ThroughputPoint(BaseModel):
@@ -206,25 +206,25 @@ async def cleanup_old_metrics(
 class KillSwitchRequest(BaseModel):
     active: bool
     mode: str = "maintenance"  # "maintenance", "redirect", "drop"
-    redirect_url: Optional[str] = None
+    redirect_url: str | None = None
 
     # The URL is written verbatim into an nginx `return 301` line, so a `;` or `}`
     # in it would inject config (including Lua) into the internet-facing proxy.
     @field_validator("redirect_url")
     @classmethod
-    def validate_redirect_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_redirect_url(cls, v: str | None) -> str | None:
         return _check_redirect_url(v)
 
 
 class KillSwitchResponse(BaseModel):
     active: bool
-    mode: Optional[str] = None
-    redirect_url: Optional[str] = None
-    activated_at: Optional[str] = None
-    activated_by: Optional[str] = None
+    mode: str | None = None
+    redirect_url: str | None = None
+    activated_at: str | None = None
+    activated_by: str | None = None
 
 
-def _generate_kill_switch_config(mode: str, redirect_url: Optional[str] = None) -> str:
+def _generate_kill_switch_config(mode: str, redirect_url: str | None = None) -> str:
     """Generate nginx config for the kill switch based on mode."""
     header = """# KILL SWITCH ACTIVE - All traffic blocked
 # This file is auto-generated by Ghostwire Proxy kill switch
@@ -458,7 +458,7 @@ def _reload_nginx_via_docker():
         sock.recv(4096)
         sock.close()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reload nginx: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reload nginx: {e!s}")
 
 
 async def _save_setting(db: AsyncSession, key: str, value: str) -> None:

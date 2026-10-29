@@ -2,20 +2,19 @@
 DNS Provider and Zone Management API Routes
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from pydantic import BaseModel
 import uuid
 
-from ...core.database import get_db
-from ...core.security import encrypt_data, decrypt_data
-from ...models.dns_provider import DnsProvider, DnsZone
-from ...services.cloudflare_service import CloudflareClient
-from ..deps import get_current_user, get_current_admin_user
-from ...models.user import User
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.database import get_db
+from ...core.security import decrypt_data, encrypt_data
+from ...models.dns_provider import DnsProvider, DnsZone
+from ...models.user import User
+from ...services.cloudflare_service import CloudflareClient
+from ..deps import get_current_admin_user, get_current_user
 
 router = APIRouter(prefix="/dns", tags=["dns"])
 
@@ -25,7 +24,7 @@ class DnsProviderCreate(BaseModel):
     name: str
     provider_type: str = "cloudflare"
     api_key: str
-    api_email: Optional[str] = None
+    api_email: str | None = None
 
 
 class DnsProviderResponse(BaseModel):
@@ -33,7 +32,7 @@ class DnsProviderResponse(BaseModel):
     name: str
     provider_type: str
     enabled: bool
-    zones: List[dict]
+    zones: list[dict]
 
     class Config:
         from_attributes = True
@@ -48,15 +47,15 @@ class DnsRecordCreate(BaseModel):
 
 
 class DnsRecordUpdate(BaseModel):
-    type: Optional[str] = None
-    name: Optional[str] = None
-    content: Optional[str] = None
-    ttl: Optional[int] = None
-    proxied: Optional[bool] = None
+    type: str | None = None
+    name: str | None = None
+    content: str | None = None
+    ttl: int | None = None
+    proxied: bool | None = None
 
 
 # Provider Routes
-@router.get("/providers", response_model=List[DnsProviderResponse])
+@router.get("/providers", response_model=list[DnsProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

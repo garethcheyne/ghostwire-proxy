@@ -1,20 +1,19 @@
 """Security presets API — browse and apply best-practice rule templates."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.database import get_db
 from app.core.utils import get_client_ip
 from app.models.user import User
-from app.api.deps import get_current_user, get_current_admin_user
 from app.services.preset_service import (
-    list_presets,
-    get_preset,
     apply_preset,
     get_applied_presets,
-    remove_preset,
+    get_preset,
+    list_presets,
     reapply_preset,
+    remove_preset,
 )
 
 router = APIRouter()
@@ -22,7 +21,7 @@ router = APIRouter()
 
 @router.get("")
 async def get_presets(
-    category: Optional[str] = Query(None, description="Filter by category: waf, geoip, rate_limit, threat_response"),
+    category: str | None = Query(None, description="Filter by category: waf, geoip, rate_limit, threat_response"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -52,7 +51,7 @@ async def get_preset_detail(
 async def apply_preset_route(
     preset_id: str,
     request: Request,
-    proxy_host_id: Optional[str] = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
+    proxy_host_id: str | None = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -97,7 +96,7 @@ async def remove_preset_route(
 async def reapply_preset_route(
     preset_id: str,
     request: Request,
-    proxy_host_id: Optional[str] = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
+    proxy_host_id: str | None = Query(None, description="Apply GeoIP/rate-limit rules to a specific proxy host"),
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):

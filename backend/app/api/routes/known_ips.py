@@ -1,23 +1,23 @@
 """Known IPs: operator-supplied names for addresses, plus per-IP traffic reports."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Response
-from pydantic import BaseModel, field_validator
-from sqlalchemy import select, func, and_, or_, literal_column, delete as sa_delete
-from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 import ipaddress
+from datetime import UTC, datetime, timedelta
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel, field_validator
+from sqlalchemy import and_, func, literal_column, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.database import get_db
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.known_ip import KnownIp
-from app.models.traffic_log import TrafficLog
-from app.models.proxy_host import ProxyHost
-from app.models.waf import ThreatEvent
-from app.models.honeypot import IpEnrichment
 from app.models.audit_log import AuditLog
-from app.api.deps import get_current_user, get_current_admin_user
+from app.models.honeypot import IpEnrichment
+from app.models.known_ip import KnownIp
+from app.models.proxy_host import ProxyHost
+from app.models.traffic_log import TrafficLog
+from app.models.user import User
+from app.models.waf import ThreatEvent
 
 router = APIRouter()
 
@@ -28,9 +28,9 @@ router = APIRouter()
 class KnownIpBase(BaseModel):
     ip_address: str
     label: str
-    category: Optional[str] = None
-    group_name: Optional[str] = None
-    notes: Optional[str] = None
+    category: str | None = None
+    group_name: str | None = None
+    notes: str | None = None
     trusted: bool = False
 
     @field_validator("ip_address")
@@ -58,17 +58,17 @@ class KnownIpCreate(KnownIpBase):
 
 
 class KnownIpUpdate(BaseModel):
-    label: Optional[str] = None
-    category: Optional[str] = None
-    group_name: Optional[str] = None
-    notes: Optional[str] = None
-    trusted: Optional[bool] = None
+    label: str | None = None
+    category: str | None = None
+    group_name: str | None = None
+    notes: str | None = None
+    trusted: bool | None = None
 
 
 class KnownIpResponse(KnownIpBase):
     id: str
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -82,9 +82,9 @@ async def list_known_ips(
     response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    group_name: Optional[str] = None,
+    search: str | None = None,
+    category: str | None = None,
+    group_name: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -290,7 +290,7 @@ async def get_ip_report(
             detail=f"'{ip_address}' is not a valid IP address",
         )
 
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     base = and_(TrafficLog.client_ip == ip, TrafficLog.timestamp >= since)
 
     totals = (

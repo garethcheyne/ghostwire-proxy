@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 import secrets
 import string
 
-from app.core.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.auth_session import delete_auth_data, revoke_sessions, set_password
+from app.core.database import get_db
 from app.core.utils import get_client_ip
-from app.models.user import User
 from app.models.audit_log import AuditLog
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserCreateResponse
-from app.api.deps import get_current_user, get_current_admin_user
+from app.models.user import User
+from app.schemas.user import UserCreate, UserCreateResponse, UserResponse, UserUpdate
 
 router = APIRouter()
 

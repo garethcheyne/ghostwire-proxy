@@ -1,7 +1,7 @@
-from pydantic import BaseModel, field_validator, model_validator
-from datetime import datetime
-from typing import Optional
 import re
+from datetime import datetime
+
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.services.load_balancing import (
     HEALTH_CHECK_TYPES,
@@ -11,7 +11,7 @@ from app.services.load_balancing import (
 )
 
 
-def _check_port(v: Optional[int]) -> Optional[int]:
+def _check_port(v: int | None) -> int | None:
     if v is not None and not 1 <= v <= 65535:
         raise ValueError('Port must be between 1 and 65535')
     return v
@@ -38,7 +38,7 @@ class UpstreamServerBase(BaseModel):
     fail_timeout: int = 30
     backup: bool = False
     down: bool = False
-    max_conns: Optional[int] = None
+    max_conns: int | None = None
     enabled: bool = True
 
     @field_validator('host')
@@ -65,28 +65,28 @@ class UpstreamServerUpsert(UpstreamServerBase):
     their health history), rows without one are added, and saved rows missing
     from the list are removed."""
 
-    id: Optional[str] = None
+    id: str | None = None
 
 
 class UpstreamServerUpdate(BaseModel):
-    host: Optional[str] = None
-    port: Optional[int] = None
-    weight: Optional[int] = None
-    max_fails: Optional[int] = None
-    fail_timeout: Optional[int] = None
-    backup: Optional[bool] = None
-    down: Optional[bool] = None
-    max_conns: Optional[int] = None
-    enabled: Optional[bool] = None
+    host: str | None = None
+    port: int | None = None
+    weight: int | None = None
+    max_fails: int | None = None
+    fail_timeout: int | None = None
+    backup: bool | None = None
+    down: bool | None = None
+    max_conns: int | None = None
+    enabled: bool | None = None
 
     @field_validator('host')
     @classmethod
-    def host_valid(cls, v: Optional[str]) -> Optional[str]:
+    def host_valid(cls, v: str | None) -> str | None:
         return None if v is None else normalize_upstream_host(v)
 
     @field_validator('port')
     @classmethod
-    def port_range(cls, v: Optional[int]) -> Optional[int]:
+    def port_range(cls, v: int | None) -> int | None:
         return _check_port(v)
 
     @model_validator(mode='after')
@@ -104,13 +104,13 @@ class UpstreamServerResponse(BaseModel):
     fail_timeout: int
     backup: bool = False
     down: bool = False
-    max_conns: Optional[int] = None
+    max_conns: int | None = None
     enabled: bool
     # Health, from the background loop (or a manual "Check now")
-    last_check_at: Optional[datetime] = None
+    last_check_at: datetime | None = None
     last_status: str = "unknown"
-    last_error: Optional[str] = None
-    last_latency_ms: Optional[int] = None
+    last_error: str | None = None
+    last_latency_ms: int | None = None
     auto_down: bool = False
     created_at: datetime
 
@@ -181,7 +181,7 @@ def _check_health_timeout(v):
 class UpstreamPreviewRequest(LoadBalancingSettings):
     """What the editor has on screen, rendered without saving anything."""
 
-    host_id: Optional[str] = None
+    host_id: str | None = None
     forward_scheme: str = "http"
     websockets_support: bool = True
     servers: list[UpstreamServerUpsert] = []
@@ -199,24 +199,24 @@ class UpstreamCheckResult(BaseModel):
     host: str
     port: int
     status: str
-    latency_ms: Optional[int]
-    error: Optional[str]
+    latency_ms: int | None
+    error: str | None
 
 
 class UpstreamServerEventResponse(BaseModel):
     """A backend going down or coming back, and what happened to its alert."""
 
     id: str
-    upstream_server_id: Optional[str] = None
+    upstream_server_id: str | None = None
     server: str
     event: str  # down, recovered
     alert: str  # sent, held (flap protection), grouped (host-down alert covered it)
-    error: Optional[str] = None
-    latency_ms: Optional[int] = None
-    healthy: Optional[int] = None
-    total: Optional[int] = None
+    error: str | None = None
+    latency_ms: int | None = None
+    healthy: int | None = None
+    total: int | None = None
     auto_down: bool = False
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -240,8 +240,8 @@ class ProxyLocationBase(BaseModel):
 
     # Caching
     cache_enabled: bool = False
-    cache_valid: Optional[str] = None
-    cache_bypass: Optional[str] = None
+    cache_valid: str | None = None
+    cache_bypass: str | None = None
 
     # Rate limiting
     rate_limit_enabled: bool = False
@@ -250,16 +250,16 @@ class ProxyLocationBase(BaseModel):
     rate_limit_burst: int = 50
 
     # Headers
-    custom_headers: Optional[dict[str, str]] = None
-    proxy_headers: Optional[dict[str, str]] = None
-    hide_headers: Optional[list[str]] = None
+    custom_headers: dict[str, str] | None = None
+    proxy_headers: dict[str, str] | None = None
+    hide_headers: list[str] | None = None
 
     # Timeouts
     proxy_connect_timeout: int = 60
     proxy_send_timeout: int = 60
     proxy_read_timeout: int = 60
 
-    advanced_config: Optional[str] = None
+    advanced_config: str | None = None
     enabled: bool = True
 
     @field_validator('forward_port')
@@ -289,35 +289,35 @@ class ProxyLocationCreate(ProxyLocationBase):
 
 
 class ProxyLocationUpdate(BaseModel):
-    path: Optional[str] = None
-    match_type: Optional[str] = None
-    priority: Optional[int] = None
+    path: str | None = None
+    match_type: str | None = None
+    priority: int | None = None
 
-    forward_scheme: Optional[str] = None
-    forward_host: Optional[str] = None
-    forward_port: Optional[int] = None
+    forward_scheme: str | None = None
+    forward_host: str | None = None
+    forward_port: int | None = None
 
-    websockets_support: Optional[bool] = None
+    websockets_support: bool | None = None
 
-    cache_enabled: Optional[bool] = None
-    cache_valid: Optional[str] = None
-    cache_bypass: Optional[str] = None
+    cache_enabled: bool | None = None
+    cache_valid: str | None = None
+    cache_bypass: str | None = None
 
-    rate_limit_enabled: Optional[bool] = None
-    rate_limit_requests: Optional[int] = None
-    rate_limit_period: Optional[str] = None
-    rate_limit_burst: Optional[int] = None
+    rate_limit_enabled: bool | None = None
+    rate_limit_requests: int | None = None
+    rate_limit_period: str | None = None
+    rate_limit_burst: int | None = None
 
-    custom_headers: Optional[dict[str, str]] = None
-    proxy_headers: Optional[dict[str, str]] = None
-    hide_headers: Optional[list[str]] = None
+    custom_headers: dict[str, str] | None = None
+    proxy_headers: dict[str, str] | None = None
+    hide_headers: list[str] | None = None
 
-    proxy_connect_timeout: Optional[int] = None
-    proxy_send_timeout: Optional[int] = None
-    proxy_read_timeout: Optional[int] = None
+    proxy_connect_timeout: int | None = None
+    proxy_send_timeout: int | None = None
+    proxy_read_timeout: int | None = None
 
-    advanced_config: Optional[str] = None
-    enabled: Optional[bool] = None
+    advanced_config: str | None = None
+    enabled: bool | None = None
 
 
 class ProxyLocationResponse(BaseModel):
@@ -334,23 +334,23 @@ class ProxyLocationResponse(BaseModel):
     websockets_support: bool
 
     cache_enabled: bool
-    cache_valid: Optional[str]
-    cache_bypass: Optional[str]
+    cache_valid: str | None
+    cache_bypass: str | None
 
     rate_limit_enabled: bool
     rate_limit_requests: int
     rate_limit_period: str
     rate_limit_burst: int
 
-    custom_headers: Optional[dict[str, str]]
-    proxy_headers: Optional[dict[str, str]]
-    hide_headers: Optional[list[str]]
+    custom_headers: dict[str, str] | None
+    proxy_headers: dict[str, str] | None
+    hide_headers: list[str] | None
 
     proxy_connect_timeout: int
     proxy_send_timeout: int
     proxy_read_timeout: int
 
-    advanced_config: Optional[str]
+    advanced_config: str | None
     enabled: bool
 
     created_at: datetime
@@ -382,7 +382,7 @@ class ProxyHostBase(LoadBalancingSettings):
 
     ssl_enabled: bool = False
     ssl_force: bool = False
-    certificate_id: Optional[str] = None
+    certificate_id: str | None = None
 
     http2_support: bool = True
     hsts_enabled: bool = False
@@ -390,14 +390,14 @@ class ProxyHostBase(LoadBalancingSettings):
     websockets_support: bool = True
     block_exploits: bool = True
 
-    access_list_id: Optional[str] = None
-    auth_wall_id: Optional[str] = None
+    access_list_id: str | None = None
+    auth_wall_id: str | None = None
 
     # Location-level advanced config
-    advanced_config: Optional[str] = None
+    advanced_config: str | None = None
 
     # Server-level advanced config
-    server_advanced_config: Optional[str] = None
+    server_advanced_config: str | None = None
 
     # Server-level settings
     client_max_body_size: str = "100m"
@@ -415,8 +415,8 @@ class ProxyHostBase(LoadBalancingSettings):
 
     # Caching
     cache_enabled: bool = False
-    cache_valid: Optional[str] = None
-    cache_bypass: Optional[str] = None
+    cache_valid: str | None = None
+    cache_bypass: str | None = None
 
     # Rate limiting
     rate_limit_enabled: bool = False
@@ -425,7 +425,7 @@ class ProxyHostBase(LoadBalancingSettings):
     rate_limit_burst: int = 50
 
     # Custom error pages
-    custom_error_pages: Optional[dict[str, str]] = None
+    custom_error_pages: dict[str, str] | None = None
 
     traffic_logging_enabled: bool = False
     honeypot_enabled: bool = False
@@ -474,114 +474,114 @@ def _check_scheme(v):
 
 
 class ProxyHostCreate(ProxyHostBase):
-    upstream_servers: Optional[list[UpstreamServerCreate]] = None
-    locations: Optional[list[ProxyLocationCreate]] = None
+    upstream_servers: list[UpstreamServerCreate] | None = None
+    locations: list[ProxyLocationCreate] | None = None
 
 
 class ProxyHostUpdate(BaseModel):
-    domain_names: Optional[list[str]] = None
-    forward_scheme: Optional[str] = None
-    forward_host: Optional[str] = None
-    forward_port: Optional[int] = None
+    domain_names: list[str] | None = None
+    forward_scheme: str | None = None
+    forward_host: str | None = None
+    forward_port: int | None = None
 
-    ssl_enabled: Optional[bool] = None
-    ssl_force: Optional[bool] = None
-    certificate_id: Optional[str] = None
+    ssl_enabled: bool | None = None
+    ssl_force: bool | None = None
+    certificate_id: str | None = None
 
-    http2_support: Optional[bool] = None
-    hsts_enabled: Optional[bool] = None
-    hsts_subdomains: Optional[bool] = None
-    websockets_support: Optional[bool] = None
-    block_exploits: Optional[bool] = None
+    http2_support: bool | None = None
+    hsts_enabled: bool | None = None
+    hsts_subdomains: bool | None = None
+    websockets_support: bool | None = None
+    block_exploits: bool | None = None
 
-    access_list_id: Optional[str] = None
-    auth_wall_id: Optional[str] = None
+    access_list_id: str | None = None
+    auth_wall_id: str | None = None
 
-    advanced_config: Optional[str] = None
-    server_advanced_config: Optional[str] = None
+    advanced_config: str | None = None
+    server_advanced_config: str | None = None
 
-    client_max_body_size: Optional[str] = None
-    proxy_buffering: Optional[bool] = None
-    proxy_buffer_size: Optional[str] = None
-    proxy_buffers: Optional[str] = None
+    client_max_body_size: str | None = None
+    proxy_buffering: bool | None = None
+    proxy_buffer_size: str | None = None
+    proxy_buffers: str | None = None
 
-    cdn_provider: Optional[str] = None
+    cdn_provider: str | None = None
 
-    proxy_connect_timeout: Optional[int] = None
-    proxy_send_timeout: Optional[int] = None
-    proxy_read_timeout: Optional[int] = None
+    proxy_connect_timeout: int | None = None
+    proxy_send_timeout: int | None = None
+    proxy_read_timeout: int | None = None
 
-    cache_enabled: Optional[bool] = None
-    cache_valid: Optional[str] = None
-    cache_bypass: Optional[str] = None
+    cache_enabled: bool | None = None
+    cache_valid: str | None = None
+    cache_bypass: str | None = None
 
-    rate_limit_enabled: Optional[bool] = None
-    rate_limit_requests: Optional[int] = None
-    rate_limit_period: Optional[str] = None
-    rate_limit_burst: Optional[int] = None
+    rate_limit_enabled: bool | None = None
+    rate_limit_requests: int | None = None
+    rate_limit_period: str | None = None
+    rate_limit_burst: int | None = None
 
-    custom_error_pages: Optional[dict[str, str]] = None
+    custom_error_pages: dict[str, str] | None = None
 
-    traffic_logging_enabled: Optional[bool] = None
-    honeypot_enabled: Optional[bool] = None
-    enabled: Optional[bool] = None
+    traffic_logging_enabled: bool | None = None
+    honeypot_enabled: bool | None = None
+    enabled: bool | None = None
 
     # Load balancing
-    lb_method: Optional[str] = None
-    upstream_keepalive: Optional[int] = None
-    health_check_type: Optional[str] = None
-    health_check_path: Optional[str] = None
-    health_check_timeout: Optional[int] = None
-    lb_auto_down: Optional[bool] = None
+    lb_method: str | None = None
+    upstream_keepalive: int | None = None
+    health_check_type: str | None = None
+    health_check_path: str | None = None
+    health_check_timeout: int | None = None
+    lb_auto_down: bool | None = None
     # When sent, replaces the host's upstream servers in one validated apply
     # ([] switches the host back to a single backend).
-    upstream_servers: Optional[list[UpstreamServerUpsert]] = None
+    upstream_servers: list[UpstreamServerUpsert] | None = None
 
     # The same checks as create, so an update can't hand nginx -t (or the
     # config) a bad name, host or port either.
     @field_validator('domain_names')
     @classmethod
-    def validate_domain_names(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+    def validate_domain_names(cls, v: list[str] | None) -> list[str] | None:
         return _check_domain_names(v)
 
     @field_validator('forward_host')
     @classmethod
-    def forward_host_valid(cls, v: Optional[str]) -> Optional[str]:
+    def forward_host_valid(cls, v: str | None) -> str | None:
         return None if v is None else normalize_upstream_host(v)
 
     @field_validator('forward_port')
     @classmethod
-    def port_range(cls, v: Optional[int]) -> Optional[int]:
+    def port_range(cls, v: int | None) -> int | None:
         return _check_port(v)
 
     @field_validator('forward_scheme')
     @classmethod
-    def scheme_valid(cls, v: Optional[str]) -> Optional[str]:
+    def scheme_valid(cls, v: str | None) -> str | None:
         return _check_scheme(v)
 
     @field_validator('lb_method')
     @classmethod
-    def method_valid(cls, v: Optional[str]) -> Optional[str]:
+    def method_valid(cls, v: str | None) -> str | None:
         return _check_lb_method(v)
 
     @field_validator('upstream_keepalive')
     @classmethod
-    def keepalive_range(cls, v: Optional[int]) -> Optional[int]:
+    def keepalive_range(cls, v: int | None) -> int | None:
         return _check_keepalive(v)
 
     @field_validator('health_check_type')
     @classmethod
-    def check_type_valid(cls, v: Optional[str]) -> Optional[str]:
+    def check_type_valid(cls, v: str | None) -> str | None:
         return _check_health_type(v)
 
     @field_validator('health_check_timeout')
     @classmethod
-    def check_timeout_range(cls, v: Optional[int]) -> Optional[int]:
+    def check_timeout_range(cls, v: int | None) -> int | None:
         return _check_health_timeout(v)
 
     @field_validator('health_check_path')
     @classmethod
-    def check_path_valid(cls, v: Optional[str]) -> Optional[str]:
+    def check_path_valid(cls, v: str | None) -> str | None:
         return None if v is None else validate_health_check_path(v)
 
 
@@ -594,7 +594,7 @@ class ProxyHostResponse(BaseModel):
 
     ssl_enabled: bool
     ssl_force: bool
-    certificate_id: Optional[str]
+    certificate_id: str | None
 
     http2_support: bool
     hsts_enabled: bool
@@ -602,11 +602,11 @@ class ProxyHostResponse(BaseModel):
     websockets_support: bool
     block_exploits: bool
 
-    access_list_id: Optional[str]
-    auth_wall_id: Optional[str]
+    access_list_id: str | None
+    auth_wall_id: str | None
 
-    advanced_config: Optional[str]
-    server_advanced_config: Optional[str]
+    advanced_config: str | None
+    server_advanced_config: str | None
 
     client_max_body_size: str
     proxy_buffering: bool
@@ -620,15 +620,15 @@ class ProxyHostResponse(BaseModel):
     proxy_read_timeout: int
 
     cache_enabled: bool
-    cache_valid: Optional[str]
-    cache_bypass: Optional[str]
+    cache_valid: str | None
+    cache_bypass: str | None
 
     rate_limit_enabled: bool
     rate_limit_requests: int
     rate_limit_period: str
     rate_limit_burst: int
 
-    custom_error_pages: Optional[dict[str, str]]
+    custom_error_pages: dict[str, str] | None
 
     traffic_logging_enabled: bool
     honeypot_enabled: bool
@@ -642,8 +642,8 @@ class ProxyHostResponse(BaseModel):
     lb_auto_down: bool = False
     health_check_enabled: bool = True
     health_status: str = "unknown"
-    health_checked_at: Optional[datetime] = None
-    health_error: Optional[str] = None
+    health_checked_at: datetime | None = None
+    health_error: str | None = None
 
     upstream_servers: list[UpstreamServerResponse] = []
     locations: list[ProxyLocationResponse] = []

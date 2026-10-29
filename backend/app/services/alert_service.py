@@ -1,13 +1,12 @@
 """Alert dispatch service for push notifications, email, webhooks."""
 
-import logging
 import json
-from typing import Optional
+import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.alert import PushSubscription, AlertChannel, AlertPreference
+from app.models.alert import AlertChannel, AlertPreference, PushSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ async def preferences_for(db: AsyncSession, alert_type: str) -> list[AlertPrefer
                 await db.execute(
                     select(AlertPreference).where(
                         AlertPreference.alert_type == fallback,
-                        AlertPreference.enabled == True,  # noqa: E712
+                        AlertPreference.enabled == True,
                     )
                 )
             )
@@ -54,7 +53,7 @@ async def users_opted_out(db: AsyncSession, alert_type: str) -> set[str]:
             await db.execute(
                 select(AlertPreference.user_id).where(
                     AlertPreference.alert_type == alert_type,
-                    AlertPreference.enabled == False,  # noqa: E712
+                    AlertPreference.enabled == False,
                 )
             )
         )
@@ -70,7 +69,7 @@ async def dispatch_alert(
     severity: str,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
     skip_push: bool = False,
 ) -> dict:
     """Dispatch an alert to all configured channels based on user preferences.
@@ -171,7 +170,7 @@ async def _send_to_channel(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send alert to a specific channel."""
     if channel.channel_type in ("webhook", "slack"):
@@ -201,11 +200,11 @@ async def _send_push(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send Web Push notification."""
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import WebPushException, webpush
 
         result = await db.execute(select(PushSubscription).where(PushSubscription.user_id == channel.user_id))
         subscriptions = result.scalars().all()
@@ -254,7 +253,7 @@ async def _send_webhook(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send webhook notification."""
     try:
@@ -284,7 +283,7 @@ async def _send_slack(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send Slack notification via webhook."""
     try:
@@ -312,7 +311,7 @@ async def _send_telegram(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send Telegram notification."""
     try:
@@ -346,7 +345,7 @@ async def _send_email(
     channel: AlertChannel,
     title: str,
     message: str,
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ) -> bool:
     """Send an alert by email via the configured SMTP server.
 
@@ -354,7 +353,7 @@ async def _send_email(
     as delivered while nothing was ever sent. It now reports real success.
     """
     from app.core.database import AsyncSessionLocal
-    from app.services.email_service import send_email, EmailNotConfigured
+    from app.services.email_service import EmailNotConfigured, send_email
 
     try:
         config = json.loads(channel.config) if isinstance(channel.config, str) else (channel.config or {})

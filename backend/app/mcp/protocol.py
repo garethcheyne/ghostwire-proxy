@@ -9,8 +9,9 @@ Nothing here knows about the proxy. Tools are handed in.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 # Newest first: the first entry is what we answer with when asked for one we do not know.
 SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -57,7 +58,7 @@ class ServerInfo:
     name: str
     title: str
     version: str
-    instructions: Optional[str] = None
+    instructions: str | None = None
 
 
 class ToolError(Exception):
@@ -80,7 +81,7 @@ def is_notification(message: dict[str, Any]) -> bool:
     return message.get("id") is None
 
 
-def text_result(text: str, *, structured: Optional[dict] = None, is_error: bool = False) -> ToolResult:
+def text_result(text: str, *, structured: dict | None = None, is_error: bool = False) -> ToolResult:
     result: ToolResult = {"content": [{"type": "text", "text": text}]}
     if structured is not None:
         result["structuredContent"] = structured
@@ -89,7 +90,7 @@ def text_result(text: str, *, structured: Optional[dict] = None, is_error: bool 
     return result
 
 
-async def handle_message(message: Any, *, tools: list[McpTool], info: ServerInfo) -> Optional[dict[str, Any]]:
+async def handle_message(message: Any, *, tools: list[McpTool], info: ServerInfo) -> dict[str, Any] | None:
     """Handle one JSON-RPC message. None means no reply (the route answers 202)."""
     if not isinstance(message, dict):
         return rpc_error(None, RPC.INVALID_REQUEST, "Not a JSON-RPC 2.0 request.")

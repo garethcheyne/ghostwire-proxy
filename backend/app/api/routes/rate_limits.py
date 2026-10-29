@@ -1,21 +1,21 @@
 """Rate limiting configuration API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.rate_limit import RateLimitRule
 from app.models.audit_log import AuditLog
+from app.models.rate_limit import RateLimitRule
+from app.models.user import User
 from app.schemas.rate_limit import (
     RateLimitRuleCreate,
-    RateLimitRuleUpdate,
     RateLimitRuleResponse,
+    RateLimitRuleUpdate,
 )
-from app.api.deps import get_current_user, get_current_admin_user
 
 router = APIRouter()
 

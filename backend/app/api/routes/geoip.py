@@ -1,23 +1,23 @@
 """GeoIP configuration and rules API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.rate_limit import GeoipSettings, GeoipRule
 from app.models.audit_log import AuditLog
+from app.models.rate_limit import GeoipRule, GeoipSettings
+from app.models.user import User
 from app.schemas.rate_limit import (
-    GeoipSettingsUpdate,
-    GeoipSettingsResponse,
     GeoipRuleCreate,
-    GeoipRuleUpdate,
     GeoipRuleResponse,
+    GeoipRuleUpdate,
+    GeoipSettingsResponse,
+    GeoipSettingsUpdate,
 )
-from app.api.deps import get_current_user, get_current_admin_user
 
 router = APIRouter()
 
@@ -47,7 +47,7 @@ async def update_geoip_settings(
     settings_obj = result.scalar_one_or_none()
 
     update_data = data.model_dump(exclude_unset=True)
-    if "license_key" in update_data and update_data["license_key"]:
+    if update_data.get("license_key"):
         update_data["license_key"] = encrypt_data(update_data["license_key"])
 
     if settings_obj:
@@ -198,8 +198,9 @@ async def lookup_ip(
 ):
     """Lookup geographic information for an IP address."""
     try:
-        import geoip2.database
         import os
+
+        import geoip2.database
 
         db_path = os.environ.get("GEOIP_DB_PATH", "/data/geoip/GeoLite2-Country.mmdb")
         if not os.path.exists(db_path):

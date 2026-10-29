@@ -1,8 +1,9 @@
 """Update tracking models for self-update system."""
 
-from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer, JSON
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 
@@ -32,7 +33,7 @@ class UpdateHistory(Base):
 
     # Metadata
     initiated_by = Column(String(36), nullable=True)
-    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Detailed progress
@@ -61,7 +62,7 @@ class BaseImageVersion(Base):
     update_available = Column(Boolean, default=False)
     security_update = Column(Boolean, default=False)  # If it's a security patch
 
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class UpdateSettings(Base):
@@ -90,4 +91,4 @@ class UpdateSettings(Base):
     # GitHub repository (for custom forks)
     github_repo = Column(String(200), default="garethcheyne/ghostwire-proxy")
 
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

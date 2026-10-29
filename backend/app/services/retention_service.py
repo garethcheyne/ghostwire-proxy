@@ -5,7 +5,7 @@ Runs in batches to avoid long-running transactions and table locks.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +69,7 @@ async def run_retention_cleanup() -> dict:
         # --- Traffic Logs ---
         days = await _get_retention_setting(session, "traffic_log_retention_days")
         if days > 0:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(UTC) - timedelta(days=days)
             deleted = await _batch_delete(session, "traffic_logs", "timestamp", cutoff)
             summary["traffic_logs"] = {"deleted": deleted, "retention_days": days}
             # The Traffic page's hourly summaries follow the raw rows they describe.
@@ -78,7 +78,7 @@ async def run_retention_cleanup() -> dict:
 
                 await prune_before(session, cutoff)
                 await session.commit()
-            except Exception as e:  # noqa: BLE001 — summaries are rebuildable; never block retention
+            except Exception as e:
                 await session.rollback()
                 logger.warning(f"Retention: traffic rollup prune failed: {e}")
             if deleted > 0:
@@ -87,7 +87,7 @@ async def run_retention_cleanup() -> dict:
         # --- Threat Events ---
         days = await _get_retention_setting(session, "threat_event_retention_days")
         if days > 0:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(UTC) - timedelta(days=days)
             deleted = await _batch_delete(session, "threat_events", "timestamp", cutoff)
             summary["threat_events"] = {"deleted": deleted, "retention_days": days}
             if deleted > 0:
@@ -96,14 +96,14 @@ async def run_retention_cleanup() -> dict:
         # --- Audit Logs ---
         days = await _get_retention_setting(session, "audit_log_retention_days")
         if days > 0:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(UTC) - timedelta(days=days)
             deleted = await _batch_delete(session, "audit_logs", "timestamp", cutoff)
             summary["audit_logs"] = {"deleted": deleted, "retention_days": days}
             if deleted > 0:
                 logger.info(f"Retention: deleted {deleted} audit_logs older than {days} days")
 
         # --- System Metrics (already had cleanup but wire it in here too) ---
-        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        cutoff = datetime.now(UTC) - timedelta(days=90)
         deleted = await _batch_delete(session, "system_metrics", "timestamp", cutoff)
         summary["system_metrics"] = {"deleted": deleted, "retention_days": 90}
         if deleted > 0:
@@ -113,8 +113,9 @@ async def run_retention_cleanup() -> dict:
         if any(v.get("deleted", 0) > 0 for v in summary.values()):
             try:
                 # VACUUM requires being outside a transaction — use raw connection
-                from app.core.database import engine
                 from sqlalchemy import text as sa_text
+
+                from app.core.database import engine
 
                 async with engine.connect() as conn:
                     await conn.execution_options(isolation_level="AUTOCOMMIT")

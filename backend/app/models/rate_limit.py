@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index, ForeignKey
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.core.database import Base
 
@@ -20,10 +21,8 @@ class RateLimitRule(Base):
     action = Column(String(20), default="reject")  # reject, delay, log
     enabled = Column(Boolean, default=True, nullable=False)
     preset_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class GeoipSettings(Base):
@@ -51,7 +50,5 @@ class GeoipRule(Base):
     action = Column(String(20), default="block")  # block, log, challenge
     enabled = Column(Boolean, default=True, nullable=False)
     preset_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))

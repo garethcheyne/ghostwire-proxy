@@ -1,32 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
-from app.core.security import get_password_hash, encrypt_data
-from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
-from app.models.audit_log import AuditLog
-from app.models.proxy_host import ProxyHost
-from app.schemas.auth_wall import (
-    AuthWallCreate,
-    AuthWallUpdate,
-    AuthWallResponse,
-    LocalAuthUserCreate,
-    LocalAuthUserUpdate,
-    LocalAuthUserResponse,
-    AuthProviderCreate,
-    AuthProviderUpdate,
-    AuthProviderResponse,
-    LdapConfigCreate,
-    LdapConfigUpdate,
-    LdapConfigResponse,
-)
-from app.api.deps import get_current_user, get_current_admin_user
+from app.api.deps import get_current_admin_user, get_current_user
 from app.api.routes.proxy_hosts import validate_and_apply
+from app.core.cache import cache_delete_prefix, cached_json
+from app.core.database import get_db
+from app.core.security import encrypt_data, get_password_hash
+from app.core.utils import get_client_ip
+from app.models.audit_log import AuditLog
+from app.models.auth_wall import AuthProvider, AuthWall, LdapConfig, LocalAuthUser
+from app.models.proxy_host import ProxyHost
+from app.models.user import User
+from app.schemas.auth_wall import (
+    AuthProviderCreate,
+    AuthProviderResponse,
+    AuthWallCreate,
+    AuthWallResponse,
+    AuthWallUpdate,
+    LdapConfigCreate,
+    LdapConfigResponse,
+    LocalAuthUserCreate,
+    LocalAuthUserResponse,
+)
 
 router = APIRouter()
 

@@ -6,8 +6,8 @@ only reads sessions (see app/api/deps.py) and writes credentials when admins man
 Column names follow the field mapping in frontend/src/lib/auth.ts.
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, String, Text
 
@@ -15,7 +15,7 @@ from app.core.database import Base
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class AuthSession(Base):

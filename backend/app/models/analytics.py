@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, DateTime, Integer, Index
-from datetime import datetime, timezone
 import uuid
+
+from sqlalchemy import Column, Index, Integer, String
 
 from app.core.database import Base
 

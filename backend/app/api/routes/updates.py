@@ -1,17 +1,16 @@
 """Update management API endpoints."""
 
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.models.user import User
-from app.api.deps import get_current_user, get_current_admin_user
 from app.services.update_service import update_service
 
 router = APIRouter()
@@ -26,10 +25,10 @@ class AppVersionInfo(BaseModel):
     """Information about a single app version/release."""
 
     version: str
-    name: Optional[str] = None
-    published_at: Optional[str] = None
-    changelog: Optional[str] = None
-    html_url: Optional[str] = None
+    name: str | None = None
+    published_at: str | None = None
+    changelog: str | None = None
+    html_url: str | None = None
     prerelease: bool = False
 
 
@@ -37,10 +36,10 @@ class CheckAppUpdatesResponse(BaseModel):
     """Response for app update check."""
 
     current_version: str
-    latest_version: Optional[str] = None
+    latest_version: str | None = None
     update_available: bool
-    releases: List[AppVersionInfo]
-    error: Optional[str] = None
+    releases: list[AppVersionInfo]
+    error: str | None = None
 
 
 class BaseImageInfo(BaseModel):
@@ -49,9 +48,9 @@ class BaseImageInfo(BaseModel):
     container: str
     image: str
     update_available: bool
-    current_digest: Optional[str] = None
-    latest_digest: Optional[str] = None
-    error: Optional[str] = None
+    current_digest: str | None = None
+    latest_digest: str | None = None
+    error: str | None = None
 
 
 class StartAppUpdateRequest(BaseModel):
@@ -71,18 +70,18 @@ class UpdateStatusResponse(BaseModel):
 
     id: str
     update_type: str
-    from_version: Optional[str] = None
-    to_version: Optional[str] = None
-    container_name: Optional[str] = None
+    from_version: str | None = None
+    to_version: str | None = None
+    container_name: str | None = None
     status: str
     progress_percent: int
-    progress_message: Optional[str] = None
-    error_message: Optional[str] = None
+    progress_message: str | None = None
+    error_message: str | None = None
     can_rollback: bool
     rollback_performed: bool = False
-    backup_id: Optional[str] = None
+    backup_id: str | None = None
     started_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -107,14 +106,14 @@ class UpdateSettingsResponse(BaseModel):
 class UpdateSettingsUpdate(BaseModel):
     """Request to update settings."""
 
-    auto_check_enabled: Optional[bool] = None
-    check_interval_hours: Optional[int] = Field(None, ge=1, le=168)
-    notify_app_updates: Optional[bool] = None
-    notify_security_updates: Optional[bool] = None
-    notify_base_image_updates: Optional[bool] = None
-    auto_update_security: Optional[bool] = None
-    update_channel: Optional[str] = Field(None, pattern="^(stable|beta|edge)$")
-    github_repo: Optional[str] = None
+    auto_check_enabled: bool | None = None
+    check_interval_hours: int | None = Field(None, ge=1, le=168)
+    notify_app_updates: bool | None = None
+    notify_security_updates: bool | None = None
+    notify_base_image_updates: bool | None = None
+    auto_update_security: bool | None = None
+    update_channel: str | None = Field(None, pattern="^(stable|beta|edge)$")
+    github_repo: str | None = None
 
 
 # ============================================================================
@@ -136,7 +135,7 @@ async def check_app_updates(
     return CheckAppUpdatesResponse(**result)
 
 
-@router.get("/check/base-images", response_model=List[BaseImageInfo])
+@router.get("/check/base-images", response_model=list[BaseImageInfo])
 async def check_base_image_updates(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -226,7 +225,7 @@ async def get_update_status(
     return UpdateStatusResponse.model_validate(update)
 
 
-@router.get("/history", response_model=List[UpdateStatusResponse])
+@router.get("/history", response_model=list[UpdateStatusResponse])
 async def get_update_history(
     limit: int = 20,
     current_user: User = Depends(get_current_user),
@@ -336,14 +335,14 @@ async def check_now(
 
     Calls GitHub and Docker Hub APIs, caches results in Redis.
     """
-    from datetime import timezone
+
     from app.core.version import APP_VERSION
 
     app_result = await update_service.check_for_app_updates(db)
     base_results = await update_service.check_for_base_image_updates(db)
     base_updates = [r for r in base_results if r.get("update_available")]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Cache in Redis
     try:

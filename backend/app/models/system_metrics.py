@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Float, BigInteger, Integer, Index
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import BigInteger, Column, DateTime, Float, Index, Integer, String
 
 from app.core.database import Base
 
@@ -11,7 +12,7 @@ class SystemMetrics(Base):
     __tablename__ = "system_metrics"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     # CPU metrics
     cpu_usage = Column(Float, nullable=True)  # Percentage (0-100)
@@ -39,7 +40,7 @@ class SystemMetrics(Base):
     db_connections = Column(Integer, nullable=True)
     db_size_bytes = Column(BigInteger, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     __table_args__ = (Index('idx_system_metrics_timestamp', 'timestamp'),)
 
@@ -50,7 +51,7 @@ class ContainerMetrics(Base):
     __tablename__ = "container_metrics"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     container_name = Column(String(100), nullable=False)
     container_id = Column(String(64), nullable=True)
@@ -69,7 +70,7 @@ class ContainerMetrics(Base):
     # Uptime
     started_at = Column(DateTime(timezone=True), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     __table_args__ = (
         Index('idx_container_metrics_timestamp', 'timestamp'),

@@ -6,17 +6,15 @@ Docker containers, and database.
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import psutil
-
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
 
-from app.core.database import AsyncSessionLocal, engine
-from app.models.system_metrics import SystemMetrics, ContainerMetrics
+from app.core.database import AsyncSessionLocal
+from app.models.system_metrics import SystemMetrics
 from app.models.traffic_log import TrafficLog
 
 logger = logging.getLogger(__name__)
@@ -54,7 +52,7 @@ class SystemMonitorService:
 
     async def get_system_status(self) -> dict:
         """Get current system status including all services."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Get service health
         services = await self._get_services_health()
@@ -319,7 +317,7 @@ class SystemMonitorService:
         if not started_at:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = now - started_at
 
         days = delta.days
@@ -376,7 +374,7 @@ class SystemMonitorService:
         }
 
         delta = period_map.get(period, timedelta(hours=24))
-        start_time = datetime.now(timezone.utc) - delta
+        start_time = datetime.now(UTC) - delta
 
         if db is None:
             async with AsyncSessionLocal() as session:
@@ -416,7 +414,7 @@ class SystemMonitorService:
         }
 
         total_delta, interval = period_map.get(period, (timedelta(hours=24), timedelta(hours=1)))
-        start_time = datetime.now(timezone.utc) - total_delta
+        start_time = datetime.now(UTC) - total_delta
 
         if db is None:
             async with AsyncSessionLocal() as session:
@@ -471,7 +469,7 @@ class SystemMonitorService:
 
             # Get request count for the last minute
             async with AsyncSessionLocal() as session:
-                one_min_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
+                one_min_ago = datetime.now(UTC) - timedelta(minutes=1)
                 req_count = await session.execute(
                     select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= one_min_ago)
                 )
@@ -483,7 +481,7 @@ class SystemMonitorService:
                 # Create metrics record
                 metrics = SystemMetrics(
                     id=str(uuid.uuid4()),
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     cpu_usage=resources["cpu"]["usage"],
                     cpu_count=resources["cpu"]["cores"],
                     memory_used=resources["memory"]["used"],
@@ -511,7 +509,7 @@ class SystemMonitorService:
         """Delete metrics older than retention period."""
         try:
             async with AsyncSessionLocal() as session:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+                cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
                 # Delete old system metrics
                 await session.execute(text("DELETE FROM system_metrics WHERE timestamp < :cutoff"), {"cutoff": cutoff})

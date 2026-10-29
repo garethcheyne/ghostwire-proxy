@@ -1,24 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.api.routes.proxy_hosts import validate_and_apply
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
 from app.models.access_list import AccessList, AccessListEntry
-from app.models.proxy_host import ProxyHost
 from app.models.audit_log import AuditLog
+from app.models.proxy_host import ProxyHost
+from app.models.user import User
 from app.schemas.access_list import (
     AccessListCreate,
-    AccessListUpdate,
-    AccessListResponse,
     AccessListEntryCreate,
     AccessListEntryResponse,
+    AccessListResponse,
+    AccessListUpdate,
 )
-from app.api.deps import get_current_user, get_current_admin_user
-from app.api.routes.proxy_hosts import validate_and_apply
 
 router = APIRouter()
 

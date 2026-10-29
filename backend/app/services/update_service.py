@@ -10,20 +10,17 @@ This service handles:
 
 import json
 import logging
-import os
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
 import semver
-
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
 
 from app.core.redis import get_redis
 from app.core.version import APP_VERSION
-from app.models.update import UpdateHistory, BaseImageVersion, UpdateSettings
+from app.models.update import BaseImageVersion, UpdateHistory, UpdateSettings
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +75,7 @@ class UpdateService:
     """Service for managing application updates."""
 
     def __init__(self):
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -95,7 +92,7 @@ class UpdateService:
     # VERSION CHECKING
     # =========================================================================
 
-    async def check_for_app_updates(self, db: Optional[AsyncSession] = None) -> dict:
+    async def check_for_app_updates(self, db: AsyncSession | None = None) -> dict:
         """
         Check for new application versions via GitHub releases.
 
@@ -178,7 +175,7 @@ class UpdateService:
 
         return result
 
-    async def check_for_base_image_updates(self, db: Optional[AsyncSession] = None) -> list[dict]:
+    async def check_for_base_image_updates(self, db: AsyncSession | None = None) -> list[dict]:
         """
         Check for base image updates using Docker registry API.
 
@@ -239,7 +236,7 @@ class UpdateService:
 
         return results
 
-    async def _get_docker_hub_token(self, namespace: str, name: str) -> Optional[str]:
+    async def _get_docker_hub_token(self, namespace: str, name: str) -> str | None:
         """Get Docker Hub authentication token for image access."""
         try:
             url = f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{namespace}/{name}:pull"
@@ -250,7 +247,7 @@ class UpdateService:
             logger.debug(f"Failed to get Docker Hub token: {e}")
         return None
 
-    async def _get_image_digest(self, namespace: str, name: str, tag: str, token: str) -> Optional[str]:
+    async def _get_image_digest(self, namespace: str, name: str, tag: str, token: str) -> str | None:
         """Get image manifest digest from Docker Hub."""
         try:
             url = f"https://registry-1.docker.io/v2/{namespace}/{name}/manifests/{tag}"
@@ -396,7 +393,7 @@ class UpdateService:
 
         return update
 
-    async def get_update_status(self, db: AsyncSession, update_id: str) -> Optional[UpdateHistory]:
+    async def get_update_status(self, db: AsyncSession, update_id: str) -> UpdateHistory | None:
         """Get current status of an update."""
         # First check Redis for real-time status
         try:
@@ -416,7 +413,7 @@ class UpdateService:
                     if "error_message" in status_data:
                         update.error_message = status_data["error_message"]
                     if status_data.get("status") in ["completed", "failed"]:
-                        update.completed_at = datetime.now(timezone.utc)
+                        update.completed_at = datetime.now(UTC)
                     await db.commit()
                     return update
         except Exception as e:
@@ -528,7 +525,7 @@ class UpdateService:
             if hasattr(settings, key) and value is not None:
                 setattr(settings, key, value)
 
-        settings.updated_at = datetime.now(timezone.utc)
+        settings.updated_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(settings)
 

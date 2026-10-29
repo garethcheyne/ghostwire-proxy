@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, field_validator
 
 VALID_ROLES = ("admin", "user")
 
@@ -17,19 +18,19 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: Optional[str] = None  # If None, generate random password
+    password: str | None = None  # If None, generate random password
 
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    role: Optional[Literal["admin", "user"]] = None
-    is_active: Optional[bool] = None
-    password: Optional[str] = None
+    email: EmailStr | None = None
+    name: str | None = None
+    role: Literal["admin", "user"] | None = None
+    is_active: bool | None = None
+    password: str | None = None
 
     @field_validator('email')
     @classmethod
-    def email_lowercase(cls, v: Optional[str]) -> Optional[str]:
+    def email_lowercase(cls, v: str | None) -> str | None:
         return v.lower() if v else v
 
 
@@ -40,7 +41,7 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     signin_count: int
-    last_signin_at: Optional[datetime]
+    last_signin_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -49,4 +50,4 @@ class UserResponse(BaseModel):
 
 
 class UserCreateResponse(UserResponse):
-    generated_password: Optional[str] = None
+    generated_password: str | None = None

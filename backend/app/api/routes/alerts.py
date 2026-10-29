@@ -1,32 +1,32 @@
 """Alert channels, preferences, and push notification API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.alert import PushSubscription, AlertChannel, AlertPreference
+from app.models.alert import AlertChannel, AlertPreference, PushSubscription
 from app.models.audit_log import AuditLog
+from app.models.user import User
 from app.schemas.alert import (
+    AlertChannelCreate,
+    AlertChannelResponse,
+    AlertChannelUpdate,
+    AlertPreferenceCreate,
+    AlertPreferenceResponse,
+    AlertPreferenceUpdate,
     PushSubscriptionCreate,
     PushSubscriptionResponse,
-    AlertChannelCreate,
-    AlertChannelUpdate,
-    AlertChannelResponse,
-    AlertPreferenceCreate,
-    AlertPreferenceUpdate,
-    AlertPreferenceResponse,
 )
-from app.api.deps import get_current_user, get_current_admin_user
+from app.services.alert_service import dispatch_alert
 from app.services.outbound_url import (
     OutboundUrlError,
     internal_targets_allowed,
     validate_outbound_url,
 )
-from app.services.alert_service import dispatch_alert
 from app.services.push_service import push_service
 
 router = APIRouter()

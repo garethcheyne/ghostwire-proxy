@@ -8,8 +8,7 @@ tick or a container that was down at 07:00 doesn't silently skip a report.
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,12 +35,12 @@ def _recipients(schedule: ReportSchedule) -> list[str]:
     return [str(v).strip() for v in values if str(v).strip()]
 
 
-def is_due(schedule: ReportSchedule, now: Optional[datetime] = None) -> bool:
+def is_due(schedule: ReportSchedule, now: datetime | None = None) -> bool:
     """Whether this schedule's slot has arrived and not yet been served."""
     if not schedule.enabled or not _recipients(schedule):
         return False
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     if now.hour < schedule.send_hour:
         return False
@@ -59,7 +58,7 @@ def is_due(schedule: ReportSchedule, now: Optional[datetime] = None) -> bool:
         return True
 
     if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
+        last = last.replace(tzinfo=UTC)
 
     # Don't re-send within the same period.
     min_gap = {
@@ -98,7 +97,7 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
                 await email_service.send_email(db, to=recipients, subject=subject, text_body=text, html_body=html)
                 sent_for += 1
 
-            schedule.last_sent_at = datetime.now(timezone.utc)
+            schedule.last_sent_at = datetime.now(UTC)
             schedule.last_status = "sent"
             schedule.last_error = None
             schedule.send_count = (schedule.send_count or 0) + 1
@@ -107,7 +106,7 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
 
         await email_service.send_email(db, to=recipients, subject=subject, text_body=text, html_body=html)
 
-        schedule.last_sent_at = datetime.now(timezone.utc)
+        schedule.last_sent_at = datetime.now(UTC)
         schedule.last_status = "sent"
         schedule.last_error = None
         schedule.send_count = (schedule.send_count or 0) + 1
@@ -129,7 +128,7 @@ async def run_due_schedules(db: AsyncSession) -> int:
     """Send every schedule whose slot has arrived. Returns how many were sent."""
     schedules = (await db.execute(select(ReportSchedule).where(ReportSchedule.enabled == True))).scalars().all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sent = 0
 
     for schedule in schedules:

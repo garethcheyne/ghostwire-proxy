@@ -12,7 +12,6 @@ trust still is.
 
 import json
 import logging
-from typing import Optional
 
 import httpx
 from sqlalchemy import select

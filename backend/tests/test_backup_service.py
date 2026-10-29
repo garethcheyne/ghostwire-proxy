@@ -1,11 +1,9 @@
 """Tests for backup service."""
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
+import pytest
 from app.services.backup_service import BackupService
-from app.models.backup import Backup, BackupSettings
 
 
 class TestBackupService:

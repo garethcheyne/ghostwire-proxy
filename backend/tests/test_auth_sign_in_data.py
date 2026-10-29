@@ -1,11 +1,10 @@
 """Passwords and sessions for admin sign-in live in Better Auth's tables."""
 
 import pytest
-from sqlalchemy import select
-
 from app.core.security import verify_password
 from app.models.auth import AuthAccount
 from app.models.user import User
+from sqlalchemy import select
 
 
 class TestUserManagement:

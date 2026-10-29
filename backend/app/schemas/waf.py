@@ -1,24 +1,24 @@
-from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, field_validator
 
 
 class WafRuleSetCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     enabled: bool = True
 
 
 class WafRuleSetUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
 
 
 class WafRuleSetResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -28,10 +28,10 @@ class WafRuleSetResponse(BaseModel):
 
 
 class WafRuleCreate(BaseModel):
-    rule_set_id: Optional[str] = None
-    proxy_host_id: Optional[str] = None
+    rule_set_id: str | None = None
+    proxy_host_id: str | None = None
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     category: str
     pattern: str
     severity: str = "medium"
@@ -79,22 +79,22 @@ class WafRuleCreate(BaseModel):
 
 
 class WafRuleUpdate(BaseModel):
-    proxy_host_id: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    pattern: Optional[str] = None
-    severity: Optional[str] = None
-    action: Optional[str] = None
-    enabled: Optional[bool] = None
+    proxy_host_id: str | None = None
+    name: str | None = None
+    description: str | None = None
+    category: str | None = None
+    pattern: str | None = None
+    severity: str | None = None
+    action: str | None = None
+    enabled: bool | None = None
 
 
 class WafRuleResponse(BaseModel):
     id: str
-    rule_set_id: Optional[str]
-    proxy_host_id: Optional[str]
+    rule_set_id: str | None
+    proxy_host_id: str | None
     name: str
-    description: Optional[str]
+    description: str | None
     category: str
     pattern: str
     severity: str
@@ -109,18 +109,18 @@ class WafRuleResponse(BaseModel):
 
 class ThreatEventResponse(BaseModel):
     id: str
-    proxy_host_id: Optional[str]
+    proxy_host_id: str | None
     client_ip: str
-    rule_id: Optional[str]
-    rule_name: Optional[str]
-    category: Optional[str]
-    severity: Optional[str]
-    action_taken: Optional[str]
-    request_method: Optional[str]
-    request_uri: Optional[str]
-    matched_payload: Optional[str]
-    user_agent: Optional[str]
-    host: Optional[str]
+    rule_id: str | None
+    rule_name: str | None
+    category: str | None
+    severity: str | None
+    action_taken: str | None
+    request_method: str | None
+    request_uri: str | None
+    matched_payload: str | None
+    user_agent: str | None
+    host: str | None
     timestamp: datetime
 
     class Config:
@@ -132,16 +132,16 @@ class ThreatActorResponse(BaseModel):
     ip_address: str
     total_events: int
     threat_score: int
-    first_seen: Optional[datetime]
-    last_seen: Optional[datetime]
+    first_seen: datetime | None
+    last_seen: datetime | None
     current_status: str
-    temp_block_until: Optional[datetime]
-    perm_blocked_at: Optional[datetime]
-    firewall_banned_at: Optional[datetime]
-    country_code: Optional[str]
-    country_name: Optional[str]
-    tags: Optional[list[str]] = None
-    notes: Optional[str]
+    temp_block_until: datetime | None
+    perm_blocked_at: datetime | None
+    firewall_banned_at: datetime | None
+    country_code: str | None
+    country_name: str | None
+    tags: list[str] | None = None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -164,13 +164,13 @@ class ThreatActorResponse(BaseModel):
 
 
 class ThreatActorUpdate(BaseModel):
-    current_status: Optional[str] = None
-    tags: Optional[list[str]] = None
-    notes: Optional[str] = None
+    current_status: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
 
     @field_validator('current_status')
     @classmethod
-    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+    def validate_status(cls, v: str | None) -> str | None:
         if v is not None:
             valid = ('monitored', 'warned', 'temp_blocked', 'perm_blocked', 'firewall_banned')
             if v not in valid:
@@ -180,11 +180,11 @@ class ThreatActorUpdate(BaseModel):
 
 class ThreatThresholdCreate(BaseModel):
     name: str
-    events_count: Optional[int] = None
-    time_window_minutes: Optional[int] = None
-    threat_score: Optional[int] = None
+    events_count: int | None = None
+    time_window_minutes: int | None = None
+    threat_score: int | None = None
     response_action: str
-    temp_block_duration_minutes: Optional[int] = None
+    temp_block_duration_minutes: int | None = None
     enabled: bool = True
     priority: int = 0
 
@@ -198,24 +198,24 @@ class ThreatThresholdCreate(BaseModel):
 
 
 class ThreatThresholdUpdate(BaseModel):
-    name: Optional[str] = None
-    events_count: Optional[int] = None
-    time_window_minutes: Optional[int] = None
-    threat_score: Optional[int] = None
-    response_action: Optional[str] = None
-    temp_block_duration_minutes: Optional[int] = None
-    enabled: Optional[bool] = None
-    priority: Optional[int] = None
+    name: str | None = None
+    events_count: int | None = None
+    time_window_minutes: int | None = None
+    threat_score: int | None = None
+    response_action: str | None = None
+    temp_block_duration_minutes: int | None = None
+    enabled: bool | None = None
+    priority: int | None = None
 
 
 class ThreatThresholdResponse(BaseModel):
     id: str
     name: str
-    events_count: Optional[int]
-    time_window_minutes: Optional[int]
-    threat_score: Optional[int]
+    events_count: int | None
+    time_window_minutes: int | None
+    threat_score: int | None
     response_action: str
-    temp_block_duration_minutes: Optional[int]
+    temp_block_duration_minutes: int | None
     enabled: bool
     priority: int
 

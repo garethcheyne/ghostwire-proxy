@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, EmailStr
 
 
 class CertificateBase(BaseModel):
@@ -15,7 +15,7 @@ class CertificateCreate(CertificateBase):
 class CertificateUpload(CertificateBase):
     certificate: str  # PEM format
     certificate_key: str  # PEM format
-    certificate_chain: Optional[str] = None  # PEM format
+    certificate_chain: str | None = None  # PEM format
 
 
 class CertificateLetsEncrypt(CertificateBase):
@@ -28,14 +28,14 @@ class CertificateResponse(BaseModel):
     domain_names: list[str]
 
     is_letsencrypt: bool
-    letsencrypt_email: Optional[str]
+    letsencrypt_email: str | None
 
-    expires_at: Optional[datetime]
+    expires_at: datetime | None
     auto_renew: bool
 
     status: str
-    last_renewed_at: Optional[datetime]
-    error_message: Optional[str]
+    last_renewed_at: datetime | None
+    error_message: str | None
 
     created_at: datetime
     updated_at: datetime

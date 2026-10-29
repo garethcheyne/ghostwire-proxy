@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+
 from app.core.database import AsyncSessionLocal
 from app.models.certificate import Certificate
 from sqlalchemy import select
@@ -22,9 +23,9 @@ async def restore_certs():
             key_path = os.path.join(CERTS_PATH, f"{cert.id}.key")
 
             if os.path.exists(crt_path) and os.path.exists(key_path):
-                with open(crt_path, "r") as f:
+                with open(crt_path) as f:
                     cert_content = f.read()
-                with open(key_path, "r") as f:
+                with open(key_path) as f:
                     key_content = f.read()
 
                 cert.certificate = cert_content

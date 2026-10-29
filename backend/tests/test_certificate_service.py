@@ -1,16 +1,16 @@
 """Tests for certificate service."""
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from app.models.certificate import Certificate
 from app.services.certificate_service import (
-    request_letsencrypt_certificate,
-    renew_certificate,
     check_expiring_certificates,
+    renew_certificate,
+    request_letsencrypt_certificate,
     validate_certificate_pem,
 )
-from app.models.certificate import Certificate
 
 
 def _self_signed_pem(days_valid: int = 90) -> str:
@@ -22,9 +22,9 @@ def _self_signed_pem(days_valid: int = 90) -> str:
     therefore no longer round-trips — these tests need a genuine certificate.
     """
     from cryptography import x509
-    from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name(
@@ -32,7 +32,7 @@ def _self_signed_pem(days_valid: int = 90) -> str:
             x509.NameAttribute(NameOID.COMMON_NAME, "test.example.com"),
         ]
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -272,7 +272,7 @@ class TestCheckExpiringCertificates:
             is_letsencrypt=True,
             auto_renew=True,
             status="valid",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=10),
+            expires_at=datetime.now(UTC) + timedelta(days=10),
         )
         db_session.add(cert)
         await db_session.commit()
@@ -290,7 +290,7 @@ class TestCheckExpiringCertificates:
             is_letsencrypt=True,
             auto_renew=True,
             status="valid",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=60),
+            expires_at=datetime.now(UTC) + timedelta(days=60),
         )
         db_session.add(cert)
         await db_session.commit()

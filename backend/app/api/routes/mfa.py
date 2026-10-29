@@ -13,20 +13,20 @@ session yet; the admin UI's Better Auth plugin enrols them through internal_admi
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.rate_limiter import limiter, RATE_LIMITS
+from app.api.deps import get_current_admin_user, get_current_user, get_enrolling_user
 from app.core.auth_session import verify_user_password
+from app.core.database import get_db
+from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.user import User
-from app.api.deps import get_current_user, get_current_admin_user, get_enrolling_user
 from app.schemas.auth import (
-    MfaStatusResponse,
-    MfaSetupResponse,
-    MfaVerifyRequest,
-    MfaVerifiedResponse,
-    MfaDisableRequest,
     BackupCodesResponse,
+    MfaDisableRequest,
+    MfaSetupResponse,
+    MfaStatusResponse,
+    MfaVerifiedResponse,
+    MfaVerifyRequest,
 )
 from app.services import admin_mfa_service
 

@@ -2,9 +2,9 @@
 Schemas for Auth Wall Session management.
 """
 
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 # Session validation (for Lua internal API)
@@ -20,14 +20,14 @@ class SessionValidateResponse(BaseModel):
     """Response to Lua with session validation result."""
 
     valid: bool
-    session_id: Optional[str] = None
-    auth_wall_id: Optional[str] = None
-    user_type: Optional[str] = None
-    user_id: Optional[str] = None
-    username: Optional[str] = None
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    expires_at: Optional[int] = None  # Unix timestamp for Lua
+    session_id: str | None = None
+    auth_wall_id: str | None = None
+    user_type: str | None = None
+    user_id: str | None = None
+    username: str | None = None
+    email: str | None = None
+    display_name: str | None = None
+    expires_at: int | None = None  # Unix timestamp for Lua
 
 
 # Session info for admin UI
@@ -39,17 +39,17 @@ class SessionResponse(BaseModel):
     user_type: str
     user_id: str
     username: str
-    email: Optional[str]
-    display_name: Optional[str]
-    provider_id: Optional[str]
-    ip_address: Optional[str]
-    user_agent: Optional[str]
+    email: str | None
+    display_name: str | None
+    provider_id: str | None
+    ip_address: str | None
+    user_agent: str | None
     created_at: datetime
     expires_at: datetime
     last_activity_at: datetime
     revoked: bool
-    revoked_at: Optional[datetime]
-    revoked_reason: Optional[str]
+    revoked_at: datetime | None
+    revoked_reason: str | None
 
     class Config:
         from_attributes = True
@@ -67,14 +67,14 @@ class SessionListResponse(BaseModel):
 class SessionRevokeRequest(BaseModel):
     """Request to revoke a session."""
 
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class SessionRevokeAllRequest(BaseModel):
     """Request to revoke all sessions for a user."""
 
-    user_id: Optional[str] = None  # If None, revoke all sessions for the auth wall
-    reason: Optional[str] = None
+    user_id: str | None = None  # If None, revoke all sessions for the auth wall
+    reason: str | None = None
 
 
 # Auth wall config for Lua
@@ -113,8 +113,8 @@ class LocalLoginResponse(BaseModel):
 
     success: bool
     requires_totp: bool = False
-    partial_session_id: Optional[str] = None  # Used to continue TOTP flow
-    session_cookie: Optional[str] = None  # Set if login complete
+    partial_session_id: str | None = None  # Used to continue TOTP flow
+    session_cookie: str | None = None  # Set if login complete
     message: str = ""
 
 
@@ -144,9 +144,9 @@ class OAuthCallbackResponse(BaseModel):
     """OAuth callback result."""
 
     success: bool
-    session_cookie: Optional[str] = None
-    redirect_url: Optional[str] = None
-    error: Optional[str] = None
+    session_cookie: str | None = None
+    redirect_url: str | None = None
+    error: str | None = None
 
 
 # Session creation (internal)
@@ -157,11 +157,11 @@ class SessionCreateRequest(BaseModel):
     user_type: str
     user_id: str
     username: str
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    provider_id: Optional[str] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    email: str | None = None
+    display_name: str | None = None
+    provider_id: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
 
 
 class SessionCreateResponse(BaseModel):

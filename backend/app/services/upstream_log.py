@@ -21,8 +21,8 @@ import asyncio
 import ipaddress
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Optional
 
 _SPLIT = re.compile(r"\s*,\s*|\s+:\s+")
 
@@ -34,8 +34,8 @@ ATTEMPTS_MAX = 10
 @dataclass
 class UpstreamAttempt:
     addr: str
-    status: Optional[int] = None
-    time_ms: Optional[int] = None
+    status: int | None = None
+    time_ms: int | None = None
 
     def as_dict(self) -> dict:
         return {"addr": self.addr, "status": self.status, "ms": self.time_ms}
@@ -46,15 +46,15 @@ class UpstreamResult:
     attempts: list[UpstreamAttempt] = field(default_factory=list)
 
     @property
-    def final(self) -> Optional[UpstreamAttempt]:
+    def final(self) -> UpstreamAttempt | None:
         return self.attempts[-1] if self.attempts else None
 
     @property
-    def final_addr(self) -> Optional[str]:
+    def final_addr(self) -> str | None:
         return self.final.addr if self.final else None
 
     @property
-    def final_time_ms(self) -> Optional[int]:
+    def final_time_ms(self) -> int | None:
         return self.final.time_ms if self.final else None
 
     @property
@@ -67,29 +67,27 @@ class UpstreamResult:
         return len(self.attempts) > 1
 
 
-def _split(value: Optional[str]) -> list[str]:
+def _split(value: str | None) -> list[str]:
     if not value:
         return []
     return [part.strip() for part in _SPLIT.split(value.strip()) if part.strip()]
 
 
-def _int(value: str) -> Optional[int]:
+def _int(value: str) -> int | None:
     try:
         return int(value)
     except TypeError, ValueError:
         return None
 
 
-def _ms(value: str) -> Optional[int]:
+def _ms(value: str) -> int | None:
     try:
         return int(round(float(value) * 1000))
     except TypeError, ValueError:
         return None
 
 
-def parse_upstream(
-    addr: Optional[str], status: Optional[str] = None, response_time: Optional[str] = None
-) -> UpstreamResult:
+def parse_upstream(addr: str | None, status: str | None = None, response_time: str | None = None) -> UpstreamResult:
     """Pair up nginx's per-attempt lists. Missing or short lists give None values."""
     addrs = _split(addr)
     statuses = _split(status)
@@ -109,7 +107,7 @@ def parse_upstream(
     return UpstreamResult(attempts=attempts[-ATTEMPTS_MAX:])
 
 
-def split_host_port(addr: str) -> tuple[str, Optional[int]]:
+def split_host_port(addr: str) -> tuple[str, int | None]:
     """'10.0.0.5:8050' -> ('10.0.0.5', 8050); '[fd00::5]:80' -> ('fd00::5', 80)."""
     if addr.startswith("["):
         host, _, rest = addr[1:].partition("]")
@@ -148,7 +146,7 @@ async def _resolve(hostname: str) -> set[str]:
     return ips
 
 
-async def match_upstream_server(final_addr: Optional[str], servers: Iterable) -> Optional[str]:
+async def match_upstream_server(final_addr: str | None, servers: Iterable) -> str | None:
     """The id of the UpstreamServer row that answered, or None.
 
     nginx reports resolved addresses, so a server configured by hostname is

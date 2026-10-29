@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 
@@ -39,9 +40,9 @@ class ReportSchedule(Base):
     last_error = Column(Text, nullable=True)
     send_count = Column(Integer, default=0, nullable=False)
 
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )

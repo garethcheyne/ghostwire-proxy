@@ -10,7 +10,7 @@ admin UI warns about it.
 from __future__ import annotations
 
 import re
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 # Provider types that admit outside accounts (local users and LDAP are managed lists already).
 OAUTH_PROVIDER_TYPES = frozenset({"google", "github", "azure_ad", "oidc"})
@@ -33,7 +33,7 @@ def normalize_domain(value: str) -> str:
     return value
 
 
-def clean_list(values: Optional[Iterable[str]], normalize) -> list[str]:
+def clean_list(values: Iterable[str] | None, normalize) -> list[str]:
     """Normalise, drop blanks and duplicates, keep order. Raises ValueError on a bad entry."""
     out: list[str] = []
     for raw in values or []:
@@ -49,7 +49,7 @@ def has_allow_list(wall) -> bool:
     return bool(getattr(wall, "allowed_emails", None) or getattr(wall, "allowed_email_domains", None))
 
 
-def is_email_allowed(wall, email: Optional[str]) -> bool:
+def is_email_allowed(wall, email: str | None) -> bool:
     """True if this (provider-verified) email may pass the wall.
 
     No allow-list: everyone the provider vouches for (previous behaviour).
@@ -71,7 +71,7 @@ def is_email_allowed(wall, email: Optional[str]) -> bool:
     return email.rsplit("@", 1)[1] in domains
 
 
-def open_to_any_account(wall, providers: Optional[Iterable] = None) -> bool:
+def open_to_any_account(wall, providers: Iterable | None = None) -> bool:
     """True when an enabled OAuth provider would admit any account (no allow-list)."""
     if has_allow_list(wall):
         return False

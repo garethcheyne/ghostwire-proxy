@@ -1,17 +1,17 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class SettingUpdate(BaseModel):
-    value: Optional[str] = None
-    description: Optional[str] = None
+    value: str | None = None
+    description: str | None = None
 
 
 class SettingResponse(BaseModel):
     key: str
-    value: Optional[str]
-    description: Optional[str]
+    value: str | None
+    description: str | None
     updated_at: datetime
 
     class Config:

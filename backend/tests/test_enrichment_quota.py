@@ -7,15 +7,14 @@ the blank score then looked like a cache miss, and a 429 was indistinguishable
 from a real answer of "nothing known".
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import httpx
 import pytest
-from sqlalchemy import select
-
 from app.models.honeypot import IpEnrichment
 from app.services import enrichment_service as es
+from sqlalchemy import select
 
 
 @pytest.fixture(autouse=True)
@@ -87,7 +86,7 @@ class TestNeverQueriesAnIpTwice:
             row = (
                 await db_session.execute(select(IpEnrichment).where(IpEnrichment.ip_address == "203.0.113.3"))
             ).scalar_one()
-            old = datetime.now(timezone.utc) - timedelta(days=30)
+            old = datetime.now(UTC) - timedelta(days=30)
             row.updated_at = old
             row.enriched_at = old
             await db_session.commit()
@@ -166,5 +165,5 @@ class TestRateLimitCooldown:
 
     @pytest.mark.asyncio
     async def test_cooldown_expires(self):
-        es._ABUSE_RATE_LIMITED_UNTIL = datetime.now(timezone.utc) - timedelta(seconds=1)
+        es._ABUSE_RATE_LIMITED_UNTIL = datetime.now(UTC) - timedelta(seconds=1)
         assert es._abuse_is_rate_limited() is False

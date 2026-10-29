@@ -6,8 +6,7 @@ browser for most of the internet.
 """
 
 import pytest
-
-from app.services.client_classifier import parse_browser, parse_os, parse_device_type
+from app.services.client_classifier import parse_browser, parse_device_type, parse_os
 
 CHROME_WIN = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

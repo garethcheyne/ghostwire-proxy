@@ -1,13 +1,13 @@
-from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, field_validator
 
 
 class PushSubscriptionCreate(BaseModel):
     endpoint: str
     p256dh_key: str
     auth_key: str
-    user_agent: Optional[str] = None
+    user_agent: str | None = None
 
 
 class PushSubscriptionResponse(BaseModel):
@@ -23,7 +23,7 @@ class PushSubscriptionResponse(BaseModel):
 class AlertChannelCreate(BaseModel):
     channel_type: str
     name: str
-    config: Optional[str] = None  # JSON
+    config: str | None = None  # JSON
     enabled: bool = True
 
     @field_validator('channel_type')
@@ -36,17 +36,17 @@ class AlertChannelCreate(BaseModel):
 
 
 class AlertChannelUpdate(BaseModel):
-    name: Optional[str] = None
-    config: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    config: str | None = None
+    enabled: bool | None = None
 
 
 class AlertChannelResponse(BaseModel):
     id: str
-    user_id: Optional[str]
+    user_id: str | None
     channel_type: str
     name: str
-    config: Optional[str]
+    config: str | None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -72,7 +72,7 @@ ALERT_TYPES = (
 class AlertPreferenceCreate(BaseModel):
     alert_type: str
     min_severity: str = "medium"
-    channels: Optional[str] = None  # JSON array of channel IDs
+    channels: str | None = None  # JSON array of channel IDs
     enabled: bool = True
 
     @field_validator('alert_type')
@@ -92,9 +92,9 @@ class AlertPreferenceCreate(BaseModel):
 
 
 class AlertPreferenceUpdate(BaseModel):
-    min_severity: Optional[str] = None
-    channels: Optional[str] = None
-    enabled: Optional[bool] = None
+    min_severity: str | None = None
+    channels: str | None = None
+    enabled: bool | None = None
 
 
 class AlertPreferenceResponse(BaseModel):
@@ -102,7 +102,7 @@ class AlertPreferenceResponse(BaseModel):
     user_id: str
     alert_type: str
     min_severity: str
-    channels: Optional[str]
+    channels: str | None
     enabled: bool
 
     class Config:

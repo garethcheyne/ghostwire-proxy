@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, Index, Boolean, ForeignKey
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 
 from app.core.database import Base
 
@@ -13,10 +14,8 @@ class WafRuleSet(Base):
     description = Column(Text, nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
     preset_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class WafRule(Base):
@@ -34,7 +33,7 @@ class WafRule(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     is_lua = Column(Boolean, default=True, nullable=False)  # True=Lua, False=ModSecurity
     preset_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     __table_args__ = (Index('idx_waf_rules_category_enabled', 'category', 'enabled'),)
 
@@ -56,7 +55,7 @@ class ThreatEvent(Base):
     matched_payload = Column(Text, nullable=True)
     user_agent = Column(Text, nullable=True)
     host = Column(String(255), nullable=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     __table_args__ = (Index('idx_threat_events_ip_timestamp', 'client_ip', 'timestamp'),)
 
@@ -80,10 +79,8 @@ class ThreatActor(Base):
     country_name = Column(String(100), nullable=True)
     tags = Column(Text, nullable=True)  # JSON array of tag strings
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     # Set when this actor was last submitted to AbuseIPDB via bulk-report.
     # Re-reported if last_seen advances past this (continued abuse), not on

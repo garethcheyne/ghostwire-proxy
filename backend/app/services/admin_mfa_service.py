@@ -11,15 +11,14 @@ Secrets and backup codes are Fernet-encrypted at rest via `core.security`.
 
 import json
 import secrets
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import encrypt_data, decrypt_data
-from app.models.user import User
+from app.core.security import decrypt_data, encrypt_data
 from app.models.setting import Setting
+from app.models.user import User
 
 try:
     import pyotp
@@ -128,7 +127,7 @@ async def confirm_enrolment(db: AsyncSession, user: User, code: str) -> bool:
 
     user.totp_enabled = True
     user.totp_verified = True
-    user.totp_enrolled_at = datetime.now(timezone.utc)
+    user.totp_enrolled_at = datetime.now(UTC)
     await db.commit()
     return True
 
@@ -203,7 +202,7 @@ async def disable_mfa(db: AsyncSession, user: User) -> None:
     await db.commit()
 
 
-def build_qr_data_uri(provisioning_uri: str) -> Optional[str]:
+def build_qr_data_uri(provisioning_uri: str) -> str | None:
     """Render the provisioning URI as an inline PNG data URI.
 
     Done server-side so the secret never has to reach a third-party QR service,
@@ -211,8 +210,9 @@ def build_qr_data_uri(provisioning_uri: str) -> Optional[str]:
     missing — the UI falls back to showing the secret for manual entry.
     """
     try:
-        import io
         import base64
+        import io
+
         import qrcode
 
         img = qrcode.make(provisioning_uri)

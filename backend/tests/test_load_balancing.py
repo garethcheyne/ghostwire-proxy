@@ -5,12 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from app.models.proxy_host import ProxyHost, UpstreamServer
-from app.schemas.proxy_host import UpstreamServerCreate, ProxyHostUpdate
+from app.schemas.proxy_host import ProxyHostUpdate, UpstreamServerCreate
 from app.services import health_service
 from app.services.load_balancing import (
     check_lb_rules,
@@ -24,6 +20,9 @@ from app.services.openresty_service import (
     generate_upstream_connection_map,
     generate_upstream_location_directives,
 )
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 HOST_ID = "11111111-2222-3333-4444-555555555555"
 UP = "upstream_11111111_2222_3333_4444_555555555555"

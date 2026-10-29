@@ -3,14 +3,12 @@ Session Service for Auth Wall authentication.
 Handles session creation, validation, revocation, and cookie signing.
 """
 
-import hmac
 import hashlib
-import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+import hmac
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, and_, func
 
 from app.core.config import settings
 from app.models.auth_wall import AuthWall
@@ -42,7 +40,7 @@ class SessionService:
         signature = self._sign_session_id(session_id)
         return f"{session_id}.{signature}"
 
-    def verify_session_cookie(self, cookie_value: str) -> Optional[str]:
+    def verify_session_cookie(self, cookie_value: str) -> str | None:
         """Verify session cookie signature and return session_id if valid."""
         if not cookie_value or "." not in cookie_value:
             return None
@@ -65,11 +63,11 @@ class SessionService:
         user_type: str,
         user_id: str,
         username: str,
-        email: Optional[str] = None,
-        display_name: Optional[str] = None,
-        provider_id: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        email: str | None = None,
+        display_name: str | None = None,
+        provider_id: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> tuple[AuthWallSession, str]:
         """
         Create a new session and return the session object and signed cookie.
@@ -84,7 +82,7 @@ class SessionService:
             raise ValueError(f"Auth wall not found: {auth_wall_id}")
 
         # Calculate expiry
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=auth_wall.session_timeout)
 
         # Create session
@@ -117,7 +115,7 @@ class SessionService:
         self,
         session_id: str,
         auth_wall_id: str,
-    ) -> Optional[AuthWallSession]:
+    ) -> AuthWallSession | None:
         """
         Validate a session and return it if valid.
 
@@ -133,7 +131,7 @@ class SessionService:
                     AuthWallSession.id == session_id,
                     AuthWallSession.auth_wall_id == auth_wall_id,
                     AuthWallSession.revoked == False,
-                    AuthWallSession.expires_at > datetime.now(timezone.utc),
+                    AuthWallSession.expires_at > datetime.now(UTC),
                 )
             )
         )
@@ -146,9 +144,7 @@ class SessionService:
         Should be called periodically (debounced) to track user activity.
         """
         result = await self.db.execute(
-            update(AuthWallSession)
-            .where(AuthWallSession.id == session_id)
-            .values(last_activity_at=datetime.now(timezone.utc))
+            update(AuthWallSession).where(AuthWallSession.id == session_id).values(last_activity_at=datetime.now(UTC))
         )
         await self.db.commit()
         return result.rowcount > 0
@@ -156,10 +152,10 @@ class SessionService:
     async def revoke_session(
         self,
         session_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> bool:
         """Revoke a specific session."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.db.execute(
             update(AuthWallSession)
             .where(AuthWallSession.id == session_id)
@@ -176,14 +172,14 @@ class SessionService:
         self,
         auth_wall_id: str,
         user_id: str,
-        reason: Optional[str] = None,
-        exclude_session_id: Optional[str] = None,
+        reason: str | None = None,
+        exclude_session_id: str | None = None,
     ) -> int:
         """
         Revoke all sessions for a user in an auth wall.
         Optionally exclude a specific session (e.g., current session).
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         query = (
             update(AuthWallSession)
             .where(
@@ -210,10 +206,10 @@ class SessionService:
     async def revoke_all_sessions(
         self,
         auth_wall_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> int:
         """Revoke all sessions for an auth wall."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.db.execute(
             update(AuthWallSession)
             .where(
@@ -234,7 +230,7 @@ class SessionService:
     async def list_sessions(
         self,
         auth_wall_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         include_revoked: bool = False,
         include_expired: bool = False,
         page: int = 1,
@@ -254,7 +250,7 @@ class SessionService:
         if not include_revoked:
             conditions.append(AuthWallSession.revoked == False)
         if not include_expired:
-            conditions.append(AuthWallSession.expires_at > datetime.now(timezone.utc))
+            conditions.append(AuthWallSession.expires_at > datetime.now(UTC))
 
         # Count total
         count_query = select(func.count()).select_from(AuthWallSession).where(and_(*conditions))
@@ -279,7 +275,7 @@ class SessionService:
         Delete expired sessions older than the specified number of days.
         This is a maintenance task to prevent database bloat.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
         result = await self.db.execute(
             delete(AuthWallSession).where(
                 and_(
@@ -299,7 +295,7 @@ class SessionService:
                 and_(
                     AuthWallSession.auth_wall_id == auth_wall_id,
                     AuthWallSession.revoked == False,
-                    AuthWallSession.expires_at > datetime.now(timezone.utc),
+                    AuthWallSession.expires_at > datetime.now(UTC),
                 )
             )
         )

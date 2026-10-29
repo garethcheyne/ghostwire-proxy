@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text
 
 from app.core.database import Base
 
@@ -20,10 +21,8 @@ class FirewallConnector(Base):
     address_list_name = Column(String(100), nullable=True)  # RouterOS address list name
     enabled = Column(Boolean, default=True, nullable=False)
     last_sync_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class FirewallBlocklist(Base):

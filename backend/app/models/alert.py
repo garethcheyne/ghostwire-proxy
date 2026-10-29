@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Text, Boolean, Index
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Index, String, Text
 
 from app.core.database import Base
 
@@ -14,7 +15,7 @@ class PushSubscription(Base):
     p256dh_key = Column(Text, nullable=False)
     auth_key = Column(Text, nullable=False)
     user_agent = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class AlertChannel(Base):
@@ -26,10 +27,8 @@ class AlertChannel(Base):
     name = Column(String(255), nullable=False)
     config = Column(Text, nullable=True)  # JSON config
     enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class AlertPreference(Base):

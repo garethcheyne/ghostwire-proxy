@@ -1,30 +1,27 @@
 """Honeypot trap management and IP enrichment API routes."""
 
-import json
 import logging
-import os
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, distinct
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.honeypot import HoneypotTrap, HoneypotHit, IpEnrichment
 from app.models.audit_log import AuditLog
+from app.models.honeypot import HoneypotHit, HoneypotTrap, IpEnrichment
+from app.models.user import User
 from app.schemas.honeypot import (
-    HoneypotTrapCreate,
-    HoneypotTrapUpdate,
-    HoneypotTrapResponse,
     HoneypotHitResponse,
-    IpEnrichmentResponse,
-    IpLookupRequest,
     HoneypotStatsResponse,
+    HoneypotTrapCreate,
+    HoneypotTrapResponse,
+    HoneypotTrapUpdate,
+    IpEnrichmentResponse,
 )
-from app.api.deps import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -216,10 +213,9 @@ async def get_ip_enrichment(
 
     Returns cached data if available. Pass ?force=true to re-fetch.
     """
-    from app.services.enrichment_service import enrich_ip
-
     # Get optional AbuseIPDB key from settings
     from app.models.setting import Setting
+    from app.services.enrichment_service import enrich_ip
 
     abuseipdb_key = None
     result = await db.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
@@ -251,7 +247,7 @@ async def get_honeypot_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
 

@@ -8,9 +8,10 @@ operator's head, and without somewhere to put it every grid shows a wall of
 anonymous numbers.
 """
 
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Index
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Index, String, Text
 
 from app.core.database import Base
 
@@ -42,11 +43,11 @@ class KnownIp(Base):
     trusted = Column(Boolean, default=False, nullable=False)
 
     created_by = Column(String(36), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     __table_args__ = (Index("idx_known_ips_category_label", "category", "label"),)

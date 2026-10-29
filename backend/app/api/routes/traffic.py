@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import and_, delete as sa_delete, func, select, text
+from sqlalchemy import and_, func, select, text
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin_user, get_current_user
@@ -28,8 +29,8 @@ from app.models.traffic_log import TrafficLog
 from app.models.user import User
 from app.models.waf import ThreatActor, ThreatEvent
 from app.schemas.traffic import TrafficLogResponse, TrafficStatsResponse
-from app.services import traffic_query as tq
 from app.services import traffic_nodes as tn
+from app.services import traffic_query as tq
 from app.services import traffic_rollup_service
 from app.services.enrichment_service import backfill_enrichment
 
@@ -40,7 +41,7 @@ router = APIRouter()
 VIEW_CACHE_TTL = 20
 
 
-def traffic_filters(default_range: Optional[str]) -> Callable[..., tq.TrafficFilters]:
+def traffic_filters(default_range: str | None) -> Callable[..., tq.TrafficFilters]:
     """FastAPI dependency building TrafficFilters from query parameters.
 
     ``default_range`` applies when neither ``range`` nor start/end is given: the
@@ -48,27 +49,27 @@ def traffic_filters(default_range: Optional[str]) -> Callable[..., tq.TrafficFil
     """
 
     def dep(
-        range: Optional[str] = Query(None, description="15m, 1h, 6h, 24h, 7d, 30d, 90d or all"),
-        start: Optional[datetime] = Query(None),
-        end: Optional[datetime] = Query(None),
-        start_date: Optional[datetime] = Query(None, description="Legacy alias of start"),
-        end_date: Optional[datetime] = Query(None, description="Legacy alias of end"),
+        range: str | None = Query(None, description="15m, 1h, 6h, 24h, 7d, 30d, 90d or all"),
+        start: datetime | None = Query(None),
+        end: datetime | None = Query(None),
+        start_date: datetime | None = Query(None, description="Legacy alias of start"),
+        end_date: datetime | None = Query(None, description="Legacy alias of end"),
         host: list[str] = Query([], description="Proxy host id (repeatable)"),
-        proxy_host_id: Optional[str] = Query(None, description="Legacy single host"),
+        proxy_host_id: str | None = Query(None, description="Legacy single host"),
         backend: list[str] = Query([], description="Upstream 'ip:port', or 'ip' for every port"),
         status_class: list[int] = Query([], description="1-5 (repeatable)"),
         status_code: list[int] = Query([], alias="status", description="Exact status code (repeatable)"),
-        status_min: Optional[int] = Query(None),
-        status_max: Optional[int] = Query(None),
+        status_min: int | None = Query(None),
+        status_max: int | None = Query(None),
         method: list[str] = Query([]),
-        path: Optional[str] = Query(None, max_length=500),
+        path: str | None = Query(None, max_length=500),
         path_mode: str = Query("contains", pattern="^(contains|prefix)$"),
-        client_ip: Optional[str] = Query(None, max_length=64, description="Address or CIDR"),
+        client_ip: str | None = Query(None, max_length=64, description="Address or CIDR"),
         country: list[str] = Query([]),
-        ua: Optional[str] = Query(None, max_length=200, description="User agent contains"),
-        bot: Optional[bool] = Query(None),
-        min_rt: Optional[int] = Query(None, ge=0, description="Slower than (ms)"),
-        search: Optional[str] = Query(None, max_length=200),
+        ua: str | None = Query(None, max_length=200, description="User agent contains"),
+        bot: bool | None = Query(None),
+        min_rt: int | None = Query(None, ge=0, description="Slower than (ms)"),
+        search: str | None = Query(None, max_length=200),
     ) -> tq.TrafficFilters:
         try:
             s, e = tq.resolve_range(range, start or start_date, end or end_date, default=default_range)
@@ -143,7 +144,7 @@ async def list_traffic_logs(
 
 @router.get("/stats", response_model=TrafficStatsResponse)
 async def get_traffic_stats(
-    proxy_host_id: Optional[str] = None,
+    proxy_host_id: str | None = None,
     days: int = Query(30, ge=1, le=365),
     include_top_ips: bool = Query(True, description="Top client IPs need a raw scan of the window; the UI skips them"),
     current_user: User = Depends(get_current_user),
@@ -157,7 +158,7 @@ async def get_traffic_stats(
     cache_key = f"traffic:stats2:{proxy_host_id or 'all'}:{days}:{int(include_top_ips)}"
 
     async def _compute() -> TrafficStatsResponse:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         f = tq.TrafficFilters(start=now - timedelta(days=days), host_ids=[proxy_host_id] if proxy_host_id else [])
@@ -216,7 +217,7 @@ async def traffic_overview(
     """Summary cards, status codes and the over-time series for the filters."""
 
     async def _compute() -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stride = tq.auto_stride(f.start, f.end, now)
         watermark = await tq.rolled_until(db)
         rows = await tq.aggregate(db, f, ["status"], stride=stride, watermark=watermark)
@@ -415,7 +416,7 @@ async def traffic_nodes(
     or one machine (filter by backend)."""
 
     async def _compute() -> dict:
-        return await tn.node_summary(db, f, now=datetime.now(timezone.utc))
+        return await tn.node_summary(db, f, now=datetime.now(UTC))
 
     return await cached_json(_cache_key("nodes", request), ttl=VIEW_CACHE_TTL, producer=_compute)
 
@@ -483,13 +484,13 @@ async def client_info(
 
 @router.get("/geo/heatmap")
 async def get_geo_heatmap(
-    proxy_host_id: Optional[str] = None,
+    proxy_host_id: str | None = None,
     days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get traffic count by country for heatmap visualization."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     query = (
         select(TrafficLog.country_code, TrafficLog.country_name, func.count(TrafficLog.id).label("count"))
         .where(TrafficLog.country_code.isnot(None), TrafficLog.timestamp >= since)
@@ -504,13 +505,13 @@ async def get_geo_heatmap(
 
 @router.get("/geo/city-heatmap")
 async def get_city_heatmap(
-    proxy_host_id: Optional[str] = None,
+    proxy_host_id: str | None = None,
     days: int = Query(30, ge=1, le=365),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get traffic aggregated by city with lat/lon from IP enrichment data."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     base_filter = [
         TrafficLog.timestamp >= since,
         IpEnrichment.latitude.isnot(None),
@@ -596,7 +597,7 @@ async def trigger_enrichment_backfill(
 _SECRET_HEADERS = {"cookie", "authorization", "proxy-authorization", "x-api-key", "x-internal-auth"}
 
 
-def _safe_headers(raw: Optional[str]) -> Optional[dict]:
+def _safe_headers(raw: str | None) -> dict | None:
     """Logged request headers, minus credentials."""
     if not raw:
         return None

@@ -2,17 +2,15 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-
-from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.waf import ThreatEvent, ThreatActor, ThreatThreshold
 from app.models.firewall import FirewallBlocklist
+from app.models.waf import ThreatActor, ThreatEvent, ThreatThreshold
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +23,9 @@ def _get_geoip_reader():
     if _geoip_reader is not None:
         return _geoip_reader
     try:
-        import geoip2.database
         import os
+
+        import geoip2.database
 
         db_path = os.environ.get("GEOIP_DB_PATH", "/data/geoip/GeoLite2-Country.mmdb")
         if os.path.exists(db_path):
@@ -41,7 +40,7 @@ def _get_geoip_reader():
     return _geoip_reader
 
 
-def lookup_country(ip: str) -> tuple[Optional[str], Optional[str]]:
+def lookup_country(ip: str) -> tuple[str | None, str | None]:
     """Return (country_code, country_name) for an IP, or (None, None)."""
     reader = _get_geoip_reader()
     if not reader:
@@ -70,7 +69,7 @@ def _send_push_notification_background(coro):
 UNDER_ATTACK_EVENTS_PER_MINUTE = 60
 # Don't re-announce the same ongoing attack every few seconds.
 UNDER_ATTACK_COOLDOWN_SECONDS = 900
-_last_under_attack_alert: Optional[datetime] = None
+_last_under_attack_alert: datetime | None = None
 
 
 # Severity score mapping
@@ -88,17 +87,17 @@ async def record_threat_event(
     category: str,
     severity: str,
     action_taken: str,
-    request_method: Optional[str] = None,
-    request_uri: Optional[str] = None,
-    request_headers: Optional[str] = None,
-    matched_payload: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    host: Optional[str] = None,
-    proxy_host_id: Optional[str] = None,
-    rule_id: Optional[str] = None,
-    rule_name: Optional[str] = None,
-    country_code: Optional[str] = None,
-    country_name: Optional[str] = None,
+    request_method: str | None = None,
+    request_uri: str | None = None,
+    request_headers: str | None = None,
+    matched_payload: str | None = None,
+    user_agent: str | None = None,
+    host: str | None = None,
+    proxy_host_id: str | None = None,
+    rule_id: str | None = None,
+    rule_name: str | None = None,
+    country_code: str | None = None,
+    country_name: str | None = None,
 ) -> ThreatEvent:
     """Record a threat event and update the threat actor profile."""
     # Create event
@@ -142,7 +141,7 @@ async def record_threat_event(
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))
     existing = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     score_delta = SEVERITY_SCORES.get(severity, 25)
 
     # Resolve country: prefer passed-in values from Lua GeoIP, fall back to local lookup
@@ -221,7 +220,7 @@ async def _maybe_notify_under_attack(db: AsyncSession) -> None:
     """
     global _last_under_attack_alert
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if _last_under_attack_alert and (now - _last_under_attack_alert).total_seconds() < UNDER_ATTACK_COOLDOWN_SECONDS:
         return
 
@@ -276,7 +275,7 @@ async def evaluate_thresholds(db: AsyncSession, actor: ThreatActor) -> None:
     )
     thresholds = result.scalars().all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for threshold in thresholds:
         triggered = False
@@ -309,10 +308,10 @@ async def apply_response(
     db: AsyncSession,
     actor: ThreatActor,
     action: str,
-    temp_block_minutes: Optional[int] = None,
+    temp_block_minutes: int | None = None,
 ) -> None:
     """Apply a threat response action to an actor."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Only escalate, never downgrade
     status_levels = {
@@ -380,7 +379,7 @@ async def apply_response(
             logger.debug(f"Push notification skipped: {e}")
 
 
-async def check_ip_blocked(db: AsyncSession, ip_address: str) -> tuple[bool, Optional[str]]:
+async def check_ip_blocked(db: AsyncSession, ip_address: str) -> tuple[bool, str | None]:
     """Check if an IP is currently blocked. Returns (is_blocked, reason)."""
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip_address))
     actor = result.scalar_one_or_none()
@@ -388,7 +387,7 @@ async def check_ip_blocked(db: AsyncSession, ip_address: str) -> tuple[bool, Opt
     if not actor:
         return False, None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if actor.current_status == "perm_blocked":
         return True, "permanently blocked"

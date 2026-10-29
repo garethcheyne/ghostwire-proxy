@@ -1,18 +1,18 @@
 """Traffic page queries: filters, rollup/raw stitching and the /api/traffic routes."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from app.core.cache import cache_delete_prefix
 from app.models.proxy_host import ProxyHost
 from app.models.traffic_log import TrafficLog
 from app.services import traffic_query as tq
 from app.services import traffic_rollup_service as rollup
+
 from tests.conftest import TestSessionLocal
 
-NOW = datetime.now(timezone.utc).replace(microsecond=0)
+NOW = datetime.now(UTC).replace(microsecond=0)
 
 
 @pytest.fixture(autouse=True)

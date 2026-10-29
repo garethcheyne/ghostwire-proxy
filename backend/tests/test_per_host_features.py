@@ -2,9 +2,8 @@
 
 import pytest
 from app.models.proxy_host import ProxyHost
+from app.models.rate_limit import GeoipRule, RateLimitRule
 from app.models.waf import WafRule
-from app.models.rate_limit import RateLimitRule, GeoipRule
-from app.models.honeypot import HoneypotTrap
 
 
 @pytest.fixture

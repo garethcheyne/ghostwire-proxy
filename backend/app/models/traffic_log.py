@@ -1,10 +1,10 @@
-from sqlalchemy import Column, String, DateTime, Integer, SmallInteger, Text, Boolean, ForeignKey, Index, JSON, text
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, SmallInteger, String, Text, text
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-
 
 # The upstream that produced the response: nginx records "a:1, b:2" when it
 # retried, and the last one answered. Host part without the port, for grouping
@@ -22,7 +22,7 @@ class TrafficLog(Base):
 
     # Request info
     # Not indexed alone: idx_traffic_logs_timestamp_status leads with it.
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     client_ip = Column(String(45), nullable=False, index=True)  # IPv6 can be up to 45 chars
 
     # HTTP request

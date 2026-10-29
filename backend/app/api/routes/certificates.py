@@ -1,23 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, BackgroundTasks, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from datetime import datetime, timezone
 
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
-from app.core.security import encrypt_data, decrypt_data
-from app.models.user import User
-from app.models.certificate import Certificate
-from app.models.audit_log import AuditLog
-from app.schemas.certificate import CertificateUpload, CertificateLetsEncrypt, CertificateResponse
-from app.api.deps import get_current_user, get_current_admin_user
+from app.core.security import encrypt_data
 from app.core.utils import get_client_ip
+from app.models.audit_log import AuditLog
+from app.models.certificate import Certificate
+from app.models.user import User
+from app.schemas.certificate import CertificateLetsEncrypt, CertificateResponse, CertificateUpload
 from app.services.certificate_service import (
-    request_letsencrypt_certificate,
     renew_and_deploy_certificate,
+    request_letsencrypt_certificate,
     validate_certificate_pem,
 )
-from app.services.openresty_service import generate_all_configs, write_certificate_files, reload_nginx
+from app.services.openresty_service import generate_all_configs, reload_nginx, write_certificate_files
 
 router = APIRouter()
 

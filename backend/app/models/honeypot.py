@@ -1,8 +1,9 @@
 """Honeypot trap models for catching and profiling scanners/attackers."""
 
-from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index, ForeignKey, UniqueConstraint
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from app.core.database import Base
 
@@ -27,10 +28,8 @@ class HoneypotTrap(Base):
     auto_block = Column(Boolean, default=True)  # Auto-block the IP
     enabled = Column(Boolean, default=True, nullable=False)
     hit_count = Column(Integer, default=0)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class HoneypotHit(Base):
@@ -59,7 +58,7 @@ class HoneypotHit(Base):
     # Action taken
     action_taken = Column(String(20), default="logged")  # logged, blocked, enriched
 
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     __table_args__ = (Index('idx_honeypot_hits_ip_timestamp', 'client_ip', 'timestamp'),)
 
@@ -108,10 +107,8 @@ class IpEnrichment(Base):
     abuse_checked_at = Column(DateTime(timezone=True), nullable=True)
 
     # Meta
-    enriched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
-    )
+    enriched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 
 class AbuseIPDBBlacklistEntry(Base):
@@ -130,4 +127,4 @@ class AbuseIPDBBlacklistEntry(Base):
     abuse_confidence_score = Column(Integer, nullable=False)
     country_code = Column(String(5), nullable=True)
     last_reported_at = Column(DateTime(timezone=True), nullable=True)
-    synced_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    synced_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))

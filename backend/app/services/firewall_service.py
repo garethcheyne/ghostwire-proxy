@@ -2,15 +2,14 @@
 
 import ipaddress
 import logging
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
-from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.core.security import decrypt_data
+from app.models.firewall import FirewallBlocklist, FirewallConnector
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +71,7 @@ class RouterOSConnector(BaseFirewallConnector):
                     json={
                         "list": list_name,
                         "address": ip,
-                        "comment": comment or f"Blocked by Ghostwire Proxy",
+                        "comment": comment or "Blocked by Ghostwire Proxy",
                     },
                 )
                 raw_response = f"HTTP {resp.status_code}: {resp.text[:500]}"
@@ -792,7 +791,7 @@ def get_connector(connector: FirewallConnector) -> BaseFirewallConnector:
     return cls(connector)
 
 
-async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -> dict:
+async def sync_blocklist(db: AsyncSession, connector_id: str | None = None) -> dict:
     """Sync pending blocklist entries to firewalls."""
     # Get pending entries
     query = select(FirewallBlocklist).where(FirewallBlocklist.status == "pending")
@@ -815,7 +814,7 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
 
     synced = 0
     failed = 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for entry in pending:
         for connector in connectors:

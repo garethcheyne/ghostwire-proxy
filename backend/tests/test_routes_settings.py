@@ -1,7 +1,6 @@
 """Tests for settings API routes."""
 
 import pytest
-
 from app.models.setting import Setting
 
 
@@ -70,6 +69,7 @@ class TestDefaultSiteSettings:
     async def test_update_default_site(self, client, admin_user, auth_headers, tmp_path):
         """Writes _default.conf and reloads nginx (nginx itself is mocked: CI has none)."""
         from unittest.mock import patch
+
         from app.core.config import settings as app_settings
 
         with (
@@ -94,6 +94,7 @@ class TestDefaultSiteSettings:
     @pytest.mark.asyncio
     async def test_update_default_site_rolls_back_bad_config(self, client, admin_user, auth_headers, tmp_path):
         from unittest.mock import patch
+
         from app.core.config import settings as app_settings
 
         with (

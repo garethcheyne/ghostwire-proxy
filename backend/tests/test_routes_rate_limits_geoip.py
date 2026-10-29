@@ -1,8 +1,7 @@
 """Tests for rate limits and geoip API routes."""
 
 import pytest
-
-from app.models.rate_limit import RateLimitRule, GeoipRule, GeoipSettings
+from app.models.rate_limit import RateLimitRule
 
 
 class TestRateLimitsRoutes:

@@ -17,7 +17,6 @@ silently removes real traffic from the numbers.
 """
 
 import re
-from typing import Optional
 
 # Substrings that appear in self-identifying automated clients. Matched
 # case-insensitively against the User-Agent.
@@ -105,7 +104,7 @@ _NAMED_BOTS = (
 _BROWSER_HINT = re.compile(r"mozilla/5\.0", re.I)
 
 
-def classify_bot(user_agent: Optional[str]) -> tuple[bool, Optional[str]]:
+def classify_bot(user_agent: str | None) -> tuple[bool, str | None]:
     """Return (is_bot, bot_name). bot_name is None for unnamed automation."""
     if not user_agent or not user_agent.strip():
         # No User-Agent at all is not something a browser does.
@@ -131,9 +130,9 @@ def classify_bot(user_agent: Optional[str]) -> tuple[bool, Optional[str]]:
 
 
 def is_streaming_response(
-    status: Optional[int],
-    upgrade_header: Optional[str] = None,
-    content_type: Optional[str] = None,
+    status: int | None,
+    upgrade_header: str | None = None,
+    content_type: str | None = None,
 ) -> bool:
     """Was this a long-lived connection rather than a slow request?"""
     # 101 Switching Protocols is a completed websocket handshake.
@@ -196,7 +195,7 @@ _TABLET_MARKERS = ("ipad", "tablet", "kindle", "playbook", "silk")
 _MOBILE_MARKERS = ("mobile", "iphone", "ipod", "android", "windows phone", "blackberry", "opera mini")
 
 
-def parse_browser(user_agent: Optional[str]) -> str:
+def parse_browser(user_agent: str | None) -> str:
     """Best-effort browser family name for reporting."""
     if not user_agent or not user_agent.strip():
         return "Unknown"
@@ -216,7 +215,7 @@ def parse_browser(user_agent: Optional[str]) -> str:
     return "Other"
 
 
-def parse_os(user_agent: Optional[str]) -> str:
+def parse_os(user_agent: str | None) -> str:
     """Best-effort operating system name for reporting."""
     if not user_agent or not user_agent.strip():
         return "Unknown"
@@ -229,7 +228,7 @@ def parse_os(user_agent: Optional[str]) -> str:
     return "Other"
 
 
-def parse_device_type(user_agent: Optional[str]) -> str:
+def parse_device_type(user_agent: str | None) -> str:
     """Desktop / Mobile / Tablet / Bot."""
     if not user_agent or not user_agent.strip():
         return "Bot"

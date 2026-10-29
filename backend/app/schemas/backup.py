@@ -1,8 +1,8 @@
 """Pydantic schemas for backup operations."""
 
-from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class BackupCreate(BaseModel):
@@ -28,10 +28,10 @@ class BackupResponse(BaseModel):
     includes_configs: bool
     includes_traffic_logs: bool
     status: str
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    created_by: Optional[str] = None
+    completed_at: datetime | None = None
+    created_by: str | None = None
 
     class Config:
         from_attributes = True
@@ -61,17 +61,17 @@ class BackupSettingsResponse(BaseModel):
 class BackupSettingsUpdate(BaseModel):
     """Schema for updating backup settings."""
 
-    auto_backup_enabled: Optional[bool] = None
-    schedule_cron: Optional[str] = Field(None, pattern=r"^[\d\*\/\-\,]+(\s+[\d\*\/\-\,]+){4}$")
-    retention_days: Optional[int] = Field(None, ge=1, le=365)
-    retention_count: Optional[int] = Field(None, ge=1, le=100)
-    include_traffic_logs: Optional[bool] = None
+    auto_backup_enabled: bool | None = None
+    schedule_cron: str | None = Field(None, pattern=r"^[\d\*\/\-\,]+(\s+[\d\*\/\-\,]+){4}$")
+    retention_days: int | None = Field(None, ge=1, le=365)
+    retention_count: int | None = Field(None, ge=1, le=100)
+    include_traffic_logs: bool | None = None
 
 
 class RestoreRequest(BaseModel):
     """Schema for restore request."""
 
-    backup_id: Optional[str] = None
+    backup_id: str | None = None
     restore_database: bool = True
     restore_certificates: bool = True
     restore_letsencrypt: bool = True

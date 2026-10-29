@@ -3,15 +3,11 @@ grouping with the whole-host alert, maintenance, content and routing."""
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from app.models.alert import AlertChannel, AlertPreference
 from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent
 from app.models.setting import Setting
@@ -19,8 +15,11 @@ from app.schemas.alert import AlertPreferenceCreate
 from app.services import health_service
 from app.services.alert_service import dispatch_alert, preferences_for, users_opted_out
 from app.services.push_service import push_service
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-T0 = datetime(2026, 10, 8, 12, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 WINDOW = timedelta(minutes=5)
 
 

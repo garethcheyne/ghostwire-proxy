@@ -1,18 +1,18 @@
 """Tests for alert service — dispatch, channel routing, and sending."""
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from app.models.alert import AlertChannel, AlertPreference
 from app.services.alert_service import (
-    dispatch_alert,
-    _send_to_channel,
-    _send_webhook,
+    _send_email,
     _send_slack,
     _send_telegram,
-    _send_email,
+    _send_to_channel,
+    _send_webhook,
+    dispatch_alert,
 )
-from app.models.alert import AlertChannel, AlertPreference, PushSubscription
 
 
 class TestDispatchAlert:

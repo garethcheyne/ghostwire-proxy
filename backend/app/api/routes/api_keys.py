@@ -5,7 +5,7 @@ router session-only). Creating a key needs the admin's current two-factor code, 
 two-factor and regenerating backup codes do.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -132,7 +132,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
 
     if row.revoked_at is None:
-        row.revoked_at = datetime.now(timezone.utc)
+        row.revoked_at = datetime.now(UTC)
         _audit(db, request, current_user, "api_key_revoked", f"Revoked API key '{row.name}' (gwp_{row.prefix})")
         await db.commit()
 

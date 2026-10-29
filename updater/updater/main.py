@@ -14,13 +14,11 @@ import json
 import logging
 import os
 import subprocess
-import shutil
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import docker
-import redis.asyncio as redis
 import httpx
+import redis.asyncio as redis
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -56,9 +54,9 @@ class UpdaterService:
     """Main updater service."""
 
     def __init__(self):
-        self.redis: Optional[redis.Redis] = None
-        self.docker_client: Optional[docker.DockerClient] = None
-        self.http_client: Optional[httpx.AsyncClient] = None
+        self.redis: redis.Redis | None = None
+        self.docker_client: docker.DockerClient | None = None
+        self.http_client: httpx.AsyncClient | None = None
         self.running = False
 
     async def start(self):
@@ -151,7 +149,7 @@ class UpdaterService:
         status_data = {
             "update_id": update_id,
             "status": status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if progress is not None:
             status_data["progress_percent"] = str(progress)
@@ -173,7 +171,7 @@ class UpdaterService:
         title: str,
         body: str,
         notification_type: str = "update",
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ):
         """Send push notification via internal API endpoint."""
         try:
@@ -472,7 +470,7 @@ class UpdaterService:
         # Restart containers
         await self.restart_containers_ordered()
 
-    async def store_backup_id(self, update_id: str, backup_id: Optional[str]):
+    async def store_backup_id(self, update_id: str, backup_id: str | None):
         """Store backup ID for later rollback."""
         if backup_id:
             await self.redis.hset(f"update:{update_id}", "backup_id", backup_id)

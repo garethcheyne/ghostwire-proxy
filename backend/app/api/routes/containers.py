@@ -1,16 +1,15 @@
 """Container OS package inventory and security-update posture."""
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cache import cached_json, cache_delete
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete, cached_json
 from app.core.database import get_db
 from app.models.user import User
-from app.api.deps import get_current_user, get_current_admin_user
-from app.services.container_security_service import scanner, DOCKER_AVAILABLE
+from app.services.container_security_service import DOCKER_AVAILABLE, scanner
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -120,17 +119,19 @@ AUTO_UPDATE_SETTINGS = {
 DEFAULT_UPDATE_CRON = "0 4 * * 0"  # Sundays 04:00 UTC
 
 
-async def _get_setting(db: AsyncSession, key: str) -> Optional[str]:
-    from app.models.setting import Setting
+async def _get_setting(db: AsyncSession, key: str) -> str | None:
     from sqlalchemy import select
+
+    from app.models.setting import Setting
 
     row = (await db.execute(select(Setting).where(Setting.key == key))).scalar_one_or_none()
     return row.value if row else None
 
 
 async def _set_setting(db: AsyncSession, key: str, value: str) -> None:
-    from app.models.setting import Setting
     from sqlalchemy import select
+
+    from app.models.setting import Setting
 
     row = (await db.execute(select(Setting).where(Setting.key == key))).scalar_one_or_none()
     if row:
@@ -140,7 +141,7 @@ async def _set_setting(db: AsyncSession, key: str, value: str) -> None:
     await db.commit()
 
 
-def _truthy(value: Optional[str]) -> bool:
+def _truthy(value: str | None) -> bool:
     return bool(value) and str(value).strip().lower() in ("true", "1", "yes", "on")
 
 
@@ -180,7 +181,7 @@ async def write_auto_update_policy(
 ):
     from croniter import croniter
 
-    if "cron" in payload and payload["cron"]:
+    if payload.get("cron"):
         try:
             croniter(str(payload["cron"]))
         except ValueError, KeyError:
@@ -216,9 +217,9 @@ async def run_auto_update_now(
     outcome, including which packages moved.
     """
     from app.services.container_security_service import (
+        DOCKER_AVAILABLE,
         apply_updates,
         apply_updates_all,
-        DOCKER_AVAILABLE,
         scanner,
     )
 

@@ -2,8 +2,6 @@
 
 import pytest
 
-from app.models.user import User
-
 
 class TestListUsers:
     """Tests for GET /api/users."""

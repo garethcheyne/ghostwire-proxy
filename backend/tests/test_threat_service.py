@@ -1,14 +1,11 @@
 """Tests for threat service — recording events, evaluating thresholds, blocking."""
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timezone
-
+from app.models.waf import ThreatActor
 from app.services.threat_service import (
-    record_threat_event,
     check_ip_blocked,
+    record_threat_event,
 )
-from app.models.waf import ThreatEvent, ThreatActor
 
 
 class TestRecordThreatEvent:

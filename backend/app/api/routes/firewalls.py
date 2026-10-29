@@ -1,22 +1,24 @@
 """Firewall connector API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from datetime import UTC
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
+from app.models.firewall import FirewallBlocklist, FirewallConnector
+from app.models.user import User
 from app.schemas.firewall import (
-    FirewallConnectorCreate,
-    FirewallConnectorUpdate,
-    FirewallConnectorResponse,
     FirewallBlocklistResponse,
+    FirewallConnectorCreate,
+    FirewallConnectorResponse,
+    FirewallConnectorUpdate,
 )
-from app.api.deps import get_current_user, get_current_admin_user
 from app.services.firewall_service import get_connector as get_firewall_connector
 
 router = APIRouter()
@@ -120,9 +122,9 @@ async def update_connector(
         raise HTTPException(status_code=404, detail="Firewall connector not found")
 
     update_data = data.model_dump(exclude_unset=True)
-    if "password" in update_data and update_data["password"]:
+    if update_data.get("password"):
         update_data["password"] = encrypt_data(update_data["password"])
-    if "api_key" in update_data and update_data["api_key"]:
+    if update_data.get("api_key"):
         update_data["api_key"] = encrypt_data(update_data["api_key"])
 
     for field, value in update_data.items():
@@ -311,20 +313,20 @@ async def sync_blocklist(
     pushed = 0
     errors = 0
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     for entry in entries:
-        success, error_msg = await instance.add_to_blocklist(entry.ip_address, f"Ghostwire threat score block")
+        success, error_msg = await instance.add_to_blocklist(entry.ip_address, "Ghostwire threat score block")
         if success:
             entry.status = "pushed"
-            entry.pushed_at = datetime.now(timezone.utc)
+            entry.pushed_at = datetime.now(UTC)
             entry.connector_id = connector_id
             pushed += 1
         else:
             entry.error_message = error_msg or "Push failed (unknown error)"
             errors += 1
 
-    connector.last_sync_at = datetime.now(timezone.utc)
+    connector.last_sync_at = datetime.now(UTC)
     await db.commit()
     await cache_delete_prefix("firewalls:")
 

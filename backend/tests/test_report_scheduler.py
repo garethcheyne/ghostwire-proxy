@@ -5,12 +5,10 @@ these focus on due-ness and on what happens to `last_sent_at` when a send fails.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from app.models.report_schedule import ReportSchedule
-from app.services.report_scheduler import is_due, _recipients
+from app.services.report_scheduler import _recipients, is_due
 
 
 def make(**kwargs) -> ReportSchedule:
@@ -30,7 +28,7 @@ def make(**kwargs) -> ReportSchedule:
 
 
 # A Monday at 08:00 UTC.
-MONDAY_0800 = datetime(2026, 9, 7, 8, 0, tzinfo=timezone.utc)
+MONDAY_0800 = datetime(2026, 9, 7, 8, 0, tzinfo=UTC)
 
 
 class TestRecipients:

@@ -1,8 +1,8 @@
-from pydantic import BaseModel, field_validator, model_validator
-from datetime import datetime
-from typing import Optional
 import ipaddress
 import re
+from datetime import datetime
+
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class ProxyHostRef(BaseModel):
@@ -18,7 +18,7 @@ class ProxyHostRef(BaseModel):
 class AccessListEntryCreate(BaseModel):
     ip_or_cidr: str
     action: str = "deny"
-    description: Optional[str] = None
+    description: str | None = None
 
     @field_validator('ip_or_cidr')
     @classmethod
@@ -47,7 +47,7 @@ class AccessListEntryResponse(BaseModel):
     access_list_id: str
     ip_or_cidr: str
     action: str
-    description: Optional[str]
+    description: str | None
     created_at: datetime
 
     class Config:
@@ -57,13 +57,13 @@ class AccessListEntryResponse(BaseModel):
 BLOCKED_BEHAVIORS = ('403', 'congratulations', 'redirect', '404', '444')
 
 
-def _check_blocked_behavior(v: Optional[str]) -> Optional[str]:
+def _check_blocked_behavior(v: str | None) -> str | None:
     if v is not None and v not in BLOCKED_BEHAVIORS:
         raise ValueError(f"Blocked behaviour must be one of: {', '.join(BLOCKED_BEHAVIORS)}")
     return v
 
 
-def _check_redirect_url(v: Optional[str]) -> Optional[str]:
+def _check_redirect_url(v: str | None) -> str | None:
     """The URL is written into the nginx config, so accept only a plain http(s) URL."""
     if v is None:
         return None
@@ -80,7 +80,7 @@ class AccessListBase(BaseModel):
     mode: str = "blacklist"
     default_action: str = "allow"
     blocked_behavior: str = "403"
-    blocked_redirect_url: Optional[str] = None
+    blocked_redirect_url: str | None = None
 
     @field_validator('blocked_behavior')
     @classmethod
@@ -114,15 +114,15 @@ class AccessListBase(BaseModel):
 
 
 class AccessListCreate(AccessListBase):
-    entries: Optional[list[AccessListEntryCreate]] = None
+    entries: list[AccessListEntryCreate] | None = None
 
 
 class AccessListUpdate(BaseModel):
-    name: Optional[str] = None
-    mode: Optional[str] = None
-    default_action: Optional[str] = None
-    blocked_behavior: Optional[str] = None
-    blocked_redirect_url: Optional[str] = None
+    name: str | None = None
+    mode: str | None = None
+    default_action: str | None = None
+    blocked_behavior: str | None = None
+    blocked_redirect_url: str | None = None
 
     @field_validator('blocked_behavior')
     @classmethod
@@ -135,11 +135,11 @@ class AccessListUpdate(BaseModel):
         return _check_redirect_url(v)
 
     # When given, replaces every entry (in this order)
-    entries: Optional[list[AccessListEntryCreate]] = None
+    entries: list[AccessListEntryCreate] | None = None
 
     @field_validator('mode')
     @classmethod
-    def mode_valid(cls, v: Optional[str]) -> Optional[str]:
+    def mode_valid(cls, v: str | None) -> str | None:
         if v is not None and v not in ('whitelist', 'blacklist'):
             raise ValueError('Mode must be whitelist or blacklist')
         return v
@@ -151,7 +151,7 @@ class AccessListResponse(BaseModel):
     mode: str
     default_action: str
     blocked_behavior: str = "403"
-    blocked_redirect_url: Optional[str] = None
+    blocked_redirect_url: str | None = None
     entries: list[AccessListEntryResponse] = []
     proxy_hosts: list[ProxyHostRef] = []
     created_at: datetime

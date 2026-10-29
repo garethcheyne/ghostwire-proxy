@@ -1,12 +1,9 @@
 """Tests for preset service — list, get, and apply security presets."""
 
-import pytest
-import json
-import uuid
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+from unittest.mock import patch
 
-from app.services.preset_service import list_presets, get_preset, apply_preset
+import pytest
+from app.services.preset_service import apply_preset, get_preset, list_presets
 
 
 class TestListPresets:

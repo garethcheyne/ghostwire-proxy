@@ -1,16 +1,12 @@
 """Tests for session service — cookie creation, session management."""
 
 import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone, timedelta
-
+from app.models.auth_wall import AuthWall
 from app.services.session_service import (
     SessionService,
-    get_cookie_header,
     get_clear_cookie_header,
+    get_cookie_header,
 )
-from app.models.auth_wall_session import AuthWallSession
-from app.models.auth_wall import AuthWall
 
 
 class TestSessionService:

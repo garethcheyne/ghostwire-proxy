@@ -2,15 +2,14 @@
 Local authentication provider with TOTP support.
 """
 
-import secrets
 import json
-from typing import Optional
-from datetime import datetime, timedelta, timezone
+import secrets
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import verify_password, encrypt_data, decrypt_data
+from app.core.security import decrypt_data, encrypt_data, verify_password
 from app.models.auth_wall import AuthWall, LocalAuthUser
 from app.services.auth_providers.base import AuthProviderBase, UserInfo
 
@@ -40,7 +39,7 @@ class LocalAuthProvider(AuthProviderBase):
     def provider_type(self) -> str:
         return "local"
 
-    async def authenticate(self, credentials: dict) -> Optional[UserInfo]:
+    async def authenticate(self, credentials: dict) -> UserInfo | None:
         """
         Authenticate with username and password.
 
@@ -89,7 +88,7 @@ class LocalAuthProvider(AuthProviderBase):
 
     async def _record_failed_attempt(self, user: LocalAuthUser) -> None:
         """Record a failed login attempt."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         new_attempts = user.failed_attempts + 1
 
         update_values = {

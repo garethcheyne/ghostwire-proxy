@@ -1,23 +1,23 @@
 """Analytics aggregation service."""
 
-import logging
 import json
-from datetime import datetime, timezone, timedelta
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, text, cast, String, literal_column
+import logging
 import uuid
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import and_, func, literal_column, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.analytics import AnalyticsDaily, AnalyticsGeo, AnalyticsHourly
 from app.models.traffic_log import TrafficLog
 from app.models.waf import ThreatEvent
-from app.models.analytics import AnalyticsHourly, AnalyticsDaily, AnalyticsGeo
 
 logger = logging.getLogger(__name__)
 
 
 async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
     """Aggregate traffic logs into hourly buckets."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - timedelta(hours=hours_back)
 
     # Get distinct hours with traffic
@@ -106,7 +106,7 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
 
 async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
     """Aggregate traffic logs into daily buckets."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - timedelta(days=days_back)
 
     result = await db.execute(
@@ -214,7 +214,7 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
 
 async def aggregate_geo(db: AsyncSession, days_back: int = 2) -> int:
     """Aggregate geographic traffic stats."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - timedelta(days=days_back)
 
     result = await db.execute(

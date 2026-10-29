@@ -28,8 +28,7 @@ for that cycle, and so are their recoveries when the host recovers.
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy import select
@@ -76,7 +75,7 @@ def _format_duration(seconds: float) -> str:
     return f"{seconds // 86400}d {(seconds % 86400) // 3600}h"
 
 
-async def probe_upstream(host: ProxyHost) -> tuple[bool, Optional[str]]:
+async def probe_upstream(host: ProxyHost) -> tuple[bool, str | None]:
     """Probe a host's upstream. Returns (is_up, error_message)."""
     url = f"{host.forward_scheme}://{host.forward_host}:{host.forward_port}/"
     try:
@@ -107,7 +106,7 @@ async def probe_server(
     check_type: str = "http",
     path: str = "/",
     timeout: float = CHECK_TIMEOUT,
-) -> tuple[bool, Optional[str], Optional[int]]:
+) -> tuple[bool, str | None, int | None]:
     """Probe one upstream server. Returns (is_up, error, latency_ms).
 
     tcp: the port accepts a connection. http: GET `path` answers with any
@@ -143,7 +142,7 @@ async def probe_server(
         if code >= 500:
             return False, f"HTTP {code}", latency
         return True, None, latency
-    except asyncio.TimeoutError, httpx.TimeoutException:
+    except TimeoutError, httpx.TimeoutException:
         return False, f"timed out after {timeout:g}s", None
     except httpx.HTTPError as e:
         return False, str(e)[:300] or type(e).__name__, None
@@ -168,8 +167,8 @@ def _probe_args(host: ProxyHost, server: UpstreamServer) -> dict:
 def _apply_server_result(
     server: UpstreamServer,
     is_up: bool,
-    error: Optional[str],
-    latency: Optional[int],
+    error: str | None,
+    latency: int | None,
     now: datetime,
     debounce: bool = True,
 ) -> None:
@@ -216,13 +215,13 @@ def _update_auto_down(host: ProxyHost, servers: list[UpstreamServer]) -> bool:
 
 async def _check_servers(
     host: ProxyHost, servers: list[UpstreamServer], semaphore: asyncio.Semaphore
-) -> tuple[bool, Optional[str], str]:
+) -> tuple[bool, str | None, str]:
     async def one(server):
         async with semaphore:
             return await probe_server(**_probe_args(host, server))
 
     results = await asyncio.gather(*(one(s) for s in servers))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     answering = 0
     first_error = None
     for server, (ok, error, latency) in zip(servers, results):
@@ -260,7 +259,7 @@ async def check_upstream_servers_now(db: AsyncSession, host: ProxyHost) -> list[
             return await probe_server(**_probe_args(host, server))
 
     results = await asyncio.gather(*(one(s) for s in servers))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     out = []
     for server, (ok, error, latency) in zip(servers, results):
         _apply_server_result(server, ok, error, latency, now, debounce=False)
@@ -278,9 +277,9 @@ async def check_upstream_servers_now(db: AsyncSession, host: ProxyHost) -> list[
     return out
 
 
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
+def _aware(value: datetime | None) -> datetime | None:
     if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
@@ -301,10 +300,10 @@ def backend_summary(servers: list[UpstreamServer]) -> tuple[int, int, str]:
 def plan_server_alerts(
     host: ProxyHost,
     servers: list[UpstreamServer],
-    host_transition: Optional[str],
+    host_transition: str | None,
     now: datetime,
     flap_window: timedelta,
-    previous: Optional[dict[str, str]] = None,
+    previous: dict[str, str] | None = None,
 ) -> list[dict]:
     """Decide which per-server alerts this cycle sends, and what the history shows.
 
@@ -374,7 +373,7 @@ def server_alert_content(
     server: UpstreamServer,
     event: str,
     now: datetime,
-    down_since: Optional[datetime] = None,
+    down_since: datetime | None = None,
 ) -> dict:
     """Title, message and data for one per-server alert."""
     domains = list(host.domain_names or [])
@@ -489,7 +488,7 @@ async def _check_one(host: ProxyHost, semaphore: asyncio.Semaphore) -> dict:
             is_up, error = await probe_upstream(host)
         upstream = f"{host.forward_host}:{host.forward_port}"
     previous = host.health_status or "unknown"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if is_up:
         _consecutive_failures.pop(host.id, None)
@@ -511,7 +510,7 @@ async def _check_one(host: ProxyHost, semaphore: asyncio.Semaphore) -> dict:
     if transition == "recovered" and host.health_checked_at:
         last = host.health_checked_at
         if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
+            last = last.replace(tzinfo=UTC)
         downtime = _format_duration((now - last).total_seconds())
 
     host.health_status = new_status
@@ -537,9 +536,7 @@ async def run_health_checks(db: AsyncSession) -> dict:
     result = await db.execute(
         select(ProxyHost)
         .options(selectinload(ProxyHost.upstream_servers))
-        .where(
-            (ProxyHost.enabled == True) & (ProxyHost.health_check_enabled == True)  # noqa: E712
-        )
+        .where((ProxyHost.enabled == True) & (ProxyHost.health_check_enabled == True))
     )
     hosts = list(result.scalars().all())
     if not hosts:
@@ -561,7 +558,7 @@ async def run_health_checks(db: AsyncSession) -> dict:
     # known, so a whole-host outage is announced once; their state is
     # committed with everything else.
     window = await flap_window(db)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     server_alerts = []
     touched_hosts = set()
     for outcome in outcomes:
@@ -612,8 +609,8 @@ async def run_health_checks(db: AsyncSession) -> dict:
 
     # Notifications go out only after the new state is committed, so a failure
     # to send can never leave the DB claiming something was already announced.
-    from app.services.push_service import push_service
     from app.services.alert_service import dispatch_alert
+    from app.services.push_service import push_service
 
     down = recovered = 0
     for change in changes:

@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, DateTime, Text, Index
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Column, DateTime, Index, String, Text
 
 from app.core.database import Base
 
@@ -23,6 +24,6 @@ class AuditLog(Base):
     user_agent = Column(Text, nullable=True)
 
     # Timestamp
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     __table_args__ = (Index('idx_audit_logs_user_timestamp', 'user_id', 'timestamp'),)

@@ -1,35 +1,36 @@
 """WAF rules and threat management API routes."""
 
-import httpx
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, case, delete as sa_delete
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import and_, case, func, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_admin_user, get_current_user
+from app.core.cache import cache_delete_prefix, cached_json
 from app.core.database import get_db
-from app.core.cache import cached_json, cache_delete_prefix
 from app.core.utils import get_client_ip
-from app.models.user import User
-from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, ThreatThreshold
-from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
+from app.models.firewall import FirewallBlocklist, FirewallConnector
+from app.models.user import User
+from app.models.waf import ThreatActor, ThreatEvent, ThreatThreshold, WafRule, WafRuleSet
 from app.schemas.waf import (
-    WafRuleCreate,
-    WafRuleUpdate,
-    WafRuleResponse,
-    WafRuleSetCreate,
-    WafRuleSetUpdate,
-    WafRuleSetResponse,
-    ThreatEventResponse,
     ThreatActorResponse,
     ThreatActorUpdate,
-    ThreatThresholdCreate,
-    ThreatThresholdUpdate,
-    ThreatThresholdResponse,
+    ThreatEventResponse,
     ThreatStatsResponse,
+    ThreatThresholdCreate,
+    ThreatThresholdResponse,
+    ThreatThresholdUpdate,
+    WafRuleCreate,
+    WafRuleResponse,
+    WafRuleSetCreate,
+    WafRuleSetResponse,
+    WafRuleUpdate,
 )
-from app.api.deps import get_current_user, get_current_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -334,7 +335,7 @@ async def get_threats_by_host(
     db: AsyncSession = Depends(get_db),
 ):
     """Get threat events grouped by host with category breakdown."""
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     # Threats per host
     host_result = await db.execute(
@@ -381,7 +382,7 @@ async def get_threat_stats(
     """Threat stats (cached for 30s)."""
 
     async def _compute() -> ThreatStatsResponse:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
 
@@ -502,7 +503,7 @@ async def update_threat_actor(
             setattr(actor, field, _json.dumps(value) if value is not None else None)
         else:
             setattr(actor, field, value)
-    actor.updated_at = datetime.now(timezone.utc)
+    actor.updated_at = datetime.now(UTC)
 
     db.add(
         AuditLog(
@@ -575,7 +576,7 @@ async def bulk_firewall_ban(
 
     from app.services.firewall_service import get_connector as get_fw_connector
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     results = []
     total_pushed = 0
     total_errors = []
@@ -684,7 +685,7 @@ async def bulk_unblock_actors(
             actor.temp_block_until = None
             actor.perm_blocked_at = None
             actor.firewall_banned_at = None
-            actor.updated_at = datetime.now(timezone.utc)
+            actor.updated_at = datetime.now(UTC)
             unblocked += 1
 
     db.add(
@@ -749,7 +750,7 @@ async def block_threat_actor(
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
     actor = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if not actor:
         actor = ThreatActor(
             ip_address=ip,
@@ -793,7 +794,7 @@ async def firewall_ban_threat_actor(
     if not connectors:
         raise HTTPException(status_code=400, detail="No enabled firewall connectors configured")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
     actor = result.scalar_one_or_none()
 
@@ -892,7 +893,7 @@ async def unblock_threat_actor(
     actor.temp_block_until = None
     actor.perm_blocked_at = None
     actor.firewall_banned_at = None
-    actor.updated_at = datetime.now(timezone.utc)
+    actor.updated_at = datetime.now(UTC)
 
     db.add(
         AuditLog(

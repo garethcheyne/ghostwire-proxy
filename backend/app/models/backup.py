@@ -1,8 +1,9 @@
 """Backup model for storing backup metadata."""
 
-from sqlalchemy import Column, String, DateTime, BigInteger, Boolean, Text
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, String, Text
 
 from app.core.database import Base
 
@@ -32,7 +33,7 @@ class Backup(Base):
     error_message = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Creator info
@@ -60,4 +61,4 @@ class BackupSettings(Base):
     # Encryption (for future use)
     encryption_enabled = Column(Boolean, default=False)
 
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

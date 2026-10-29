@@ -11,7 +11,7 @@ GET  /api/audit-logs      recent changes, newest first. (scope: read)
 import difflib
 import os
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ValidationError
@@ -25,8 +25,8 @@ from app.core.database import get_db
 from app.core.utils import get_client_ip
 from app.models.access_list import AccessList
 from app.models.audit_log import AuditLog
-from app.models.certificate import Certificate
 from app.models.auth_wall import AuthWall
+from app.models.certificate import Certificate
 from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer
 from app.models.user import User
 from app.schemas.proxy_host import ProxyHostCreate, ProxyHostUpdate
@@ -37,7 +37,7 @@ audit_router = APIRouter()
 
 class ConfigPreviewRequest(BaseModel):
     # Omit for a new host.
-    host_id: Optional[str] = None
+    host_id: str | None = None
     # Fields as the proxy-host create (new host) or update (existing host) endpoint takes them.
     changes: dict[str, Any] = {}
 
@@ -195,7 +195,7 @@ async def preview_config(
     if existing is not None:
         path = os.path.join(settings.nginx_config_path, f"{payload.host_id}.conf")
         if os.path.isfile(path):
-            with open(path, "r", encoding="utf-8", newline="") as f:
+            with open(path, encoding="utf-8", newline="") as f:
                 current_text = f.read()
 
     diff = "".join(
@@ -258,7 +258,7 @@ async def reload_config(
 @audit_router.get("/")
 async def list_audit_logs(
     limit: int = Query(50, ge=1, le=200),
-    action: Optional[str] = Query(None, max_length=100),
+    action: str | None = Query(None, max_length=100),
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):

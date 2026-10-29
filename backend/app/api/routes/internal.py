@@ -4,13 +4,12 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.utils import generate_secure_token
@@ -29,7 +28,7 @@ if not _env_token:
 INTERNAL_AUTH_TOKEN = _env_token
 
 
-def internal_token_ok(token: Optional[str]) -> bool:
+def internal_token_ok(token: str | None) -> bool:
     """Constant-time check of an X-Internal-Auth value."""
     if not token or not INTERNAL_AUTH_TOKEN:
         return False
@@ -51,18 +50,17 @@ def verify_internal_auth(request: Request) -> None:
         )
 
 
-from app.models.traffic_log import TrafficLog
-from app.models.proxy_host import ProxyHost
-from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConfig
-from app.models.auth_wall_session import AuthWallSession
-from app.services.session_service import SessionService
-from app.schemas.auth_wall_session import (
-    SessionValidateRequest,
-    SessionValidateResponse,
-    AuthWallConfigResponse,
-    AuthWallConfigProvider,
-)
 from sqlalchemy import select
+
+from app.models.auth_wall import AuthWall
+from app.models.proxy_host import ProxyHost
+from app.models.traffic_log import TrafficLog
+from app.schemas.auth_wall_session import (
+    AuthWallConfigProvider,
+    AuthWallConfigResponse,
+    SessionValidateResponse,
+)
+from app.services.session_service import SessionService
 
 # Every route here is for co-located services (the proxy's Lua, the updater, the
 # admin UI's server side) and requires the internal token.
@@ -76,30 +74,30 @@ class TrafficLogRequest(BaseModel):
     client_ip: str
     method: str
     uri: str
-    query_string: Optional[str] = None
+    query_string: str | None = None
     host: str
-    user_agent: Optional[str] = None
-    referer: Optional[str] = None
+    user_agent: str | None = None
+    referer: str | None = None
     status_code: int
     response_time_ms: float
     bytes_sent: int = 0
     bytes_received: int = 0
-    upstream_addr: Optional[str] = None
+    upstream_addr: str | None = None
     # nginx's per-attempt lists ("502, 200" / "0.004, 0.120") when it retried
-    upstream_status: Optional[str] = None
-    upstream_response_time: Optional[str] = None
-    ssl_protocol: Optional[str] = None
-    ssl_cipher: Optional[str] = None
-    country_code: Optional[str] = None
-    country_name: Optional[str] = None
+    upstream_status: str | None = None
+    upstream_response_time: str | None = None
+    ssl_protocol: str | None = None
+    ssl_cipher: str | None = None
+    country_code: str | None = None
+    country_name: str | None = None
     # Username from the host's auth wall session when the request was
     # authenticated, so traffic can be attributed to a person rather than an
     # address. NULL for anonymous/public requests.
-    auth_user: Optional[str] = None
+    auth_user: str | None = None
     # Set by the Lua logger when the response was a websocket upgrade or an
     # SSE stream, so latency stats can exclude connection lifetime.
-    upgrade: Optional[str] = None
-    content_type: Optional[str] = None
+    upgrade: str | None = None
+    content_type: str | None = None
 
 
 @router.post("/traffic/log")
@@ -156,7 +154,7 @@ async def log_traffic(
     log = TrafficLog(
         id=str(uuid.uuid4()),
         proxy_host_id=proxy_host_id,
-        timestamp=datetime.fromtimestamp(data.timestamp, tz=timezone.utc),
+        timestamp=datetime.fromtimestamp(data.timestamp, tz=UTC),
         client_ip=data.client_ip,
         request_method=data.method,
         request_uri=data.uri,
@@ -195,17 +193,17 @@ class ThreatLogRequest(BaseModel):
     client_ip: str
     category: str
     severity: str
-    pattern: Optional[str] = None
-    matched_payload: Optional[str] = None
-    request_method: Optional[str] = None
-    request_uri: Optional[str] = None
-    request_headers: Optional[dict] = None
-    user_agent: Optional[str] = None
-    host: Optional[str] = None
-    timestamp: Optional[int] = None
-    country_code: Optional[str] = None
-    country_name: Optional[str] = None
-    rule_id: Optional[str] = None
+    pattern: str | None = None
+    matched_payload: str | None = None
+    request_method: str | None = None
+    request_uri: str | None = None
+    request_headers: dict | None = None
+    user_agent: str | None = None
+    host: str | None = None
+    timestamp: int | None = None
+    country_code: str | None = None
+    country_name: str | None = None
+    rule_id: str | None = None
 
 
 @router.post("/threats/log")
@@ -314,6 +312,7 @@ async def get_trusted_ips(
 ):
     """Return trusted IPs list for Lua to cache. These IPs bypass WAF, rate limiting, and traffic logging."""
     import json as _json
+
     from app.models.setting import Setting
 
     result = await db.execute(select(Setting).where(Setting.key == "trusted_ips"))
@@ -333,10 +332,11 @@ async def get_blocked_ips(
     db: AsyncSession = Depends(get_db),
 ):
     """Return all currently blocked IPs for Lua to cache."""
-    from app.models.waf import ThreatActor
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    from app.models.waf import ThreatActor
+
+    now = datetime.now(UTC)
 
     result = await db.execute(
         select(ThreatActor).where(ThreatActor.current_status.in_(["temp_blocked", "perm_blocked", "firewall_banned"]))
@@ -397,15 +397,15 @@ class HoneypotHitRequest(BaseModel):
     trap_id: str
     trap_path: str
     client_ip: str
-    request_method: Optional[str] = None
-    request_uri: Optional[str] = None
-    request_headers: Optional[dict] = None
-    request_body: Optional[str] = None
-    user_agent: Optional[str] = None
-    host: Optional[str] = None
-    referer: Optional[str] = None
-    country_code: Optional[str] = None
-    country_name: Optional[str] = None
+    request_method: str | None = None
+    request_uri: str | None = None
+    request_headers: dict | None = None
+    request_body: str | None = None
+    user_agent: str | None = None
+    host: str | None = None
+    referer: str | None = None
+    country_code: str | None = None
+    country_name: str | None = None
     auto_block: bool = True
     severity: str = "high"
 
@@ -418,7 +418,8 @@ async def log_honeypot_hit(
 ):
     """Receive a honeypot trap hit from nginx Lua and process it."""
     import json as _json
-    from app.models.honeypot import HoneypotTrap, HoneypotHit
+
+    from app.models.honeypot import HoneypotHit, HoneypotTrap
     from app.services.threat_service import record_threat_event
 
     action = "logged"
@@ -469,8 +470,8 @@ async def log_honeypot_hit(
 
     # Auto-enrich the IP in the background
     try:
-        from app.services.enrichment_service import enrich_ip
         from app.models.setting import Setting
+        from app.services.enrichment_service import enrich_ip
 
         abuseipdb_key = None
         setting_result = await db.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
@@ -651,7 +652,7 @@ class PushNotificationRequest(BaseModel):
     title: str
     body: str
     notification_type: str = "general"
-    data: Optional[dict] = None
+    data: dict | None = None
 
 
 @router.post("/push/send")

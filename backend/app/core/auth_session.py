@@ -11,7 +11,7 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import unquote
 
 from sqlalchemy import delete, select, update
@@ -49,7 +49,7 @@ async def find_session(db: AsyncSession, token: str) -> AuthSession | None:
     result = await db.execute(
         select(AuthSession).where(
             AuthSession.token == token,
-            AuthSession.expires_at > datetime.now(timezone.utc),
+            AuthSession.expires_at > datetime.now(UTC),
         )
     )
     return result.scalar_one_or_none()
@@ -62,7 +62,7 @@ async def create_session(
     session = AuthSession(
         user_id=user_id,
         token=secrets.token_urlsafe(24),
-        expires_at=datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
+        expires_at=datetime.now(UTC) + timedelta(days=SESSION_DAYS),
         ip_address=ip_address,
         user_agent=user_agent,
     )
@@ -83,7 +83,7 @@ async def set_password(db: AsyncSession, user, password: str) -> None:
     result = await db.execute(
         update(AuthAccount)
         .where(AuthAccount.user_id == user.id, AuthAccount.provider_id == "credential")
-        .values(password=password_hash, updated_at=datetime.now(timezone.utc))
+        .values(password=password_hash, updated_at=datetime.now(UTC))
     )
     if result.rowcount == 0:
         db.add(

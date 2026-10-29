@@ -2,9 +2,7 @@
 Google OAuth2 authentication provider.
 """
 
-from typing import Optional
 import httpx
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_data
@@ -46,7 +44,7 @@ class GoogleAuthProvider(AuthProviderBase):
     def scopes(self) -> str:
         return self.provider.scopes or self.DEFAULT_SCOPES
 
-    async def authenticate(self, credentials: dict) -> Optional[UserInfo]:
+    async def authenticate(self, credentials: dict) -> UserInfo | None:
         """Not applicable for OAuth - use callback flow."""
         raise NotImplementedError("Use OAuth callback flow for Google auth")
 

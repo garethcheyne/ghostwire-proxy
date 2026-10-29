@@ -1,17 +1,16 @@
 """Scoped API keys: minting, authentication, scope enforcement, revocation and audit."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pyotp
 import pytest
-from sqlalchemy import select
-
 from app.core.rate_limiter import limiter
 from app.core.security import encrypt_data
 from app.models.api_key import ApiKey
 from app.models.audit_log import AuditLog
 from app.services import api_key_service
 from app.services.api_key_service import SESSION_ONLY, required_scope
+from sqlalchemy import select
 
 
 @pytest.fixture(autouse=True)
@@ -215,15 +214,13 @@ class TestKeyAuthentication:
         assert (await client.get("/api/settings/", headers=bearer(key))).status_code == 403
 
     async def test_revoked_key_rejected(self, client, db_session, admin_user):
-        _, key = await make_key(db_session, admin_user, ["read"], revoked_at=datetime.now(timezone.utc))
+        _, key = await make_key(db_session, admin_user, ["read"], revoked_at=datetime.now(UTC))
         r = await client.get("/api/proxy-hosts/", headers=bearer(key))
         assert r.status_code == 401
         assert "revoked" in r.json()["detail"]
 
     async def test_expired_key_rejected(self, client, db_session, admin_user):
-        _, key = await make_key(
-            db_session, admin_user, ["read"], expires_at=datetime.now(timezone.utc) - timedelta(minutes=1)
-        )
+        _, key = await make_key(db_session, admin_user, ["read"], expires_at=datetime.now(UTC) - timedelta(minutes=1))
         r = await client.get("/api/proxy-hosts/", headers=bearer(key))
         assert r.status_code == 401
         assert "expired" in r.json()["detail"]

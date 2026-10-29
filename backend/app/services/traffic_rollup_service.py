@@ -16,8 +16,8 @@ per transaction, oldest first, so it can stop and resume at any point.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +80,7 @@ async def rebuild(db: AsyncSession, start: datetime, end: datetime) -> None:
     await db.execute(text(_INSERT_METHODS), params)
 
 
-async def _state(db: AsyncSession) -> Optional[datetime]:
+async def _state(db: AsyncSession) -> datetime | None:
     return (await db.execute(text("SELECT rolled_until FROM traffic_rollup_state WHERE id = 1"))).scalar()
 
 
@@ -100,17 +100,17 @@ async def _try_lock(db: AsyncSession) -> bool:
 
 
 async def refresh(
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     *,
     max_steps: int = 1000,
     session_factory: Callable[[], AsyncSession] = AsyncSessionLocal,
 ) -> dict:
     """Bring the rollup up to the start of the current hour. Returns what it did."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     current = floor_hour(now)
     steps = 0
-    first_start: Optional[datetime] = None
-    end: Optional[datetime] = None
+    first_start: datetime | None = None
+    end: datetime | None = None
     while steps < max_steps:
         async with session_factory() as db:
             if not await _try_lock(db):
@@ -142,7 +142,7 @@ async def rebuild_hour_of(db: AsyncSession, ts: datetime) -> None:
     """Recompute the hour holding ``ts`` if it's already summarised (after a row
     in it was deleted). Runs in the caller's transaction."""
     state = await _state(db)
-    hour = floor_hour(ts.astimezone(timezone.utc))
+    hour = floor_hour(ts.astimezone(UTC))
     if state is not None and hour < state:
         await rebuild(db, hour, hour + timedelta(hours=1))
 
@@ -151,7 +151,7 @@ async def prune_before(db: AsyncSession, cutoff: datetime) -> None:
     """After retention deleted raw rows older than ``cutoff``: drop the hours
     wholly before it and recompute the one it cuts through, so the summaries
     describe exactly the rows that still exist."""
-    hour = floor_hour(cutoff.astimezone(timezone.utc))
+    hour = floor_hour(cutoff.astimezone(UTC))
     params = {"h": hour}
     await db.execute(text("DELETE FROM traffic_rollup_hourly WHERE bucket < :h"), params)
     await db.execute(text("DELETE FROM traffic_rollup_method_hourly WHERE bucket < :h"), params)

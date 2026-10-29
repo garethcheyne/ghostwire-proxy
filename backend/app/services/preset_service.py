@@ -3,14 +3,13 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
 
-from app.models.waf import WafRule, WafRuleSet, ThreatThreshold
-from app.models.rate_limit import GeoipRule, RateLimitRule
 from app.models.audit_log import AuditLog
+from app.models.rate_limit import GeoipRule, RateLimitRule
+from app.models.waf import ThreatThreshold, WafRule, WafRuleSet
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +18,11 @@ PRESETS_DIR = Path(__file__).parent.parent / "presets"
 
 def _load_preset_file(filepath: Path) -> dict:
     """Load and parse a single preset JSON file."""
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         return json.load(f)
 
 
-def list_presets(category: Optional[str] = None) -> list[dict]:
+def list_presets(category: str | None = None) -> list[dict]:
     """List all available presets, optionally filtered by category."""
     presets = []
     if not PRESETS_DIR.exists():
@@ -57,7 +56,7 @@ def list_presets(category: Optional[str] = None) -> list[dict]:
     return presets
 
 
-def get_preset(preset_id: str) -> Optional[dict]:
+def get_preset(preset_id: str) -> dict | None:
     """Get full preset details including all rules."""
     if not PRESETS_DIR.exists():
         return None
@@ -98,7 +97,7 @@ async def remove_preset(
     preset_id: str,
     db: AsyncSession,
     user_id: str,
-    client_ip: Optional[str] = None,
+    client_ip: str | None = None,
 ) -> dict:
     """Remove all rules created by a preset."""
     preset = get_preset(preset_id)
@@ -136,8 +135,8 @@ async def apply_preset(
     preset_id: str,
     db: AsyncSession,
     user_id: str,
-    proxy_host_id: Optional[str] = None,
-    client_ip: Optional[str] = None,
+    proxy_host_id: str | None = None,
+    client_ip: str | None = None,
 ) -> dict:
     """Apply a preset — creates rules/settings in the database.
 
@@ -197,8 +196,8 @@ async def reapply_preset(
     preset_id: str,
     db: AsyncSession,
     user_id: str,
-    proxy_host_id: Optional[str] = None,
-    client_ip: Optional[str] = None,
+    proxy_host_id: str | None = None,
+    client_ip: str | None = None,
 ) -> dict:
     """Re-apply a preset — removes existing rules then re-creates from the latest JSON."""
     preset = get_preset(preset_id)
@@ -255,7 +254,7 @@ async def _apply_waf_preset(preset: dict, db: AsyncSession, preset_id: str) -> l
 
 
 async def _apply_geoip_preset(
-    preset: dict, db: AsyncSession, proxy_host_id: Optional[str] = None, preset_id: str = ""
+    preset: dict, db: AsyncSession, proxy_host_id: str | None = None, preset_id: str = ""
 ) -> list[dict]:
     """Apply GeoIP rule preset — creates geo blocking rules."""
     import uuid
@@ -279,7 +278,7 @@ async def _apply_geoip_preset(
 
 
 async def _apply_rate_limit_preset(
-    preset: dict, db: AsyncSession, proxy_host_id: Optional[str] = None, preset_id: str = ""
+    preset: dict, db: AsyncSession, proxy_host_id: str | None = None, preset_id: str = ""
 ) -> list[dict]:
     """Apply rate limit preset — creates rate limit rules."""
     import uuid

@@ -1,12 +1,10 @@
 """Tests for analytics service — hourly/daily/geo aggregation."""
 
 import pytest
-from datetime import datetime, timezone, timedelta
-
 from app.services.analytics_service import (
-    aggregate_hourly,
     aggregate_daily,
     aggregate_geo,
+    aggregate_hourly,
 )
 
 

@@ -1,14 +1,14 @@
-from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, field_validator
 
 
 class RateLimitRuleCreate(BaseModel):
-    proxy_host_id: Optional[str] = None
+    proxy_host_id: str | None = None
     name: str
-    requests_per_second: Optional[int] = None
-    requests_per_minute: Optional[int] = None
-    requests_per_hour: Optional[int] = None
+    requests_per_second: int | None = None
+    requests_per_minute: int | None = None
+    requests_per_hour: int | None = None
     burst_size: int = 10
     action: str = "reject"
     enabled: bool = True
@@ -23,22 +23,22 @@ class RateLimitRuleCreate(BaseModel):
 
 
 class RateLimitRuleUpdate(BaseModel):
-    name: Optional[str] = None
-    requests_per_second: Optional[int] = None
-    requests_per_minute: Optional[int] = None
-    requests_per_hour: Optional[int] = None
-    burst_size: Optional[int] = None
-    action: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    requests_per_second: int | None = None
+    requests_per_minute: int | None = None
+    requests_per_hour: int | None = None
+    burst_size: int | None = None
+    action: str | None = None
+    enabled: bool | None = None
 
 
 class RateLimitRuleResponse(BaseModel):
     id: str
-    proxy_host_id: Optional[str]
+    proxy_host_id: str | None
     name: str
-    requests_per_second: Optional[int]
-    requests_per_minute: Optional[int]
-    requests_per_hour: Optional[int]
+    requests_per_second: int | None
+    requests_per_minute: int | None
+    requests_per_hour: int | None
     burst_size: int
     action: str
     enabled: bool
@@ -50,15 +50,15 @@ class RateLimitRuleResponse(BaseModel):
 
 
 class GeoipSettingsUpdate(BaseModel):
-    provider: Optional[str] = None
-    database_path: Optional[str] = None
-    license_key: Optional[str] = None
-    auto_update: Optional[bool] = None
-    enabled: Optional[bool] = None
+    provider: str | None = None
+    database_path: str | None = None
+    license_key: str | None = None
+    auto_update: bool | None = None
+    enabled: bool | None = None
 
     @field_validator('provider')
     @classmethod
-    def validate_provider(cls, v: Optional[str]) -> Optional[str]:
+    def validate_provider(cls, v: str | None) -> str | None:
         if v is not None:
             valid = ('maxmind', 'ip2location')
             if v not in valid:
@@ -69,9 +69,9 @@ class GeoipSettingsUpdate(BaseModel):
 class GeoipSettingsResponse(BaseModel):
     id: str
     provider: str
-    database_path: Optional[str]
+    database_path: str | None
     auto_update: bool
-    last_updated_at: Optional[datetime]
+    last_updated_at: datetime | None
     enabled: bool
 
     class Config:
@@ -79,7 +79,7 @@ class GeoipSettingsResponse(BaseModel):
 
 
 class GeoipRuleCreate(BaseModel):
-    proxy_host_id: Optional[str] = None
+    proxy_host_id: str | None = None
     name: str
     mode: str = "blocklist"
     countries: str  # JSON array
@@ -104,16 +104,16 @@ class GeoipRuleCreate(BaseModel):
 
 
 class GeoipRuleUpdate(BaseModel):
-    name: Optional[str] = None
-    mode: Optional[str] = None
-    countries: Optional[str] = None
-    action: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    mode: str | None = None
+    countries: str | None = None
+    action: str | None = None
+    enabled: bool | None = None
 
 
 class GeoipRuleResponse(BaseModel):
     id: str
-    proxy_host_id: Optional[str]
+    proxy_host_id: str | None
     name: str
     mode: str
     countries: str
@@ -128,6 +128,6 @@ class GeoipRuleResponse(BaseModel):
 
 class GeoipLookupResponse(BaseModel):
     ip: str
-    country_code: Optional[str]
-    country_name: Optional[str]
-    continent_code: Optional[str]
+    country_code: str | None
+    country_name: str | None
+    continent_code: str | None

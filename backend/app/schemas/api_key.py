@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -8,7 +7,7 @@ class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     scopes: list[str]
     # None = never expires
-    expires_in_days: Optional[int] = Field(default=90, ge=1, le=3650)
+    expires_in_days: int | None = Field(default=90, ge=1, le=3650)
     # A current code from the admin's authenticator app (or a backup code): creating a key is
     # a step-up action, like disabling two-factor.
     code: str = Field(min_length=6, max_length=16)
@@ -29,12 +28,12 @@ class ApiKeyResponse(BaseModel):
     display: str  # "gwp_<prefix>_…"
     scopes: list[str]
     created_by: str
-    created_by_email: Optional[str] = None
+    created_by_email: str | None = None
     created_at: datetime
-    last_used_at: Optional[datetime] = None
-    last_used_ip: Optional[str] = None
-    expires_at: Optional[datetime] = None
-    revoked_at: Optional[datetime] = None
+    last_used_at: datetime | None = None
+    last_used_ip: str | None = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
     status: str  # active, expired, revoked
 
 

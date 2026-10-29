@@ -1,9 +1,8 @@
 """Tests for cloudflare service."""
 
-import pytest
-import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from app.services.cloudflare_service import CloudflareClient
 
 

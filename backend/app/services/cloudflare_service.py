@@ -3,14 +3,14 @@ Cloudflare API integration service.
 Manages DNS records for domains configured in proxy hosts.
 """
 
+from datetime import UTC
+
 import httpx
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decrypt_data
 from app.models.dns_provider import DnsProvider, DnsZone
-
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
 
@@ -23,7 +23,7 @@ class CloudflareClient:
             "Content-Type": "application/json",
         }
 
-    async def verify_token(self) -> tuple[bool, Optional[str]]:
+    async def verify_token(self) -> tuple[bool, str | None]:
         """Verify that the API token is valid"""
         async with httpx.AsyncClient() as client:
             try:
@@ -168,7 +168,7 @@ class CloudflareClient:
                 return False, str(e)
 
 
-async def get_cloudflare_client(db: AsyncSession, provider_id: str) -> Optional[CloudflareClient]:
+async def get_cloudflare_client(db: AsyncSession, provider_id: str) -> CloudflareClient | None:
     """Get a Cloudflare client for a provider"""
     result = await db.execute(
         select(DnsProvider).where(
@@ -223,9 +223,9 @@ async def sync_zones(db: AsyncSession, provider_id: str) -> tuple[bool, str]:
     result = await db.execute(select(DnsProvider).where(DnsProvider.id == provider_id))
     provider = result.scalar_one_or_none()
     if provider:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        provider.last_sync_at = datetime.now(timezone.utc)
+        provider.last_sync_at = datetime.now(UTC)
 
     await db.commit()
     return True, f"Synced {len(zones_or_error)} zones"

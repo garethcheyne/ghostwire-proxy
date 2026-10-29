@@ -1,8 +1,7 @@
 import re
+from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator
-from datetime import datetime
-from typing import Optional
 
 from app.schemas.access_list import ProxyHostRef
 from app.services.auth_wall_access import clean_list, normalize_domain, normalize_email, open_to_any_account
@@ -12,29 +11,29 @@ from app.services.auth_wall_access import clean_list, normalize_domain, normaliz
 class LocalAuthUserCreate(BaseModel):
     username: str
     password: str
-    display_name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    display_name: str | None = None
+    email: EmailStr | None = None
 
 
 class LocalAuthUserUpdate(BaseModel):
-    username: Optional[str] = None
-    password: Optional[str] = None
-    display_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    is_active: Optional[bool] = None
+    username: str | None = None
+    password: str | None = None
+    display_name: str | None = None
+    email: EmailStr | None = None
+    is_active: bool | None = None
 
 
 class LocalAuthUserResponse(BaseModel):
     id: str
     auth_wall_id: str
     username: str
-    display_name: Optional[str]
-    email: Optional[str]
+    display_name: str | None
+    email: str | None
     is_active: bool
     totp_enabled: bool = False
     totp_verified: bool = False
     failed_attempts: int = 0
-    locked_until: Optional[datetime] = None
+    locked_until: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -70,9 +69,9 @@ class AuthProviderCreate(BaseModel):
     provider_type: str  # google, github, azure_ad, oidc
     client_id: str
     client_secret: str
-    authorization_url: Optional[str] = None
-    token_url: Optional[str] = None
-    userinfo_url: Optional[str] = None
+    authorization_url: str | None = None
+    token_url: str | None = None
+    userinfo_url: str | None = None
     scopes: str = "openid email profile"
     enabled: bool = True
 
@@ -86,14 +85,14 @@ class AuthProviderCreate(BaseModel):
 
 
 class AuthProviderUpdate(BaseModel):
-    name: Optional[str] = None
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    authorization_url: Optional[str] = None
-    token_url: Optional[str] = None
-    userinfo_url: Optional[str] = None
-    scopes: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    authorization_url: str | None = None
+    token_url: str | None = None
+    userinfo_url: str | None = None
+    scopes: str | None = None
+    enabled: bool | None = None
 
 
 class AuthProviderResponse(BaseModel):
@@ -101,10 +100,10 @@ class AuthProviderResponse(BaseModel):
     auth_wall_id: str
     name: str
     provider_type: str
-    client_id: Optional[str]
-    authorization_url: Optional[str]
-    token_url: Optional[str]
-    userinfo_url: Optional[str]
+    client_id: str | None
+    authorization_url: str | None
+    token_url: str | None
+    userinfo_url: str | None
     scopes: str
     enabled: bool
     created_at: datetime
@@ -121,30 +120,30 @@ class LdapConfigCreate(BaseModel):
     port: int = 389
     use_ssl: bool = False
     use_starttls: bool = False
-    bind_dn: Optional[str] = None
-    bind_password: Optional[str] = None
+    bind_dn: str | None = None
+    bind_password: str | None = None
     base_dn: str
     user_filter: str = "(uid=%s)"
     username_attribute: str = "uid"
-    email_attribute: Optional[str] = "mail"
-    display_name_attribute: Optional[str] = "cn"
+    email_attribute: str | None = "mail"
+    display_name_attribute: str | None = "cn"
     enabled: bool = True
 
 
 class LdapConfigUpdate(BaseModel):
-    name: Optional[str] = None
-    host: Optional[str] = None
-    port: Optional[int] = None
-    use_ssl: Optional[bool] = None
-    use_starttls: Optional[bool] = None
-    bind_dn: Optional[str] = None
-    bind_password: Optional[str] = None
-    base_dn: Optional[str] = None
-    user_filter: Optional[str] = None
-    username_attribute: Optional[str] = None
-    email_attribute: Optional[str] = None
-    display_name_attribute: Optional[str] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    host: str | None = None
+    port: int | None = None
+    use_ssl: bool | None = None
+    use_starttls: bool | None = None
+    bind_dn: str | None = None
+    bind_password: str | None = None
+    base_dn: str | None = None
+    user_filter: str | None = None
+    username_attribute: str | None = None
+    email_attribute: str | None = None
+    display_name_attribute: str | None = None
+    enabled: bool | None = None
 
 
 class LdapConfigResponse(BaseModel):
@@ -155,12 +154,12 @@ class LdapConfigResponse(BaseModel):
     port: int
     use_ssl: bool
     use_starttls: bool
-    bind_dn: Optional[str]
+    bind_dn: str | None
     base_dn: str
     user_filter: str
     username_attribute: str
-    email_attribute: Optional[str]
-    display_name_attribute: Optional[str]
+    email_attribute: str | None
+    display_name_attribute: str | None
     enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -176,7 +175,7 @@ _WALL_NAME_FORBIDDEN = re.compile(r'["\\;{}$`\r\n]')
 _THEME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
 
 
-def _check_wall_name(v: Optional[str]) -> Optional[str]:
+def _check_wall_name(v: str | None) -> str | None:
     if v is None:
         return v
     v = v.strip()
@@ -187,7 +186,7 @@ def _check_wall_name(v: Optional[str]) -> Optional[str]:
     return v
 
 
-def _check_theme(v: Optional[str]) -> Optional[str]:
+def _check_theme(v: str | None) -> str | None:
     if v is None:
         return v
     if not _THEME_RE.match(v):
@@ -198,8 +197,8 @@ def _check_theme(v: Optional[str]) -> Optional[str]:
 class AuthWallAllowList(BaseModel):
     """Who may pass through an OAuth provider. Both empty = any account."""
 
-    allowed_emails: Optional[list[str]] = None
-    allowed_email_domains: Optional[list[str]] = None
+    allowed_emails: list[str] | None = None
+    allowed_email_domains: list[str] | None = None
 
     @field_validator('allowed_emails')
     @classmethod
@@ -217,7 +216,7 @@ class AuthWallBase(AuthWallAllowList):
     auth_type: str = "basic"
     session_timeout: int = 3600
     theme: str = "default"  # Auth portal theme directory
-    default_provider_id: Optional[str] = None
+    default_provider_id: str | None = None
 
     @field_validator('auth_type')
     @classmethod
@@ -239,17 +238,17 @@ class AuthWallBase(AuthWallAllowList):
 
 
 class AuthWallCreate(AuthWallBase):
-    local_users: Optional[list[LocalAuthUserCreate]] = None
-    auth_providers: Optional[list[AuthProviderCreate]] = None
-    ldap_configs: Optional[list[LdapConfigCreate]] = None
+    local_users: list[LocalAuthUserCreate] | None = None
+    auth_providers: list[AuthProviderCreate] | None = None
+    ldap_configs: list[LdapConfigCreate] | None = None
 
 
 class AuthWallUpdate(AuthWallAllowList):
-    name: Optional[str] = None
-    auth_type: Optional[str] = None
-    session_timeout: Optional[int] = None
-    theme: Optional[str] = None
-    default_provider_id: Optional[str] = None
+    name: str | None = None
+    auth_type: str | None = None
+    session_timeout: int | None = None
+    theme: str | None = None
+    default_provider_id: str | None = None
 
     @field_validator('auth_type')
     @classmethod
@@ -275,12 +274,12 @@ class AuthWallResponse(BaseModel):
     auth_type: str
     session_timeout: int
     theme: str = "default"
-    default_provider_id: Optional[str]
+    default_provider_id: str | None
     allowed_emails: list[str] = []
     allowed_email_domains: list[str] = []
     local_users: list[LocalAuthUserResponse] = []
     providers: list[AuthProviderResponse] = Field(default=[], validation_alias="auth_providers")
-    ldap_config: Optional[LdapConfigResponse] = Field(default=None, validation_alias="ldap_configs")
+    ldap_config: LdapConfigResponse | None = Field(default=None, validation_alias="ldap_configs")
     proxy_hosts: list[ProxyHostRef] = []
     created_at: datetime
     updated_at: datetime
