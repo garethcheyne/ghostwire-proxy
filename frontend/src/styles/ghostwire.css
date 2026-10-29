@@ -60,15 +60,17 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* Fixed-meaning colours (the same in both themes). */
+  /* Fixed-meaning colours. Severity is the same in both themes (its text uses the severity-*
+     utilities below, which pair shades per theme); status colours are also used as text, so they
+     take a darker shade on white (the light-mode rule in design/README.md). */
   --color-severity-critical: #ef4444;
   --color-severity-high: #f97316;
   --color-severity-medium: #eab308;
   --color-severity-low: #22c55e;
-  --color-status-online: #22c55e;
-  --color-status-offline: #ef4444;
-  --color-status-warning: #f59e0b;
-  --color-status-pending: #6b7280;
+  --color-status-online: var(--status-online);
+  --color-status-offline: var(--status-offline);
+  --color-status-warning: var(--status-warning);
+  --color-status-pending: var(--status-pending);
 }
 
 :root {
@@ -97,6 +99,10 @@
   /* Brand: cyan and purple. Logo text, product name, active navigation, brand icons.
      Deep shades in light mode (cyan-700, purple-700): at least 4.5:1 on white. */
   --brand: hsl(192 91% 31%);
+  --status-online: #15803d; /* green-700 */
+  --status-offline: #dc2626; /* red-600 */
+  --status-warning: #b45309; /* amber-700 */
+  --status-pending: #6b7280; /* gray-500 */
   --brand-2: hsl(272 72% 47%);
 
   --chart-1: hsl(199 89% 48%);
@@ -142,6 +148,10 @@
 
   /* Bright shades (cyan-400, purple-400) on dark surfaces. */
   --brand: hsl(187 85% 53%);
+  --status-online: #22c55e; /* green-500 */
+  --status-offline: #ef4444; /* red-500 */
+  --status-warning: #f59e0b; /* amber-500 */
+  --status-pending: #9ca3af; /* gray-400 */
   --brand-2: hsl(270 95% 75%);
 
   --chart-1: hsl(199 89% 48%);
