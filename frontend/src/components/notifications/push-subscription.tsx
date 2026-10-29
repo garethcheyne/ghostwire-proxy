@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Bell,
   BellOff,
   BellRing,
   Loader2,
-  CheckCircle,
   XCircle,
   AlertTriangle,
   Smartphone,
@@ -23,6 +22,8 @@ import {
   subscriptionToJson,
 } from '@/lib/push-notifications'
 import { Button } from '@/components/ui/button'
+import { usePageData } from '@/lib/use-page-data'
+import { toastError, toastSuccess } from '@/lib/toast'
 
 interface PushSubscriptionManagerProps {
   className?: string
@@ -39,8 +40,8 @@ export function PushSubscriptionManager({
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
+  // Set-up problems (push not configured on the server) stay on screen; action results are toasts.
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
   const [vapidKey, setVapidKey] = useState<string | null>(null)
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
 
@@ -91,17 +92,15 @@ export function PushSubscriptionManager({
     }
   }, [])
 
-  useEffect(() => {
-    initialize()
-  }, [initialize])
+  usePageData(() => {
+    void initialize()
+  })
 
   // Subscribe to push
   const handleSubscribe = async () => {
     if (!registration || !vapidKey) return
 
     setIsProcessing(true)
-    setError(null)
-    setSuccess(null)
 
     try {
       // Request permission if needed
@@ -110,7 +109,7 @@ export function PushSubscriptionManager({
         setPermission(result)
 
         if (result !== 'granted') {
-          setError('Notification permission denied')
+          toastError('Notification permission denied')
           setIsProcessing(false)
           return
         }
@@ -130,12 +129,11 @@ export function PushSubscriptionManager({
         })
 
         setIsSubscribed(true)
-        setSuccess('Push notifications enabled')
-        setTimeout(() => setSuccess(null), 3000)
+        toastSuccess('Push notifications enabled')
       }
     } catch (err: any) {
       console.error('Subscribe error:', err)
-      setError(err.response?.data?.detail || 'Failed to enable notifications')
+      toastError(err.response?.data?.detail || 'Failed to enable notifications')
     } finally {
       setIsProcessing(false)
     }
@@ -146,7 +144,6 @@ export function PushSubscriptionManager({
     if (!registration) return
 
     setIsProcessing(true)
-    setError(null)
 
     try {
       const subscription = await registration.pushManager.getSubscription()
@@ -162,11 +159,10 @@ export function PushSubscriptionManager({
       }
 
       setIsSubscribed(false)
-      setSuccess('Push notifications disabled')
-      setTimeout(() => setSuccess(null), 3000)
+      toastSuccess('Push notifications disabled')
     } catch (err: any) {
       console.error('Unsubscribe error:', err)
-      setError('Failed to disable notifications')
+      toastError('Failed to disable notifications')
     } finally {
       setIsProcessing(false)
     }
@@ -175,14 +171,12 @@ export function PushSubscriptionManager({
   // Send test notification
   const handleTestNotification = async () => {
     setIsProcessing(true)
-    setError(null)
 
     try {
       await api.post('/api/alerts/push/test')
-      setSuccess('Test notification sent')
-      setTimeout(() => setSuccess(null), 3000)
+      toastSuccess('Test notification sent')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to send test notification')
+      toastError(err.response?.data?.detail || 'Failed to send test notification')
     } finally {
       setIsProcessing(false)
     }
@@ -262,14 +256,11 @@ export function PushSubscriptionManager({
             </div>
           </div>
 
-          <button
+          <Button
+            variant={isSubscribed ? 'outline' : 'default'}
+            size="lg"
             onClick={isSubscribed ? handleUnsubscribe : handleSubscribe}
             disabled={isProcessing || !vapidKey}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-              isSubscribed
-                ? 'border border-input hover:bg-muted'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            }`}
           >
             {isProcessing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -284,7 +275,7 @@ export function PushSubscriptionManager({
                 <span className="hidden sm:inline">Enable</span>
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -293,13 +284,6 @@ export function PushSubscriptionManager({
         <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-600 dark:text-green-400">
-          <CheckCircle className="h-4 w-4 flex-shrink-0" />
-          {success}
         </div>
       )}
 

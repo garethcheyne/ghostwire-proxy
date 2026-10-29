@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LoadError } from '@/components/load-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,13 +41,16 @@ export function ApiKeysSettings() {
   const confirm = useConfirm()
   const [keys, setKeys] = useState<ApiKeyRow[] | null>(null)
   const [newKey, setNewKey] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const { data } = await api.get('/api/api-keys/')
       setKeys(data)
+      setLoadError(false)
     } catch {
-      setKeys([])
+      // Not "no keys": say the list could not be loaded.
+      setLoadError(true)
     }
   }, [])
 
@@ -89,6 +93,9 @@ export function ApiKeysSettings() {
 
       {newKey && <NewKeyAlert value={newKey} />}
 
+      {loadError && keys === null ? (
+        <LoadError what="API keys" onRetry={load} />
+      ) : (
       <div className="rounded-xl border border-border bg-card">
         {keys === null ? (
           <div className="flex items-center justify-center p-10">
@@ -175,6 +182,7 @@ export function ApiKeysSettings() {
           </Table>
         )}
       </div>
+      )}
     </div>
   )
 }

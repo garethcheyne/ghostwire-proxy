@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, Loader2, Send, AlertCircle, Check, Eye, EyeOff } from 'lucide-react'
+import { Mail, Loader2, Send, Eye, EyeOff } from 'lucide-react'
 import api from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { LoadError } from '@/components/load-state'
+import { toastError, toastSuccess } from '@/lib/toast'
 
 interface SmtpConfig {
   host: string
@@ -34,20 +37,23 @@ export function SmtpCard() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testTo, setTestTo] = useState('')
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [loadError, setLoadError] = useState(false)
 
-  useEffect(() => {
+  const load = () =>
     api
       .get('/api/reports/smtp')
-      .then(({ data }) => setConfig({ ...EMPTY, ...data }))
-      .catch(() => setError('Could not load mail settings'))
+      .then(({ data }) => {
+        setConfig({ ...EMPTY, ...data })
+        setLoadError(false)
+      })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
+
+  useEffect(() => {
+    void load()
   }, [])
 
   const save = async () => {
-    setError('')
-    setNotice('')
     setSaving(true)
     try {
       const payload: Record<string, unknown> = { ...config }
@@ -56,23 +62,21 @@ export function SmtpCard() {
       const { data } = await api.put('/api/reports/smtp', payload)
       setConfig({ ...EMPTY, ...data })
       setPassword('')
-      setNotice('Mail settings saved.')
+      toastSuccess('Mail settings saved.')
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not save mail settings')
+      toastError(e.response?.data?.detail || 'Could not save mail settings')
     } finally {
       setSaving(false)
     }
   }
 
   const sendTest = async () => {
-    setError('')
-    setNotice('')
     setTesting(true)
     try {
       await api.post('/api/reports/smtp/test', { to: testTo })
-      setNotice(`Test message sent to ${testTo}.`)
+      toastSuccess(`Test message sent to ${testTo}.`)
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not send the test message')
+      toastError(e.response?.data?.detail || 'Could not send the test message')
     } finally {
       setTesting(false)
     }
@@ -102,19 +106,10 @@ export function SmtpCard() {
         configured here, both are silently undeliverable.
       </p>
 
-      {error && (
-        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      {notice && (
-        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm">
-          <Check className="h-4 w-4 flex-shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-
+      {loadError ? (
+        <LoadError what="mail settings" onRetry={load} className="border-0 bg-transparent p-0" />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <label className="block text-sm font-medium">SMTP server</label>
@@ -177,13 +172,16 @@ export function SmtpCard() {
               placeholder={config.has_password ? '••••••••' : ''}
               autoComplete="new-password"
             />
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -208,14 +206,10 @@ export function SmtpCard() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 mt-5 pt-4 border-t border-border">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
-        >
+        <Button size="lg" onClick={save} disabled={saving}>
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           Save
-        </button>
+        </Button>
 
         <div className="flex-1 min-w-[220px] space-y-2">
           <label className="block text-sm font-medium">Send a test message to</label>
@@ -227,18 +221,21 @@ export function SmtpCard() {
               onChange={(e) => setTestTo(e.target.value)}
               placeholder="you@example.com"
             />
-            <button
+            <Button
+              variant="outline"
               onClick={sendTest}
               disabled={testing || !testTo || !config.configured}
               title={!config.configured ? 'Save an SMTP server first' : undefined}
-              className="h-10 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5 flex-shrink-0"
+              className="h-10 flex-shrink-0"
             >
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               Test
-            </button>
+            </Button>
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

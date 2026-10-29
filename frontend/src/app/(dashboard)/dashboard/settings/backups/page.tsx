@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Modal, ModalBody } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -22,7 +24,6 @@ import {
   Activity,
   CheckCircle,
   XCircle,
-  AlertTriangle,
   Loader2,
 } from 'lucide-react'
 import api from '@/lib/api'
@@ -62,8 +63,7 @@ export default function BackupsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   // Create backup options
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -97,9 +97,10 @@ export default function BackupsPage() {
     try {
       const response = await api.get('/api/backups')
       setBackups(response.data.backups)
+      setLoadError(false)
     } catch (err: any) {
       console.error('Failed to fetch backups:', err)
-      setError('Failed to load backups')
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -130,7 +131,6 @@ export default function BackupsPage() {
 
   const handleCreateBackup = async () => {
     setIsCreating(true)
-    setError(null)
 
     try {
       const response = await api.post('/api/backups', {
@@ -141,13 +141,11 @@ export default function BackupsPage() {
         include_traffic_logs: includeTrafficLogs,
       })
 
-      setSuccess('Backup created successfully')
       toastSuccess('Backup created')
       setShowCreateDialog(false)
       fetchBackups()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create backup')
-      toastError('Failed to create backup')
+      toastError(err.response?.data?.detail || 'Failed to create backup')
     } finally {
       setIsCreating(false)
     }
@@ -167,7 +165,7 @@ export default function BackupsPage() {
       link.click()
       link.remove()
     } catch (err: any) {
-      setError('Failed to download backup')
+      toastError('Failed to download backup')
     }
   }
 
@@ -176,12 +174,10 @@ export default function BackupsPage() {
 
     try {
       await api.delete(`/api/backups/${backup.id}`)
-      setSuccess('Backup deleted')
       toastSuccess('Backup deleted')
       fetchBackups()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete backup')
-      toastError('Failed to delete backup')
+      toastError(err.response?.data?.detail || 'Failed to delete backup')
     }
   }
 
@@ -191,7 +187,6 @@ export default function BackupsPage() {
     if (!(await confirm({ description: 'WARNING: This will overwrite existing data. Are you sure you want to restore from this backup?', variant: 'destructive' }))) return
 
     setIsRestoring(true)
-    setError(null)
 
     try {
       const response = await api.post('/api/backups/restore', {
@@ -199,7 +194,6 @@ export default function BackupsPage() {
         ...restoreOptions,
       })
 
-      setSuccess(`Restore completed: ${response.data.message}`)
       toastSuccess('Restore completed — logging out...')
       setShowRestoreDialog(false)
 
@@ -208,8 +202,7 @@ export default function BackupsPage() {
         void signOutAndRedirect()
       }, 2000)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to restore backup')
-      toastError('Failed to restore backup')
+      toastError(err.response?.data?.detail || 'Failed to restore backup')
     } finally {
       setIsRestoring(false)
     }
@@ -219,17 +212,14 @@ export default function BackupsPage() {
     if (!editedSettings) return
 
     setIsSavingSettings(true)
-    setError(null)
 
     try {
       await api.put('/api/backups/settings/current', editedSettings)
       setSettings(editedSettings)
-      setSuccess('Settings saved')
       toastSuccess('Backup settings saved')
       setShowSettingsDialog(false)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save settings')
-      toastError('Failed to save settings')
+      toastError(err.response?.data?.detail || 'Failed to save settings')
     } finally {
       setIsSavingSettings(false)
     }
@@ -240,12 +230,11 @@ export default function BackupsPage() {
     if (!file) return
 
     if (!file.name.endsWith('.tar.gz') && !file.name.endsWith('.tgz')) {
-      setError('Please select a .tar.gz backup file')
+      toastError('Please select a .tar.gz backup file')
       return
     }
 
     setIsUploading(true)
-    setError(null)
 
     try {
       const formData = new FormData()
@@ -255,12 +244,10 @@ export default function BackupsPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      setSuccess('Backup uploaded successfully')
       toastSuccess('Backup uploaded')
       fetchBackups()
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to upload backup')
-      toastError('Failed to upload backup')
+      toastError(err.response?.data?.detail || 'Failed to upload backup')
     } finally {
       setIsUploading(false)
       // Reset file input so same file can be selected again
@@ -281,14 +268,6 @@ export default function BackupsPage() {
       default:
         return <Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
     }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading backups...</div>
-      </div>
-    )
   }
 
   return (
@@ -324,6 +303,7 @@ export default function BackupsPage() {
                   setEditedSettings(settings)
                   setShowSettingsDialog(true)
                 }}
+                disabled={!settings}
               >
                 <Settings className="h-4 w-4" />
                 Settings
@@ -331,6 +311,7 @@ export default function BackupsPage() {
               <Button
                 size="lg"
                 onClick={() => setShowCreateDialog(true)}
+                disabled={isLoading || loadError}
               >
                 <Plus className="h-4 w-4" />
                 Create Backup
@@ -340,26 +321,9 @@ export default function BackupsPage() {
         }
       />
 
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 text-destructive flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5" />
-          {error}
-          <button onClick={() => setError(null)} className="ml-auto text-xs underline">
-            Dismiss
-          </button>
-        </div>
-      )}
+      {isLoading && <ContentSkeleton rows={4} />}
 
-      {success && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-600 dark:text-green-400 flex items-center gap-2">
-          <CheckCircle className="h-5 w-5" />
-          {success}
-          <button onClick={() => setSuccess(null)} className="ml-auto text-xs underline">
-            Dismiss
-          </button>
-        </div>
-      )}
+      {!isLoading && loadError && <LoadError what="backups" onRetry={() => { fetchBackups(); fetchSettings() }} />}
 
       {/* Settings Summary */}
       {settings && (
@@ -387,7 +351,7 @@ export default function BackupsPage() {
       )}
 
       {/* Backups List */}
-      {backups.length === 0 ? (
+      {isLoading || loadError ? null : backups.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
           <Archive className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
           <p className="text-muted-foreground">No backups yet</p>
@@ -480,32 +444,39 @@ export default function BackupsPage() {
                     <div className="flex items-center justify-end gap-1">
                       {backup.status === 'completed' && (
                         <>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => handleDownload(backup)}
-                            className="p-2 rounded hover:bg-muted"
                             title="Download"
+                            aria-label="Download"
                           >
                             <Download className="h-4 w-4" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => {
                               setRestoreBackupId(backup.id)
                               setShowRestoreDialog(true)
                             }}
-                            className="p-2 rounded hover:bg-muted text-blue-600 dark:text-blue-400"
                             title="Restore"
+                            aria-label="Restore"
                           >
                             <RotateCcw className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </>
                       )}
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleDelete(backup)}
-                        className="p-2 rounded hover:bg-muted text-red-600 dark:text-red-400"
+                        className="text-red-600 hover:text-red-600 dark:text-red-400"
                         title="Delete"
+                        aria-label="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -537,11 +508,9 @@ export default function BackupsPage() {
                   <Database className="h-4 w-4 text-muted-foreground" />
                   <span>Database</span>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeDatabase}
-                  onChange={(e) => setIncludeDatabase(e.target.checked)}
-                  className="h-4 w-4"
+                  onCheckedChange={(checked) => setIncludeDatabase(checked === true)}
                 />
               </label>
 
@@ -550,11 +519,9 @@ export default function BackupsPage() {
                   <Shield className="h-4 w-4 text-muted-foreground" />
                   <span>SSL Certificates</span>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeCertificates}
-                  onChange={(e) => setIncludeCertificates(e.target.checked)}
-                  className="h-4 w-4"
+                  onCheckedChange={(checked) => setIncludeCertificates(checked === true)}
                 />
               </label>
 
@@ -563,11 +530,9 @@ export default function BackupsPage() {
                   <Shield className="h-4 w-4 text-muted-foreground" />
                   <span>Let's Encrypt Data</span>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeLetsencrypt}
-                  onChange={(e) => setIncludeLetsencrypt(e.target.checked)}
-                  className="h-4 w-4"
+                  onCheckedChange={(checked) => setIncludeLetsencrypt(checked === true)}
                 />
               </label>
 
@@ -576,11 +541,9 @@ export default function BackupsPage() {
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <span>Nginx Configs</span>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeConfigs}
-                  onChange={(e) => setIncludeConfigs(e.target.checked)}
-                  className="h-4 w-4"
+                  onCheckedChange={(checked) => setIncludeConfigs(checked === true)}
                 />
               </label>
 
@@ -592,11 +555,9 @@ export default function BackupsPage() {
                     <p className="text-xs text-muted-foreground">Warning: Can be large!</p>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeTrafficLogs}
-                  onChange={(e) => setIncludeTrafficLogs(e.target.checked)}
-                  className="h-4 w-4"
+                  onCheckedChange={(checked) => setIncludeTrafficLogs(checked === true)}
                 />
               </label>
 
@@ -639,53 +600,45 @@ export default function BackupsPage() {
             <div className="p-6 space-y-4">
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Restore Database</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={restoreOptions.restore_database}
-                  onChange={(e) => setRestoreOptions({
+                  onCheckedChange={(checked) => setRestoreOptions({
                     ...restoreOptions,
-                    restore_database: e.target.checked,
+                    restore_database: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Restore Certificates</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={restoreOptions.restore_certificates}
-                  onChange={(e) => setRestoreOptions({
+                  onCheckedChange={(checked) => setRestoreOptions({
                     ...restoreOptions,
-                    restore_certificates: e.target.checked,
+                    restore_certificates: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Restore Let's Encrypt</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={restoreOptions.restore_letsencrypt}
-                  onChange={(e) => setRestoreOptions({
+                  onCheckedChange={(checked) => setRestoreOptions({
                     ...restoreOptions,
-                    restore_letsencrypt: e.target.checked,
+                    restore_letsencrypt: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 
               <label className="flex items-center justify-between cursor-pointer">
                 <span>Restore Configs</span>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={restoreOptions.restore_configs}
-                  onChange={(e) => setRestoreOptions({
+                  onCheckedChange={(checked) => setRestoreOptions({
                     ...restoreOptions,
-                    restore_configs: e.target.checked,
+                    restore_configs: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 
@@ -730,14 +683,12 @@ export default function BackupsPage() {
                   <span className="font-medium">Automatic Backups</span>
                   <p className="text-xs text-muted-foreground">Run backups on schedule</p>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={editedSettings.auto_backup_enabled}
-                  onChange={(e) => setEditedSettings({
+                  onCheckedChange={(checked) => setEditedSettings({
                     ...editedSettings,
-                    auto_backup_enabled: e.target.checked,
+                    auto_backup_enabled: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 
@@ -794,14 +745,12 @@ export default function BackupsPage() {
                   <span className="font-medium">Include Traffic Logs</span>
                   <p className="text-xs text-muted-foreground">Warning: Significantly increases backup size</p>
                 </div>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={editedSettings.include_traffic_logs}
-                  onChange={(e) => setEditedSettings({
+                  onCheckedChange={(checked) => setEditedSettings({
                     ...editedSettings,
-                    include_traffic_logs: e.target.checked,
+                    include_traffic_logs: checked === true,
                   })}
-                  className="h-4 w-4"
                 />
               </label>
 

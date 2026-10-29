@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Loader2,
   RefreshCw,
-  AlertCircle,
   ShieldAlert,
   ShieldCheck,
   Globe,
@@ -17,6 +16,12 @@ import api from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
 import { StatCard } from '@/components/stat-card'
 import { Boxes as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
+import { usePageData } from '@/lib/use-page-data'
+import { toastError, toastSuccess } from '@/lib/toast'
 
 interface Pending {
   count: number
@@ -69,8 +74,8 @@ interface Summary {
 
 const LEVEL_STYLES: Record<string, string> = {
   critical: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
-  high: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-  medium: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
   ok: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   unknown: 'bg-muted text-muted-foreground border-border',
 }
@@ -80,16 +85,14 @@ export default function ContainersPage() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [policy, setPolicy] = useState<AutoUpdatePolicy | null>(null)
   const [savingPolicy, setSavingPolicy] = useState(false)
   const [updating, setUpdating] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true)
-    setError('')
     try {
       const { data } = await api.get('/api/containers/security', {
         params: refresh ? { refresh: true } : {},
@@ -97,6 +100,7 @@ export default function ContainersPage() {
         // index, which is slow by nature — well past the client default.
         timeout: 180000,
       })
+      setLoadError(false)
       setScans(data.containers || [])
       setSummary(data.summary || null)
       try {
@@ -106,25 +110,27 @@ export default function ContainersPage() {
         // Policy is admin-only; a non-admin still gets the scan.
       }
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not scan containers')
+      // A failed first load shows the error in place of the list; a failed rescan keeps the
+      // last results and says so.
+      if (refresh) toastError(e.response?.data?.detail || 'Could not scan containers')
+      else setLoadError(true)
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    load()
-  }, [])
+  usePageData(() => {
+    void load()
+  })
 
   const savePolicy = async (patch: Partial<AutoUpdatePolicy>) => {
     setSavingPolicy(true)
-    setError('')
     try {
       const { data } = await api.put('/api/containers/auto-update', patch)
       setPolicy(data)
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not save the update policy')
+      toastError(e.response?.data?.detail || 'Could not save the update policy')
     } finally {
       setSavingPolicy(false)
     }
@@ -132,8 +138,6 @@ export default function ContainersPage() {
 
   const runUpdate = async (container?: string) => {
     setUpdating(container || 'all')
-    setError('')
-    setNotice('')
     try {
       const { data } = await api.post(
         '/api/containers/auto-update/run',
@@ -142,24 +146,17 @@ export default function ContainersPage() {
         { timeout: 900000 }
       )
       const failed = data.failed || []
-      setNotice(
+      const message =
         `${data.packages_upgraded} package(s) upgraded` +
-          (failed.length ? ` — failed: ${failed.join(', ')}` : '')
-      )
+        (failed.length ? ` — failed: ${failed.join(', ')}` : '')
+      if (failed.length) toastError(message)
+      else toastSuccess(message)
       await load(true)
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Update run failed')
+      toastError(e.response?.data?.detail || 'Update run failed')
     } finally {
       setUpdating(null)
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
   }
 
   return (
@@ -167,13 +164,14 @@ export default function ContainersPage() {
       <PageHeader
         icon={HeaderIcon}
         title="Container Security"
-        description="OS packages, pending updates and image age for every container in the stack."
+        description="OS packages, pending updates and image age for every container. Packages upgraded inside a running container are lost when it is recreated; only rebuilding the image is durable."
         actions={
           <>
-            <button
+            <Button
+              variant="outline"
+              size="lg"
               onClick={() => load(true)}
-              disabled={refreshing}
-              className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
+              disabled={refreshing || loading}
             >
               {refreshing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -181,37 +179,14 @@ export default function ContainersPage() {
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
               {refreshing ? 'Scanning…' : 'Rescan'}
-            </button>
+            </Button>
           </>
         }
       />
 
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      {loading && <ContentSkeleton stats={5} rows={4} />}
 
-      {/* Why in-container updates aren't the whole answer. Stated once, plainly,
-          because acting on the numbers below without it leads people to run
-          `apk upgrade` in a shell and believe they have fixed something. */}
-      <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-        <p>
-          <strong className="text-foreground">Updating a container means rebuilding it.</strong>{' '}
-          Packages upgraded inside a running container are discarded the next time it is
-          recreated. Pending updates below show live exposure; image age shows whether the
-          image itself needs rebuilding from a refreshed base. Both matter, and only the
-          rebuild is durable.
-        </p>
-      </div>
-
-      {notice && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm">
-          <ShieldCheck className="h-4 w-4 flex-shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
+      {!loading && loadError && <LoadError what="container scans" onRetry={() => load()} />}
 
       {/* Automatic updates */}
       {policy && (
@@ -229,16 +204,13 @@ export default function ContainersPage() {
                 whole stack mid-transaction.
               </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={policy.enabled}
-                disabled={savingPolicy}
-                onChange={(e) => savePolicy({ enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-primary peer-disabled:opacity-50 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-background after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-            </label>
+            <Switch
+              checked={policy.enabled}
+              disabled={savingPolicy}
+              onCheckedChange={(checked) => savePolicy({ enabled: checked })}
+              aria-label="Automatic OS package updates"
+              className="flex-shrink-0"
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 mt-4">
@@ -275,11 +247,10 @@ export default function ContainersPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-border">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={policy.security_only}
                 disabled={savingPolicy}
-                onChange={(e) => savePolicy({ security_only: e.target.checked })}
+                onCheckedChange={(checked) => savePolicy({ security_only: checked === true })}
               />
               <span>
                 Security updates only
@@ -289,10 +260,10 @@ export default function ContainersPage() {
               </span>
             </label>
 
-            <button
+            <Button
+              size="lg"
               onClick={() => runUpdate()}
               disabled={updating !== null}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
             >
               {updating === 'all' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -300,7 +271,7 @@ export default function ContainersPage() {
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
               {updating === 'all' ? 'Updating…' : 'Update all now'}
-            </button>
+            </Button>
           </div>
 
           {policy.last_run && (
@@ -388,7 +359,7 @@ export default function ContainersPage() {
                           c.image_age_days > 180
                             ? 'text-red-600 dark:text-red-400'
                             : c.image_age_days > 90
-                            ? 'text-amber-600 dark:text-amber-400'
+                            ? 'text-amber-700 dark:text-amber-400'
                             : ''
                         }`}
                       >
@@ -453,7 +424,9 @@ export default function ContainersPage() {
 
                   {c.scannable !== false && c.status === 'running' && (
                     <div className="flex flex-wrap items-center gap-3">
-                      <button
+                      <Button
+                        variant="outline"
+                        size="lg"
                         onClick={() => runUpdate(c.name)}
                         disabled={
                           updating !== null ||
@@ -465,7 +438,6 @@ export default function ContainersPage() {
                             ? 'This container is never updated in place'
                             : undefined
                         }
-                        className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
                       >
                         {updating === c.name ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -473,7 +445,7 @@ export default function ContainersPage() {
                           <RefreshCw className="h-3.5 w-3.5" />
                         )}
                         {updating === c.name ? 'Updating…' : 'Update now'}
-                      </button>
+                      </Button>
                       {(policy?.always_excluded || []).includes(c.name) && (
                         <span className="text-xs text-muted-foreground">
                           Excluded — updated by replacing the image, not in place.
@@ -483,7 +455,7 @@ export default function ContainersPage() {
                   )}
 
                   {c.pending?.error && (
-                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
                       Update check failed: {c.pending.error}
                     </p>
                   )}

@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePageData } from '@/lib/use-page-data'
+import { toastError } from '@/lib/toast'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   ArrowUpCircle,
   Shield,
@@ -81,7 +84,6 @@ export function UpdatesTab() {
   const [isChecking, setIsChecking] = useState(false)
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
   const [activeUpdate, setActiveUpdate] = useState<UpdateHistoryItem | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   const loadSettings = async () => {
     try {
@@ -106,9 +108,9 @@ export function UpdatesTab() {
     await Promise.all([loadSettings(), loadHistory()])
   }
 
-  useEffect(() => {
-    loadAll()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  usePageData(() => {
+    void loadAll()
+  })
 
   // Poll active update progress
   useEffect(() => {
@@ -127,13 +129,12 @@ export function UpdatesTab() {
 
   const checkNow = async () => {
     setIsChecking(true)
-    setError(null)
     try {
       const res = await api.post('/api/updates/check-now')
       setAppCheck(res.data.app)
       setBaseCheck(res.data.base_images)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to check for updates')
+      toastError(err?.response?.data?.detail || 'Failed to check for updates')
     } finally {
       setIsChecking(false)
     }
@@ -145,7 +146,7 @@ export function UpdatesTab() {
       const res = await api.post('/api/updates/app', { target_version: version })
       setActiveUpdate(res.data)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to start update')
+      toastError(err?.response?.data?.detail || 'Failed to start update')
     } finally {
       setIsUpdating(null)
     }
@@ -157,7 +158,7 @@ export function UpdatesTab() {
       const res = await api.post('/api/updates/base-image', { container_name: container })
       setActiveUpdate(res.data)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to start update')
+      toastError(err?.response?.data?.detail || 'Failed to start update')
     } finally {
       setIsUpdating(null)
     }
@@ -168,7 +169,7 @@ export function UpdatesTab() {
       const res = await api.post(`/api/updates/rollback/${updateId}`)
       setActiveUpdate(res.data)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Rollback failed')
+      toastError(err?.response?.data?.detail || 'Rollback failed')
     }
   }
 
@@ -243,12 +244,6 @@ export function UpdatesTab() {
           </Button>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-600 dark:text-red-400">
-            {error}
-          </div>
-        )}
-
         {appCheck ? (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -259,7 +254,7 @@ export function UpdatesTab() {
               {appCheck.update_available && appCheck.latest_version && (
                 <>
                   <span className="text-muted-foreground">→</span>
-                  <div className="rounded-lg bg-brand/10 border border-brand/20 px-4 py-3">
+                  <div className="rounded-lg bg-muted/50 px-4 py-3">
                     <p className="text-xs text-brand">Latest</p>
                     <p className="text-lg font-bold font-mono text-brand">v{appCheck.latest_version}</p>
                   </div>
@@ -455,21 +450,15 @@ export function UpdatesTab() {
                   Stable: production releases only. Beta: include pre-releases.
                 </p>
               </div>
-              <div className="flex rounded-lg border border-input overflow-hidden">
-                {['stable', 'beta', 'edge'].map(ch => (
-                  <button
-                    key={ch}
-                    onClick={() => updateSetting('update_channel', ch)}
-                    className={`px-3 py-1 text-xs font-medium transition-colors ${
-                      settings.update_channel === ch
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    {ch}
-                  </button>
-                ))}
-              </div>
+              <Tabs value={settings.update_channel} onValueChange={(ch) => updateSetting('update_channel', ch)}>
+                <TabsList aria-label="Update channel">
+                  {['stable', 'beta', 'edge'].map(ch => (
+                    <TabsTrigger key={ch} value={ch} className="capitalize">
+                      {ch}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
             </div>
           </div>
         </div>

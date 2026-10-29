@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Loader2,
   CheckCircle,
-  AlertTriangle,
   Server,
   Archive,
   ChevronRight,
@@ -31,6 +30,7 @@ import { SmtpCard } from '@/components/settings/smtp-card'
 import { PageHeader } from '@/components/page-header'
 import { Settings as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isReloading, setIsReloading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [nginxStatus, setNginxStatus] = useState<'running' | 'stopped' | 'error'>('running')
   const [defaultSite, setDefaultSite] = useState({ behavior: 'congratulations', redirect_url: '' })
   const [isSavingDefault, setIsSavingDefault] = useState(false)
@@ -79,8 +79,11 @@ export default function SettingsPage() {
       if (response.data) {
         setSettings((prev) => ({ ...prev, ...response.data }))
       }
+      setLoadError(false)
     } catch (error) {
       console.error('Failed to fetch settings:', error)
+      // Without this the form would show the built-in defaults as if they were the saved settings.
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -88,14 +91,11 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setIsSaving(true)
-    setMessage(null)
 
     try {
       await api.put('/api/settings', settings)
-      setMessage({ type: 'success', text: 'Settings saved successfully' })
       toastSuccess('Settings saved')
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to save settings' })
       toastError('Failed to save settings')
     } finally {
       setIsSaving(false)
@@ -113,13 +113,10 @@ export default function SettingsPage() {
 
   const handleSaveDefaultSite = async () => {
     setIsSavingDefault(true)
-    setMessage(null)
     try {
       await api.put('/api/settings/default-site', defaultSite)
-      setMessage({ type: 'success', text: 'Default site updated and applied' })
       toastSuccess('Default site updated')
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update default site' })
       toastError('Failed to update default site')
     } finally {
       setIsSavingDefault(false)
@@ -128,15 +125,12 @@ export default function SettingsPage() {
 
   const handleReloadNginx = async () => {
     setIsReloading(true)
-    setMessage(null)
 
     try {
       await api.post('/api/settings/reload-nginx')
-      setMessage({ type: 'success', text: 'Nginx configuration reloaded successfully' })
       toastSuccess('Nginx reloaded')
     } catch (error: any) {
       const detail = error.response?.data?.detail || 'Failed to reload Nginx configuration'
-      setMessage({ type: 'error', text: detail })
       toastError(detail)
     } finally {
       setIsReloading(false)
@@ -220,14 +214,11 @@ export default function SettingsPage() {
 
   const saveTrustedIps = async (ips: string[]) => {
     setIsSavingTrusted(true)
-    setMessage(null)
     try {
       await api.put('/api/settings/trusted_ips', { value: JSON.stringify(ips) })
       setTrustedIps(ips)
-      setMessage({ type: 'success', text: 'Trusted IPs saved. Changes will take effect within 5 minutes.' })
-      toastSuccess('Trusted IPs saved')
+      toastSuccess('Trusted IPs saved. Changes take effect within 5 minutes.')
     } catch {
-      setMessage({ type: 'error', text: 'Failed to save trusted IPs' })
       toastError('Failed to save trusted IPs')
     } finally {
       setIsSavingTrusted(false)
@@ -250,25 +241,22 @@ export default function SettingsPage() {
     if (ipv4Match) {
       const prefix = ipv4Match[3] ? parseInt(ipv4Match[3], 10) : null
       if (prefix !== null && prefix > 32) {
-        setMessage({ type: 'error', text: 'IPv4 CIDR prefix must be between 0 and 32' })
+        toastError('IPv4 CIDR prefix must be between 0 and 32')
         return
       }
     } else if (ipv6Match) {
       const prefix = ipv6Match[3] ? parseInt(ipv6Match[3], 10) : null
       if (prefix !== null && prefix > 128) {
-        setMessage({ type: 'error', text: 'IPv6 CIDR prefix must be between 0 and 128' })
+        toastError('IPv6 CIDR prefix must be between 0 and 128')
         return
       }
     } else {
-      setMessage({
-        type: 'error',
-        text: 'Invalid IP address or CIDR format (e.g. 192.168.1.1, 10.0.0.0/24, 2001:db8::1, or 2001:db8::/32)',
-      })
+      toastError('Invalid IP address or CIDR format (e.g. 192.168.1.1, 10.0.0.0/24, 2001:db8::1, or 2001:db8::/32)')
       return
     }
 
     if (trustedIps.includes(ip)) {
-      setMessage({ type: 'error', text: 'This IP is already in the trusted list' })
+      toastError('This IP is already in the trusted list')
       return
     }
     const updated = [...trustedIps, ip]
@@ -278,14 +266,6 @@ export default function SettingsPage() {
 
   const removeTrustedIp = (ip: string) => {
     saveTrustedIps(trustedIps.filter(i => i !== ip))
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading settings...</div>
-      </div>
-    )
   }
 
   return (
@@ -301,7 +281,7 @@ export default function SettingsPage() {
                 variant="outline"
                 size="lg"
                 onClick={handleReloadNginx}
-                disabled={isReloading}
+                disabled={isReloading || isLoading}
               >
                 <RefreshCw className={`h-4 w-4 ${isReloading ? 'animate-spin' : ''}`} />
                 Reload Nginx
@@ -309,7 +289,7 @@ export default function SettingsPage() {
               <Button
                 size="lg"
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={isSaving || isLoading || loadError}
               >
                 {isSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -323,23 +303,17 @@ export default function SettingsPage() {
         }
       />
 
-      {message && (
-        <div
-          className={`flex items-center gap-2 p-4 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
-              : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-          }`}
-        >
-          {message.type === 'success' ? (
-            <CheckCircle className="h-5 w-5" />
-          ) : (
-            <AlertTriangle className="h-5 w-5" />
-          )}
-          {message.text}
-        </div>
+      {isLoading && <ContentSkeleton rows={5} />}
+
+      {!isLoading && loadError && (
+        <LoadError
+          what="settings"
+          onRetry={() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey(); fetchAbuseIpDbAutoReport() }}
+        />
       )}
 
+      {!isLoading && !loadError && (
+      <>
       {/* System Status */}
       <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -691,13 +665,16 @@ export default function SettingsPage() {
                   placeholder={abuseIpDbKeyHasValue ? '••••••••••••••••••••••••' : 'Paste your AbuseIPDB API key'}
                   className="w-full px-4 py-2 pr-10 rounded-lg border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => setShowAbuseKey(!showAbuseKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showAbuseKey ? 'Hide API key' : 'Show API key'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                 >
                   {showAbuseKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                </Button>
               </div>
               <Button
                 size="lg"
@@ -708,14 +685,16 @@ export default function SettingsPage() {
                 Save
               </Button>
               {abuseIpDbKeyHasValue && (
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={clearAbuseIpDbKey}
                   disabled={isSavingAbuseKey}
-                  className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 text-destructive"
+                  className="text-destructive hover:text-destructive"
                 >
                   <X className="h-4 w-4" />
                   Remove
-                </button>
+                </Button>
               )}
             </div>
             {abuseIpDbKeyHasValue && (
@@ -794,19 +773,24 @@ export default function SettingsPage() {
                   className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm font-mono"
                 >
                   <span>{ip}</span>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     onClick={() => removeTrustedIp(ip)}
                     disabled={isSavingTrusted}
-                    className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                    aria-label={`Remove ${ip}`}
+                    className="text-muted-foreground hover:text-destructive"
                   >
                     <X className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

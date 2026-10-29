@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -16,8 +16,6 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  CheckCircle,
-  AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,6 +33,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface AlertPreference {
   id: string
@@ -142,7 +142,7 @@ export default function NotificationsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState<string | null>(null)
   const [isTesting, setIsTesting] = useState(false)
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   // Channel form
   const [showChannelDialog, setShowChannelDialog] = useState(false)
@@ -156,12 +156,6 @@ export default function NotificationsPage() {
   const [flapMinutes, setFlapMinutes] = useState('5')
   const confirm = useConfirm()
 
-  useEffect(() => {
-    if (!notification) return
-    const timer = setTimeout(() => setNotification(null), 5000)
-    return () => clearTimeout(timer)
-  }, [notification])
-
   const fetchAll = async () => {
     setIsLoading(true)
     try {
@@ -171,12 +165,13 @@ export default function NotificationsPage() {
       ])
       setPreferences(prefRes.data)
       setChannels(chanRes.data)
+      setLoadError(false)
       api
         .get('/api/settings/upstream_alert_flap_minutes')
         .then((res) => setFlapMinutes(res.data?.value || '5'))
         .catch(() => {})
     } catch {
-      setNotification({ type: 'error', message: 'Failed to load notification settings' })
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -215,7 +210,6 @@ export default function NotificationsPage() {
       setPreferences(res.data)
       toastSuccess('Subscription updated')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to update subscription' })
       toastError('Failed to update subscription')
     } finally {
       setIsSaving(null)
@@ -235,7 +229,6 @@ export default function NotificationsPage() {
       setPreferences(res.data)
       toastSuccess('Severity updated')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to update severity' })
       toastError('Failed to update severity')
     } finally {
       setIsSaving(null)
@@ -292,7 +285,6 @@ export default function NotificationsPage() {
       setShowChannelDialog(false)
       const res = await api.get('/api/alerts/channels')
       setChannels(res.data)
-      setNotification({ type: 'success', message: editingChannel ? 'Channel updated' : 'Channel created' })
       toastSuccess(editingChannel ? 'Channel updated' : 'Channel created')
     } catch (err: any) {
       setFormError(err.response?.data?.detail || 'Failed to save channel')
@@ -307,10 +299,8 @@ export default function NotificationsPage() {
       await api.delete(`/api/alerts/channels/${channel.id}`)
       const res = await api.get('/api/alerts/channels')
       setChannels(res.data)
-      setNotification({ type: 'success', message: 'Channel deleted' })
       toastSuccess('Channel deleted')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to delete channel' })
       toastError('Failed to delete channel')
     }
   }
@@ -319,10 +309,8 @@ export default function NotificationsPage() {
     setIsTesting(true)
     try {
       await api.post('/api/alerts/test')
-      setNotification({ type: 'success', message: 'Test notification sent to all channels!' })
       toastSuccess('Test notification sent')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to send test alert' })
       toastError('Failed to send test alert')
     } finally {
       setIsTesting(false)
@@ -340,14 +328,6 @@ export default function NotificationsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading notifications...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -357,7 +337,7 @@ export default function NotificationsPage() {
         description="Choose what you get notified about and how"
         actions={
           <>
-            {activeTab === 'channels' && (
+            {activeTab === 'channels' && !isLoading && !loadError && (
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -381,19 +361,6 @@ export default function NotificationsPage() {
         }
       />
 
-      {/* Notification banner */}
-      {notification && (
-        <div className={`rounded-md px-4 py-3 text-sm flex items-center justify-between ${
-          notification.type === 'success' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-destructive/15 text-destructive'
-        }`}>
-          <span className="flex items-center gap-2">
-            {notification.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-            {notification.message}
-          </span>
-          <button onClick={() => setNotification(null)} className="ml-4 hover:opacity-70">&times;</button>
-        </div>
-      )}
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList>
@@ -409,11 +376,24 @@ export default function NotificationsPage() {
         </TabsList>
       </Tabs>
 
+      {isLoading && <ContentSkeleton rows={5} />}
+
+      {!isLoading && loadError && <LoadError what="notification settings" onRetry={fetchAll} />}
+
       {/* === SUBSCRIPTIONS TAB === */}
-      {activeTab === 'subscriptions' && (
+      {!isLoading && !loadError && activeTab === 'subscriptions' && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Toggle which event types you want to be notified about. Alerts are sent to all your enabled channels.
+            {channels.length === 0 && (
+              <>
+                {' '}You have no channels yet:{' '}
+                <Button variant="link" className="h-auto p-0 text-sm" onClick={() => setActiveTab('channels')}>
+                  add a delivery method under Channels
+                </Button>
+                .
+              </>
+            )}
           </p>
 
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
@@ -453,23 +433,13 @@ export default function NotificationsPage() {
                     </select>
 
                     {/* Toggle */}
-                    <button
-                      onClick={() => toggleSubscription(nt.key)}
+                    {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={() => toggleSubscription(nt.key)}
                       disabled={saving}
-                      className="relative shrink-0"
-                    >
-                      {saving ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      ) : isEnabled ? (
-                        <div className="w-11 h-6 bg-primary rounded-full relative transition-colors">
-                          <div className="absolute top-0.5 right-[2px] bg-background rounded-full h-5 w-5 transition-all" />
-                        </div>
-                      ) : (
-                        <div className="w-11 h-6 bg-muted rounded-full relative transition-colors">
-                          <div className="absolute top-0.5 left-[2px] bg-background rounded-full h-5 w-5 transition-all" />
-                        </div>
-                      )}
-                    </button>
+                      aria-label={`Notify me about ${nt.label}`}
+                    />
                   </div>
                 </div>
               )
@@ -499,16 +469,11 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          {channels.length === 0 && (
-            <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4 text-sm text-yellow-600 dark:text-yellow-400">
-              <strong>No channels configured.</strong> Go to the Channels tab to add a delivery method (webhook, Slack, push, etc.)
-            </div>
-          )}
         </div>
       )}
 
       {/* === CHANNELS TAB === */}
-      {activeTab === 'channels' && (
+      {!isLoading && !loadError && activeTab === 'channels' && (
         <div className="space-y-3">
           {channels.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-12 text-center">
@@ -559,6 +524,7 @@ export default function NotificationsPage() {
                             <Pencil className="h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onSelect={() => handleDeleteChannel(channel)}
                             className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"
@@ -578,7 +544,7 @@ export default function NotificationsPage() {
       )}
 
       {/* === PUSH DEVICES TAB === */}
-      {activeTab === 'devices' && (
+      {!isLoading && !loadError && activeTab === 'devices' && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Manage browser push notification subscriptions for this device.

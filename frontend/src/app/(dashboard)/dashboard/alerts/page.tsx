@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePageData } from '@/lib/use-page-data'
 import { toastSuccess, toastError } from '@/lib/toast'
 import {
@@ -15,8 +15,6 @@ import {
   Globe,
   MessageSquare,
   Smartphone,
-  AlertTriangle,
-  CheckCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/api'
@@ -33,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface AlertChannel {
   id: string
@@ -68,7 +67,7 @@ export default function AlertsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [error, setError] = useState('')
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   // Channel form
   const [formName, setFormName] = useState('')
@@ -77,19 +76,14 @@ export default function AlertsPage() {
   const [formEnabled, setFormEnabled] = useState(true)
   const confirm = useConfirm()
 
-  useEffect(() => {
-    if (!notification) return
-    const timer = setTimeout(() => setNotification(null), 5000)
-    return () => clearTimeout(timer)
-  }, [notification])
-
   const fetchChannels = async () => {
     setIsLoading(true)
     try {
       const res = await api.get('/api/alerts/channels')
       setChannels(res.data)
+      setLoadError(false)
     } catch {
-      setNotification({ type: 'error', message: 'Failed to load channels' })
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -133,7 +127,6 @@ export default function AlertsPage() {
       }
       setShowCreateDialog(false)
       fetchChannels()
-      setNotification({ type: 'success', message: editingChannel ? 'Channel updated' : 'Channel created' })
       toastSuccess(editingChannel ? 'Channel updated' : 'Channel created')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save channel')
@@ -147,10 +140,8 @@ export default function AlertsPage() {
     try {
       await api.delete(`/api/alerts/channels/${channel.id}`)
       fetchChannels()
-      setNotification({ type: 'success', message: 'Channel deleted' })
       toastSuccess('Channel deleted')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to delete channel' })
       toastError('Failed to delete channel')
     }
   }
@@ -159,10 +150,8 @@ export default function AlertsPage() {
     setIsTesting(true)
     try {
       await api.post('/api/alerts/test')
-      setNotification({ type: 'success', message: 'Test notification sent to all channels!' })
       toastSuccess('Test notification sent')
     } catch {
-      setNotification({ type: 'error', message: 'Failed to send test alert' })
       toastError('Failed to send test alert')
     } finally {
       setIsTesting(false)
@@ -218,23 +207,10 @@ export default function AlertsPage() {
         }
       />
 
-      {/* Notification banner */}
-      {notification && (
-        <div className={`rounded-md px-4 py-3 text-sm flex items-center justify-between ${
-          notification.type === 'success' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-destructive/15 text-destructive'
-        }`}>
-          <span className="flex items-center gap-2">
-            {notification.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-            {notification.message}
-          </span>
-          <button onClick={() => setNotification(null)} className="ml-4 hover:opacity-70">&times;</button>
-        </div>
-      )}
-
       {isLoading ? (
-        <div className="flex h-96 items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
-        </div>
+        <ContentSkeleton rows={3} />
+      ) : loadError ? (
+        <LoadError what="alert channels" onRetry={fetchChannels} />
       ) : channels.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
           <Bell className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
@@ -288,6 +264,7 @@ export default function AlertsPage() {
                           <Pencil className="h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onSelect={() => handleDeleteChannel(channel)}
                           className="gap-2 text-red-600 dark:text-red-400 focus:text-red-500"

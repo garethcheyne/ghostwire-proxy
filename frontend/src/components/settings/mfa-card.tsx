@@ -1,18 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   ShieldCheck,
   ShieldAlert,
   Loader2,
   KeyRound,
   RefreshCw,
-  AlertCircle,
-  Check,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { LoadError } from '@/components/load-state'
+import { usePageData } from '@/lib/use-page-data'
+import { toastError, toastSuccess } from '@/lib/toast'
 
 interface MfaStatus {
   enabled: boolean
@@ -34,8 +37,7 @@ export function MfaCard() {
   const [policy, setPolicy] = useState<Policy | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [loadError, setLoadError] = useState(false)
 
   // Enrolment flow
   const [setupOpen, setSetupOpen] = useState(false)
@@ -63,19 +65,19 @@ export function MfaCard() {
       ])
       setStatus(s.data)
       if (p) setPolicy(p.data)
+      setLoadError(false)
     } catch {
-      setError('Could not load two-factor status')
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    load()
-  }, [])
+  usePageData(() => {
+    void load()
+  })
 
   const startSetup = async () => {
-    setError('')
     setBusy(true)
     try {
       const { data } = await api.post('/api/admin-mfa/setup', {})
@@ -86,29 +88,27 @@ export function MfaCard() {
       setVerifyCode('')
       setSetupOpen(true)
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not start setup')
+      toastError(e.response?.data?.detail || 'Could not start setup')
     } finally {
       setBusy(false)
     }
   }
 
   const confirmSetup = async () => {
-    setError('')
     setBusy(true)
     try {
       await api.post('/api/admin-mfa/verify', { code: verifyCode.trim() })
       setSetupOpen(false)
-      setNotice('Two-factor authentication is now enabled on your account.')
+      toastSuccess('Two-factor authentication is now enabled on your account.')
       await load()
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'That code did not match')
+      toastError(e.response?.data?.detail || 'That code did not match')
     } finally {
       setBusy(false)
     }
   }
 
   const doDisable = async () => {
-    setError('')
     setBusy(true)
     try {
       await api.post('/api/admin-mfa/disable', {
@@ -118,17 +118,16 @@ export function MfaCard() {
       setDisableOpen(false)
       setDisablePassword('')
       setDisableCode('')
-      setNotice('Two-factor authentication disabled.')
+      toastSuccess('Two-factor authentication disabled.')
       await load()
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not disable two-factor authentication')
+      toastError(e.response?.data?.detail || 'Could not disable two-factor authentication')
     } finally {
       setBusy(false)
     }
   }
 
   const doRegenerate = async () => {
-    setError('')
     setBusy(true)
     try {
       const { data } = await api.post('/api/admin-mfa/backup-codes/regenerate', {
@@ -138,25 +137,24 @@ export function MfaCard() {
       setRegenCode('')
       await load()
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not regenerate backup codes')
+      toastError(e.response?.data?.detail || 'Could not regenerate backup codes')
     } finally {
       setBusy(false)
     }
   }
 
   const togglePolicy = async (required: boolean) => {
-    setError('')
     setBusy(true)
     try {
       await api.put('/api/admin-mfa/policy', { required })
-      setNotice(
+      toastSuccess(
         required
           ? 'Two-factor authentication is now required. Anyone not enrolled will be asked to set it up at their next sign-in.'
           : 'The org-wide two-factor requirement has been turned off.'
       )
       await load()
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Could not change the policy')
+      toastError(e.response?.data?.detail || 'Could not change the policy')
     } finally {
       setBusy(false)
     }
@@ -188,19 +186,10 @@ export function MfaCard() {
         rewrite every proxy host and read every traffic log.
       </p>
 
-      {error && (
-        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      {notice && (
-        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm">
-          <Check className="h-4 w-4 flex-shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
-
+      {loadError ? (
+        <LoadError what="two-factor status" onRetry={load} className="border-0 bg-transparent p-0" />
+      ) : (
+      <>
       {/* Your own account */}
       <div className="flex items-center justify-between py-3 border-t border-border">
         <div>
@@ -211,7 +200,7 @@ export function MfaCard() {
                 Enabled
               </span>
             ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
                 Not enabled
               </span>
             )}
@@ -227,18 +216,21 @@ export function MfaCard() {
         <div className="flex gap-2">
           {enrolled ? (
             <>
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => {
                   setNewCodes([])
                   setRegenOpen(true)
                 }}
                 disabled={busy}
-                className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent disabled:opacity-50 flex items-center gap-1.5"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 New backup codes
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => setDisableOpen(true)}
                 disabled={busy || status?.required_org_wide}
                 title={
@@ -246,26 +238,22 @@ export function MfaCard() {
                     ? 'Two-factor authentication is required for all admin accounts'
                     : undefined
                 }
-                className="h-9 px-3 rounded-md border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 disabled:opacity-50"
+                className="text-destructive hover:text-destructive"
               >
                 Disable
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              onClick={startSetup}
-              disabled={busy}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
-            >
+            <Button size="lg" onClick={startSetup} disabled={busy}>
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
               Set up
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {lowCodes && (
-        <div className="flex items-center gap-2 p-3 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm">
+        <div className="flex items-center gap-2 p-3 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm">
           <ShieldAlert className="h-4 w-4 flex-shrink-0" />
           <span>
             Only {status?.backup_codes_remaining} backup code
@@ -292,24 +280,23 @@ export function MfaCard() {
                 )}
               </p>
               {!enrolled && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
                   Enable it on your own account first — otherwise turning this on would lock
                   you out at your next sign-in.
                 </p>
               )}
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={policy.required}
-                disabled={busy || (!enrolled && !policy.required)}
-                onChange={(e) => togglePolicy(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-primary peer-disabled:opacity-50 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-background after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-            </label>
+            <Switch
+              checked={policy.required}
+              disabled={busy || (!enrolled && !policy.required)}
+              onCheckedChange={(checked) => togglePolicy(checked)}
+              aria-label="Require two-factor authentication for all admin accounts"
+              className="flex-shrink-0"
+            />
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* ── Setup modal ── */}
@@ -349,10 +336,9 @@ export function MfaCard() {
               ))}
             </div>
             <label className="flex items-start gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={savedCodes}
-                onChange={(e) => setSavedCodes(e.target.checked)}
+                onCheckedChange={(checked) => setSavedCodes(checked === true)}
                 className="mt-0.5"
               />
               <span>I have saved these backup codes somewhere safe</span>
@@ -373,20 +359,17 @@ export function MfaCard() {
           </div>
         </ModalBody>
         <ModalFooter>
-          <button
-            onClick={() => setSetupOpen(false)}
-            className="h-9 px-4 rounded-md border border-input text-sm font-medium hover:bg-accent"
-          >
+          <Button variant="outline" size="lg" onClick={() => setSetupOpen(false)}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
             onClick={confirmSetup}
             disabled={busy || !savedCodes || verifyCode.trim().length < 6}
-            className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
           >
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Enable
-          </button>
+          </Button>
         </ModalFooter>
       </Modal>
 
@@ -423,12 +406,9 @@ export function MfaCard() {
           </div>
         </ModalBody>
         <ModalFooter>
-          <button
-            onClick={() => setDisableOpen(false)}
-            className="h-9 px-4 rounded-md border border-input text-sm font-medium hover:bg-accent"
-          >
+          <Button variant="outline" size="lg" onClick={() => setDisableOpen(false)}>
             Cancel
-          </button>
+          </Button>
           <Button
             variant="destructive"
             size="lg"
@@ -480,30 +460,23 @@ export function MfaCard() {
         <ModalFooter>
           {newCodes.length === 0 ? (
             <>
-              <button
-                onClick={() => setRegenOpen(false)}
-                className="h-9 px-4 rounded-md border border-input text-sm font-medium hover:bg-accent"
-              >
+              <Button variant="outline" size="lg" onClick={() => setRegenOpen(false)}>
                 Cancel
-              </button>
-              <button
-                onClick={doRegenerate}
-                disabled={busy || regenCode.trim().length < 6}
-                className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-              >
+              </Button>
+              <Button size="lg" onClick={doRegenerate} disabled={busy || regenCode.trim().length < 6}>
                 Generate
-              </button>
+              </Button>
             </>
           ) : (
-            <button
+            <Button
+              size="lg"
               onClick={() => {
                 setRegenOpen(false)
                 setNewCodes([])
               }}
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
             >
               Done
-            </button>
+            </Button>
           )}
         </ModalFooter>
       </Modal>

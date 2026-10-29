@@ -8,7 +8,6 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
-  AlertTriangle,
   Loader2,
   Package,
   Server,
@@ -24,6 +23,9 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
 import { Download as HeaderIcon } from 'lucide-react'
@@ -95,8 +97,7 @@ export default function UpdatesPage() {
   const [isChecking, setIsChecking] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isSavingSettings, setIsSavingSettings] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   // Expandable sections
   const [showAllReleases, setShowAllReleases] = useState(false)
@@ -119,6 +120,7 @@ export default function UpdatesPage() {
       setBaseImages(imagesResponse.data)
       setUpdateHistory(historyResponse.data)
       setSettings(settingsResponse.data)
+      setLoadError(false)
 
       // Check for active updates
       const active = historyResponse.data.find(
@@ -128,7 +130,7 @@ export default function UpdatesPage() {
         setActiveUpdate(active)
       }
     } catch (err: any) {
-      setError('Failed to load update information')
+      setLoadError(true)
       console.error(err)
     } finally {
       setIsLoading(false)
@@ -162,8 +164,6 @@ export default function UpdatesPage() {
   // Check for updates
   const handleCheckUpdates = async () => {
     setIsChecking(true)
-    setError(null)
-    setSuccess(null)
 
     try {
       const [appResponse, imagesResponse] = await Promise.all([
@@ -173,11 +173,8 @@ export default function UpdatesPage() {
 
       setAppInfo(appResponse.data)
       setBaseImages(imagesResponse.data)
-      setSuccess('Update check completed')
       toastSuccess('Update check completed')
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
-      setError('Failed to check for updates')
       toastError('Failed to check for updates')
     } finally {
       setIsChecking(false)
@@ -189,18 +186,15 @@ export default function UpdatesPage() {
     if (!(await confirm({ description: `Update to version ${version}?\n\nA backup will be created automatically before the update.`, variant: 'destructive' }))) return
 
     setIsUpdating(true)
-    setError(null)
 
     try {
       const response = await api.post('/api/updates/app', {
         target_version: version,
       })
       setActiveUpdate(response.data)
-      setSuccess('Update started')
       toastSuccess('Update started')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to start update')
-      toastError('Failed to start update')
+      toastError(err.response?.data?.detail || 'Failed to start update')
     } finally {
       setIsUpdating(false)
     }
@@ -211,18 +205,15 @@ export default function UpdatesPage() {
     if (!(await confirm({ description: `Update base image for ${containerName}?\n\nThis will restart the container.`, variant: 'destructive' }))) return
 
     setIsUpdating(true)
-    setError(null)
 
     try {
       const response = await api.post('/api/updates/base-image', {
         container_name: containerName,
       })
       setActiveUpdate(response.data)
-      setSuccess('Base image update started')
       toastSuccess('Base image update started')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to start update')
-      toastError('Failed to start update')
+      toastError(err.response?.data?.detail || 'Failed to start update')
     } finally {
       setIsUpdating(false)
     }
@@ -232,16 +223,13 @@ export default function UpdatesPage() {
   const handleRollback = async (updateId: string) => {
     if (!(await confirm({ description: 'Rollback this update?\n\nThis will restore the previous version from backup.', variant: 'destructive' }))) return
 
-    setError(null)
 
     try {
       const response = await api.post(`/api/updates/rollback/${updateId}`)
       setActiveUpdate(response.data)
-      setSuccess('Rollback started')
       toastSuccess('Rollback started')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to start rollback')
-      toastError('Failed to start rollback')
+      toastError(err.response?.data?.detail || 'Failed to start rollback')
     }
   }
 
@@ -250,16 +238,12 @@ export default function UpdatesPage() {
     if (!settings) return
 
     setIsSavingSettings(true)
-    setError(null)
 
     try {
       const response = await api.put('/api/updates/settings', settings)
       setSettings(response.data)
-      setSuccess('Settings saved')
       toastSuccess('Update settings saved')
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
-      setError('Failed to save settings')
       toastError('Failed to save settings')
     } finally {
       setIsSavingSettings(false)
@@ -298,14 +282,6 @@ export default function UpdatesPage() {
     return `${Math.floor(days / 30)} months ago`
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   const isUpdateInProgress = activeUpdate?.status === 'in_progress' || activeUpdate?.status === 'pending'
 
   return (
@@ -322,6 +298,7 @@ export default function UpdatesPage() {
                 variant="outline"
                 size="lg"
                 onClick={() => setShowSettings(!showSettings)}
+                disabled={isLoading || loadError}
               >
                 <Settings className="h-4 w-4" />
                 Settings
@@ -329,7 +306,7 @@ export default function UpdatesPage() {
               <Button
                 size="lg"
                 onClick={handleCheckUpdates}
-                disabled={isChecking || isUpdateInProgress}
+                disabled={isChecking || isUpdateInProgress || isLoading}
               >
                 {isChecking ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -343,27 +320,12 @@ export default function UpdatesPage() {
         }
       />
 
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 text-destructive flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-          <span className="flex-1">{error}</span>
-          <button onClick={() => setError(null)} className="text-xs underline">
-            Dismiss
-          </button>
-        </div>
-      )}
+      {isLoading && <ContentSkeleton rows={4} />}
 
-      {success && (
-        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4 text-green-600 dark:text-green-400 flex items-center gap-2">
-          <CheckCircle className="h-5 w-5 flex-shrink-0" />
-          <span className="flex-1">{success}</span>
-          <button onClick={() => setSuccess(null)} className="text-xs underline">
-            Dismiss
-          </button>
-        </div>
-      )}
+      {!isLoading && loadError && <LoadError what="update information" onRetry={fetchData} />}
 
+      {!isLoading && !loadError && (
+      <>
       {/* Active Update Progress */}
       {isUpdateInProgress && activeUpdate && (
         <div className="rounded-xl border border-border bg-card p-6">
@@ -407,18 +369,11 @@ export default function UpdatesPage() {
                 <p className="font-medium">Auto-check for updates</p>
                 <p className="text-sm text-muted-foreground">Periodically check for new versions</p>
               </div>
-              <button
-                onClick={() => setSettings({ ...settings, auto_check_enabled: !settings.auto_check_enabled })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  settings.auto_check_enabled ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    settings.auto_check_enabled ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
+              <Switch
+                checked={settings.auto_check_enabled}
+                onCheckedChange={(checked) => setSettings({ ...settings, auto_check_enabled: checked })}
+                aria-label="Auto-check for updates"
+              />
             </div>
 
             <div className="flex items-center justify-between">
@@ -496,21 +451,21 @@ export default function UpdatesPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-border p-4 bg-muted">
-                <p className="text-sm text-muted-foreground">Current Version</p>
-                <p className="mt-2 font-mono text-lg font-semibold">{appInfo?.current_version}</p>
-              </div>
-              <div className="rounded-xl border border-border p-4 bg-muted">
-                <p className="text-sm text-muted-foreground">Latest Release</p>
-                <p className="mt-2 font-mono text-lg font-semibold">
-                  {appInfo?.latest_version ?? 'Unknown'}
-                </p>
-                {appInfo?.releases?.[0]?.published_at && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Released {formatRelativeDate(appInfo.releases[0].published_at)}
-                  </p>
-                )}
-              </div>
+              <StatCard
+                title="Current Version"
+                value={<span className="font-mono">{appInfo?.current_version}</span>}
+                icon={Package}
+              />
+              <StatCard
+                title="Latest Release"
+                value={<span className="font-mono">{appInfo?.latest_version ?? 'Unknown'}</span>}
+                icon={Download}
+                description={
+                  appInfo?.releases?.[0]?.published_at
+                    ? `Released ${formatRelativeDate(appInfo.releases[0].published_at)}`
+                    : undefined
+                }
+              />
             </div>
           </div>
 
@@ -558,15 +513,16 @@ export default function UpdatesPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {appInfo.releases[0].html_url && (
-                  <a
-                    href={appInfo.releases[0].html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    View Release Notes
-                  </a>
+                  <Button variant="outline" asChild>
+                    <a
+                      href={appInfo.releases[0].html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      View Release Notes
+                    </a>
+                  </Button>
                 )}
                 {appInfo.update_available && appInfo.latest_version && (
                   <Button
@@ -584,9 +540,10 @@ export default function UpdatesPage() {
               <div className="mt-4 rounded-lg border border-border bg-muted p-4">
                 <div className="flex items-center justify-between">
                   <p className="font-medium">Release Notes</p>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedRelease(selectedRelease?.version === appInfo.releases[0].version ? null : appInfo.releases[0])}
-                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                   >
                     {selectedRelease?.version === appInfo.releases[0].version ? (
                       <ChevronUp className="h-4 w-4" />
@@ -594,7 +551,7 @@ export default function UpdatesPage() {
                       <ChevronDown className="h-4 w-4" />
                     )}
                     {selectedRelease?.version === appInfo.releases[0].version ? 'Hide' : 'View'} changelog
-                  </button>
+                  </Button>
                 </div>
                 {selectedRelease?.version === appInfo.releases[0].version && (
                   <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted p-4 text-sm text-foreground">
@@ -609,13 +566,14 @@ export default function UpdatesPage() {
         {/* Previous releases */}
         {appInfo?.releases && appInfo.releases.length > 1 && (
           <div className="mt-4 pt-4 border-t border-border">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setShowAllReleases(!showAllReleases)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               {showAllReleases ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showAllReleases ? 'Hide' : 'Show'} previous releases ({appInfo.releases.length - 1})
-            </button>
+            </Button>
 
             {showAllReleases && (
               <div className="mt-3 space-y-3">
@@ -625,7 +583,7 @@ export default function UpdatesPage() {
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="font-mono text-sm">{release.version}</span>
                         {release.prerelease && (
-                          <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                          <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
                             Pre-release
                           </span>
                         )}
@@ -683,8 +641,8 @@ export default function UpdatesPage() {
       {/* Base Image Updates */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-            <Server className="h-5 w-5 text-orange-700 dark:text-orange-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+            <Server className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">Base Image Updates</h2>
@@ -737,8 +695,8 @@ export default function UpdatesPage() {
       {/* Update History */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-            <History className="h-5 w-5 text-brand-2" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+            <History className="h-5 w-5 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-semibold">Update History</h2>
         </div>
@@ -813,6 +771,8 @@ export default function UpdatesPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

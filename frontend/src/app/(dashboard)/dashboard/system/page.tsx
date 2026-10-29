@@ -40,6 +40,9 @@ import { UpdatesTab } from '@/components/system/updates-tab'
 import { PageHeader } from '@/components/page-header'
 import { Monitor as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface ServiceHealth {
   status: 'healthy' | 'unhealthy' | 'unknown'
@@ -152,20 +155,20 @@ export default function SystemMonitorPage() {
     return () => clearInterval(interval)
   }, [fetchStatus])
 
-  useEffect(() => {
-    fetchMetrics()
-    fetchThroughput()
-  }, [fetchMetrics, fetchThroughput])
-
   const fetchAllData = async () => {
     setIsRefreshing(true)
     await Promise.all([fetchStatus(), fetchMetrics(), fetchThroughput()])
     setIsRefreshing(false)
   }
 
+  // Status on mount; metrics and throughput on mount and whenever the period changes.
   usePageData(() => {
-    fetchAllData()
+    void fetchStatus()
   })
+  usePageData(() => {
+    void fetchMetrics()
+    void fetchThroughput()
+  }, [period])
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -207,11 +210,11 @@ export default function SystemMonitorPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'healthy':
-        return 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
+        return 'text-green-600 dark:text-green-400'
       case 'unhealthy':
-        return 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
+        return 'text-red-600 dark:text-red-400'
       default:
-        return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+        return 'text-yellow-700 dark:text-yellow-400'
     }
   }
 
@@ -225,32 +228,6 @@ export default function SystemMonitorPage() {
     if (percent >= 90) return 'bg-red-500'
     if (percent >= 70) return 'bg-yellow-500'
     return 'bg-green-500'
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading system status...</div>
-      </div>
-    )
-  }
-
-  if (error && !status) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="text-center">
-          <XCircle className="h-12 w-12 text-red-600 dark:text-red-400 mx-auto mb-4" />
-          <p className="text-muted-foreground">{error}</p>
-          <Button
-            size="lg"
-            onClick={fetchAllData}
-            className="mt-4"
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -267,95 +244,78 @@ export default function SystemMonitorPage() {
           </>
         }
         actions={
-          <>
-            <div className="flex items-center gap-3">
-              {/* Tab Switcher */}
-              <div className="flex rounded-lg border border-input overflow-hidden">
-                <button
-                  onClick={() => setActiveTab('monitor')}
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                    activeTab === 'monitor'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted'
-                  }`}
-                >
-                  <Activity className="h-4 w-4" />
-                  Monitor
-                </button>
-                <button
-                  onClick={() => setActiveTab('updates')}
-                  className={`px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                    activeTab === 'updates'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted'
-                  }`}
-                >
-                  <ArrowUpCircle className="h-4 w-4" />
-                  Updates
-                </button>
-              </div>
-
-              {activeTab === 'monitor' && (
-                <>
-                  <div className="flex rounded-lg border border-input overflow-hidden">
-                    {(['1h', '6h', '24h', '7d'] as const).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setPeriod(p)}
-                        className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                          period === p
-                            ? 'bg-primary text-primary-foreground'
-                            : 'hover:bg-muted'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={fetchAllData}
-                    disabled={isRefreshing}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                </>
-              )}
-            </div>
-          </>
+          activeTab === 'monitor' && (
+            <>
+              <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+                <TabsList aria-label="Period">
+                  {(['1h', '6h', '24h', '7d'] as const).map((p) => (
+                    <TabsTrigger key={p} value={p}>
+                      {p}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={fetchAllData}
+                disabled={isRefreshing || isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </>
+          )
         }
       />
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList>
+          <TabsTrigger value="monitor">
+            <Activity />
+            Monitor
+          </TabsTrigger>
+          <TabsTrigger value="updates">
+            <ArrowUpCircle />
+            Updates
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Updates Tab */}
       {activeTab === 'updates' && <UpdatesTab />}
 
       {/* Monitor Tab */}
-      {activeTab === 'monitor' && (
+      {activeTab === 'monitor' && isLoading && <ContentSkeleton stats={4} rows={3} />}
+
+      {activeTab === 'monitor' && !isLoading && error && !status && (
+        <LoadError what="system status" onRetry={fetchAllData} />
+      )}
+
+      {activeTab === 'monitor' && !isLoading && status && (
       <>
       {/* Service Health Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {status && Object.entries(status.services).map(([name, service]) => (
           <div
             key={name}
-            className={`rounded-xl border p-4 ${getStatusColor(service.status)}`}
+            className="rounded-xl border bg-card p-4"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {getStatusIcon(service.status)}
                 <span className="font-semibold capitalize">{name}</span>
               </div>
-              <span className="text-xs uppercase">{service.status}</span>
+              <span className={`text-xs uppercase ${getStatusColor(service.status)}`}>{service.status}</span>
             </div>
             {service.uptime && (
-              <div className="mt-2 flex items-center gap-1 text-xs opacity-80">
+              <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 Uptime: {formatUptime(service.uptime)}
               </div>
             )}
             {service.error && (
-              <p className="mt-2 text-xs opacity-80 truncate" title={service.error}>
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400 truncate" title={service.error}>
                 {service.error}
               </p>
             )}
@@ -673,27 +633,25 @@ export default function SystemMonitorPage() {
 
       {/* Database Stats */}
       {status && status.database && !status.database.error && (
-        <div className="rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
             <Database className="h-5 w-5 text-muted-foreground" />
             <h3 className="font-semibold">Database Statistics</h3>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">Database Size</p>
-              <p className="text-2xl font-bold mt-1">
-                {formatBytes(status.database.size_bytes || 0)}
-              </p>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">Active Connections</p>
-              <p className="text-2xl font-bold mt-1">
-                {status.database.connections || 0}
-              </p>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">Table Counts</p>
-              <div className="mt-1 space-y-1">
+            <StatCard
+              title="Database Size"
+              value={formatBytes(status.database.size_bytes || 0)}
+              icon={HardDrive}
+            />
+            <StatCard
+              title="Active Connections"
+              value={status.database.connections || 0}
+              icon={Network}
+            />
+            <div className="rounded-xl border bg-card p-4 sm:p-6">
+              <p className="text-xs font-medium text-muted-foreground sm:text-sm">Table Counts</p>
+              <div className="mt-2 space-y-1">
                 {status.database.table_counts &&
                   Object.entries(status.database.table_counts)
                     .sort((a, b) => b[1] - a[1])
@@ -712,7 +670,7 @@ export default function SystemMonitorPage() {
 
       {/* Empty State for Metrics */}
       {metrics.length === 0 && !isLoading && (
-        <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center">
+        <div className="rounded-xl border border-dashed bg-card p-8 text-center">
           <Gauge className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="font-semibold mb-2">No Historical Metrics</h3>
           <p className="text-sm text-muted-foreground mb-4">
