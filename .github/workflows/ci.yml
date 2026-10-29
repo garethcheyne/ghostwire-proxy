@@ -12,7 +12,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "22"
+  NODE_VERSION: "24"
 
 jobs:
   # ─────────────────────────────────────────────
@@ -196,7 +196,7 @@ jobs:
         run: pnpm lint
 
       - name: Type check
-        run: pnpm exec tsc --noEmit
+        run: pnpm typecheck
 
       - name: Build
         env:
@@ -304,3 +304,14 @@ jobs:
             git push origin "$TAG"
             echo "Created and pushed tag $TAG"
           fi
+
+  # ─────────────────────────────────────────────
+  # Scripts: shell syntax
+  # ─────────────────────────────────────────────
+  scripts:
+    name: Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Shell syntax
+        run: for f in $(git ls-files '*.sh'); do bash -n "$f" || exit 1; done
