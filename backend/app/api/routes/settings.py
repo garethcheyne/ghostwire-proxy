@@ -15,6 +15,7 @@ from app.models.setting import Setting
 from app.models.user import User
 from app.schemas.access_list import _check_redirect_url
 from app.schemas.setting import SettingResponse, SettingsBulkUpdate, SettingUpdate
+from app.services import ghostwire_analytics
 
 router = APIRouter()
 
@@ -44,7 +45,7 @@ DEFAULT_SETTINGS = {
 # Secret values are write-only: every reader (admins included) gets a mask,
 # and a masked value sent back unchanged leaves the stored secret alone.
 SECRET_MASK = "\u2022\u2022\u2022\u2022"  # noqa: S105  not a secret: the mask shown in place of one
-_SECRET_KEY_RE = re.compile(r"(password|secret|token|api_key|private_key|apikey)$")
+_SECRET_KEY_RE = re.compile(r"(password|secret|token|api_key|private_key|apikey|ingest_key)$")
 
 
 def is_secret_key(key: str) -> bool:
@@ -221,6 +222,70 @@ async def update_default_site(
     return {"message": "Default site updated and applied", "behavior": data.behavior}
 
 
+# Ghostwire Analytics (system monitoring): admin only, with its own validation, and the ingest key
+# encrypted and write-only. The generic /{key} routes refuse these keys (see _check_config_setting).
+class AnalyticsSettingsChange(BaseModel):
+    enabled: bool = False
+    url: str = ""
+    websiteId: str = ""
+    traceSample: int = ghostwire_analytics.DEFAULT_TRACE_SAMPLE
+    browser: bool = False
+    replay: bool = False
+    # Absent keeps the stored key, "" removes it.
+    ingestKey: str | None = None
+
+
+@router.get("/analytics")
+async def get_analytics_settings(
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The Ghostwire Analytics settings, without the ingest key (only whether one is stored)."""
+    return ghostwire_analytics.public_view(await ghostwire_analytics.load(db))
+
+
+@router.put("/analytics")
+async def update_analytics_settings(
+    data: AnalyticsSettingsChange,
+    request: Request,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save the Ghostwire Analytics settings. They apply within a minute, without a restart."""
+    change = data.model_dump(exclude_unset=True)
+    try:
+        saved = await ghostwire_analytics.save(db, change)
+    except ghostwire_analytics.AnalyticsSettingsError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from None
+
+    key_note = ""
+    if change.get("ingestKey") is not None:
+        key_note = ", ingest key replaced" if change["ingestKey"].strip() else ", ingest key removed"
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="analytics_settings_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Ghostwire Analytics monitoring {'on' if saved['enabled'] else 'off'}{key_note}",
+        )
+    )
+    await db.commit()
+    return saved
+
+
+@router.post("/analytics/test")
+async def check_analytics_connection(
+    data: AnalyticsSettingsChange,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check the values are well-formed and the Analytics URL answers. Saves nothing."""
+    stored = await ghostwire_analytics.load(db)
+    return await ghostwire_analytics.check_connection(data.model_dump(), stored_key=stored["ingest_key"])
+
+
 @router.get("/{key}", response_model=SettingResponse)
 async def get_setting(
     key: str,
@@ -249,6 +314,11 @@ async def get_setting(
 
 def _check_config_setting(key: str, value) -> None:
     """Settings the nginx config is generated from get the same checks as their own routes."""
+    if ghostwire_analytics.is_analytics_key(key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Ghostwire Analytics settings are saved through /api/settings/analytics",
+        )
     if key == "default_site_redirect_url" and value:
         try:
             _check_redirect_url(str(value))

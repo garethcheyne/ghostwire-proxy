@@ -325,6 +325,27 @@ async def get_trusted_ips(
         return []
 
 
+@router.get("/analytics-config")
+async def get_analytics_config(
+    db: AsyncSession = Depends(get_db),
+):
+    """The Ghostwire Analytics monitoring config for the admin UI's server side (its telemetry, the
+    /gw/ relay and the tracker tag), with the ingest key. null while monitoring is off."""
+    from app.services import ghostwire_analytics
+
+    config = ghostwire_analytics.active_config(await ghostwire_analytics.load(db))
+    if config is None:
+        return None
+    return {
+        "url": config["url"],
+        "websiteId": config["website_id"],
+        "ingestKey": config["ingest_key"],
+        "traceSample": config["trace_sample"],
+        "browser": config["browser"],
+        "replay": config["replay"],
+    }
+
+
 @router.get("/blocked-ips")
 async def get_blocked_ips(
     db: AsyncSession = Depends(get_db),

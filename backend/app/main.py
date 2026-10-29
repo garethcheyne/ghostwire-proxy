@@ -13,12 +13,15 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.api import router as api_router
+from app.core import ghostwire_telemetry
 from app.core.client_ip import TrustedProxyMiddleware
 from app.core.config import settings
 from app.core.database import engine
+from app.core.ghostwire_telemetry import heartbeat, job
 from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
 from app.core.redis import close_redis
 from app.core.version import APP_VERSION
+from app.services import ghostwire_analytics
 
 # Configure logging
 logging.basicConfig(
@@ -199,6 +202,21 @@ async def lifespan(app: FastAPI):
     # Auto-provision admin UI proxy host + SSL cert if NEXTAUTH_URL is an FQDN
     await _auto_provision_admin_proxy()
 
+    # Ghostwire Analytics monitoring settings: held in memory for the telemetry's export threads,
+    # reloaded after every save and once a minute (so another worker's save or a restore applies).
+    await ghostwire_analytics.refresh()
+
+    async def analytics_settings_refresh_loop():
+        while True:
+            try:
+                await asyncio.sleep(ghostwire_analytics.REFRESH_SECONDS)
+                heartbeat(job="analytics-settings-refresh")
+                await ghostwire_analytics.refresh()
+            except asyncio.CancelledError:
+                break
+
+    analytics_settings_task = asyncio.create_task(analytics_settings_refresh_loop())
+
     # Start background metrics collection task
     from app.services.system_service import system_monitor_service
 
@@ -207,7 +225,9 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 await asyncio.sleep(60)  # Collect every 60 seconds
-                await system_monitor_service.collect_and_store_metrics()
+                heartbeat(job="system-metrics")
+                async with job("system-metrics"):
+                    await system_monitor_service.collect_and_store_metrics()
             except asyncio.CancelledError:
                 logger.info("Metrics collection task cancelled")
                 break
@@ -238,6 +258,7 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 await asyncio.sleep(60)  # Check every minute
+                heartbeat(job="scheduled-backup")
                 async with AsyncSessionLocal() as session:
                     settings_obj = await backup_service.get_settings(session)
                     if not settings_obj.auto_backup_enabled:
@@ -266,17 +287,18 @@ async def lifespan(app: FastAPI):
                         last_fired_slot = slot
                         logger.info("Running scheduled backup...")
                         try:
-                            created_backup = await backup_service.create_backup(
-                                db=session,
-                                backup_type="scheduled",
-                                include_database=True,
-                                include_certificates=True,
-                                include_letsencrypt=True,
-                                include_configs=True,
-                                include_traffic_logs=settings_obj.include_traffic_logs,
-                            )
-                            # Run cleanup after scheduled backup
-                            await backup_service.cleanup_old_backups(session)
+                            async with job("scheduled-backup"):
+                                created_backup = await backup_service.create_backup(
+                                    db=session,
+                                    backup_type="scheduled",
+                                    include_database=True,
+                                    include_certificates=True,
+                                    include_letsencrypt=True,
+                                    include_configs=True,
+                                    include_traffic_logs=settings_obj.include_traffic_logs,
+                                )
+                                # Run cleanup after scheduled backup
+                                await backup_service.cleanup_old_backups(session)
                             logger.info("Scheduled backup completed successfully")
                             try:
                                 from app.services.push_service import push_service
@@ -326,8 +348,9 @@ async def lifespan(app: FastAPI):
         # probe, so a slow-starting backend isn't reported as an outage.
         await asyncio.sleep(90)
         while True:
+            heartbeat(job="upstream-health-checks")
             try:
-                async with AsyncSessionLocal() as session:
+                async with job("upstream-health-checks"), AsyncSessionLocal() as session:
                     await run_health_checks(session)
             except asyncio.CancelledError:
                 logger.info("Health check task cancelled")
@@ -354,8 +377,9 @@ async def lifespan(app: FastAPI):
         """
         await asyncio.sleep(30)
         while True:
+            heartbeat(job="trusted-proxy-ranges")
             try:
-                async with AsyncSessionLocal() as session:
+                async with job("trusted-proxy-ranges"), AsyncSessionLocal() as session:
                     await refresh_ranges(session)
             except asyncio.CancelledError:
                 logger.info("Trusted proxy refresh task cancelled")
@@ -397,7 +421,8 @@ async def lifespan(app: FastAPI):
         # don't have to wait 24h for the first download (which causes nginx to
         # log "GeoIP database not found" warnings until then).
         try:
-            await check_and_update()
+            async with job("geoip-update"):
+                await check_and_update()
         except Exception as e:
             logger.error(f"Error in initial GeoIP check: {e}")
 
@@ -405,7 +430,9 @@ async def lifespan(app: FastAPI):
             try:
                 # Check every 24 hours
                 await asyncio.sleep(86400)
-                await check_and_update()
+                heartbeat(job="geoip-update")
+                async with job("geoip-update"):
+                    await check_and_update()
             except asyncio.CancelledError:
                 logger.info("GeoIP update task cancelled")
                 break
@@ -424,6 +451,7 @@ async def lifespan(app: FastAPI):
         # Wait 2 minutes on startup before first check
         await asyncio.sleep(120)
         while True:
+            heartbeat(job="update-check")
             try:
                 async with AsyncSessionLocal() as session:
                     update_settings = await update_service.get_settings(session)
@@ -443,11 +471,12 @@ async def lifespan(app: FastAPI):
 
                     logger.info("Running scheduled update check...")
 
-                    # Check app updates
-                    app_result = await update_service.check_for_app_updates(session)
+                    async with job("update-check"):
+                        # Check app updates
+                        app_result = await update_service.check_for_app_updates(session)
 
-                    # Check base image updates
-                    base_results = await update_service.check_for_base_image_updates(session)
+                        # Check base image updates
+                        base_results = await update_service.check_for_base_image_updates(session)
                     base_updates = [r for r in base_results if r.get("update_available")]
 
                     # Cache results in Redis for fast frontend polling
@@ -529,6 +558,7 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(30)
         cleanup_counter = 0
         while True:
+            heartbeat(job="ip-enrichment-backfill")
             try:
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select as _select
@@ -545,11 +575,13 @@ async def lifespan(app: FastAPI):
                         cleanup_counter += 1
                         if cleanup_counter >= 72:
                             cleanup_counter = 0
-                            await cleanup_stale_enrichments(session)
+                            async with job("ip-enrichment-cleanup"):
+                                await cleanup_stale_enrichments(session)
                         await asyncio.sleep(300)
                         continue
 
-                    result = await backfill_enrichment(session)
+                    async with job("ip-enrichment-backfill"):
+                        result = await backfill_enrichment(session)
                     if result["enriched"] > 0:
                         logger.info(
                             "IP enrichment backfill: enriched %d IPs, %d remaining",
@@ -561,7 +593,7 @@ async def lifespan(app: FastAPI):
                     cleanup_counter += 1
                     if cleanup_counter >= 72:
                         cleanup_counter = 0
-                        async with AsyncSessionLocal() as cleanup_session:
+                        async with job("ip-enrichment-cleanup"), AsyncSessionLocal() as cleanup_session:
                             await cleanup_stale_enrichments(cleanup_session)
 
                     if result["status"] == "complete":
@@ -592,6 +624,7 @@ async def lifespan(app: FastAPI):
         """Periodically refresh the local AbuseIPDB blacklist cache."""
         await asyncio.sleep(45)
         while True:
+            heartbeat(job="abuseipdb-blacklist-sync")
             try:
                 async with AsyncSessionLocal() as session:
                     from app.models.setting import Setting
@@ -599,7 +632,8 @@ async def lifespan(app: FastAPI):
                     setting_result = await session.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
                     setting = setting_result.scalar_one_or_none()
                     if setting and setting.value:
-                        result = await sync_abuseipdb_blacklist(session, setting.value)
+                        async with job("abuseipdb-blacklist-sync"):
+                            result = await sync_abuseipdb_blacklist(session, setting.value)
                         if result["status"] == "synced":
                             logger.info(
                                 "AbuseIPDB blacklist sync: cached %d known-bad IPs",
@@ -626,6 +660,7 @@ async def lifespan(app: FastAPI):
         """Periodically report newly-escalated threat actors to AbuseIPDB."""
         await asyncio.sleep(60)
         while True:
+            heartbeat(job="abuseipdb-report")
             try:
                 async with AsyncSessionLocal() as session:
                     from app.models.setting import Setting
@@ -638,7 +673,8 @@ async def lifespan(app: FastAPI):
                     enabled_setting = enabled_result.scalar_one_or_none()
 
                     if key_setting and key_setting.value and enabled_setting and enabled_setting.value == "true":
-                        result = await submit_bulk_reports(session, key_setting.value)
+                        async with job("abuseipdb-report"):
+                            result = await submit_bulk_reports(session, key_setting.value)
                         if result["status"] == "reported":
                             logger.info(
                                 "AbuseIPDB report: submitted %d IPs (%d accepted, %d rejected, %d skipped as trusted)",
@@ -687,21 +723,25 @@ async def lifespan(app: FastAPI):
         # One-time backfill so traffic already sitting in the table is summarised
         # before the first prune ever removes it.
         try:
-            await roll_up_analytics(hours_back=72, days_back=90)
+            async with job("analytics-rollup"):
+                await roll_up_analytics(hours_back=72, days_back=90)
         except Exception as e:
             logger.error(f"Initial analytics backfill failed: {e}")
 
         while True:
+            heartbeat(job="data-retention")
             try:
                 # Summarise first — anything pruned below is gone for good.
-                await roll_up_analytics()
+                async with job("analytics-rollup"):
+                    await roll_up_analytics()
             except asyncio.CancelledError:
                 logger.info("Data retention task cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in analytics rollup: {e}")
             try:
-                summary = await run_retention_cleanup()
+                async with job("data-retention"):
+                    summary = await run_retention_cleanup()
                 total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
                 if total_deleted > 0:
                     logger.info(f"Data retention cleanup: removed {total_deleted} total rows")
@@ -725,8 +765,10 @@ async def lifespan(app: FastAPI):
     async def traffic_rollup_loop():
         await asyncio.sleep(20)
         while True:
+            heartbeat(job="traffic-rollup")
             try:
-                result = await refresh_traffic_rollup()
+                async with job("traffic-rollup"):
+                    result = await refresh_traffic_rollup()
                 if result.get("steps", 0) > 3:
                     logger.info(f"Traffic rollup caught up: {result}")
             except asyncio.CancelledError:
@@ -746,8 +788,9 @@ async def lifespan(app: FastAPI):
         # Let the app settle before the first check; reports are never urgent.
         await asyncio.sleep(180)
         while True:
+            heartbeat(job="scheduled-reports")
             try:
-                async with AsyncSessionLocal() as session:
+                async with job("scheduled-reports"), AsyncSessionLocal() as session:
                     sent = await run_due_schedules(session)
                 if sent:
                     logger.info("Scheduled reports: sent %d", sent)
@@ -769,8 +812,9 @@ async def lifespan(app: FastAPI):
     async def backup_watchdog_loop():
         await asyncio.sleep(600)
         while True:
+            heartbeat(job="backup-watchdog")
             try:
-                async with AsyncSessionLocal() as session:
+                async with job("backup-watchdog"), AsyncSessionLocal() as session:
                     from sqlalchemy import func as _func
                     from sqlalchemy import select as _select
 
@@ -837,6 +881,7 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(120)
 
         while True:
+            heartbeat(job="container-package-update")
             try:
                 async with AsyncSessionLocal() as session:
                     policy = await get_auto_update_policy(session)
@@ -860,10 +905,11 @@ async def lifespan(app: FastAPI):
                     excluded = set(policy["excluded"]) | set(policy["always_excluded"])
                     logger.info("Running scheduled container package update...")
 
-                    results = await apply_updates_all(
-                        security_only=policy["security_only"],
-                        excluded=excluded,
-                    )
+                    async with job("container-package-update"):
+                        results = await apply_updates_all(
+                            security_only=policy["security_only"],
+                            excluded=excluded,
+                        )
                     upgraded = sum(r.get("upgraded", 0) or 0 for r in results)
                     failures = [r for r in results if r.get("error") and not r.get("skipped")]
 
@@ -922,8 +968,9 @@ async def lifespan(app: FastAPI):
         # Wait 2 minutes on startup before first check
         await asyncio.sleep(120)
         while True:
+            heartbeat(job="certificate-renewal")
             try:
-                async with AsyncSessionLocal() as session:
+                async with job("certificate-check"), AsyncSessionLocal() as session:
                     due = await check_expiring_certificates(
                         session,
                         days_before_expiry=30,
@@ -938,7 +985,8 @@ async def lifespan(app: FastAPI):
                     for cert in due:
                         domain = cert.domain_names[0] if cert.domain_names else cert.id
                         try:
-                            success, message = await renew_and_deploy_certificate(cert.id)
+                            async with job("certificate-renewal"):
+                                success, message = await renew_and_deploy_certificate(cert.id)
                             if success:
                                 logger.info("Certificate auto-renewal: renewed %s", domain)
                             else:
@@ -965,6 +1013,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cancel background tasks
+    analytics_settings_task.cancel()
     metrics_task.cancel()
     backup_task.cancel()
     geoip_task.cancel()
@@ -980,7 +1029,13 @@ async def lifespan(app: FastAPI):
     backup_watchdog_task.cancel()
     container_update_task.cancel()
     traffic_rollup_task.cancel()
-    for _task in (report_task, backup_watchdog_task, container_update_task, traffic_rollup_task):
+    for _task in (
+        report_task,
+        backup_watchdog_task,
+        container_update_task,
+        traffic_rollup_task,
+        analytics_settings_task,
+    ):
         with suppress(asyncio.CancelledError):
             await _task
     with suppress(asyncio.CancelledError):
@@ -1010,6 +1065,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Ghostwire Proxy API...")
     await close_redis()
     await engine.dispose()
+    ghostwire_telemetry.shutdown()
 
 
 app = FastAPI(
@@ -1064,6 +1120,38 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TrustedProxyMiddleware)
 
 
+class UntracedInternalRoutes:
+    """/api/internal/* is machine traffic inside the stack: OpenResty posts a traffic log for every
+    proxied request and asks about auth-wall sessions, rules and blocks. Monitoring leaves it out
+    (no spans, no metrics, no database spans under it), so its volume never scales with proxied
+    traffic and nothing is added to that path. Per-host traffic is the Proxy's own analytics."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path", "").startswith("/api/internal/"):
+            with ghostwire_telemetry.suppress_instrumentation():
+                await self.app(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(UntracedInternalRoutes)
+
+# System monitoring with Ghostwire Analytics (ghostwire-suite/docs/analytics-reporting.md): off by
+# default, switched on and pointed at a site on the Settings page. Nothing is sent while it's off.
+ghostwire_telemetry.setup(
+    ghostwire_analytics.get_config,
+    service_name="api",
+    service_namespace="ghostwire-proxy",
+    service_version=APP_VERSION,
+    app=app,
+    sqlalchemy_engine=engine,
+    ignored_paths=[*ghostwire_telemetry.IGNORED_PATHS, "/api/internal/"],
+)
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "ghostwire-proxy-api"}
@@ -1080,3 +1168,9 @@ async def get_version():
 
 # Include API routes
 app.include_router(api_router, prefix="/api")
+
+# The stack's OpenTelemetry Collector (ghostwire-proxy-otel) sends container and host metrics here,
+# and this forwards them with the Analytics URL and key from Settings. Only from private addresses
+# (the Docker network), and a 404 while monitoring is off. It's not under /api, so the admin UI's
+# rewrites never reach it.
+app.include_router(ghostwire_telemetry.make_otlp_relay_router(ghostwire_analytics.get_config))

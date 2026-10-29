@@ -569,7 +569,9 @@ UPGRADE_TIMEOUT_SECONDS = 600
 # matters: swapping its libraries under a running server risks the database
 # itself, and it is a registry image that watchtower already keeps current by
 # replacing the whole image — which is the correct mechanism for it.
-DEFAULT_EXCLUDED = ("ghostwire-proxy-postgres",)
+# The OpenTelemetry Collector is distroless (no package manager to run); it's updated by changing
+# its pinned image tag in docker-compose.yml.
+DEFAULT_EXCLUDED = ("ghostwire-proxy-postgres", "ghostwire-proxy-otel")
 
 
 class UpgradeResult(dict):
