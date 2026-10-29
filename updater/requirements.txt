@@ -1,13 +1,13 @@
 # Ghostwire Proxy Updater - Dependencies
 
 # Redis for pub/sub communication
-redis>=5.0.0
+redis==8.1.0
 
 # HTTP client for health checks and API calls
-httpx>=0.25.0
+httpx==0.28.1
 
 # Docker SDK for container management
-docker>=7.0.0
+docker==7.2.0
 
 # Semantic versioning
-semver>=3.0.0
+semver==3.1.0

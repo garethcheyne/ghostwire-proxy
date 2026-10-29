@@ -2,15 +2,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+import bcrypt
 from cryptography.fernet import Fernet
 import base64
 import hashlib
 
 from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def _truncate_password(password: str) -> str:
     """Truncate password to 72 bytes for bcrypt compatibility"""
@@ -21,11 +18,16 @@ def _truncate_password(password: str) -> str:
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(_truncate_password(password), rounds=settings.bcrypt_rounds)
+    salt = bcrypt.gensalt(rounds=settings.bcrypt_rounds)
+    return bcrypt.hashpw(_truncate_password(password).encode('utf-8'), salt).decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(_truncate_password(plain_password), hashed_password)
+    # $2a$/$2b$/$2y$ hashes, as passlib and bcryptjs (Better Auth) write them.
+    try:
+        return bcrypt.checkpw(_truncate_password(plain_password).encode('utf-8'), hashed_password.encode('utf-8'))
+    except ValueError:  # not a bcrypt hash
+        return False
 
 
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:

@@ -63,7 +63,7 @@ class Settings(BaseSettings):
         """Sync database URL for Alembic migrations."""
         url = self.database_url
         if "+asyncpg" in url:
-            return url.replace("+asyncpg", "+psycopg2")
+            return url.replace("+asyncpg", "+psycopg")
         return url
 
     class Config:

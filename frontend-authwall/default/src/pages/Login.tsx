@@ -129,11 +129,11 @@ export default function Login() {
               <img
                 src="/__auth/logo.png"
                 alt="Ghostwire Logo"
-                className="h-10 w-10 object-contain [filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
+                className="h-10 w-10 object-contain filter-[brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
               />
             </div>
             <div>
-              <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+              <span className="text-xl font-bold bg-linear-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
                 Ghostwire
               </span>
               <div className="text-[10px] text-white/40 tracking-[0.2em] uppercase">
@@ -154,7 +154,7 @@ export default function Login() {
           <h1 className="text-4xl font-bold leading-tight">
             <span className="text-white">Sign in to</span>
             <br />
-            <span className="bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
               continue
             </span>
           </h1>
@@ -194,10 +194,10 @@ export default function Login() {
               <img
                 src="/__auth/logo.png"
                 alt="Ghostwire Logo"
-                className="h-10 w-10 object-contain [filter:brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
+                className="h-10 w-10 object-contain filter-[brightness(0)_saturate(100%)_invert(71%)_sepia(53%)_saturate(425%)_hue-rotate(162deg)_brightness(95%)_contrast(92%)]"
               />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="text-xl font-bold bg-linear-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
               Ghostwire
             </span>
           </div>

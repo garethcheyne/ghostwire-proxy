@@ -1,12 +1,12 @@
 # Build stage
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
 ARG BUILD_VERSION=unknown
 
-# pnpm via corepack — version comes from the "packageManager" field in package.json
-RUN corepack enable
+# pnpm via corepack (Node 25+ no longer bundles it); the version comes from "packageManager" in package.json.
+RUN npm install -g corepack@0.36.0 && corepack enable
 
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
@@ -24,7 +24,7 @@ RUN echo "$BUILD_VERSION" > /app/VERSION
 RUN pnpm build
 
 # Production stage
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 
 WORKDIR /app
 

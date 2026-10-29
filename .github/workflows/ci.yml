@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.12"
-  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.15"
+  NODE_VERSION: "26"
 
 jobs:
   # ─────────────────────────────────────────────
