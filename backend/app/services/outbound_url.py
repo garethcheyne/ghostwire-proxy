@@ -55,7 +55,7 @@ async def _resolve(host: str) -> list[str]:
     loop = asyncio.get_running_loop()
     try:
         infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=5)
-    except TimeoutError, OSError:
+    except (TimeoutError, OSError):
         raise OutboundUrlError(f"Could not resolve {host}") from None
     return list({info[4][0] for info in infos})
 

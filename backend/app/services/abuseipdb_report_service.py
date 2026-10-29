@@ -65,7 +65,7 @@ async def _get_trusted_networks(db: AsyncSession) -> list:
 
     try:
         raw = json.loads(setting.value)
-    except json.JSONDecodeError, TypeError:
+    except (json.JSONDecodeError, TypeError):
         return []
 
     networks = []

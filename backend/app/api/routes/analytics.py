@@ -692,7 +692,7 @@ async def get_auth_errors(
         for row in top_hosts_result.all():
             try:
                 names = json.loads(row[1]) if row[1] else []
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 names = []
             top_hosts.append(
                 {

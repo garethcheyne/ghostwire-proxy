@@ -330,7 +330,7 @@ class ContainerSecurityScanner:
             return None
         try:
             return int((out or "0").strip().splitlines()[-1])
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             return None
 
     def _image_info(self, container) -> dict:

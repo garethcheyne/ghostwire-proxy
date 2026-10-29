@@ -69,7 +69,7 @@ def _f(value, places: int = 1) -> float | None:
         return None
     try:
         return round(float(value), places)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -77,7 +77,7 @@ def _i(value) -> int:
     """Coerce a SQL aggregate to a plain int."""
     try:
         return int(value or 0)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return 0
 
 

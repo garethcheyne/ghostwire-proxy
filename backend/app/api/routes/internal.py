@@ -321,7 +321,7 @@ async def get_trusted_ips(
 
     try:
         return _json.loads(setting.value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return []
 
 

@@ -32,7 +32,7 @@ async def _get_retention_setting(session: AsyncSession, key: str) -> int:
     if row is not None:
         try:
             return int(row)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             pass
     return DEFAULT_RETENTION.get(key, 90)
 

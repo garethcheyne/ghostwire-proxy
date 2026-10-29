@@ -69,7 +69,7 @@ def get_preset(preset_id: str) -> dict | None:
                 data = _load_preset_file(preset_file)
                 if data.get("id") == preset_id:
                     return data
-            except json.JSONDecodeError, KeyError:
+            except (json.JSONDecodeError, KeyError):
                 continue
 
     return None

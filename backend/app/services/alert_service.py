@@ -357,7 +357,7 @@ async def _send_email(
 
     try:
         config = json.loads(channel.config) if isinstance(channel.config, str) else (channel.config or {})
-    except json.JSONDecodeError, TypeError:
+    except (json.JSONDecodeError, TypeError):
         logger.error("Email channel %s has unreadable config", channel.id)
         return False
 

@@ -559,7 +559,7 @@ class TestHealth:
     async def test_per_server_status_and_host_aggregate(self, db_session):
         host = await _make_host(db_session, [8050, 8051])
 
-        async def fake_probe(scheme, host, port, check_type, path, timeout):  # noqa: ASYNC109  mirrors probe_server
+        async def fake_probe(scheme, host, port, check_type, path, timeout):
             return (True, None, 7) if port == 8050 else (False, "connection refused", None)
 
         with (

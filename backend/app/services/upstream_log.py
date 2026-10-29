@@ -77,14 +77,14 @@ def _split(value: str | None) -> list[str]:
 def _int(value: str) -> int | None:
     try:
         return int(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
 def _ms(value: str) -> int | None:
     try:
         return round(float(value) * 1000)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 

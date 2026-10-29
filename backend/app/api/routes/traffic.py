@@ -604,7 +604,7 @@ def _safe_headers(raw: str | None) -> dict | None:
         return None
     try:
         headers = json.loads(raw)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
     if not isinstance(headers, dict):
         return None

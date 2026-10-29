@@ -26,7 +26,7 @@ def _bytes_human(value: int | None) -> str:
 def _num(value) -> str:
     try:
         return f"{int(value):,}"
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "—"
 
 
@@ -37,7 +37,7 @@ def _ms(value) -> str:
         return "—"
     try:
         return f"{float(value):,.0f} ms"
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return str(value)
 
 

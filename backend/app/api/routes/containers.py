@@ -184,7 +184,7 @@ async def write_auto_update_policy(
     if payload.get("cron"):
         try:
             croniter(str(payload["cron"]))
-        except ValueError, KeyError:
+        except (ValueError, KeyError):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Not a valid cron expression: {payload['cron']}",

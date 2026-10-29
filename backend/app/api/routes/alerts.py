@@ -44,7 +44,7 @@ async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) 
 
     try:
         config = json.loads(config_json)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         raise HTTPException(status_code=422, detail="Channel config must be valid JSON") from None
     if not isinstance(config, dict):
         raise HTTPException(status_code=422, detail="Channel config must be a JSON object")

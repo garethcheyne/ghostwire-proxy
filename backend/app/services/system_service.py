@@ -139,7 +139,7 @@ class SystemMonitorService:
             try:
                 if 'nginx' in proc.info['name'].lower():
                     return {"status": "healthy", "process": True}
-            except psutil.NoSuchProcess, psutil.AccessDenied:
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
         return {"status": "unknown"}

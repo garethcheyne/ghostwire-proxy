@@ -254,7 +254,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now(UTC)
                     try:
                         slot = croniter(settings_obj.schedule_cron, now).get_prev(datetime)
-                    except ValueError, KeyError:
+                    except (ValueError, KeyError):
                         logger.error(f"Invalid cron expression: {settings_obj.schedule_cron}")
                         continue
 
@@ -847,7 +847,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now(UTC)
                     try:
                         slot = croniter(policy["cron"], now).get_prev(datetime)
-                    except ValueError, KeyError:
+                    except (ValueError, KeyError):
                         logger.error("Invalid container update cron: %s", policy["cron"])
                         await asyncio.sleep(300)
                         continue

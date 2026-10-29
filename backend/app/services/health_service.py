@@ -106,7 +106,7 @@ async def probe_server(
     port: int,
     check_type: str = "http",
     path: str = "/",
-    timeout: float = CHECK_TIMEOUT,  # noqa: ASYNC109  per-server setting handed to wait_for and httpx
+    timeout: float = CHECK_TIMEOUT,
 ) -> tuple[bool, str | None, int | None]:
     """Probe one upstream server. Returns (is_up, error, latency_ms).
 
@@ -143,7 +143,7 @@ async def probe_server(
         if code >= 500:
             return False, f"HTTP {code}", latency
         return True, None, latency
-    except TimeoutError, httpx.TimeoutException:
+    except (TimeoutError, httpx.TimeoutException):
         return False, f"timed out after {timeout:g}s", None
     except httpx.HTTPError as e:
         return False, str(e)[:300] or type(e).__name__, None
@@ -433,7 +433,7 @@ async def flap_window(db: AsyncSession) -> timedelta:
     try:
         value = (await db.execute(select(Setting.value).where(Setting.key == FLAP_SETTING))).scalar_one_or_none()
         minutes = int(str(value).strip()) if value not in (None, "") else DEFAULT_FLAP_MINUTES
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         minutes = DEFAULT_FLAP_MINUTES
     return timedelta(minutes=max(0, min(minutes, 1440)))
 

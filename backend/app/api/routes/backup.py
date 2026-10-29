@@ -51,7 +51,7 @@ def _save_and_inspect_upload(file_path: str, content: bytes) -> dict | None:
             meta_file = tar.extractfile(tar.getmember("metadata.json"))
             if meta_file:
                 return json.loads(meta_file.read().decode("utf-8"))
-        except KeyError, json.JSONDecodeError:
+        except (KeyError, json.JSONDecodeError):
             pass
     return None
 
