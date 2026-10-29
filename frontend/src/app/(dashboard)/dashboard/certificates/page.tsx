@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 
 export default function CertificatesPage() {
   const confirm = useConfirm()
@@ -195,16 +196,16 @@ export default function CertificatesPage() {
         description="Manage SSL/TLS certificates for your proxy hosts"
         actions={
           <>
-            <button
+            <Button
+              size="lg"
               onClick={() => {
                 resetForm()
                 setShowCreateDialog(true)
               }}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               Add Certificate
-            </button>
+            </Button>
           </>
         }
       />
@@ -250,9 +251,9 @@ export default function CertificatesPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="rounded-lg p-1 hover:bg-muted" aria-label="Actions">
+                      <Button variant="ghost" size="icon-xs" aria-label="Actions">
                         <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
                       {cert.is_letsencrypt && (
@@ -368,13 +369,14 @@ export default function CertificatesPage() {
                         className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
-                      <button
+                      <Button
+                        variant="outline"
+                        size="lg"
                         type="button"
                         onClick={handleAddLeDomain}
-                        className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                       >
                         Add
-                      </button>
+                      </Button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {leDomains.map((domain) => (
@@ -444,13 +446,14 @@ export default function CertificatesPage() {
                         className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
-                      <button
+                      <Button
+                        variant="outline"
+                        size="lg"
                         type="button"
                         onClick={handleAddUploadDomain}
-                        className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                       >
                         Add
-                      </button>
+                      </Button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {uploadDomains.map((domain) => (
@@ -506,21 +509,22 @@ export default function CertificatesPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowCreateDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {createMode === 'letsencrypt' ? 'Request Certificate' : 'Upload'}
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>

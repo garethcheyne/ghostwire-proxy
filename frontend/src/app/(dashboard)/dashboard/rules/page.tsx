@@ -746,9 +746,9 @@ export default function RulesPage() {
                         <div className="shrink-0 ml-2">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                              <Button variant="ghost" size="icon" aria-label="Actions">
                                 <MoreHorizontal className="h-4 w-4" />
-                              </button>
+                              </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
                               <DropdownMenuItem onSelect={() => handleEditWaf(rule)} className="gap-2">
@@ -851,9 +851,9 @@ export default function RulesPage() {
                             <div className="shrink-0 ml-2">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                                  <Button variant="ghost" size="icon" aria-label="Actions">
                                     <MoreHorizontal className="h-4 w-4" />
-                                  </button>
+                                  </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40">
                                   <DropdownMenuItem onSelect={() => handleEditGeo(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>
@@ -930,9 +930,9 @@ export default function RulesPage() {
                       <div className="shrink-0 ml-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                            <Button variant="ghost" size="icon" aria-label="Actions">
                               <MoreHorizontal className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuItem onSelect={() => handleEditRateLimit(rule)} className="gap-2"><Pencil className="gap-2" /> Edit</DropdownMenuItem>

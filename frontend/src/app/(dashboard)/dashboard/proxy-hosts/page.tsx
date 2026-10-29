@@ -59,6 +59,7 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
 import { PageHeader } from '@/components/page-header'
 import { Globe as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 type TabType = 'details' | 'locations' | 'advanced' | 'config'
 
@@ -585,13 +586,13 @@ export default function ProxyHostsPage() {
         description="Manage your reverse proxy configurations"
         actions={
           <>
-            <button
+            <Button
+              size="lg"
               onClick={handleCreate}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               Add Proxy Host
-            </button>
+            </Button>
           </>
         }
       />
@@ -695,9 +696,9 @@ export default function ProxyHostsPage() {
                     </button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button type="button" className="rounded-lg p-2 hover:bg-muted" title="More actions">
+                        <Button variant="ghost" size="icon" type="button" title="More actions">
                           <MoreHorizontal className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={() => handleEdit(host)}>
@@ -938,13 +939,14 @@ export default function ProxyHostsPage() {
                         className="flex-1 px-4 py-2 rounded-lg border border-input bg-background focus:outline-hidden focus:ring-2 focus:ring-primary"
                         placeholder="example.com"
                       />
-                      <button
+                      <Button
+                        variant="outline"
+                        size="lg"
                         type="button"
                         onClick={handleAddDomain}
-                        className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                       >
                         Add
-                      </button>
+                      </Button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {formData.domain_names.map((domain) => (
@@ -1225,13 +1227,12 @@ export default function ProxyHostsPage() {
                     <p className="text-sm text-muted-foreground">
                       Custom locations allow different paths to be proxied to different backends.
                     </p>
-                    <button
+                    <Button
                       onClick={handleAddLocation}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90"
                     >
                       <Plus className="h-4 w-4" />
                       Add Location
-                    </button>
+                    </Button>
                   </div>
 
                   {locations.length === 0 ? (
@@ -1575,22 +1576,23 @@ export default function ProxyHostsPage() {
 
             {/* Shared footer buttons - visible on all tabs */}
             <ModalFooter className="p-6">
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 type="button"
                 onClick={() => setShowDialog(false)}
-                className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                size="lg"
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingHost ? 'Save Changes' : 'Create'}
-              </button>
+              </Button>
             </ModalFooter>
       </Modal>
 
@@ -1806,18 +1808,19 @@ export default function ProxyHostsPage() {
             </ModalBody>
 
             <ModalFooter className="p-4">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={() => setShowLocationDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   onClick={handleSaveLocation}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
                 >
                   {editingLocation ? 'Update' : 'Add'}
-                </button>
+                </Button>
             </ModalFooter>
       </Modal>
 

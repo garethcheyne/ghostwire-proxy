@@ -30,6 +30,7 @@ import { MfaCard } from '@/components/settings/mfa-card'
 import { SmtpCard } from '@/components/settings/smtp-card'
 import { PageHeader } from '@/components/page-header'
 import { Settings as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface SystemSettings {
   nginx_config_path: string
@@ -296,18 +297,19 @@ export default function SettingsPage() {
         actions={
           <>
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={handleReloadNginx}
                 disabled={isReloading}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${isReloading ? 'animate-spin' : ''}`} />
                 Reload Nginx
-              </button>
-              <button
+              </Button>
+              <Button
+                size="lg"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -315,7 +317,7 @@ export default function SettingsPage() {
                   <Save className="h-4 w-4" />
                 )}
                 Save Settings
-              </button>
+              </Button>
             </div>
           </>
         }
@@ -426,10 +428,10 @@ export default function SettingsPage() {
           )}
 
           <div className="flex justify-end">
-            <button
+            <Button
+              size="lg"
               onClick={handleSaveDefaultSite}
               disabled={isSavingDefault}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {isSavingDefault ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -437,7 +439,7 @@ export default function SettingsPage() {
                 <Save className="h-4 w-4" />
               )}
               Save & Apply
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -697,14 +699,14 @@ export default function SettingsPage() {
                   {showAbuseKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <button
+              <Button
+                size="lg"
                 onClick={saveAbuseIpDbKey}
                 disabled={isSavingAbuseKey || !abuseIpDbKey.trim()}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isSavingAbuseKey ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save
-              </button>
+              </Button>
               {abuseIpDbKeyHasValue && (
                 <button
                   onClick={clearAbuseIpDbKey}
@@ -769,10 +771,10 @@ export default function SettingsPage() {
               placeholder="e.g. 203.86.201.144, 10.0.0.0/8, or 2001:db8::1"
               className="flex-1 max-w-sm px-4 py-2 rounded-lg border border-input bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
-            <button
+            <Button
+              size="lg"
               onClick={addTrustedIp}
               disabled={isSavingTrusted || !newTrustedIp.trim()}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {isSavingTrusted ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -780,7 +782,7 @@ export default function SettingsPage() {
                 <Plus className="h-4 w-4" />
               )}
               Add
-            </button>
+            </Button>
           </div>
           {trustedIps.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">No trusted IPs configured</p>

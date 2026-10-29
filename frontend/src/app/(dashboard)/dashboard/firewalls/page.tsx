@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 
 interface FirewallConnector {
   id: string
@@ -303,22 +304,23 @@ export default function FirewallsPage() {
         actions={
           <>
             {activeTab === 'connectors' && (
-              <button
+              <Button
+                size="lg"
                 onClick={handleCreate}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" />
                 Add Connector
-              </button>
+              </Button>
             )}
             {activeTab === 'blocklist' && blocklist.length > 0 && (
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={handleDeduplicate}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
               >
                 <Trash2 className="h-4 w-4" />
                 Remove Duplicates
-              </button>
+              </Button>
             )}
           </>
         }
@@ -415,9 +417,9 @@ export default function FirewallsPage() {
                     <div onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                          <Button variant="ghost" size="icon" aria-label="Actions">
                             <MoreHorizontal className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
@@ -520,12 +522,12 @@ export default function FirewallsPage() {
               </div>
             </div>
             <div className="border-t border-border p-4 flex justify-end">
-              <button
+              <Button
+                size="lg"
                 onClick={() => setFindingsDialog(null)}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </ModalBody>
         )}
@@ -747,21 +749,22 @@ export default function FirewallsPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowCreateDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editingConnector ? 'Save Changes' : 'Add Connector'}
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>

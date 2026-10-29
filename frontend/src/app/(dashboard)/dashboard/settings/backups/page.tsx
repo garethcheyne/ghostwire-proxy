@@ -308,31 +308,33 @@ export default function BackupsPage() {
                 onChange={handleUpload}
                 className="hidden"
               />
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
                 {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 {isUploading ? 'Uploading...' : 'Upload Backup'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => {
                   setEditedSettings(settings)
                   setShowSettingsDialog(true)
                 }}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
               >
                 <Settings className="h-4 w-4" />
                 Settings
-              </button>
-              <button
+              </Button>
+              <Button
+                size="lg"
                 onClick={() => setShowCreateDialog(true)}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" />
                 Create Backup
-              </button>
+              </Button>
             </div>
           </>
         }
@@ -599,20 +601,21 @@ export default function BackupsPage() {
               </label>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={() => setShowCreateDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   onClick={handleCreateBackup}
                   disabled={isCreating}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
                   Create Backup
-                </button>
+                </Button>
               </div>
             </div>
         </ModalBody>
@@ -687,12 +690,13 @@ export default function BackupsPage() {
               </label>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={() => setShowRestoreDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
+                </Button>
                 <Button
                   variant="destructive"
                   size="lg"
@@ -802,20 +806,21 @@ export default function BackupsPage() {
               </label>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={() => setShowSettingsDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   onClick={handleSaveSettings}
                   disabled={isSavingSettings}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSavingSettings && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Settings
-                </button>
+                </Button>
               </div>
             </div>
           </ModalBody>

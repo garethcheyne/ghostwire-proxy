@@ -318,17 +318,18 @@ export default function UpdatesPage() {
         actions={
           <>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted"
               >
                 <Settings className="h-4 w-4" />
                 Settings
-              </button>
-              <button
+              </Button>
+              <Button
+                size="lg"
                 onClick={handleCheckUpdates}
                 disabled={isChecking || isUpdateInProgress}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isChecking ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -336,7 +337,7 @@ export default function UpdatesPage() {
                   <RefreshCw className="h-4 w-4" />
                 )}
                 Check for Updates
-              </button>
+              </Button>
             </div>
           </>
         }
@@ -465,14 +466,14 @@ export default function UpdatesPage() {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-border">
-              <button
+              <Button
+                size="lg"
                 onClick={handleSaveSettings}
                 disabled={isSavingSettings}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isSavingSettings && <Loader2 className="h-4 w-4 animate-spin" />}
                 Save Settings
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -647,13 +648,13 @@ export default function UpdatesPage() {
                           </a>
                         )}
                         {release.changelog && (
-                          <button
+                          <Button
+                            variant="outline"
                             onClick={() =>
                               setSelectedRelease(
                                 selectedRelease?.version === release.version ? null : release
                               )
                             }
-                            className="inline-flex items-center gap-1 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
                           >
                             {selectedRelease?.version === release.version ? (
                               <ChevronUp className="h-4 w-4" />
@@ -661,7 +662,7 @@ export default function UpdatesPage() {
                               <ChevronDown className="h-4 w-4" />
                             )}
                             {selectedRelease?.version === release.version ? 'Hide' : 'View'} notes
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -784,14 +785,14 @@ export default function UpdatesPage() {
 
                 <div className="flex items-center gap-2">
                   {update.status === 'completed' && update.can_rollback && !update.rollback_performed && (
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => handleRollback(update.id)}
                       disabled={isUpdateInProgress}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted disabled:opacity-50"
                     >
                       <RotateCcw className="h-4 w-4" />
                       Rollback
-                    </button>
+                    </Button>
                   )}
 
                   {update.rollback_performed && (

@@ -22,6 +22,7 @@ import {
 import { useIpActions } from '@/components/ip-actions-provider'
 import { PageHeader } from '@/components/page-header'
 import { Tag as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']
 
@@ -106,13 +107,13 @@ export default function KnownIpsPage() {
         }
         actions={
           <>
-            <button
+            <Button
+              size="lg"
               onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium"
             >
               <Plus className="h-4 w-4" />
               Label an IP
-            </button>
+            </Button>
           </>
         }
       />
@@ -128,13 +129,14 @@ export default function KnownIpsPage() {
             placeholder="e.g. 94.154.43.158"
             className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
           />
-          <button
+          <Button
+            variant="outline"
+            size="lg"
             onClick={() => lookupIp.trim() && showReport(lookupIp.trim())}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm"
           >
             <Search className="h-4 w-4" />
             View traffic
-          </button>
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           Works for any address — it does not need to be labelled first.
@@ -229,14 +231,14 @@ export default function KnownIpsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => showReport(k.ip_address)} title="View traffic"
-                          className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <Button variant="ghost" size="icon-sm" onClick={() => showReport(k.ip_address)} title="View traffic"
+                         >
                           <BarChart3 className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => openEdit(k)} title="Edit"
-                          className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground">
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(k)} title="Edit"
+                         >
                           <Pencil className="h-4 w-4" />
-                        </button>
+                        </Button>
                         <button onClick={() => handleDelete(k)} title="Remove label"
                           className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground hover:text-red-500">
                           <Trash2 className="h-4 w-4" />
@@ -334,17 +336,17 @@ export default function KnownIpsPage() {
           </label>
         </ModalBody>
         <ModalFooter>
-          <button onClick={() => setShowDialog(false)}
-            className="px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm">
+          <Button variant="outline" size="lg" onClick={() => setShowDialog(false)}
+           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
             onClick={save}
             disabled={!form.label.trim() || (!editing && !form.ip_address.trim())}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm disabled:opacity-50"
           >
             {editing ? 'Save' : 'Add'}
-          </button>
+          </Button>
         </ModalFooter>
       </Modal>
 

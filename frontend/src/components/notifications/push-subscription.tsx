@@ -22,6 +22,7 @@ import {
   unsubscribeFromPush,
   subscriptionToJson,
 } from '@/lib/push-notifications'
+import { Button } from '@/components/ui/button'
 
 interface PushSubscriptionManagerProps {
   className?: string
@@ -304,10 +305,11 @@ export function PushSubscriptionManager({
 
       {/* Test Button */}
       {showTestButton && isSubscribed && (
-        <button
+        <Button
+          variant="outline"
+          size="lg"
           onClick={handleTestNotification}
           disabled={isProcessing}
-          className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
         >
           {isProcessing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -315,7 +317,7 @@ export function PushSubscriptionManager({
             <Send className="h-4 w-4" />
           )}
           Send Test Notification
-        </button>
+        </Button>
       )}
 
       {/* Device Info */}

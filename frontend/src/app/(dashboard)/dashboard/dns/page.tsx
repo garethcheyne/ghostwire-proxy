@@ -23,6 +23,7 @@ import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
 import { Cloud as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface DnsProvider {
   id: string
@@ -268,16 +269,16 @@ export default function DnsPage() {
         description="Manage DNS records with Cloudflare integration"
         actions={
           <>
-            <button
+            <Button
+              size="lg"
               onClick={() => {
                 resetProviderForm()
                 setShowProviderDialog(true)
               }}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               Add DNS Provider
-            </button>
+            </Button>
           </>
         }
       />
@@ -378,13 +379,12 @@ export default function DnsPage() {
                       {records.length} DNS records
                     </p>
                   </div>
-                  <button
+                  <Button
                     onClick={handleCreateRecord}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                   >
                     <Plus className="h-4 w-4" />
                     Add Record
-                  </button>
+                  </Button>
                 </div>
 
                 {isLoadingRecords ? (
@@ -552,21 +552,22 @@ export default function DnsPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowProviderDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Add Provider
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>
@@ -686,21 +687,22 @@ export default function DnsPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowRecordDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editingRecord ? 'Save Changes' : 'Add Record'}
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>

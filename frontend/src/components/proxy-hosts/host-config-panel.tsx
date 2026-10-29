@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import api from '@/lib/api'
+import { Button } from '@/components/ui/button'
 
 interface HostConfigFile {
   exists: boolean
@@ -64,23 +65,23 @@ export function HostConfigPanel({ hostId }: { hostId: string }) {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={() => query.refetch()}
-            className="flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
           >
             <RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} />
             Refresh
-          </button>
+          </Button>
           {file.exists && (
-            <button
+            <Button
+              variant="outline"
               type="button"
               onClick={copy}
-              className="flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-sm hover:bg-muted"
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               {copied ? 'Copied' : 'Copy'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

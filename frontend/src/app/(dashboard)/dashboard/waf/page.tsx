@@ -28,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 
 interface WafRule {
   id: string
@@ -278,13 +279,13 @@ export default function WafPage() {
         description="Manage Web Application Firewall detection rules"
         actions={
           <>
-            <button
+            <Button
+              size="lg"
               onClick={handleCreate}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               Add Rule
-            </button>
+            </Button>
           </>
         }
       />
@@ -364,9 +365,9 @@ export default function WafPage() {
                 <div className="shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                      <Button variant="ghost" size="icon" aria-label="Actions">
                         <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
                       <DropdownMenuItem
@@ -546,21 +547,22 @@ export default function WafPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowCreateDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editingRule ? 'Save Changes' : 'Create Rule'}
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>

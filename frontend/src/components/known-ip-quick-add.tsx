@@ -14,6 +14,7 @@ import {
   useKnownIpGroups,
   type KnownIpLabel,
 } from '@/lib/queries/known-ips'
+import { Button } from '@/components/ui/button'
 
 const CATEGORIES = ['office', 'staff', 'vendor', 'monitoring', 'cdn', 'scanner', 'other']
 
@@ -145,17 +146,17 @@ export function KnownIpQuickAdd({ ip, existing, open, onOpenChange }: Props) {
         </label>
       </ModalBody>
       <ModalFooter>
-        <button onClick={() => onOpenChange(false)}
-          className="px-4 py-2 rounded-lg border border-input hover:bg-muted text-sm">
+        <Button variant="outline" size="lg" onClick={() => onOpenChange(false)}
+         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
+          size="lg"
           onClick={save}
           disabled={!form.label.trim() || busy}
-          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm disabled:opacity-50"
         >
           {existing ? 'Save' : 'Add'}
-        </button>
+        </Button>
       </ModalFooter>
     </Modal>
   )

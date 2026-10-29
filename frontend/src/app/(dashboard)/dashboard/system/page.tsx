@@ -39,6 +39,7 @@ import api from '@/lib/api'
 import { UpdatesTab } from '@/components/system/updates-tab'
 import { PageHeader } from '@/components/page-header'
 import { Monitor as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface ServiceHealth {
   status: 'healthy' | 'unhealthy' | 'unknown'
@@ -240,12 +241,13 @@ export default function SystemMonitorPage() {
         <div className="text-center">
           <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-muted-foreground">{error}</p>
-          <button
+          <Button
+            size="lg"
             onClick={fetchAllData}
-            className="mt-4 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm"
+            className="mt-4"
           >
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -310,14 +312,15 @@ export default function SystemMonitorPage() {
                       </button>
                     ))}
                   </div>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="lg"
                     onClick={fetchAllData}
                     disabled={isRefreshing}
-                    className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                   >
                     <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                     Refresh
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -715,7 +718,8 @@ export default function SystemMonitorPage() {
           <p className="text-sm text-muted-foreground mb-4">
             System metrics are collected periodically. Data will appear here once collection begins.
           </p>
-          <button
+          <Button
+            size="lg"
             onClick={async () => {
               try {
                 await api.post('/api/system/collect')
@@ -724,10 +728,9 @@ export default function SystemMonitorPage() {
                 console.error('Failed to trigger collection:', err)
               }
             }}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm"
           >
             Collect Metrics Now
-          </button>
+          </Button>
         </div>
       )}
       </>

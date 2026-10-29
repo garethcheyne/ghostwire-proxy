@@ -7,6 +7,7 @@
 
 import { useEffect } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export default function GlobalError({
   error,
@@ -33,12 +34,13 @@ export default function GlobalError({
             Reference: <code>{error.digest}</code>
           </p>
         )}
-        <button
+        <Button
+          size="lg"
           onClick={reset}
-          className="mt-4 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="mt-4"
         >
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   )

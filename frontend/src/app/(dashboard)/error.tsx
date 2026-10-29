@@ -7,6 +7,7 @@
 
 import { useEffect } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export default function DashboardError({
   error,
@@ -66,13 +67,14 @@ export default function DashboardError({
             A new version was deployed. Retry will clear the cached app and reload.
           </p>
         )}
-        <button
+        <Button
+          size="lg"
           onClick={handleRetry}
-          className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="mt-4"
         >
           <RefreshCw className="h-4 w-4" />
           Retry
-        </button>
+        </Button>
       </div>
     </div>
   )

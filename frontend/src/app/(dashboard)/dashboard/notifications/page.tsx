@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 
 interface AlertPreference {
   id: string
@@ -358,21 +359,22 @@ export default function NotificationsPage() {
           <>
             {activeTab === 'channels' && (
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   onClick={handleTestAlert}
                   disabled={isTesting}
-                  className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
                 >
                   {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Test
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   onClick={handleCreateChannel}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
                   <Plus className="h-4 w-4" />
                   Add Channel
-                </button>
+                </Button>
               </div>
             )}
           </>
@@ -545,9 +547,9 @@ export default function NotificationsPage() {
                     <div className="shrink-0 ml-4" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="rounded-lg p-2 hover:bg-muted" aria-label="Actions">
+                          <Button variant="ghost" size="icon" aria-label="Actions">
                             <MoreHorizontal className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
@@ -663,21 +665,22 @@ export default function NotificationsPage() {
               )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
+                  variant="outline"
+                  size="lg"
                   type="button"
                   onClick={() => setShowChannelDialog(false)}
-                  className="px-4 py-2 rounded-lg border border-input hover:bg-muted"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="lg"
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editingChannel ? 'Save Changes' : 'Add Channel'}
-                </button>
+                </Button>
               </div>
             </form>
         </ModalBody>

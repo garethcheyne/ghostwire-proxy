@@ -25,6 +25,7 @@ import { TrendsTab, type TrendsData } from '@/components/analytics/trends-tab'
 import { FileText } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { BarChart3 as HeaderIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface AnalyticsDashboard {
   total_requests: number
@@ -253,14 +254,15 @@ export default function AnalyticsPage() {
                   </button>
                 ))}
               </div>
-              <button
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={() => fetchData()}
                 disabled={isRefreshing}
-                className="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
-              </button>
+              </Button>
               <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2">
                 <button
                   onClick={() => setAutoRefresh(!autoRefresh)}
