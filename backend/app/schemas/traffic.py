@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class TrafficLogResponse(BaseModel):
@@ -36,8 +36,7 @@ class TrafficLogResponse(BaseModel):
     is_bot: bool | None = None
     is_streaming: bool | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TrafficStatsResponse(BaseModel):

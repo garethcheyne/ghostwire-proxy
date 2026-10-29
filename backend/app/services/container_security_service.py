@@ -502,7 +502,7 @@ class ContainerSecurityScanner:
         if not self.client:
             return []
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         try:
             containers = await loop.run_in_executor(
@@ -695,7 +695,7 @@ async def apply_updates(
     except Exception as e:
         return {"container": container_name, "applied": False, "error": f"Not found: {e}"}
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await asyncio.wait_for(
         loop.run_in_executor(None, apply_updates_sync, container, None, security_only),
         timeout=UPGRADE_TIMEOUT_SECONDS,

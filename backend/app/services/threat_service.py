@@ -58,14 +58,16 @@ _background_tasks: set[asyncio.Task] = set()
 def _send_push_notification_background(coro):
     """Fire and forget a push notification (don't block the main flow)."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Keep a reference until it finishes, or the task can be garbage collected mid-run.
-            task = asyncio.create_task(coro)
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
-        else:
-            loop.run_until_complete(coro)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Called outside the event loop (a script): run it to completion here.
+            asyncio.run(coro)
+            return
+        # Keep a reference until it finishes, or the task can be garbage collected mid-run.
+        task = loop.create_task(coro)
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     except Exception as e:
         logger.debug(f"Could not send push notification: {e}")
 

@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 from app.schemas.access_list import ProxyHostRef
 from app.services.auth_wall_access import clean_list, normalize_domain, normalize_email, open_to_any_account
@@ -37,8 +37,7 @@ class LocalAuthUserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # TOTP Setup schemas
@@ -109,8 +108,7 @@ class AuthProviderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # LDAP Config
@@ -164,8 +162,7 @@ class LdapConfigResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Auth Wall
@@ -284,9 +281,7 @@ class AuthWallResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     @field_validator('allowed_emails', 'allowed_email_domains', mode='before')
     @classmethod

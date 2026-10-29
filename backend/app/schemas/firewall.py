@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class FirewallConnectorCreate(BaseModel):
@@ -50,8 +50,7 @@ class FirewallConnectorResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FirewallBlocklistResponse(BaseModel):
@@ -64,5 +63,4 @@ class FirewallBlocklistResponse(BaseModel):
     status: str
     error_message: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

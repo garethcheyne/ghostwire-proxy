@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin_user, get_current_user
@@ -86,8 +86,7 @@ class UpdateStatusResponse(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateSettingsResponse(BaseModel):
@@ -102,8 +101,7 @@ class UpdateSettingsResponse(BaseModel):
     update_channel: str
     github_repo: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UpdateSettingsUpdate(BaseModel):

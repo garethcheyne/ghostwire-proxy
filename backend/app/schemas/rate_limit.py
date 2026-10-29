@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class RateLimitRuleCreate(BaseModel):
@@ -45,8 +45,7 @@ class RateLimitRuleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeoipSettingsUpdate(BaseModel):
@@ -74,8 +73,7 @@ class GeoipSettingsResponse(BaseModel):
     last_updated_at: datetime | None
     enabled: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeoipRuleCreate(BaseModel):
@@ -122,8 +120,7 @@ class GeoipRuleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeoipLookupResponse(BaseModel):

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BackupCreate(BaseModel):
@@ -33,8 +33,7 @@ class BackupResponse(BaseModel):
     completed_at: datetime | None = None
     created_by: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BackupListResponse(BaseModel):
@@ -54,8 +53,7 @@ class BackupSettingsResponse(BaseModel):
     include_traffic_logs: bool
     encryption_enabled: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BackupSettingsUpdate(BaseModel):

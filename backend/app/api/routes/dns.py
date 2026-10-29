@@ -5,7 +5,7 @@ DNS Provider and Zone Management API Routes
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,8 +34,7 @@ class DnsProviderResponse(BaseModel):
     enabled: bool
     zones: list[dict]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DnsRecordCreate(BaseModel):

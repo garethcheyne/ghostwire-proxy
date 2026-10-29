@@ -4,7 +4,7 @@ import ipaddress
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import and_, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,8 +70,7 @@ class KnownIpResponse(KnownIpBase):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────

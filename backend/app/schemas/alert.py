@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class PushSubscriptionCreate(BaseModel):
@@ -16,8 +16,7 @@ class PushSubscriptionResponse(BaseModel):
     endpoint: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AlertChannelCreate(BaseModel):
@@ -51,8 +50,7 @@ class AlertChannelResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Every alert type a preference can be set for. The per-backend-server types
@@ -105,5 +103,4 @@ class AlertPreferenceResponse(BaseModel):
     channels: str | None
     enabled: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SettingUpdate(BaseModel):
@@ -14,8 +14,7 @@ class SettingResponse(BaseModel):
     description: str | None
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SettingsBulkUpdate(BaseModel):

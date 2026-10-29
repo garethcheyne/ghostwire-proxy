@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class WafRuleSetCreate(BaseModel):
@@ -23,8 +23,7 @@ class WafRuleSetResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WafRuleCreate(BaseModel):
@@ -103,8 +102,7 @@ class WafRuleResponse(BaseModel):
     is_lua: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThreatEventResponse(BaseModel):
@@ -123,8 +121,7 @@ class ThreatEventResponse(BaseModel):
     host: str | None
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThreatActorResponse(BaseModel):
@@ -145,8 +142,7 @@ class ThreatActorResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @field_validator('tags', mode='before')
     @classmethod
@@ -219,8 +215,7 @@ class ThreatThresholdResponse(BaseModel):
     enabled: bool
     priority: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThreatStatsResponse(BaseModel):

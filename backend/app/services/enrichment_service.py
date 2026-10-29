@@ -61,7 +61,7 @@ async def _lookup_ip_api(ip: str) -> dict:
 async def _reverse_dns(ip: str) -> str | None:
     """Perform reverse DNS lookup."""
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, lambda: socket.gethostbyaddr(ip))
         return result[0] if result else None
     except socket.herror, socket.gaierror, OSError:

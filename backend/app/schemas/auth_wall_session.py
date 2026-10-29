@@ -4,7 +4,7 @@ Schemas for Auth Wall Session management.
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # Session validation (for Lua internal API)
@@ -51,8 +51,7 @@ class SessionResponse(BaseModel):
     revoked_at: datetime | None
     revoked_reason: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionListResponse(BaseModel):
