@@ -24,6 +24,8 @@ import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
 import { Cloud as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 interface DnsProvider {
   id: string
@@ -58,6 +60,7 @@ export default function DnsPage() {
   const [selectedZone, setSelectedZone] = useState<DnsZone | null>(null)
   const [records, setRecords] = useState<DnsRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [isLoadingRecords, setIsLoadingRecords] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -96,6 +99,7 @@ export default function DnsPage() {
   const fetchProviders = async () => {
     try {
       const response = await api.get('/api/dns/providers')
+      setLoadError(false)
       setProviders(response.data)
       if (response.data.length > 0 && !selectedProvider) {
         setSelectedProvider(response.data[0])
@@ -106,6 +110,7 @@ export default function DnsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch providers:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -253,14 +258,6 @@ export default function DnsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading DNS providers...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -283,7 +280,17 @@ export default function DnsPage() {
         }
       />
 
-      {providers.length === 0 ? (
+      {isLoading ? (
+        <ContentSkeleton rows={4} />
+      ) : loadError && providers.length === 0 ? (
+        <LoadError
+          what="DNS providers"
+          onRetry={() => {
+            setIsLoading(true)
+            fetchProviders()
+          }}
+        />
+      ) : providers.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
           <Cloud className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
           <p className="text-muted-foreground">No DNS providers configured</p>
@@ -299,14 +306,16 @@ export default function DnsPage() {
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Provider</h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={handleSyncZones}
                   disabled={isSyncing}
-                  className="p-1 rounded hover:bg-muted"
                   title="Sync zones"
+                  aria-label="Sync zones"
                 >
                   <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                </button>
+                </Button>
               </div>
               <select
                 value={selectedProvider?.id || ''}
@@ -344,14 +353,13 @@ export default function DnsPage() {
                 ) : (
                   <div className="space-y-1">
                     {selectedProvider?.zones.map((zone) => (
-                      <button
+                      <Button
                         key={zone.id}
+                        variant={selectedZone?.id === zone.id ? 'secondary' : 'ghost'}
+                        size="lg"
                         onClick={() => handleSelectZone(zone)}
-                        className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm text-left ${
-                          selectedZone?.id === zone.id
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-muted'
-                        }`}
+                        className="w-full justify-between"
+                        aria-pressed={selectedZone?.id === zone.id}
                       >
                         <div className="flex items-center gap-2">
                           <Globe className="h-4 w-4" />
@@ -360,7 +368,7 @@ export default function DnsPage() {
                         <span className="text-xs text-muted-foreground">
                           {zone.records_count} records
                         </span>
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}
@@ -450,18 +458,23 @@ export default function DnsPage() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1">
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
                                   onClick={() => handleEditRecord(record)}
-                                  className="p-1 rounded hover:bg-muted"
+                                  aria-label="Edit record"
                                 >
                                   <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
                                   onClick={() => handleDeleteRecord(record)}
-                                  className="p-1 rounded hover:bg-muted text-red-600 dark:text-red-400"
+                                  className="text-red-600 hover:text-red-600 dark:text-red-400"
+                                  aria-label="Delete record"
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                </button>
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -668,15 +681,11 @@ export default function DnsPage() {
                       Enable Cloudflare's CDN and protection
                     </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={recordProxied}
-                      onChange={(e) => setRecordProxied(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-orange-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-background after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                  </label>
+                  <Switch
+                    checked={recordProxied}
+                    onCheckedChange={setRecordProxied}
+                    aria-label="Proxy through Cloudflare"
+                  />
                 </div>
               )}
 

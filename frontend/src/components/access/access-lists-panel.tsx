@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   ShieldX,
   CheckCircle,
+  X,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -31,6 +32,7 @@ const BLOCKED_OPTIONS: Array<{ value: AccessListBlockedBehavior; label: string; 
 ]
 import { UsedBy, deleteWarning } from '@/components/access/used-by'
 import { PageHeader } from '@/components/page-header'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Key as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -45,6 +47,7 @@ import { Button } from '@/components/ui/button'
 export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
   const [accessLists, setAccessLists] = useState<AccessList[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingList, setEditingList] = useState<AccessList | null>(null)
   const [expandedLists, setExpandedLists] = useState<Set<string>>(new Set())
@@ -64,9 +67,11 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
   const fetchAccessLists = async () => {
     try {
       const response = await api.get('/api/access-lists')
+      setLoadError(false)
       setAccessLists(response.data)
     } catch (error) {
       console.error('Failed to fetch access lists:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -174,14 +179,6 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading access lists...</div>
-      </div>
-    )
-  }
-
   const addButton = (
     <Button
       size="lg"
@@ -206,6 +203,17 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {/* Access Lists */}
+      {isLoading ? (
+        <ContentSkeleton rows={4} />
+      ) : loadError && accessLists.length === 0 ? (
+        <LoadError
+          what="access lists"
+          onRetry={() => {
+            setIsLoading(true)
+            fetchAccessLists()
+          }}
+        />
+      ) : (
       <div className="space-y-4">
         {accessLists.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-12 text-center">
@@ -319,6 +327,7 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
           ))
         )}
       </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Modal
@@ -470,13 +479,16 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
                           {entry.action}
                         </span>
                       </div>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
                         type="button"
                         onClick={() => handleRemoveEntry(index)}
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground"
+                        aria-label="Remove entry"
                       >
-                        ×
-                      </button>
+                        <X />
+                      </Button>
                     </div>
                   ))}
                 </div>

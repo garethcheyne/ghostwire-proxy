@@ -5,6 +5,9 @@ import { Globe } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import api from '@/lib/api'
 import { CountryBadge } from '@/components/ip-address'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { LoadError } from '@/components/load-state'
 
 const TILE_URL =
   process.env.NEXT_PUBLIC_MAP_TILE_URL ||
@@ -232,6 +235,7 @@ export default function GeoHeatmap({
   const [threatData, setThreatData] = useState<GeoData[]>([])
   const [cityData, setCityData] = useState<CityGeoData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [layerCountry, setLayerCountry] = useState(true)
   const [layerCity, setLayerCity] = useState(true)
   const [layerThreats, setLayerThreats] = useState(true)
@@ -244,7 +248,10 @@ export default function GeoHeatmap({
     const fetches: Promise<void>[] = [
       api.get(`/api/traffic/geo/heatmap?${params}`)
         .then(res => setData(res.data))
-        .catch(err => console.error('Failed to load geo data:', err)),
+        .catch(err => {
+          console.error('Failed to load geo data:', err)
+          setLoadError(true)
+        }),
       api.get(`/api/traffic/geo/city-heatmap?${params}`)
         .then(res => setCityData(res.data))
         .catch(err => console.error('Failed to load city geo data:', err)),
@@ -262,11 +269,11 @@ export default function GeoHeatmap({
   }, [proxyHostId, days, showThreats])
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[700px] text-muted-foreground text-sm">
-        Loading geographic data...
-      </div>
-    )
+    return <Skeleton className="h-[700px] w-full rounded-xl" aria-label="Loading geographic data" />
+  }
+
+  if (loadError && data.length === 0 && threatData.length === 0) {
+    return <LoadError what="geographic data" />
   }
 
   if (data.length === 0 && threatData.length === 0) {
@@ -284,38 +291,41 @@ export default function GeoHeatmap({
       <div className="h-[700px] rounded-xl overflow-hidden border border-border relative">
         <MapContent data={data} threatData={threatData} cityData={cityData} showCountry={layerCountry} showCity={layerCity} showThreats={layerThreats} />
         {/* Interactive Legend */}
-        <div className="absolute bottom-3 left-3 z-1000 flex gap-1 rounded-lg bg-card/90 backdrop-blur-sm border border-border px-2 py-1.5 text-xs">
-          <button
+        <div className="absolute bottom-3 left-3 z-1000 flex gap-1 rounded-lg border border-border bg-card px-2 py-1.5 text-xs">
+          <Button
             type="button"
+            variant={layerCountry ? 'secondary' : 'ghost'}
+            size="xs"
+            aria-pressed={layerCountry}
             onClick={() => setLayerCountry(v => !v)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-              layerCountry ? 'bg-cyan-500/15 text-brand' : 'text-muted-foreground/50 line-through'
-            } hover:bg-cyan-500/20`}
+            className={layerCountry ? 'text-brand' : 'text-muted-foreground line-through'}
           >
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCountry ? 'bg-cyan-500' : 'bg-muted-foreground/30'}`} />
             Country
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={layerCity ? 'secondary' : 'ghost'}
+            size="xs"
+            aria-pressed={layerCity}
             onClick={() => setLayerCity(v => !v)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-              layerCity ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'text-muted-foreground/50 line-through'
-            } hover:bg-amber-500/20`}
+            className={layerCity ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground line-through'}
           >
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerCity ? 'bg-amber-400' : 'bg-muted-foreground/30'}`} />
             City
-          </button>
+          </Button>
           {threatData.length > 0 && (
-            <button
+            <Button
               type="button"
+              variant={layerThreats ? 'secondary' : 'ghost'}
+              size="xs"
+              aria-pressed={layerThreats}
               onClick={() => setLayerThreats(v => !v)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
-                layerThreats ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'text-muted-foreground/50 line-through'
-              } hover:bg-red-500/20`}
+              className={layerThreats ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground line-through'}
             >
               <span className={`inline-block h-2.5 w-2.5 rounded-full ${layerThreats ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
               Threats
-            </button>
+            </Button>
           )}
         </div>
       </div>

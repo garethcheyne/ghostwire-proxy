@@ -65,6 +65,7 @@ import {
 } from '@/components/ui/table'
 import { UsedBy, deleteWarning } from '@/components/access/used-by'
 import { PageHeader } from '@/components/page-header'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Key as HeaderIcon } from 'lucide-react'
 import {
   DropdownMenu,
@@ -122,6 +123,7 @@ interface AuthSession {
 export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
   const [authWalls, setAuthWalls] = useState<AuthWall[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showWallDialog, setShowWallDialog] = useState(false)
   const [showProviderDialog, setShowProviderDialog] = useState(false)
   const [showUserDialog, setShowUserDialog] = useState(false)
@@ -171,9 +173,11 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
   const fetchAuthWalls = async () => {
     try {
       const response = await api.get('/api/auth-walls')
+      setLoadError(false)
       setAuthWalls(response.data)
     } catch (error) {
       console.error('Failed to fetch auth walls:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -508,17 +512,9 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
     return new Date(dateString).toLocaleString()
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   const addButton = (
-    <Button onClick={handleCreateWall}>
-      <Plus className="h-4 w-4 mr-2" />
+    <Button size="lg" onClick={handleCreateWall}>
+      <Plus className="h-4 w-4" />
       Add Auth Wall
     </Button>
   )
@@ -537,6 +533,17 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
       )}
 
       {/* Auth Walls Grid */}
+      {isLoading ? (
+        <ContentSkeleton rows={3} />
+      ) : loadError && authWalls.length === 0 ? (
+        <LoadError
+          what="auth walls"
+          onRetry={() => {
+            setIsLoading(true)
+            fetchAuthWalls()
+          }}
+        />
+      ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {authWalls.length === 0 ? (
           <div className="col-span-full rounded-xl border border-border bg-card p-12 text-center">
@@ -704,6 +711,7 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
           ))
         )}
       </div>
+      )}
 
       {/* Create/Edit Wall Dialog */}
       <Dialog open={showWallDialog} onOpenChange={setShowWallDialog}>

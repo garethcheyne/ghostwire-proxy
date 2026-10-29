@@ -5,6 +5,7 @@ import { ArrowLeft, Globe, Monitor, Server, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import {
@@ -279,26 +280,20 @@ export function BackendsView({ filters, onDrill }: { filters: TrafficFilters; on
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit">
-          {(
-            [
-              ['host', 'By machine'],
-              ['hostport', 'By machine and port'],
-            ] as const
-          ).map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setGroup(v)}
-              className={cn(
-                'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium',
-                group === v ? 'bg-background shadow-sm' : 'text-muted-foreground hover:bg-background/50'
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={group} onValueChange={(v) => setGroup(v as 'host' | 'hostport')}>
+          <TabsList>
+            {(
+              [
+                ['host', 'By machine'],
+                ['hostport', 'By machine and port'],
+              ] as const
+            ).map(([v, label]) => (
+              <TabsTrigger key={v} value={v}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <p className="text-sm text-muted-foreground">
           The upstream that answered each request (the last one when nginx retried).
         </p>

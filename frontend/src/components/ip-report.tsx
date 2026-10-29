@@ -1,12 +1,15 @@
 'use client'
 
-import { createPortal } from 'react-dom'
 import { X, Globe, Server, AlertTriangle, Activity, Clock, Tag } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 
 import { useIpReport } from '@/lib/queries/known-ips'
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { StatCard } from '@/components/stat-card'
+import { LoadError } from '@/components/load-state'
 
 interface IpReportProps {
   ip: string | null
@@ -28,28 +31,32 @@ function when(v: string | null | undefined) {
 /**
  * Everything the proxy knows about one address, across every host.
  *
- * Portalled to document.body: rendered in place, an ancestor's containing block
- * offsets a fixed panel instead of letting it fill the window.
+ * The shared Sheet portals it to document.body, so an ancestor's containing block
+ * can't offset it, and gives it Escape, focus trapping and the overlay.
  */
 export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
   const { data, isPending } = useIpReport(ip, days)
 
-  if (!ip || typeof document === 'undefined') return null
+  if (!ip) return null
 
   const t = data?.totals
   const errorRate = t && t.requests ? ((t.errors / t.requests) * 100).toFixed(1) : '0.0'
 
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-background border-l shadow-2xl overflow-y-auto">
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="gap-0 overflow-y-auto bg-background data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
+      >
         <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between z-10">
           <div className="min-w-0">
-            <h3 className="font-semibold flex flex-wrap items-center gap-2">
+            <SheetTitle className="font-semibold flex flex-wrap items-center gap-2">
               <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
               <span>Traffic report</span>
               <code className="text-sm font-mono" data-private="ip">{ip}</code>
-            </h3>
+            </SheetTitle>
+            <SheetDescription className="sr-only">Everything the proxy knows about this address</SheetDescription>
             {data?.known && (
               <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                 <Tag className="h-3 w-3" />
@@ -58,16 +65,15 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
               </p>
             )}
           </div>
-          <button onClick={onClose} aria-label="Close"
-            className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground shrink-0">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close" className="shrink-0 text-muted-foreground">
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {isPending ? (
           <p className="p-8 text-center text-muted-foreground animate-pulse">Loading report…</p>
         ) : !data ? (
-          <p className="p-8 text-center text-muted-foreground">Could not load report.</p>
+          <div className="p-4"><LoadError what="the report for this address" /></div>
         ) : (
           <div className="p-4 space-y-5">
             <p className="text-xs text-muted-foreground">Last {data.days} days</p>
@@ -81,10 +87,7 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
                 ['Unique paths', String(t?.unique_paths ?? 0)],
                 ['Bot requests', (t?.bot_requests ?? 0).toLocaleString()],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="text-lg font-semibold font-mono">{value}</p>
-                </div>
+                <StatCard key={label} title={label} value={value} />
               ))}
             </div>
 
@@ -184,9 +187,8 @@ export function IpReport({ ip, onClose, days = 30 }: IpReportProps) {
             </section>
           </div>
         )}
-      </div>
-    </>,
-    document.body,
+      </SheetContent>
+    </Sheet>
   )
 }
 

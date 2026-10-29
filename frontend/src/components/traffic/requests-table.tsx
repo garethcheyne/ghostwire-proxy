@@ -93,28 +93,32 @@ export function RequestsTable({
                     <div className="flex items-center gap-1.5">
                       <IpAddress ip={log.client_ip} countryCode={log.country_code} countryName={log.country_name} />
                       {onClient && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           type="button"
-                          className="text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground"
                           onClick={() => onClient(log.client_ip)}
                           title="Drill into this client"
+                          aria-label="Drill into this client"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="hidden font-mono text-xs xl:table-cell" onClick={(e) => e.stopPropagation()}>
                     {log.upstream_addr ? (
-                      <button
+                      <Button
+                        variant="link"
                         type="button"
-                        className="hover:underline disabled:no-underline"
+                        className="h-auto p-0 font-mono text-xs font-normal text-foreground disabled:opacity-100"
                         disabled={!onBackend}
                         onClick={() => onBackend?.(lastUpstream(log.upstream_addr!).replace(/:\d+$/, ''))}
                         title="Drill into this backend"
                       >
                         {lastUpstream(log.upstream_addr)}
-                      </button>
+                      </Button>
                     ) : (
                       '–'
                     )}

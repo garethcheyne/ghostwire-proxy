@@ -34,6 +34,7 @@ import {
   HardDrive,
   ArrowRightLeft,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -60,6 +61,9 @@ import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from
 import { PageHeader } from '@/components/page-header'
 import { Globe as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 type TabType = 'details' | 'locations' | 'advanced' | 'config'
 
@@ -570,14 +574,7 @@ export default function ProxyHostsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading proxy hosts...</div>
-      </div>
-    )
-  }
-
+  const loadFailed = hostsQuery.isError
   return (
     <div className="space-y-6">
       <PageHeader
@@ -598,7 +595,11 @@ export default function ProxyHostsPage() {
       />
 
       {/* Proxy Hosts */}
-      {hosts.length === 0 ? (
+      {isLoading ? (
+        <ContentSkeleton rows={5} />
+      ) : loadFailed ? (
+        <LoadError what="proxy hosts" onRetry={() => hostsQuery.refetch()} />
+      ) : hosts.length === 0 ? (
         <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-muted-foreground">
           <Globe className="mx-auto h-12 w-12 mb-4 opacity-50" />
           <p>No proxy hosts configured</p>
@@ -620,22 +621,13 @@ export default function ProxyHostsPage() {
                 {/* Row 1: Domain, destination, actions */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleEnabled(host)}
-                      /* The dot is 12px. This toggles a host on or off, so it
-                         needs a finger-sized hit area — the negative margin
-                         grows it without shifting the dot or the domain name
-                         beside it. */
-                      className="shrink-0 mt-1.5 -m-3 p-3 flex items-center justify-center"
+                    <Switch
+                      checked={host.enabled}
+                      onCheckedChange={() => handleToggleEnabled(host)}
+                      className="mt-1"
+                      aria-label={host.enabled ? 'Disable host' : 'Enable host'}
                       title={host.enabled ? 'Disable host' : 'Enable host'}
-                    >
-                      {host.enabled ? (
-                        <div className="h-3 w-3 rounded-full bg-green-500" />
-                      ) : (
-                        <div className="h-3 w-3 rounded-full bg-gray-500" />
-                      )}
-                    </button>
+                    />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <a
@@ -677,23 +669,28 @@ export default function ProxyHostsPage() {
 
                   {/* Quick actions */}
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       type="button"
                       onClick={() => handleReload(host)}
                       disabled={reloadingHost === host.id || !host.enabled}
-                      className="rounded-lg p-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Reload config"
+                      aria-label="Reload config"
                     >
                       <RefreshCw className={`h-4 w-4 ${reloadingHost === host.id ? 'animate-spin' : ''}`} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       type="button"
                       onClick={() => handleToggleEnabled(host)}
-                      className={`rounded-lg p-2 hover:bg-muted ${host.enabled ? '' : 'text-green-600 dark:text-green-400'}`}
+                      className={host.enabled ? '' : 'text-green-600 hover:text-green-600 dark:text-green-400'}
                       title={host.enabled ? 'Disable host' : 'Enable host'}
+                      aria-label={host.enabled ? 'Disable host' : 'Enable host'}
                     >
                       {host.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-                    </button>
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" type="button" title="More actions">
@@ -856,67 +853,31 @@ export default function ProxyHostsPage() {
             </ModalHeader>
 
             {/* Tabs */}
-            <div className="shrink-0 border-b border-border px-6">
-              {/* Scrolls rather than wraps: a wrapped tab strip inside a
-                  fixed-height row is what broke the Analytics tabs. */}
-              <div className="flex gap-4 overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('details')}
-                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'details'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
+            <div className="shrink-0 border-b border-border px-6 pb-4">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+                <TabsList>
+                  <TabsTrigger value="details">
+                    <Globe />
                     Details
-                  </div>
-                </button>
-                {editingHost && (
-                  <button
-                    onClick={() => setActiveTab('locations')}
-                    className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === 'locations'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
+                  </TabsTrigger>
+                  {editingHost && (
+                    <TabsTrigger value="locations">
+                      <MapPin />
                       Locations ({locations.length})
-                    </div>
-                  </button>
-                )}
-                <button
-                  onClick={() => setActiveTab('advanced')}
-                  className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'advanced'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Settings className="h-4 w-4" />
+                    </TabsTrigger>
+                  )}
+                  <TabsTrigger value="advanced">
+                    <Settings />
                     Advanced
-                  </div>
-                </button>
-                {editingHost && (
-                  <button
-                    onClick={() => setActiveTab('config')}
-                    className={`shrink-0 py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === 'config'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
+                  </TabsTrigger>
+                  {editingHost && (
+                    <TabsTrigger value="config">
+                      <FileText />
                       Config
-                    </div>
-                  </button>
-                )}
-              </div>
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </Tabs>
             </div>
 
             <ModalBody className="p-0 min-h-[400px]">
@@ -955,13 +916,16 @@ export default function ProxyHostsPage() {
                           className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
                         >
                           {domain}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             type="button"
                             onClick={() => handleRemoveDomain(domain)}
-                            className="hover:text-primary/70"
+                            className="-mr-1.5 size-5 text-primary hover:bg-primary/10 hover:text-primary"
+                            aria-label={`Remove ${domain}`}
                           >
-                            ×
-                          </button>
+                            <X />
+                          </Button>
                         </span>
                       ))}
                     </div>
@@ -1264,18 +1228,25 @@ export default function ProxyHostsPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              type="button"
                               onClick={() => handleEditLocation(loc)}
-                              className="p-1.5 rounded hover:bg-muted"
+                              aria-label="Edit location"
                             >
                               <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              type="button"
                               onClick={() => handleDeleteLocation(loc)}
-                              className="p-1.5 rounded hover:bg-muted text-red-600 dark:text-red-400"
+                              className="text-red-600 hover:text-red-600 dark:text-red-400"
+                              aria-label="Delete location"
                             >
                               <Trash2 className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       ))}

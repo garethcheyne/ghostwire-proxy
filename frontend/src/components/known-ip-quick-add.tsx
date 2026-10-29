@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Textarea } from '@/components/ui/textarea'
@@ -42,17 +42,24 @@ export function KnownIpQuickAdd({ ip, existing, open, onOpenChange }: Props) {
   const [form, setForm] = useState({ label: '', category: '', group_name: '', notes: '', trusted: false })
 
   // Re-seed each time it opens: the same component instance is reused for
-  // whichever address the user hovered last.
-  useEffect(() => {
-    if (!open) return
-    setForm({
-      label: existing?.label ?? '',
-      category: existing?.category ?? '',
-      group_name: existing?.group_name ?? '',
-      notes: '',
-      trusted: existing?.trusted ?? false,
-    })
-  }, [open, existing])
+  // whichever address the user hovered last. Done while rendering (React's
+  // "adjust state when a prop changes" pattern) rather than in an effect.
+  const [seededFor, setSeededFor] = useState<{ open: boolean; existing: KnownIpLabel | null | undefined }>({
+    open: false,
+    existing: null,
+  })
+  if (seededFor.open !== open || seededFor.existing !== existing) {
+    setSeededFor({ open, existing })
+    if (open) {
+      setForm({
+        label: existing?.label ?? '',
+        category: existing?.category ?? '',
+        group_name: existing?.group_name ?? '',
+        notes: '',
+        trusted: existing?.trusted ?? false,
+      })
+    }
+  }
 
   const save = async () => {
     const payload = {

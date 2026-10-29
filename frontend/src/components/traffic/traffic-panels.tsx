@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatCard } from '@/components/stat-card'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { TopItem, TrafficOverview } from '@/lib/queries/traffic'
 import { SERIES, formatBytes, formatCount, formatMs, formatPct, statusTone } from './format'
@@ -159,15 +160,17 @@ export function StatusCodes({ data, onSelect }: { data?: TrafficOverview; onSele
   return (
     <div className="flex flex-wrap gap-2">
       {data.status_codes.slice(0, 16).map((c) => (
-        <button
+        <Button
           key={c.status}
+          variant="ghost"
+          size="xs"
           type="button"
           onClick={() => onSelect?.(c.status)}
-          className={cn('rounded-md px-2 py-1 text-xs font-medium hover:opacity-80', statusTone(c.status))}
+          className={cn('hover:opacity-80', statusTone(c.status))}
           title="Filter to this code"
         >
           {c.status} · {formatCount(c.requests)} ({formatPct((c.requests / total) * 100)})
-        </button>
+        </Button>
       ))}
     </div>
   )

@@ -17,6 +17,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Clock,
+  X,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Textarea } from '@/components/ui/textarea'
@@ -33,11 +34,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 
 export default function CertificatesPage() {
   const confirm = useConfirm()
   const queryClient = useQueryClient()
-  const { data: certificatesData, isPending } = useCertificates({ limit: 100 })
+  const { data: certificatesData, isPending, isError, refetch } = useCertificates({ limit: 100 })
   const certificates: Certificate[] = certificatesData?.items ?? []
   const isLoading = isPending
   const fetchCertificates = () =>
@@ -180,14 +183,6 @@ export default function CertificatesPage() {
     return 'text-green-600 dark:text-green-400'
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading certificates...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -211,6 +206,11 @@ export default function CertificatesPage() {
       />
 
       {/* Certificates Grid */}
+      {isLoading ? (
+        <ContentSkeleton rows={3} />
+      ) : isError ? (
+        <LoadError what="certificates" onRetry={() => refetch()} />
+      ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {certificates.length === 0 ? (
           <div className="col-span-full rounded-xl border border-border bg-card p-12 text-center">
@@ -305,6 +305,7 @@ export default function CertificatesPage() {
           })
         )}
       </div>
+      )}
 
       {/* Create Dialog */}
       <Modal
@@ -319,33 +320,19 @@ export default function CertificatesPage() {
             </div>
 
             {/* Mode Tabs */}
-            <div className="flex border-b border-border">
-              <button
-                onClick={() => setCreateMode('letsencrypt')}
-                className={`flex-1 px-4 py-3 text-sm font-medium ${
-                  createMode === 'letsencrypt'
-                    ? 'border-b-2 border-primary text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Let's Encrypt
-                </div>
-              </button>
-              <button
-                onClick={() => setCreateMode('upload')}
-                className={`flex-1 px-4 py-3 text-sm font-medium ${
-                  createMode === 'upload'
-                    ? 'border-b-2 border-primary text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Upload className="h-4 w-4" />
-                  Upload Custom
-                </div>
-              </button>
+            <div className="border-b border-border px-6 py-4">
+              <Tabs value={createMode} onValueChange={(v) => setCreateMode(v as typeof createMode)}>
+                <TabsList>
+                  <TabsTrigger value="letsencrypt">
+                    <RefreshCw />
+                    Let&apos;s Encrypt
+                  </TabsTrigger>
+                  <TabsTrigger value="upload">
+                    <Upload />
+                    Upload Custom
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -385,13 +372,16 @@ export default function CertificatesPage() {
                           className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
                         >
                           {domain}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             type="button"
                             onClick={() => handleRemoveLeDomain(domain)}
-                            className="hover:text-primary/70"
+                            className="-mr-1.5 size-5 text-primary hover:bg-primary/10 hover:text-primary"
+                            aria-label={`Remove ${domain}`}
                           >
-                            ×
-                          </button>
+                            <X />
+                          </Button>
                         </span>
                       ))}
                     </div>
@@ -462,13 +452,16 @@ export default function CertificatesPage() {
                           className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
                         >
                           {domain}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             type="button"
                             onClick={() => handleRemoveUploadDomain(domain)}
-                            className="hover:text-primary/70"
+                            className="-mr-1.5 size-5 text-primary hover:bg-primary/10 hover:text-primary"
+                            aria-label={`Remove ${domain}`}
                           >
-                            ×
-                          </button>
+                            <X />
+                          </Button>
                         </span>
                       ))}
                     </div>

@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { PageHeader } from '@/components/page-header'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { Users as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -42,6 +43,7 @@ interface SystemUser {
 export default function UsersPage() {
   const [users, setUsers] = useState<SystemUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -57,9 +59,11 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const response = await api.get('/api/users')
+      setLoadError(false)
       setUsers(response.data)
     } catch (error) {
       console.error('Failed to fetch users:', error)
+      setLoadError(true)
     } finally {
       setIsLoading(false)
     }
@@ -168,14 +172,6 @@ export default function UsersPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading users...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -196,6 +192,17 @@ export default function UsersPage() {
       />
 
       {/* Users Table */}
+      {isLoading ? (
+        <ContentSkeleton rows={4} />
+      ) : loadError && users.length === 0 ? (
+        <LoadError
+          what="users"
+          onRetry={() => {
+            setIsLoading(true)
+            fetchUsers()
+          }}
+        />
+      ) : (
       <div className="rounded-xl border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -300,6 +307,7 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Modal

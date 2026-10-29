@@ -24,6 +24,7 @@ import {
 } from '@/lib/queries/dashboard'
 import { PageHeader } from '@/components/page-header'
 import { StatCard } from '@/components/stat-card'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { LayoutDashboard as HeaderIcon } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -62,21 +63,35 @@ export default function DashboardPage() {
   // Once any one resolves we render the page so cards fill in progressively.
   const isLoading = hostsQuery.isPending && certsQuery.isPending && trafficQuery.isPending
 
-  if (isLoading) {
+  const loadFailed = hostsQuery.isError && certsQuery.isError && trafficQuery.isError
+  const retry = () => {
+    hostsQuery.refetch()
+    certsQuery.refetch()
+    trafficQuery.refetch()
+    wafQuery.refetch()
+    authErrorsQuery.refetch()
+  }
+
+  const header = (
+    <PageHeader
+      icon={HeaderIcon}
+      title="Dashboard"
+      description="Overview of your reverse proxy infrastructure"
+    />
+  )
+
+  if (isLoading || loadFailed) {
     return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading dashboard...</div>
+      <div className="space-y-4 sm:space-y-6">
+        {header}
+        {loadFailed ? <LoadError what="the dashboard" onRetry={retry} /> : <ContentSkeleton stats={4} rows={4} />}
       </div>
     )
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader
-        icon={HeaderIcon}
-        title="Dashboard"
-        description="Overview of your reverse proxy infrastructure"
-      />
+      {header}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-6 lg:grid-cols-4">
@@ -434,7 +449,7 @@ export default function DashboardPage() {
 
               {/* Failed Logins */}
               {authErrors.failed_logins.length > 0 && (
-                <div className="rounded-xl border border-red-500/20 bg-card">
+                <div className="rounded-xl border border-border bg-card">
                   <div className="border-b border-border p-4 flex items-center gap-2">
                     <KeyRound className="h-4 w-4 text-muted-foreground" />
                     <h2 className="font-semibold">Failed Login Attempts</h2>

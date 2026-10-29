@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useState, use } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import {
   ArrowLeft,
   Loader2,
   Printer,
   Mail,
-  AlertCircle,
   ShieldAlert,
   TrendingUp,
   TrendingDown,
@@ -30,6 +30,8 @@ import api from '@/lib/api'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { PageHeader } from '@/components/page-header'
 import { StatCard } from '@/components/stat-card'
+import { Button } from '@/components/ui/button'
+import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { FileBarChart as HeaderIcon } from 'lucide-react'
 
 // Leaflet touches `window` on import, so it cannot be server-rendered.
@@ -307,34 +309,23 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
 
   const [period, setPeriod] = useState('30d')
-  const [report, setReport] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
   const [emailOpen, setEmailOpen] = useState(false)
   const [recipients, setRecipients] = useState('')
   const [sending, setSending] = useState(false)
   const [emailNotice, setEmailNotice] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    api
-      .get(`/api/reports/hosts/${id}`, { params: { period } })
-      .then(({ data }) => {
-        if (!cancelled) setReport(data)
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.response?.data?.detail || 'Could not load the report')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [id, period])
+  // React Query drops responses for a period the user has already moved away from.
+  const reportQuery = useQuery({
+    queryKey: ['host-report', id, period],
+    queryFn: async () => (await api.get(`/api/reports/hosts/${id}`, { params: { period } })).data,
+    retry: false,
+  })
+  const report: any = reportQuery.data ?? null
+  const loading = reportQuery.isPending
+  const error = reportQuery.isError
+    ? (reportQuery.error as any)?.response?.data?.detail || 'Could not load the report'
+    : ''
 
   const sendEmail = async () => {
     setSending(true)
@@ -353,19 +344,35 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
-  }
+  const backButton = (
+    <Link
+      href="/dashboard/proxy-hosts"
+      className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" />
+      Back to hosts
+    </Link>
+  )
 
-  if (error || !report) {
+  if (loading || error || !report) {
     return (
-      <div className="flex items-center gap-2 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
-        <AlertCircle className="h-4 w-4" />
-        <span>{error || 'No report available'}</span>
+      <div className="space-y-5">
+        <PageHeader
+          backButton={backButton}
+          icon={HeaderIcon}
+          title="Traffic report"
+          description={`Traffic report · ${PERIODS.find((p) => p.value === period)?.label}`}
+        />
+        {loading ? (
+          <ContentSkeleton stats={4} rows={3} />
+        ) : error ? (
+          <div className="space-y-3">
+            <LoadError what="the report" onRetry={() => reportQuery.refetch()} />
+            {error !== 'Could not load the report' && <p className="text-sm text-muted-foreground">{error}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No report available.</p>
+        )}
       </div>
     )
   }
@@ -415,15 +422,7 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
 
       {/* Header */}
         <PageHeader
-          backButton={
-            <Link
-              href="/dashboard/proxy-hosts"
-              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1 print:hidden"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to hosts
-            </Link>
-          }
+          backButton={backButton}
           icon={HeaderIcon}
           title={report.host?.primary_domain}
           description={
@@ -445,20 +444,14 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
                   </option>
                 ))}
               </select>
-              <button
-                onClick={() => setEmailOpen(true)}
-                className="h-9 px-3 rounded-md border border-input text-sm font-medium hover:bg-accent flex items-center gap-1.5"
-              >
+              <Button variant="outline" size="lg" onClick={() => setEmailOpen(true)}>
                 <Mail className="h-3.5 w-3.5" />
                 Email
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 flex items-center gap-1.5"
-              >
+              </Button>
+              <Button size="lg" onClick={() => window.print()}>
                 <Printer className="h-3.5 w-3.5" />
                 Print / PDF
-              </button>
+              </Button>
             </div>
           }
         />
@@ -768,20 +761,13 @@ export default function HostReportPage({ params }: { params: Promise<{ id: strin
           {emailNotice && <p className="text-sm">{emailNotice}</p>}
         </ModalBody>
         <ModalFooter>
-          <button
-            onClick={() => setEmailOpen(false)}
-            className="h-9 px-4 rounded-md border border-input text-sm font-medium hover:bg-accent"
-          >
+          <Button variant="outline" size="lg" onClick={() => setEmailOpen(false)}>
             Close
-          </button>
-          <button
-            onClick={sendEmail}
-            disabled={sending || !recipients.trim()}
-            className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
-          >
+          </Button>
+          <Button size="lg" onClick={sendEmail} disabled={sending || !recipients.trim()}>
             {sending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Send
-          </button>
+          </Button>
         </ModalFooter>
       </Modal>
     </div>

@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -786,23 +787,15 @@ export function BackendsSection({
               : 'Requests are spread across several upstream servers.'}
           </p>
         </div>
-        <div className="flex w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1 sm:w-fit" role="tablist">
-          {(['single', 'balanced'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={value.mode === mode}
-              onClick={() => switchMode(mode)}
-              className={cn(
-                'flex-1 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors sm:flex-none',
-                value.mode === mode ? 'bg-background shadow-sm' : 'text-muted-foreground hover:bg-background/50'
-              )}
-            >
-              {mode === 'single' ? 'Single backend' : 'Load balanced'}
-            </button>
-          ))}
-        </div>
+        <Tabs value={value.mode} onValueChange={(v) => switchMode(v as 'single' | 'balanced')}>
+          <TabsList>
+            {(['single', 'balanced'] as const).map((mode) => (
+              <TabsTrigger key={mode} value={mode}>
+                {mode === 'single' ? 'Single backend' : 'Load balanced'}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       {value.mode === 'single' ? (
@@ -930,13 +923,14 @@ export function BackendsSection({
                     return (
                       <TableRow key={s.key} className={cn(!s.enabled && 'opacity-60')}>
                         <TableCell className="font-mono text-xs sm:text-sm">
-                          <button
+                          <Button
+                            variant="link"
                             type="button"
-                            className="text-left hover:text-primary"
+                            className="h-auto p-0 font-mono text-xs text-foreground hover:text-primary sm:text-sm"
                             onClick={() => openServerDialog(s)}
                           >
                             {s.host.includes(':') ? `[${s.host}]` : s.host}:{s.port}
-                          </button>
+                          </Button>
                           {fieldErrors.length > 0 && (
                             <p className="mt-1 font-sans text-xs text-destructive">{fieldErrors[0]}</p>
                           )}

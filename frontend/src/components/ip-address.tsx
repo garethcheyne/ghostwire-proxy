@@ -8,6 +8,7 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import api from '@/lib/api'
+import { Button } from '@/components/ui/button'
 import { useKnownIpMap } from '@/lib/queries/known-ips'
 import { useIpActions } from '@/components/ip-actions-provider'
 
@@ -193,20 +194,14 @@ export function IpAddress({ ip, countryCode, countryName, className }: IpAddress
           </div>
         )}
         <div className="p-2 border-t bg-muted/30 flex gap-2">
-          <button
-            onClick={() => labelIp(ip)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
-          >
+          <Button variant="outline" size="sm" onClick={() => labelIp(ip)} className="flex-1 text-xs">
             <Tag className="h-3 w-3" />
             {known ? 'Edit label' : 'Label this IP'}
-          </button>
-          <button
-            onClick={() => showReport(ip)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium border border-input hover:bg-muted"
-          >
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => showReport(ip)} className="flex-1 text-xs">
             <BarChart3 className="h-3 w-3" />
             View traffic
-          </button>
+          </Button>
         </div>
       </HoverCardContent>
 

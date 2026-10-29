@@ -32,11 +32,19 @@ const TABS = [
 ] as const
 type Tab = (typeof TABS)[number]['value']
 const KINDS: EntityKind[] = ['backend', 'host', 'client']
+const DESCRIPTION = 'Every request through your proxy hosts: filter it, then drill into a backend, host or client.'
 
 export default function TrafficPage() {
-  // useSearchParams needs a Suspense boundary; the fallback is a plain skeleton.
+  // useSearchParams needs a Suspense boundary; the fallback keeps the header and skeletons the rest.
   return (
-    <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <PageHeader icon={HeaderIcon} title="Traffic" description={DESCRIPTION} />
+          <Skeleton className="h-96 w-full rounded-xl" />
+        </div>
+      }
+    >
       <TrafficPageContent />
     </Suspense>
   )
@@ -105,7 +113,7 @@ function TrafficPageContent() {
       <PageHeader
         icon={HeaderIcon}
         title="Traffic"
-        description="Every request through your proxy hosts: filter it, then drill into a backend, host or client."
+        description={DESCRIPTION}
         actions={
           <>
             <Button variant="outline" onClick={purge} className="text-red-600 hover:text-red-600 dark:text-red-400">
