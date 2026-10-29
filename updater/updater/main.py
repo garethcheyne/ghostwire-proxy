@@ -20,6 +20,9 @@ import docker
 import httpx
 import redis.asyncio as redis
 
+from updater import ghostwire_telemetry
+from updater.ghostwire_telemetry import heartbeat, job
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,25 @@ INTERNAL_AUTH_TOKEN = os.environ.get("INTERNAL_AUTH_TOKEN", "updater-service")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@ghostwire.local")
+
+# System monitoring with Ghostwire Analytics (ghostwire-suite/docs/analytics-reporting.md). The updater
+# can't read the API's settings, so it sends through the API's internal relay, which adds the real URL
+# and ingest key from Settings; while monitoring is off the relay answers 404 and the batch is dropped.
+OTLP_RELAY_ENDPOINT = os.environ.get("OTLP_RELAY_ENDPOINT", f"{API_URL}/internal/otlp")
+
+
+def analytics_config() -> dict:
+    return {"url": OTLP_RELAY_ENDPOINT, "ingest_key": "relay", "trace_sample": 100}
+
+
+def app_version() -> str | None:
+    """The release the stack runs: VERSION in the mounted project, if it's there."""
+    try:
+        with open(os.path.join(COMPOSE_PROJECT_DIR, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return os.environ.get("APP_VERSION")
+
 
 # Container names
 CONTAINERS = {
@@ -78,6 +100,7 @@ class UpdaterService:
 
         try:
             while self.running:
+                heartbeat()
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
 
                 if message and message["type"] == "message":
@@ -211,54 +234,55 @@ class UpdaterService:
         8. Cleanup or rollback
         """
         try:
-            # Step 1: Pre-flight checks
-            await self.update_status(update_id, "in_progress", 5, "Running pre-flight checks...")
+            async with job("app-update", version=str(target_version)):
+                # Step 1: Pre-flight checks
+                await self.update_status(update_id, "in_progress", 5, "Running pre-flight checks...")
 
-            if not await self.preflight_checks():
-                raise Exception("Pre-flight checks failed")
+                if not await self.preflight_checks():
+                    raise Exception("Pre-flight checks failed")
 
-            # Step 2: Create backup
-            await self.update_status(update_id, "in_progress", 10, "Creating pre-update backup...")
+                # Step 2: Create backup
+                await self.update_status(update_id, "in_progress", 10, "Creating pre-update backup...")
 
-            backup_id = await self.create_pre_update_backup()
-            await self.store_backup_id(update_id, backup_id)
+                backup_id = await self.create_pre_update_backup()
+                await self.store_backup_id(update_id, backup_id)
 
-            # Step 3: Pull new version
-            await self.update_status(update_id, "in_progress", 25, f"Pulling version {target_version}...")
+                # Step 3: Pull new version
+                await self.update_status(update_id, "in_progress", 25, f"Pulling version {target_version}...")
 
-            await self.pull_new_version(target_version)
+                await self.pull_new_version(target_version)
 
-            # Step 4: Build new images
-            await self.update_status(update_id, "in_progress", 40, "Building new container images...")
+                # Step 4: Build new images
+                await self.update_status(update_id, "in_progress", 40, "Building new container images...")
 
-            await self.build_images()
+                await self.build_images()
 
-            # Step 5: Database migrations
-            await self.update_status(update_id, "in_progress", 55, "Running database migrations...")
+                # Step 5: Database migrations
+                await self.update_status(update_id, "in_progress", 55, "Running database migrations...")
 
-            await self.run_migrations()
+                await self.run_migrations()
 
-            # Step 6: Restart containers (in order)
-            await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
+                # Step 6: Restart containers (in order)
+                await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
 
-            await self.restart_containers_ordered()
+                await self.restart_containers_ordered()
 
-            # Step 7: Health checks
-            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
+                # Step 7: Health checks
+                await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
-            if not await self.post_update_health_checks():
-                raise Exception("Post-update health checks failed")
+                if not await self.post_update_health_checks():
+                    raise Exception("Post-update health checks failed")
 
-            # Success!
-            await self.update_status(update_id, "completed", 100, f"Successfully updated to {target_version}")
+                # Success!
+                await self.update_status(update_id, "completed", 100, f"Successfully updated to {target_version}")
 
-            # Send push notification
-            await self.send_push_notification(
-                title="Update Complete",
-                body=f"Successfully updated to version {target_version}",
-                notification_type="update",
-                data={"version": target_version, "update_id": update_id},
-            )
+                # Send push notification
+                await self.send_push_notification(
+                    title="Update Complete",
+                    body=f"Successfully updated to version {target_version}",
+                    notification_type="update",
+                    data={"version": target_version, "update_id": update_id},
+                )
 
         except Exception as e:
             logger.error(f"App update failed: {e}", exc_info=True)
@@ -309,17 +333,18 @@ class UpdaterService:
     async def create_pre_update_backup(self) -> str:
         """Create a backup before update via API."""
         try:
-            response = await self.http_client.post(
-                f"{API_URL}/api/backups/",
-                json={
-                    "include_database": True,
-                    "include_certificates": True,
-                    "include_letsencrypt": True,
-                    "include_configs": True,
-                    "include_traffic_logs": False,
-                },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
-            )
+            async with job("pre-update-backup"):
+                response = await self.http_client.post(
+                    f"{API_URL}/api/backups/",
+                    json={
+                        "include_database": True,
+                        "include_certificates": True,
+                        "include_letsencrypt": True,
+                        "include_configs": True,
+                        "include_traffic_logs": False,
+                    },
+                    headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
+                )
 
             if response.status_code in [200, 201]:
                 backup_data = response.json()
@@ -493,68 +518,71 @@ class UpdaterService:
         Update base image for a specific container.
         """
         try:
-            await self.update_status(
-                update_id, "in_progress", 10, f"Starting base image update for {container_name}..."
-            )
+            async with job("base-image-update", container=str(container_name)):
+                await self.update_status(
+                    update_id, "in_progress", 10, f"Starting base image update for {container_name}..."
+                )
 
-            # Validate container name
-            if container_name not in SERVICES:
-                raise ValueError(f"Cannot update base image for: {container_name}")
+                # Validate container name
+                if container_name not in SERVICES:
+                    raise ValueError(f"Cannot update base image for: {container_name}")
 
-            # Create backup first
-            await self.update_status(update_id, "in_progress", 20, "Creating pre-update backup...")
+                # Create backup first
+                await self.update_status(update_id, "in_progress", 20, "Creating pre-update backup...")
 
-            backup_id = await self.create_pre_update_backup()
-            await self.store_backup_id(update_id, backup_id)
+                backup_id = await self.create_pre_update_backup()
+                await self.store_backup_id(update_id, backup_id)
 
-            await self.update_status(update_id, "in_progress", 40, "Pulling latest base image and rebuilding...")
+                await self.update_status(update_id, "in_progress", 40, "Pulling latest base image and rebuilding...")
 
-            # Rebuild specific service with --pull to get latest base image
-            os.chdir(COMPOSE_PROJECT_DIR)
-            service_name = SERVICES[container_name]
+                # Rebuild specific service with --pull to get latest base image
+                os.chdir(COMPOSE_PROJECT_DIR)
+                service_name = SERVICES[container_name]
 
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["docker-compose", "build", "--pull", "--no-cache", service_name],
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["docker-compose", "build", "--pull", "--no-cache", service_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
 
-            if result.returncode != 0:
-                raise Exception(f"Build failed: {result.stderr}")
+                if result.returncode != 0:
+                    raise Exception(f"Build failed: {result.stderr}")
 
-            await self.update_status(update_id, "in_progress", 70, "Restarting container with new image...")
+                await self.update_status(update_id, "in_progress", 70, "Restarting container with new image...")
 
-            # Recreate just this container
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["docker-compose", "up", "-d", "--force-recreate", service_name],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+                # Recreate just this container
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["docker-compose", "up", "-d", "--force-recreate", service_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
 
-            if result.returncode != 0:
-                raise Exception(f"Container restart failed: {result.stderr}")
+                if result.returncode != 0:
+                    raise Exception(f"Container restart failed: {result.stderr}")
 
-            # Health check
-            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
+                # Health check
+                await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
-            await asyncio.sleep(10)  # Wait for container to start
+                await asyncio.sleep(10)  # Wait for container to start
 
-            if not await self.post_update_health_checks():
-                raise Exception("Health checks failed after base image update")
+                if not await self.post_update_health_checks():
+                    raise Exception("Health checks failed after base image update")
 
-            await self.update_status(update_id, "completed", 100, f"Successfully updated {container_name} base image")
+                await self.update_status(
+                    update_id, "completed", 100, f"Successfully updated {container_name} base image"
+                )
 
-            # Send push notification
-            await self.send_push_notification(
-                title="Base Image Updated",
-                body=f"Successfully updated {container_name} container",
-                notification_type="update",
-                data={"container": container_name, "update_id": update_id},
-            )
+                # Send push notification
+                await self.send_push_notification(
+                    title="Base Image Updated",
+                    body=f"Successfully updated {container_name} container",
+                    notification_type="update",
+                    data={"container": container_name, "update_id": update_id},
+                )
 
         except Exception as e:
             logger.error(f"Base image update failed: {e}", exc_info=True)
@@ -577,41 +605,42 @@ class UpdaterService:
         Perform rollback to previous version.
         """
         try:
-            await self.update_status(update_id, "in_progress", 10, "Starting rollback...")
+            async with job("rollback"):
+                await self.update_status(update_id, "in_progress", 10, "Starting rollback...")
 
-            if not backup_id:
-                raise ValueError("No backup ID provided for rollback")
+                if not backup_id:
+                    raise ValueError("No backup ID provided for rollback")
 
-            # Restore from backup
-            await self.update_status(update_id, "in_progress", 30, "Restoring from backup...")
+                # Restore from backup
+                await self.update_status(update_id, "in_progress", 30, "Restoring from backup...")
 
-            response = await self.http_client.post(
-                f"{API_URL}/api/backups/restore",
-                json={
-                    "backup_id": backup_id,
-                    "restore_database": True,
-                    "restore_certificates": True,
-                    "restore_letsencrypt": True,
-                    "restore_configs": True,
-                },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
-            )
+                response = await self.http_client.post(
+                    f"{API_URL}/api/backups/restore",
+                    json={
+                        "backup_id": backup_id,
+                        "restore_database": True,
+                        "restore_certificates": True,
+                        "restore_letsencrypt": True,
+                        "restore_configs": True,
+                    },
+                    headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
+                )
 
-            if response.status_code not in [200, 201]:
-                raise Exception(f"Restore failed: {response.text}")
+                if response.status_code not in [200, 201]:
+                    raise Exception(f"Restore failed: {response.text}")
 
-            await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
+                await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
 
-            # Restart all application containers
-            await self.restart_containers_ordered()
+                # Restart all application containers
+                await self.restart_containers_ordered()
 
-            # Health check
-            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
+                # Health check
+                await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
-            if not await self.post_update_health_checks():
-                raise Exception("Health checks failed after rollback")
+                if not await self.post_update_health_checks():
+                    raise Exception("Health checks failed after rollback")
 
-            await self.update_status(update_id, "completed", 100, "Rollback completed successfully")
+                await self.update_status(update_id, "completed", 100, "Rollback completed successfully")
 
         except Exception as e:
             logger.error(f"Rollback failed: {e}", exc_info=True)
@@ -620,6 +649,12 @@ class UpdaterService:
 
 async def main():
     """Main entry point."""
+    ghostwire_telemetry.setup(
+        analytics_config,
+        service_name="updater",
+        service_namespace="ghostwire-proxy",
+        service_version=app_version(),
+    )
     service = UpdaterService()
     await service.start()
 
