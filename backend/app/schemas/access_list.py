@@ -7,6 +7,7 @@ import re
 
 class ProxyHostRef(BaseModel):
     """A proxy host that uses an access list or auth wall."""
+
     id: str
     domain_names: list[str]
 
@@ -132,6 +133,7 @@ class AccessListUpdate(BaseModel):
     @classmethod
     def blocked_redirect_url_valid(cls, v):
         return _check_redirect_url(v)
+
     # When given, replaces every entry (in this order)
     entries: Optional[list[AccessListEntryCreate]] = None
 

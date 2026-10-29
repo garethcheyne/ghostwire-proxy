@@ -12,6 +12,7 @@ job only makes queries slower, never wrong.
 A first run on an existing install backfills from the oldest log row, one day
 per transaction, oldest first, so it can stop and resume at any point.
 """
+
 from __future__ import annotations
 
 import logging
@@ -99,7 +100,9 @@ async def _try_lock(db: AsyncSession) -> bool:
 
 
 async def refresh(
-    now: Optional[datetime] = None, *, max_steps: int = 1000,
+    now: Optional[datetime] = None,
+    *,
+    max_steps: int = 1000,
     session_factory: Callable[[], AsyncSession] = AsyncSessionLocal,
 ) -> dict:
     """Bring the rollup up to the start of the current hour. Returns what it did."""

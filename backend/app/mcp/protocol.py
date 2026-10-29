@@ -6,6 +6,7 @@ tools/call. Shapes follow the 2025-06-18 specification; tests/test_mcp_protocol.
 
 Nothing here knows about the proxy. Tools are handed in.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -88,9 +89,7 @@ def text_result(text: str, *, structured: Optional[dict] = None, is_error: bool 
     return result
 
 
-async def handle_message(
-    message: Any, *, tools: list[McpTool], info: ServerInfo
-) -> Optional[dict[str, Any]]:
+async def handle_message(message: Any, *, tools: list[McpTool], info: ServerInfo) -> Optional[dict[str, Any]]:
     """Handle one JSON-RPC message. None means no reply (the route answers 202)."""
     if not isinstance(message, dict):
         return rpc_error(None, RPC.INVALID_REQUEST, "Not a JSON-RPC 2.0 request.")
@@ -132,7 +131,9 @@ async def handle_message(
         name = params.get("name")
         tool = next((t for t in tools if t.name == name), None)
         if tool is None:
-            return rpc_error(id_, RPC.INVALID_PARAMS, f'No tool named "{name}".', {"available": [t.name for t in tools]})
+            return rpc_error(
+                id_, RPC.INVALID_PARAMS, f'No tool named "{name}".', {"available": [t.name for t in tools]}
+            )
         arguments = params.get("arguments") or {}
         if not isinstance(arguments, dict):
             return rpc_error(id_, RPC.INVALID_PARAMS, "arguments must be an object.")

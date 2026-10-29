@@ -3,6 +3,7 @@
 A key is `gwp_<prefix>_<secret>`. Only the prefix (to find the row and to show in the UI) and a
 SHA-256 hash of the whole key are stored; the key itself is shown once, when it is created.
 """
+
 from datetime import datetime, timezone
 import uuid
 

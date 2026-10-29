@@ -9,6 +9,7 @@ from app.core.database import Base
 
 class UpdateHistory(Base):
     """History of all update operations."""
+
     __tablename__ = "update_history"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -42,6 +43,7 @@ class UpdateHistory(Base):
 
 class BaseImageVersion(Base):
     """Tracks base image versions for each container."""
+
     __tablename__ = "base_image_versions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -64,6 +66,7 @@ class BaseImageVersion(Base):
 
 class UpdateSettings(Base):
     """Update preferences and configuration."""
+
     __tablename__ = "update_settings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

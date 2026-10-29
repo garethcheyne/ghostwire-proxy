@@ -9,14 +9,15 @@ from app.core.database import Base
 
 class HoneypotTrap(Base):
     """Configurable fake endpoints that catch scanners."""
+
     __tablename__ = "honeypot_traps"
-    __table_args__ = (
-        UniqueConstraint('path', 'proxy_host_id', name='uq_trap_path_host'),
-    )
+    __table_args__ = (UniqueConstraint('path', 'proxy_host_id', name='uq_trap_path_host'),)
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     path = Column(String(500), nullable=False)  # e.g. /wp-login.php
-    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True)  # NULL = all hosts
+    proxy_host_id = Column(
+        String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True
+    )  # NULL = all hosts
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     trap_type = Column(String(30), default="generic")  # wordpress, phpmyadmin, admin, api, generic
@@ -27,12 +28,14 @@ class HoneypotTrap(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     hit_count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
-                        onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class HoneypotHit(Base):
     """Record of a scanner/attacker hitting a honeypot trap."""
+
     __tablename__ = "honeypot_hits"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -58,13 +61,12 @@ class HoneypotHit(Base):
 
     timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
-    __table_args__ = (
-        Index('idx_honeypot_hits_ip_timestamp', 'client_ip', 'timestamp'),
-    )
+    __table_args__ = (Index('idx_honeypot_hits_ip_timestamp', 'client_ip', 'timestamp'),)
 
 
 class IpEnrichment(Base):
     """Enriched intelligence data about an IP address."""
+
     __tablename__ = "ip_enrichments"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -107,8 +109,9 @@ class IpEnrichment(Base):
 
     # Meta
     enriched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
-                        onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class AbuseIPDBBlacklistEntry(Base):
@@ -120,6 +123,7 @@ class AbuseIPDBBlacklistEntry(Base):
     spending a metered /check call - most honeypot-hitting IPs are already known-bad and
     show up here for free.
     """
+
     __tablename__ = "abuseipdb_blacklist"
 
     ip_address = Column(String(45), primary_key=True)

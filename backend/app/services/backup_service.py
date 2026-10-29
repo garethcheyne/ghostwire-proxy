@@ -57,9 +57,7 @@ def _check_plain_sql_dump(path: str) -> None:
                 in_copy = True
                 continue
             if stripped.startswith("\\") and not _ALLOWED_DUMP_META.match(stripped):
-                raise ValueError(
-                    f"Refusing to restore: the SQL dump contains a psql meta-command at line {lineno}"
-                )
+                raise ValueError(f"Refusing to restore: the SQL dump contains a psql meta-command at line {lineno}")
 
 
 class BackupService:
@@ -215,6 +213,7 @@ class BackupService:
         # Extract connection info
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(db_url)
             host = parsed.hostname or "localhost"
             port = str(parsed.port or 5432)
@@ -223,13 +222,18 @@ class BackupService:
 
             cmd = [
                 "pg_dump",
-                "-h", host,
-                "-p", port,
-                "-U", user,
-                "-d", dbname,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-U",
+                user,
+                "-d",
+                dbname,
                 "--no-password",
                 "-Fc",
-                "-f", dump_file,
+                "-f",
+                dump_file,
             ] + exclude_tables
 
             result = subprocess.run(
@@ -324,9 +328,7 @@ class BackupService:
             Dict with status, message, and restored items
         """
         # Get backup record
-        result = await db.execute(
-            select(Backup).where(Backup.id == backup_id)
-        )
+        result = await db.execute(select(Backup).where(Backup.id == backup_id))
         backup = result.scalar_one_or_none()
 
         if not backup:
@@ -387,9 +389,7 @@ class BackupService:
                         restored_items.append("database")
                     except Exception as e:
                         logger.error(f"Database restore failed: {e}")
-                        raise RuntimeError(
-                            f"Database restore failed; nothing else was restored. {e}"
-                        ) from e
+                        raise RuntimeError(f"Database restore failed; nothing else was restored. {e}") from e
 
                 # Restore certificates
                 if restore_certificates and backup.includes_certificates:
@@ -460,6 +460,7 @@ class BackupService:
                 env["PGPASSWORD"] = password
 
         from urllib.parse import urlparse
+
         parsed = urlparse(db_url)
         host = parsed.hostname or "localhost"
         port = str(parsed.port or 5432)
@@ -470,11 +471,16 @@ class BackupService:
         # without lock conflicts from the running API's connection pool
         term_cmd = [
             "psql",
-            "-h", host,
-            "-p", port,
-            "-U", user,
-            "-d", "postgres",
-            "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",
+            "-h",
+            host,
+            "-p",
+            port,
+            "-U",
+            user,
+            "-d",
+            "postgres",
+            "-c",
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",
         ]
         subprocess.run(term_cmd, env=env, capture_output=True, text=True, timeout=60)
         logger.info("Terminated active database connections for restore")
@@ -483,10 +489,14 @@ class BackupService:
         if use_pg_restore:
             cmd = [
                 "pg_restore",
-                "-h", host,
-                "-p", port,
-                "-U", user,
-                "-d", dbname,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-U",
+                user,
+                "-d",
+                dbname,
                 "--clean",
                 "--if-exists",
                 "--no-owner",
@@ -501,12 +511,18 @@ class BackupService:
             cmd = [
                 "psql",
                 "-X",  # ignore any psqlrc
-                "-h", host,
-                "-p", port,
-                "-U", user,
-                "-d", dbname,
-                "-v", "ON_ERROR_STOP=0",
-                "-f", dump_file,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-U",
+                user,
+                "-d",
+                dbname,
+                "-v",
+                "ON_ERROR_STOP=0",
+                "-f",
+                dump_file,
             ]
 
         try:
@@ -524,11 +540,11 @@ class BackupService:
         # restore: N"); psql with ON_ERROR_STOP=0 exits 0, so look for ERROR lines too.
         error_lines = [l for l in (result.stderr or "").splitlines() if "ERROR:" in l]
         if result.returncode != 0 or error_lines:
-            first = (error_lines[0] if error_lines else (result.stderr or "").strip()[:300]) or f"exit code {result.returncode}"
+            first = (
+                error_lines[0] if error_lines else (result.stderr or "").strip()[:300]
+            ) or f"exit code {result.returncode}"
             logger.error(f"Database restore failed with {len(error_lines)} errors. First: {first[:300]}")
-            raise RuntimeError(
-                f"{len(error_lines) or 'Some'} statements failed. First error: {first[:300]}"
-            )
+            raise RuntimeError(f"{len(error_lines) or 'Some'} statements failed. First error: {first[:300]}")
 
         logger.info("Database restore completed cleanly")
 
@@ -604,17 +620,12 @@ class BackupService:
     ) -> tuple[list[Backup], int]:
         """List all backups with pagination."""
         # Count total
-        count_result = await db.execute(
-            select(func.count()).select_from(Backup)
-        )
+        count_result = await db.execute(select(func.count()).select_from(Backup))
         total = count_result.scalar() or 0
 
         # Get backups
         result = await db.execute(
-            select(Backup)
-            .order_by(Backup.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
+            select(Backup).order_by(Backup.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
         )
         backups = list(result.scalars().all())
 
@@ -622,9 +633,7 @@ class BackupService:
 
     async def get_backup(self, db: AsyncSession, backup_id: str) -> Optional[Backup]:
         """Get a single backup by ID."""
-        result = await db.execute(
-            select(Backup).where(Backup.id == backup_id)
-        )
+        result = await db.execute(select(Backup).where(Backup.id == backup_id))
         return result.scalar_one_or_none()
 
     async def delete_backup(self, db: AsyncSession, backup_id: str) -> bool:
@@ -638,9 +647,7 @@ class BackupService:
             os.remove(backup.file_path)
 
         # Delete record
-        await db.execute(
-            delete(Backup).where(Backup.id == backup_id)
-        )
+        await db.execute(delete(Backup).where(Backup.id == backup_id))
         await db.commit()
 
         logger.info(f"Deleted backup: {backup.filename}")
@@ -696,11 +703,7 @@ class BackupService:
         settings_obj = await self.get_settings(db)
 
         # Get all completed backups ordered by date
-        result = await db.execute(
-            select(Backup)
-            .where(Backup.status == "completed")
-            .order_by(Backup.created_at.desc())
-        )
+        result = await db.execute(select(Backup).where(Backup.status == "completed").order_by(Backup.created_at.desc()))
         backups = list(result.scalars().all())
 
         if len(backups) <= settings_obj.retention_count:

@@ -3,6 +3,7 @@ OpenResty/Nginx configuration generation service.
 Generates nginx server blocks from ProxyHost database records.
 Supports multiple locations, caching, rate limiting, and custom headers.
 """
+
 import glob
 import ipaddress
 import logging
@@ -141,7 +142,9 @@ def _generate_access_list_blocked_response(host: ProxyHost, indent: str = "    "
     if behavior == "403" or (behavior == "redirect" and not redirect_url):
         return []
     if "403" in {str(code) for code in (getattr(host, "custom_error_pages", None) or {})}:
-        logger.warning(f"Host {host.id}: its custom 403 page takes precedence over access list {acl.id}'s blocked response")
+        logger.warning(
+            f"Host {host.id}: its custom 403 page takes precedence over access list {acl.id}'s blocked response"
+        )
         return []
 
     lines = [
@@ -273,12 +276,14 @@ def generate_upstream_connection_map(host) -> str:
         return ""
     if not getattr(host, "websockets_support", False):
         return ""
-    return "\n".join([
-        f"map $http_upgrade {_connection_map_var(host)} {{",
-        "    default upgrade;",
-        "    ''      \"\";",
-        "}",
-    ])
+    return "\n".join(
+        [
+            f"map $http_upgrade {_connection_map_var(host)} {{",
+            "    default upgrade;",
+            "    ''      \"\";",
+            "}",
+        ]
+    )
 
 
 def generate_upstream_location_directives(host, indent: str = "    ") -> list[str]:
@@ -387,11 +392,7 @@ def _generate_access_phase(host: ProxyHost, indent: str = "        ") -> list[st
     return []
 
 
-def _generate_location_block(
-    location: ProxyLocation,
-    host: ProxyHost,
-    indent: str = "    "
-) -> list[str]:
+def _generate_location_block(location: ProxyLocation, host: ProxyHost, indent: str = "    ") -> list[str]:
     """Generate a single location block"""
     lines = []
     loc_directive = _generate_location_directive(location)
@@ -478,11 +479,7 @@ def _generate_location_block(
     return lines
 
 
-def _generate_default_location(
-    host: ProxyHost,
-    backend: str,
-    indent: str = "    "
-) -> list[str]:
+def _generate_default_location(host: ProxyHost, backend: str, indent: str = "    ") -> list[str]:
     """Generate the default (/) location block from host settings"""
     lines = []
 
@@ -555,11 +552,7 @@ def _generate_default_location(
 
 
 def _generate_server_block_content(
-    host: ProxyHost,
-    backend: str,
-    is_https: bool = False,
-    cert: Optional[Certificate] = None,
-    indent: str = "    "
+    host: ProxyHost, backend: str, is_https: bool = False, cert: Optional[Certificate] = None, indent: str = "    "
 ) -> list[str]:
     """Generate server block content (shared between HTTP and HTTPS)"""
     lines = []
@@ -699,8 +692,7 @@ def _generate_server_block_content(
 
     # Custom locations (sorted by priority desc, then by specificity)
     locations = sorted(
-        [loc for loc in (host.locations or []) if loc.enabled],
-        key=lambda l: (-l.priority, -len(l.path))
+        [loc for loc in (host.locations or []) if loc.enabled], key=lambda l: (-l.priority, -len(l.path))
     )
 
     for location in locations:
@@ -867,11 +859,13 @@ def ensure_default_certificate() -> None:
         .sign(private_key, hashes.SHA256())
     )
     with open(key, "wb") as f:
-        f.write(private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.TraditionalOpenSSL,
-            serialization.NoEncryption(),
-        ))
+        f.write(
+            private_key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.TraditionalOpenSSL,
+                serialization.NoEncryption(),
+            )
+        )
     os.chmod(key, 0o600)
     with open(crt, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
@@ -898,16 +892,12 @@ async def generate_default_site_config(db: AsyncSession) -> str:
     behavior = "congratulations"
     redirect_url = ""
 
-    result = await db.execute(
-        select(Setting).where(Setting.key == "default_site_behavior")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_behavior"))
     setting = result.scalar_one_or_none()
     if setting:
         behavior = setting.value
 
-    result = await db.execute(
-        select(Setting).where(Setting.key == "default_site_redirect_url")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "default_site_redirect_url"))
     setting = result.scalar_one_or_none()
     if setting and setting.value:
         redirect_url = setting.value
@@ -934,31 +924,39 @@ async def generate_default_site_config(db: AsyncSession) -> str:
     # The behaviours below live inside `location /`: a server-level `return` runs before nginx
     # picks a location, so it would also answer the ACME challenge above.
     if behavior == "redirect" and redirect_url:
-        lines.extend([
-            "    location / {",
-            f"        return 301 {redirect_url};",
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    location / {",
+                f"        return 301 {redirect_url};",
+                "    }",
+            ]
+        )
     elif behavior == "404":
-        lines.extend([
-            "    location / {",
-            "        return 404;",
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    location / {",
+                "        return 404;",
+                "    }",
+            ]
+        )
     elif behavior == "444":
-        lines.extend([
-            "    location / {",
-            "        # Drop connection — send no response",
-            "        return 444;",
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    location / {",
+                "        # Drop connection — send no response",
+                "        return 444;",
+                "    }",
+            ]
+        )
     else:
         # congratulations (default) — show welcome page
-        lines.extend([
-            "    location / {",
-            *_WELCOME_PAGE,
-            "    }",
-        ])
+        lines.extend(
+            [
+                "    location / {",
+                *_WELCOME_PAGE,
+                "    }",
+            ]
+        )
 
     lines.append("}")
     return "\n".join(lines) + "\n"
@@ -983,6 +981,7 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
     # scope its own trust list.
     try:
         from app.services.trusted_proxy_service import get_ranges
+
         set_trusted_proxy_ranges(await get_ranges(db))
     except Exception as e:
         logger.warning(f"Could not load trusted proxy ranges: {e}")
@@ -1000,9 +999,7 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
         # Get certificate if SSL enabled
         cert = None
         if host.ssl_enabled and host.certificate_id:
-            cert_result = await db.execute(
-                select(Certificate).where(Certificate.id == host.certificate_id)
-            )
+            cert_result = await db.execute(select(Certificate).where(Certificate.id == host.certificate_id))
             cert = cert_result.scalar_one_or_none()
 
             # Write certificate files
@@ -1103,7 +1100,7 @@ def _http_body(raw: bytes) -> bytes:
     split = raw.find(b"\r\n\r\n")
     if split == -1:
         return b""
-    headers, body = raw[:split].lower(), raw[split + 4:]
+    headers, body = raw[:split].lower(), raw[split + 4 :]
     if b"transfer-encoding: chunked" not in headers:
         return body
 
@@ -1118,8 +1115,8 @@ def _http_body(raw: bytes) -> bytes:
             break
         if size == 0:
             break
-        decoded += body[line_end + 2:line_end + 2 + size]
-        body = body[line_end + 2 + size + 2:]
+        decoded += body[line_end + 2 : line_end + 2 + size]
+        body = body[line_end + 2 + size + 2 :]
     return bytes(decoded)
 
 
@@ -1128,12 +1125,12 @@ def _demux_docker_stream(body: bytes) -> str:
     out = []
     i = 0
     while i + 8 <= len(body):
-        if body[i] not in (0, 1, 2) or body[i + 1:i + 4] != b"\x00\x00\x00":
+        if body[i] not in (0, 1, 2) or body[i + 1 : i + 4] != b"\x00\x00\x00":
             # Not multiplexed (TTY mode) — the remainder is plain output.
             return body[i:].decode("utf-8", "replace")
-        size = int.from_bytes(body[i + 4:i + 8], "big")
+        size = int.from_bytes(body[i + 4 : i + 8], "big")
         i += 8
-        out.append(body[i:i + size].decode("utf-8", "replace"))
+        out.append(body[i : i + size].decode("utf-8", "replace"))
         i += size
     return "".join(out)
 
@@ -1162,20 +1159,24 @@ def test_nginx_config() -> tuple[bool, str]:
         import json as _json
 
         # Create the exec instance, attached so its output can be read back.
-        exec_body = _json.dumps({
-            "Cmd": ["nginx", "-t"],
-            "AttachStdout": True,
-            "AttachStderr": True,
-        })
-        created = _http_body(_docker_api(
-            f"POST /containers/{NGINX_CONTAINER}/exec HTTP/1.1\r\n"
-            f"Host: localhost\r\n"
-            f"Content-Type: application/json\r\n"
-            f"Connection: close\r\n"
-            f"Content-Length: {len(exec_body)}\r\n\r\n"
-            f"{exec_body}".encode(),
-            read_timeout=10.0,
-        ))
+        exec_body = _json.dumps(
+            {
+                "Cmd": ["nginx", "-t"],
+                "AttachStdout": True,
+                "AttachStderr": True,
+            }
+        )
+        created = _http_body(
+            _docker_api(
+                f"POST /containers/{NGINX_CONTAINER}/exec HTTP/1.1\r\n"
+                f"Host: localhost\r\n"
+                f"Content-Type: application/json\r\n"
+                f"Connection: close\r\n"
+                f"Content-Length: {len(exec_body)}\r\n\r\n"
+                f"{exec_body}".encode(),
+                read_timeout=10.0,
+            )
+        )
         exec_id = _json.loads(created or b"{}").get("Id")
         if not exec_id:
             detail = created[:200].decode("utf-8", "replace")
@@ -1195,12 +1196,12 @@ def test_nginx_config() -> tuple[bool, str]:
         output = _demux_docker_stream(_http_body(started)).strip()
 
         # The exec has exited by now, so its exit code is available.
-        inspected = _http_body(_docker_api(
-            "GET /exec/{}/json HTTP/1.1\r\n"
-            "Host: localhost\r\n"
-            "Connection: close\r\n\r\n".format(exec_id).encode(),
-            read_timeout=10.0,
-        ))
+        inspected = _http_body(
+            _docker_api(
+                "GET /exec/{}/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".format(exec_id).encode(),
+                read_timeout=10.0,
+            )
+        )
         exit_code = _json.loads(inspected or b"{}").get("ExitCode")
 
         if exit_code == 0:

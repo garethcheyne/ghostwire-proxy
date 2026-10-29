@@ -1,4 +1,5 @@
 """Per-host traffic reports and their email schedules."""
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -143,6 +144,7 @@ async def send_host_report_now(
 
 # ── Schedules ───────────────────────────────────────────────────────────────
 
+
 @router.get("/schedules")
 async def list_schedules(
     current_user: User = Depends(get_current_user),
@@ -184,9 +186,7 @@ async def update_schedule(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    schedule = (await db.execute(
-        select(ReportSchedule).where(ReportSchedule.id == schedule_id)
-    )).scalar_one_or_none()
+    schedule = (await db.execute(select(ReportSchedule).where(ReportSchedule.id == schedule_id))).scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
 
@@ -208,9 +208,7 @@ async def delete_schedule(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    schedule = (await db.execute(
-        select(ReportSchedule).where(ReportSchedule.id == schedule_id)
-    )).scalar_one_or_none()
+    schedule = (await db.execute(select(ReportSchedule).where(ReportSchedule.id == schedule_id))).scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
     await db.delete(schedule)
@@ -226,9 +224,7 @@ async def run_schedule_now(
     """Send a scheduled report immediately, without waiting for its next slot."""
     from app.services.report_scheduler import deliver_schedule
 
-    schedule = (await db.execute(
-        select(ReportSchedule).where(ReportSchedule.id == schedule_id)
-    )).scalar_one_or_none()
+    schedule = (await db.execute(select(ReportSchedule).where(ReportSchedule.id == schedule_id))).scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
 
@@ -239,6 +235,7 @@ async def run_schedule_now(
 
 
 # ── SMTP configuration ──────────────────────────────────────────────────────
+
 
 @router.get("/smtp")
 async def get_smtp(

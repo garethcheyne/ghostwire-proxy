@@ -2,6 +2,7 @@
 Auth Wall Session model for server-side session management.
 Sessions are stored in the database for instant revocation capability.
 """
+
 from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -17,22 +18,18 @@ def generate_session_id() -> str:
 
 class AuthWallSession(Base):
     """Server-side session for auth wall authentication."""
+
     __tablename__ = "auth_wall_sessions"
 
     # Primary key - cryptographically secure random ID
     id = Column(String(64), primary_key=True, default=generate_session_id)
 
     # Auth wall this session belongs to
-    auth_wall_id = Column(
-        String(36),
-        ForeignKey("auth_walls.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
+    auth_wall_id = Column(String(36), ForeignKey("auth_walls.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # User identity
     user_type = Column(String(20), nullable=False)  # 'local', 'google', 'github', 'oidc', 'ldap'
-    user_id = Column(String(255), nullable=False)   # LocalAuthUser.id or external user ID
+    user_id = Column(String(255), nullable=False)  # LocalAuthUser.id or external user ID
     username = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
     display_name = Column(String(255), nullable=True)
@@ -45,21 +42,9 @@ class AuthWallSession(Base):
     user_agent = Column(String(500), nullable=True)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
-    expires_at = Column(
-        DateTime(timezone=True),
-        nullable=False,
-        index=True
-    )
-    last_activity_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    last_activity_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Revocation
     revoked = Column(Boolean, default=False, nullable=False, index=True)

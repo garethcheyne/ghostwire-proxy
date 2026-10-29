@@ -25,6 +25,4 @@ class AuditLog(Base):
     # Timestamp
     timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
-    __table_args__ = (
-        Index('idx_audit_logs_user_timestamp', 'user_id', 'timestamp'),
-    )
+    __table_args__ = (Index('idx_audit_logs_user_timestamp', 'user_id', 'timestamp'),)

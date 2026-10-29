@@ -10,6 +10,7 @@ role. --disable-2fa turns off the user's two-factor (lost phone and backup codes
 leaves the password as it is. If two-factor is required for everyone, they set it up again at
 their next sign-in. Works whatever state the admin UI is in, because it writes straight to the database.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,9 +48,7 @@ async def _list() -> int:
 
 async def _reset(email: str, password: str | None, make_admin: bool, disable_2fa: bool = False) -> int:
     async with AsyncSessionLocal() as db:
-        user = (
-            await db.execute(select(User).where(User.email == email.strip().lower()))
-        ).scalar_one_or_none()
+        user = (await db.execute(select(User).where(User.email == email.strip().lower()))).scalar_one_or_none()
         if not user:
             print(f"No user with email {email}. Use --list to see them.", file=sys.stderr)
             return 1

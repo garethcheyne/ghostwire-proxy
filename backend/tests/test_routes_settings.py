@@ -59,6 +59,7 @@ class TestDefaultSiteSettings:
     async def test_get_default_site_via_key(self, client, admin_user, auth_headers, db_session):
         # Set the behavior setting so it exists
         from app.models.setting import Setting
+
         db_session.add(Setting(key="default_site_behavior", value="congratulations"))
         await db_session.commit()
 
@@ -71,7 +72,13 @@ class TestDefaultSiteSettings:
         from unittest.mock import patch
         from app.core.config import settings as app_settings
 
-        with patch.object(app_settings, "nginx_config_path", str(tmp_path)),              patch("app.services.openresty_service.backup_configs"),              patch("app.services.openresty_service.restore_configs") as restore,              patch("app.services.openresty_service.test_nginx_config", return_value=(True, "ok")),              patch("app.services.openresty_service.reload_nginx", return_value=(True, "ok")):
+        with (
+            patch.object(app_settings, "nginx_config_path", str(tmp_path)),
+            patch("app.services.openresty_service.backup_configs"),
+            patch("app.services.openresty_service.restore_configs") as restore,
+            patch("app.services.openresty_service.test_nginx_config", return_value=(True, "ok")),
+            patch("app.services.openresty_service.reload_nginx", return_value=(True, "ok")),
+        ):
             response = await client.put(
                 "/api/settings/default-site",
                 headers=auth_headers,
@@ -89,7 +96,13 @@ class TestDefaultSiteSettings:
         from unittest.mock import patch
         from app.core.config import settings as app_settings
 
-        with patch.object(app_settings, "nginx_config_path", str(tmp_path)),              patch("app.services.openresty_service.backup_configs"),              patch("app.services.openresty_service.restore_configs") as restore,              patch("app.services.openresty_service.test_nginx_config", return_value=(False, "syntax error")),              patch("app.services.openresty_service.reload_nginx") as reload:
+        with (
+            patch.object(app_settings, "nginx_config_path", str(tmp_path)),
+            patch("app.services.openresty_service.backup_configs"),
+            patch("app.services.openresty_service.restore_configs") as restore,
+            patch("app.services.openresty_service.test_nginx_config", return_value=(False, "syntax error")),
+            patch("app.services.openresty_service.reload_nginx") as reload,
+        ):
             response = await client.put(
                 "/api/settings/default-site",
                 headers=auth_headers,

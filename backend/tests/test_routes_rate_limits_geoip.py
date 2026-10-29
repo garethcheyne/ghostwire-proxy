@@ -16,12 +16,16 @@ class TestRateLimitsRoutes:
 
     @pytest.mark.asyncio
     async def test_create_rate_limit(self, client, admin_user, auth_headers):
-        response = await client.post("/api/rate-limits", headers=auth_headers, json={
-            "name": "Test Rate Limit",
-            "requests_per_minute": 60,
-            "burst_size": 10,
-            "action": "reject",
-        })
+        response = await client.post(
+            "/api/rate-limits",
+            headers=auth_headers,
+            json={
+                "name": "Test Rate Limit",
+                "requests_per_minute": 60,
+                "burst_size": 10,
+                "action": "reject",
+            },
+        )
         assert response.status_code in (200, 201)
         data = response.json()
         assert data["name"] == "Test Rate Limit"
@@ -78,12 +82,16 @@ class TestGeoipRoutes:
 
     @pytest.mark.asyncio
     async def test_create_geoip_rule(self, client, admin_user, auth_headers):
-        response = await client.post("/api/geoip/rules", headers=auth_headers, json={
-            "name": "Block Test Countries",
-            "mode": "blocklist",
-            "countries": '["XX", "YY"]',
-            "action": "block",
-        })
+        response = await client.post(
+            "/api/geoip/rules",
+            headers=auth_headers,
+            json={
+                "name": "Block Test Countries",
+                "mode": "blocklist",
+                "countries": '["XX", "YY"]',
+                "action": "block",
+            },
+        )
         assert response.status_code in (200, 201)
 
     @pytest.mark.asyncio

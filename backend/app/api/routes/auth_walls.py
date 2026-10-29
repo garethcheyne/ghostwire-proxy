@@ -12,10 +12,18 @@ from app.models.auth_wall import AuthWall, LocalAuthUser, AuthProvider, LdapConf
 from app.models.audit_log import AuditLog
 from app.models.proxy_host import ProxyHost
 from app.schemas.auth_wall import (
-    AuthWallCreate, AuthWallUpdate, AuthWallResponse,
-    LocalAuthUserCreate, LocalAuthUserUpdate, LocalAuthUserResponse,
-    AuthProviderCreate, AuthProviderUpdate, AuthProviderResponse,
-    LdapConfigCreate, LdapConfigUpdate, LdapConfigResponse
+    AuthWallCreate,
+    AuthWallUpdate,
+    AuthWallResponse,
+    LocalAuthUserCreate,
+    LocalAuthUserUpdate,
+    LocalAuthUserResponse,
+    AuthProviderCreate,
+    AuthProviderUpdate,
+    AuthProviderResponse,
+    LdapConfigCreate,
+    LdapConfigUpdate,
+    LdapConfigResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
 from app.api.routes.proxy_hosts import validate_and_apply
@@ -24,9 +32,7 @@ router = APIRouter()
 
 
 async def _host_count(db: AsyncSession, wall_id: str) -> int:
-    result = await db.execute(
-        select(func.count()).select_from(ProxyHost).where(ProxyHost.auth_wall_id == wall_id)
-    )
+    result = await db.execute(select(func.count()).select_from(ProxyHost).where(ProxyHost.auth_wall_id == wall_id))
     return int(result.scalar() or 0)
 
 
@@ -64,8 +70,10 @@ async def list_auth_walls(
             .limit(limit)
         )
         result = await db.execute(query)
-        return [AuthWallResponse.model_validate(w, from_attributes=True).model_dump(mode="json")
-                for w in result.scalars().all()]
+        return [
+            AuthWallResponse.model_validate(w, from_attributes=True).model_dump(mode="json")
+            for w in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
 
@@ -281,9 +289,7 @@ async def delete_auth_wall(
 
     # Hosts behind it are left open (no wall), rather than stuck behind a login that no longer exists
     in_use = await _host_count(db, wall_id)
-    await db.execute(
-        update(ProxyHost).where(ProxyHost.auth_wall_id == wall_id).values(auth_wall_id=None)
-    )
+    await db.execute(update(ProxyHost).where(ProxyHost.auth_wall_id == wall_id).values(auth_wall_id=None))
     await db.delete(auth_wall)
     await _commit_or_apply(db, bool(in_use))
     await cache_delete_prefix("auth_walls:")
@@ -331,10 +337,7 @@ async def remove_local_user(
 ):
     """Remove local user from auth wall"""
     result = await db.execute(
-        select(LocalAuthUser).where(
-            (LocalAuthUser.id == user_id) &
-            (LocalAuthUser.auth_wall_id == wall_id)
-        )
+        select(LocalAuthUser).where((LocalAuthUser.id == user_id) & (LocalAuthUser.auth_wall_id == wall_id))
     )
     local_user = result.scalar_one_or_none()
 
@@ -396,10 +399,7 @@ async def remove_auth_provider(
 ):
     """Remove OAuth provider from auth wall"""
     result = await db.execute(
-        select(AuthProvider).where(
-            (AuthProvider.id == provider_id) &
-            (AuthProvider.auth_wall_id == wall_id)
-        )
+        select(AuthProvider).where((AuthProvider.id == provider_id) & (AuthProvider.auth_wall_id == wall_id))
     )
     provider = result.scalar_one_or_none()
 
@@ -465,10 +465,7 @@ async def remove_ldap_config(
 ):
     """Remove LDAP config from auth wall"""
     result = await db.execute(
-        select(LdapConfig).where(
-            (LdapConfig.id == ldap_id) &
-            (LdapConfig.auth_wall_id == wall_id)
-        )
+        select(LdapConfig).where((LdapConfig.id == ldap_id) & (LdapConfig.auth_wall_id == wall_id))
     )
     ldap_config = result.scalar_one_or_none()
 

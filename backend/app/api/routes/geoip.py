@@ -11,8 +11,11 @@ from app.models.user import User
 from app.models.rate_limit import GeoipSettings, GeoipRule
 from app.models.audit_log import AuditLog
 from app.schemas.rate_limit import (
-    GeoipSettingsUpdate, GeoipSettingsResponse,
-    GeoipRuleCreate, GeoipRuleUpdate, GeoipRuleResponse,
+    GeoipSettingsUpdate,
+    GeoipSettingsResponse,
+    GeoipRuleCreate,
+    GeoipRuleUpdate,
+    GeoipRuleResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
 
@@ -20,6 +23,7 @@ router = APIRouter()
 
 
 # ── GeoIP Settings ─────────────────────────────────────────────
+
 
 @router.get("/settings", response_model=GeoipSettingsResponse | None)
 async def get_geoip_settings(
@@ -59,13 +63,16 @@ async def update_geoip_settings(
         )
         db.add(settings_obj)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="geoip_settings_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details="Updated GeoIP settings",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="geoip_settings_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details="Updated GeoIP settings",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("geoip:")
     await db.refresh(settings_obj)
@@ -73,6 +80,7 @@ async def update_geoip_settings(
 
 
 # ── GeoIP Rules ────────────────────────────────────────────────
+
 
 @router.get("/rules", response_model=list[GeoipRuleResponse])
 async def list_geoip_rules(
@@ -87,8 +95,10 @@ async def list_geoip_rules(
         if proxy_host_id:
             query = query.where(GeoipRule.proxy_host_id == proxy_host_id)
         result = await db.execute(query)
-        return [GeoipRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
-                for r in result.scalars().all()]
+        return [
+            GeoipRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+            for r in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
 
@@ -103,13 +113,16 @@ async def create_geoip_rule(
     rule = GeoipRule(**data.model_dump())
     db.add(rule)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="geoip_rule_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created GeoIP rule: {data.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="geoip_rule_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created GeoIP rule: {data.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("geoip:")
     await db.refresh(rule)
@@ -132,13 +145,16 @@ async def update_geoip_rule(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="geoip_rule_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated GeoIP rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="geoip_rule_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated GeoIP rule: {rule.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("geoip:")
     await db.refresh(rule)
@@ -157,19 +173,23 @@ async def delete_geoip_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="GeoIP rule not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="geoip_rule_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted GeoIP rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="geoip_rule_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted GeoIP rule: {rule.name}",
+        )
+    )
     await db.delete(rule)
     await db.commit()
     await cache_delete_prefix("geoip:")
 
 
 # ── GeoIP Lookup ───────────────────────────────────────────────
+
 
 @router.get("/lookup/{ip}")
 async def lookup_ip(
@@ -201,12 +221,14 @@ async def lookup_ip(
 
 # ── GeoIP Database Management ─────────────────────────────────
 
+
 @router.get("/database/status")
 async def get_geoip_database_status(
     current_user: User = Depends(get_current_user),
 ):
     """Get the current GeoIP database status."""
     from app.services.geoip_service import get_db_info
+
     return get_db_info()
 
 
@@ -221,13 +243,16 @@ async def update_geoip_database(
 
     result = await update_database()
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="geoip_database_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"GeoIP database update: {result['status']} - {result['message']}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="geoip_database_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"GeoIP database update: {result['status']} - {result['message']}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("geoip:")
 

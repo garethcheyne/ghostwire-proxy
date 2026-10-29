@@ -15,10 +15,18 @@ from app.models.waf import WafRule, WafRuleSet, ThreatEvent, ThreatActor, Threat
 from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
 from app.schemas.waf import (
-    WafRuleCreate, WafRuleUpdate, WafRuleResponse,
-    WafRuleSetCreate, WafRuleSetUpdate, WafRuleSetResponse,
-    ThreatEventResponse, ThreatActorResponse, ThreatActorUpdate,
-    ThreatThresholdCreate, ThreatThresholdUpdate, ThreatThresholdResponse,
+    WafRuleCreate,
+    WafRuleUpdate,
+    WafRuleResponse,
+    WafRuleSetCreate,
+    WafRuleSetUpdate,
+    WafRuleSetResponse,
+    ThreatEventResponse,
+    ThreatActorResponse,
+    ThreatActorUpdate,
+    ThreatThresholdCreate,
+    ThreatThresholdUpdate,
+    ThreatThresholdResponse,
     ThreatStatsResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
@@ -45,6 +53,7 @@ async def _notify_nginx_reload():
 
 # ── WAF Rule Sets ──────────────────────────────────────────────
 
+
 @router.get("/rules/sets", response_model=list[WafRuleSetResponse])
 async def list_rule_sets(
     current_user: User = Depends(get_current_user),
@@ -64,19 +73,23 @@ async def create_rule_set(
     rule_set = WafRuleSet(**data.model_dump())
     db.add(rule_set)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="waf_rule_set_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created WAF rule set: {data.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="waf_rule_set_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created WAF rule set: {data.name}",
+        )
+    )
     await db.commit()
     await db.refresh(rule_set)
     return rule_set
 
 
 # ── WAF Rules ──────────────────────────────────────────────────
+
 
 @router.get("/rules", response_model=list[WafRuleResponse])
 async def list_rules(
@@ -100,8 +113,10 @@ async def list_rules(
             query = query.where(WafRule.proxy_host_id == proxy_host_id)
         query = query.offset(skip).limit(limit)
         result = await db.execute(query)
-        return [WafRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
-                for r in result.scalars().all()]
+        return [
+            WafRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+            for r in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
 
@@ -116,13 +131,16 @@ async def create_rule(
     rule = WafRule(**data.model_dump())
     db.add(rule)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="waf_rule_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created WAF rule: {data.name} ({data.category})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="waf_rule_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created WAF rule: {data.name} ({data.category})",
+        )
+    )
     await db.commit()
     await db.refresh(rule)
     await cache_delete_prefix("waf_rules:")
@@ -158,13 +176,16 @@ async def update_rule(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="waf_rule_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated WAF rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="waf_rule_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated WAF rule: {rule.name}",
+        )
+    )
     await db.commit()
     await db.refresh(rule)
     await cache_delete_prefix("waf_rules:")
@@ -183,19 +204,23 @@ async def delete_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="WAF rule not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="waf_rule_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted WAF rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="waf_rule_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted WAF rule: {rule.name}",
+        )
+    )
     await db.delete(rule)
     await db.commit()
     await cache_delete_prefix("waf_rules:")
 
 
 # ── Threat Events ──────────────────────────────────────────────
+
 
 @router.get("/events", response_model=list[ThreatEventResponse])
 async def list_threat_events(
@@ -219,8 +244,10 @@ async def list_threat_events(
             query = query.where(ThreatEvent.client_ip == client_ip)
         query = query.offset(skip).limit(limit)
         result = await db.execute(query)
-        return [ThreatEventResponse.model_validate(e, from_attributes=True).model_dump(mode="json")
-                for e in result.scalars().all()]
+        return [
+            ThreatEventResponse.model_validate(e, from_attributes=True).model_dump(mode="json")
+            for e in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=15, producer=_compute)
 
@@ -238,13 +265,16 @@ async def delete_threat_event(
     if not event:
         raise HTTPException(status_code=404, detail="Threat event not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_event_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted threat event {event_id} (IP: {event.client_ip})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_event_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted threat event {event_id} (IP: {event.client_ip})",
+        )
+    )
     await db.delete(event)
     await db.commit()
     await cache_delete_prefix("waf_events:")
@@ -262,13 +292,16 @@ async def purge_threat_events(
 
     await db.execute(sa_delete(ThreatEvent))
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_events_purged",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Purged all threat events ({count} records)",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_events_purged",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Purged all threat events ({count} records)",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("waf_events:")
     return {"status": "ok", "deleted": count}
@@ -291,10 +324,7 @@ async def get_threat_geo_data(
         .group_by(ThreatActor.country_code, ThreatActor.country_name)
         .order_by(func.sum(ThreatActor.total_events).desc())
     )
-    return [
-        {"country_code": row[0], "country_name": row[1] or row[0], "count": row[2]}
-        for row in result.all()
-    ]
+    return [{"country_code": row[0], "country_name": row[1] or row[0], "count": row[2]} for row in result.all()]
 
 
 @router.get("/threats/by-host")
@@ -332,11 +362,13 @@ async def get_threats_by_host(
             .order_by(func.count(ThreatEvent.id).desc())
         )
         categories = {row[0]: row[1] for row in cat_result.all()}
-        result.append({
-            "host": host,
-            "total": count,
-            "categories": categories,
-        })
+        result.append(
+            {
+                "host": host,
+                "total": count,
+                "categories": categories,
+            }
+        )
 
     return result
 
@@ -354,24 +386,32 @@ async def get_threat_stats(
         week_start = today_start - timedelta(days=today_start.weekday())
 
         # Single aggregate query for all event counts.
-        ev_row = (await db.execute(
-            select(
-                func.count(ThreatEvent.id).label("total"),
-                func.count(case((ThreatEvent.timestamp >= today_start, 1))).label("today"),
-                func.count(case((ThreatEvent.timestamp >= week_start, 1))).label("week"),
+        ev_row = (
+            await db.execute(
+                select(
+                    func.count(ThreatEvent.id).label("total"),
+                    func.count(case((ThreatEvent.timestamp >= today_start, 1))).label("today"),
+                    func.count(case((ThreatEvent.timestamp >= week_start, 1))).label("week"),
+                )
             )
-        )).one()
+        ).one()
 
         # Single aggregate query for actor counts.
-        actor_row = (await db.execute(
-            select(
-                func.count(ThreatActor.id).label("total"),
-                func.count(case((
-                    ThreatActor.current_status.in_(['temp_blocked', 'perm_blocked', 'firewall_banned']),
-                    1,
-                ))).label("blocked"),
+        actor_row = (
+            await db.execute(
+                select(
+                    func.count(ThreatActor.id).label("total"),
+                    func.count(
+                        case(
+                            (
+                                ThreatActor.current_status.in_(['temp_blocked', 'perm_blocked', 'firewall_banned']),
+                                1,
+                            )
+                        )
+                    ).label("blocked"),
+                )
             )
-        )).one()
+        ).one()
 
         # Top categories
         cat_result = await db.execute(
@@ -383,11 +423,7 @@ async def get_threat_stats(
         top_categories = [{"category": r.category, "count": r.count} for r in cat_result.all()]
 
         # Top actors
-        actor_result = await db.execute(
-            select(ThreatActor)
-            .order_by(ThreatActor.threat_score.desc())
-            .limit(10)
-        )
+        actor_result = await db.execute(select(ThreatActor).order_by(ThreatActor.threat_score.desc()).limit(10))
         top_actors = [
             {"ip": a.ip_address, "score": a.threat_score, "events": a.total_events, "status": a.current_status}
             for a in actor_result.scalars().all()
@@ -395,8 +431,7 @@ async def get_threat_stats(
 
         # Severity breakdown
         sev_result = await db.execute(
-            select(ThreatEvent.severity, func.count(ThreatEvent.id).label('count'))
-            .group_by(ThreatEvent.severity)
+            select(ThreatEvent.severity, func.count(ThreatEvent.id).label('count')).group_by(ThreatEvent.severity)
         )
         severity_breakdown = {r.severity: r.count for r in sev_result.all()}
 
@@ -416,6 +451,7 @@ async def get_threat_stats(
 
 
 # ── Threat Actors ──────────────────────────────────────────────
+
 
 @router.get("/actors", response_model=list[ThreatActorResponse])
 async def list_threat_actors(
@@ -460,6 +496,7 @@ async def update_threat_actor(
         raise HTTPException(status_code=404, detail="Threat actor not found")
 
     import json as _json
+
     for field, value in data.model_dump(exclude_unset=True).items():
         if field == "tags":
             setattr(actor, field, _json.dumps(value) if value is not None else None)
@@ -467,13 +504,16 @@ async def update_threat_actor(
             setattr(actor, field, value)
     actor.updated_at = datetime.now(timezone.utc)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actor_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated threat actor: {ip}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actor_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated threat actor: {ip}",
+        )
+    )
     await db.commit()
     await db.refresh(actor)
     return actor
@@ -494,17 +534,21 @@ async def delete_threat_actor(
     actor_id = actor.id
     # Delete associated firewall blocklist entries and threat events
     from app.models.firewall import FirewallBlocklist
+
     await db.execute(sa_delete(FirewallBlocklist).where(FirewallBlocklist.threat_actor_id == actor_id))
     await db.execute(sa_delete(ThreatEvent).where(ThreatEvent.client_ip == ip))
     await db.delete(actor)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actor_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted threat actor: {ip}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actor_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted threat actor: {ip}",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "deleted", "ip": ip}
@@ -524,9 +568,7 @@ async def bulk_firewall_ban(
     if len(ips) > 500:
         raise HTTPException(status_code=400, detail="Maximum 500 IPs per request")
 
-    conn_result = await db.execute(
-        select(FirewallConnector).where(FirewallConnector.enabled == True)
-    )
+    conn_result = await db.execute(select(FirewallConnector).where(FirewallConnector.enabled == True))
     connectors = conn_result.scalars().all()
     if not connectors:
         raise HTTPException(status_code=400, detail="No enabled firewall connectors configured")
@@ -600,13 +642,16 @@ async def bulk_firewall_ban(
         total_errors.extend(ip_errors)
         results.append({"ip": ip, "pushed": pushed, "errors": ip_errors})
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actors_bulk_firewall_banned",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Bulk firewall banned {len(ips)} IPs (pushed {total_pushed} total)",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actors_bulk_firewall_banned",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Bulk firewall banned {len(ips)} IPs (pushed {total_pushed} total)",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {
@@ -642,13 +687,16 @@ async def bulk_unblock_actors(
             actor.updated_at = datetime.now(timezone.utc)
             unblocked += 1
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actors_bulk_unblocked",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Bulk unblocked {unblocked} of {len(ips)} IPs",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actors_bulk_unblocked",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Bulk unblocked {unblocked} of {len(ips)} IPs",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "ok", "total_ips": len(ips), "unblocked": unblocked}
@@ -676,13 +724,16 @@ async def bulk_delete_actors(
             await db.delete(actor)
             deleted += 1
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actors_bulk_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Bulk deleted {deleted} threat actors and their events",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actors_bulk_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Bulk deleted {deleted} threat actors and their events",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "ok", "total_ips": len(ips), "deleted": deleted}
@@ -713,13 +764,16 @@ async def block_threat_actor(
         actor.perm_blocked_at = now
         actor.updated_at = now
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actor_blocked",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Manually blocked IP: {ip}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actor_blocked",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Manually blocked IP: {ip}",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "blocked", "ip": ip}
@@ -734,9 +788,7 @@ async def firewall_ban_threat_actor(
 ):
     """Escalate an IP to firewall_banned and push to all enabled firewall connectors."""
     # Check that at least one enabled connector exists
-    conn_result = await db.execute(
-        select(FirewallConnector).where(FirewallConnector.enabled == True)
-    )
+    conn_result = await db.execute(select(FirewallConnector).where(FirewallConnector.enabled == True))
     connectors = conn_result.scalars().all()
     if not connectors:
         raise HTTPException(status_code=400, detail="No enabled firewall connectors configured")
@@ -765,6 +817,7 @@ async def firewall_ban_threat_actor(
 
     # Create blocklist entries for each enabled connector and push
     from app.services.firewall_service import get_connector as get_fw_connector
+
     pushed = 0
     errors = []
     for connector in connectors:
@@ -803,13 +856,16 @@ async def firewall_ban_threat_actor(
             entry.error_message = str(e)[:500]
             errors.append(connector.name)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actor_firewall_banned",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Firewall banned IP: {ip} (pushed to {pushed} connector(s))",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actor_firewall_banned",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Firewall banned IP: {ip} (pushed to {pushed} connector(s))",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {
@@ -838,13 +894,16 @@ async def unblock_threat_actor(
     actor.firewall_banned_at = None
     actor.updated_at = datetime.now(timezone.utc)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_actor_unblocked",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Unblocked IP: {ip}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_actor_unblocked",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Unblocked IP: {ip}",
+        )
+    )
     await db.commit()
     await _notify_nginx_reload()
     return {"status": "unblocked", "ip": ip}
@@ -852,14 +911,13 @@ async def unblock_threat_actor(
 
 # ── Threat Thresholds ──────────────────────────────────────────
 
+
 @router.get("/thresholds", response_model=list[ThreatThresholdResponse])
 async def list_thresholds(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(ThreatThreshold).order_by(ThreatThreshold.priority.desc())
-    )
+    result = await db.execute(select(ThreatThreshold).order_by(ThreatThreshold.priority.desc()))
     return result.scalars().all()
 
 
@@ -873,13 +931,16 @@ async def create_threshold(
     threshold = ThreatThreshold(**data.model_dump())
     db.add(threshold)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_threshold_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created threat threshold: {data.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_threshold_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created threat threshold: {data.name}",
+        )
+    )
     await db.commit()
     await db.refresh(threshold)
     return threshold
@@ -901,13 +962,16 @@ async def update_threshold(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(threshold, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_threshold_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated threat threshold: {threshold.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_threshold_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated threat threshold: {threshold.name}",
+        )
+    )
     await db.commit()
     await db.refresh(threshold)
     return threshold
@@ -925,12 +989,15 @@ async def delete_threshold(
     if not threshold:
         raise HTTPException(status_code=404, detail="Threshold not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="threat_threshold_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted threat threshold: {threshold.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="threat_threshold_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted threat threshold: {threshold.name}",
+        )
+    )
     await db.delete(threshold)
     await db.commit()

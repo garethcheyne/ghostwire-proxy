@@ -11,8 +11,11 @@ from app.models.access_list import AccessList, AccessListEntry
 from app.models.proxy_host import ProxyHost
 from app.models.audit_log import AuditLog
 from app.schemas.access_list import (
-    AccessListCreate, AccessListUpdate, AccessListResponse,
-    AccessListEntryCreate, AccessListEntryResponse
+    AccessListCreate,
+    AccessListUpdate,
+    AccessListResponse,
+    AccessListEntryCreate,
+    AccessListEntryResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
 from app.api.routes.proxy_hosts import validate_and_apply
@@ -39,9 +42,7 @@ async def _load_access_list(db: AsyncSession, list_id: str) -> AccessList:
 
 
 async def _host_count(db: AsyncSession, list_id: str) -> int:
-    result = await db.execute(
-        select(func.count()).select_from(ProxyHost).where(ProxyHost.access_list_id == list_id)
-    )
+    result = await db.execute(select(func.count()).select_from(ProxyHost).where(ProxyHost.access_list_id == list_id))
     return int(result.scalar() or 0)
 
 
@@ -68,16 +69,13 @@ async def list_access_lists(
     cache_key = f"access_lists:list:{skip}:{limit}"
 
     async def _compute() -> dict:
-        query = (
-            _with_relations(select(AccessList))
-            .order_by(AccessList.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        query = _with_relations(select(AccessList)).order_by(AccessList.created_at.desc()).offset(skip).limit(limit)
         items_result = await db.execute(query)
         total_result = await db.execute(select(func.count()).select_from(AccessList))
-        items = [AccessListResponse.model_validate(a, from_attributes=True).model_dump(mode="json")
-                 for a in items_result.scalars().all()]
+        items = [
+            AccessListResponse.model_validate(a, from_attributes=True).model_dump(mode="json")
+            for a in items_result.scalars().all()
+        ]
         return {"items": items, "total": int(total_result.scalar() or 0)}
 
     payload = await cached_json(cache_key, ttl=15, producer=_compute)
@@ -106,10 +104,7 @@ async def create_access_list(
     # Add entries if provided
     if list_data.entries:
         for entry_data in list_data.entries:
-            entry = AccessListEntry(
-                access_list_id=access_list.id,
-                **entry_data.model_dump()
-            )
+            entry = AccessListEntry(access_list_id=access_list.id, **entry_data.model_dump())
             db.add(entry)
 
     # Audit log
@@ -202,9 +197,7 @@ async def delete_access_list(
     )
     db.add(audit_log)
 
-    await db.execute(
-        update(ProxyHost).where(ProxyHost.access_list_id == list_id).values(access_list_id=None)
-    )
+    await db.execute(update(ProxyHost).where(ProxyHost.access_list_id == list_id).values(access_list_id=None))
     await db.delete(access_list)
 
     if in_use:

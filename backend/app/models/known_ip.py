@@ -7,6 +7,7 @@ datacenter IP is your own monitoring. That knowledge only exists in the
 operator's head, and without somewhere to put it every grid shows a wall of
 anonymous numbers.
 """
+
 from sqlalchemy import Column, String, Text, Boolean, DateTime, Index
 from datetime import datetime, timezone
 import uuid
@@ -48,6 +49,4 @@ class KnownIp(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    __table_args__ = (
-        Index("idx_known_ips_category_label", "category", "label"),
-    )
+    __table_args__ = (Index("idx_known_ips_category_label", "category", "label"),)

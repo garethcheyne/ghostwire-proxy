@@ -2,6 +2,7 @@
 First-run setup routes.
 These routes are only accessible when no users exist in the database.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func

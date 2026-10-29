@@ -12,6 +12,7 @@ nginx references (ngx_http_upstream_module):
 - weights are honoured by every method (ip_hash since nginx 1.3.1).
 - the method directive must come before `keepalive` in the upstream block.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -72,9 +73,7 @@ def normalize_upstream_host(value: str) -> str:
     except ValueError:
         pass
     if not _HOSTNAME_RE.match(v):
-        raise ValueError(
-            f"'{value}' is not a valid IP address or hostname (no scheme, port or path)"
-        )
+        raise ValueError(f"'{value}' is not a valid IP address or hostname (no scheme, port or path)")
     return v.lower()
 
 

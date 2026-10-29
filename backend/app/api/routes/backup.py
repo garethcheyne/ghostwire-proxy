@@ -122,7 +122,7 @@ async def upload_backup(
                 meta_file = tar.extractfile(meta_member)
                 if meta_file:
                     metadata = json.loads(meta_file.read().decode('utf-8'))
-            except (KeyError, json.JSONDecodeError):
+            except KeyError, json.JSONDecodeError:
                 pass
 
         # Create backup record

@@ -164,18 +164,26 @@ async def update_default_site(
             db.add(setting)
 
     # Audit log
-    db.add(AuditLog(
-        user_id=current_user.id,
-        email=current_user.email,
-        action="default_site_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="default_site_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Default site: {data.behavior}" + (f" -> {data.redirect_url}" if data.redirect_url else ""),
+        )
+    )
     await db.commit()
 
     # Regenerate and apply the default site config
-    from app.services.openresty_service import generate_default_site_config, reload_nginx, test_nginx_config, backup_configs, restore_configs
+    from app.services.openresty_service import (
+        generate_default_site_config,
+        reload_nginx,
+        test_nginx_config,
+        backup_configs,
+        restore_configs,
+    )
     import os
     from app.core.config import settings as app_settings
 
@@ -202,6 +210,7 @@ async def update_default_site(
         return {"message": "Default site saved but nginx reload failed", "detail": message, "behavior": data.behavior}
 
     return {"message": "Default site updated and applied", "behavior": data.behavior}
+
 
 @router.get("/{key}", response_model=SettingResponse)
 async def get_setting(

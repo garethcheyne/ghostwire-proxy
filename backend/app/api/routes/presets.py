@@ -9,8 +9,12 @@ from app.core.utils import get_client_ip
 from app.models.user import User
 from app.api.deps import get_current_user, get_current_admin_user
 from app.services.preset_service import (
-    list_presets, get_preset, apply_preset,
-    get_applied_presets, remove_preset, reapply_preset,
+    list_presets,
+    get_preset,
+    apply_preset,
+    get_applied_presets,
+    remove_preset,
+    reapply_preset,
 )
 
 router = APIRouter()

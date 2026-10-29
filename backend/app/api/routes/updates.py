@@ -21,8 +21,10 @@ router = APIRouter()
 # SCHEMAS
 # ============================================================================
 
+
 class AppVersionInfo(BaseModel):
     """Information about a single app version/release."""
+
     version: str
     name: Optional[str] = None
     published_at: Optional[str] = None
@@ -33,6 +35,7 @@ class AppVersionInfo(BaseModel):
 
 class CheckAppUpdatesResponse(BaseModel):
     """Response for app update check."""
+
     current_version: str
     latest_version: Optional[str] = None
     update_available: bool
@@ -42,6 +45,7 @@ class CheckAppUpdatesResponse(BaseModel):
 
 class BaseImageInfo(BaseModel):
     """Information about a container's base image."""
+
     container: str
     image: str
     update_available: bool
@@ -52,19 +56,19 @@ class BaseImageInfo(BaseModel):
 
 class StartAppUpdateRequest(BaseModel):
     """Request to start an app update."""
+
     target_version: str = Field(..., description="Target version to update to")
 
 
 class StartBaseImageUpdateRequest(BaseModel):
     """Request to start a base image update."""
-    container_name: str = Field(
-        ...,
-        description="Container to update: api, ui, nginx, postgres, redis"
-    )
+
+    container_name: str = Field(..., description="Container to update: api, ui, nginx, postgres, redis")
 
 
 class UpdateStatusResponse(BaseModel):
     """Response for update status."""
+
     id: str
     update_type: str
     from_version: Optional[str] = None
@@ -86,6 +90,7 @@ class UpdateStatusResponse(BaseModel):
 
 class UpdateSettingsResponse(BaseModel):
     """Response for update settings."""
+
     auto_check_enabled: bool
     check_interval_hours: int
     notify_app_updates: bool
@@ -101,6 +106,7 @@ class UpdateSettingsResponse(BaseModel):
 
 class UpdateSettingsUpdate(BaseModel):
     """Request to update settings."""
+
     auto_check_enabled: Optional[bool] = None
     check_interval_hours: Optional[int] = Field(None, ge=1, le=168)
     notify_app_updates: Optional[bool] = None
@@ -114,6 +120,7 @@ class UpdateSettingsUpdate(BaseModel):
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
 
 @router.get("/check/app", response_model=CheckAppUpdatesResponse)
 async def check_app_updates(
@@ -277,10 +284,7 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ):
     """Update settings."""
-    settings = await update_service.update_settings(
-        db=db,
-        **settings_update.model_dump(exclude_none=True)
-    )
+    settings = await update_service.update_settings(db=db, **settings_update.model_dump(exclude_none=True))
     return UpdateSettingsResponse.model_validate(settings)
 
 
@@ -350,18 +354,14 @@ async def check_now(
             "app_latest_version": app_result.get("latest_version") or "",
             "app_current_version": app_result.get("current_version", APP_VERSION),
             "base_image_updates": str(len(base_updates)),
-            "base_image_details": json.dumps([
-                {"container": r["container"], "image": r["image"]}
-                for r in base_updates
-            ]),
+            "base_image_details": json.dumps(
+                [{"container": r["container"], "image": r["image"]} for r in base_updates]
+            ),
         }
         await redis.hset("ghostwire:update_check", mapping=cache)
 
         update_settings = await update_service.get_settings(db)
-        await redis.expire(
-            "ghostwire:update_check",
-            update_settings.check_interval_hours * 7200
-        )
+        await redis.expire("ghostwire:update_check", update_settings.check_interval_hours * 7200)
     except Exception:
         pass
 

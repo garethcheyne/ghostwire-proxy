@@ -1,6 +1,7 @@
 """
 Local authentication provider with TOTP support.
 """
+
 import secrets
 import json
 from typing import Optional
@@ -16,6 +17,7 @@ from app.services.auth_providers.base import AuthProviderBase, UserInfo
 # TOTP support
 try:
     import pyotp
+
     TOTP_AVAILABLE = True
 except ImportError:
     TOTP_AVAILABLE = False
@@ -99,11 +101,7 @@ class LocalAuthProvider(AuthProviderBase):
         if new_attempts >= self.MAX_FAILED_ATTEMPTS:
             update_values["locked_until"] = now + timedelta(minutes=self.LOCKOUT_DURATION_MINUTES)
 
-        await self.db.execute(
-            update(LocalAuthUser)
-            .where(LocalAuthUser.id == user.id)
-            .values(**update_values)
-        )
+        await self.db.execute(update(LocalAuthUser).where(LocalAuthUser.id == user.id).values(**update_values))
         await self.db.commit()
 
     async def _reset_failed_attempts(self, user: LocalAuthUser) -> None:
@@ -172,9 +170,7 @@ class LocalAuthProvider(AuthProviderBase):
         encrypted_codes = encrypt_data(json.dumps(backup_codes))
 
         await self.db.execute(
-            update(LocalAuthUser)
-            .where(LocalAuthUser.id == user.id)
-            .values(totp_backup_codes=encrypted_codes)
+            update(LocalAuthUser).where(LocalAuthUser.id == user.id).values(totp_backup_codes=encrypted_codes)
         )
         await self.db.commit()
 
@@ -205,10 +201,7 @@ class LocalAuthProvider(AuthProviderBase):
         )
 
         # Generate backup codes
-        backup_codes = [
-            secrets.token_hex(self.BACKUP_CODE_LENGTH // 2).upper()
-            for _ in range(self.BACKUP_CODE_COUNT)
-        ]
+        backup_codes = [secrets.token_hex(self.BACKUP_CODE_LENGTH // 2).upper() for _ in range(self.BACKUP_CODE_COUNT)]
 
         # Store encrypted secret and backup codes (not yet verified)
         await self.db.execute(

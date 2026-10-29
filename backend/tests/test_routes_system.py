@@ -9,18 +9,21 @@ class TestSystemStatus:
 
     @pytest.mark.asyncio
     async def test_get_system_status(self, client, admin_user, auth_headers):
-        with patch("app.services.system_service.system_monitor_service.get_system_status",
-                   new_callable=AsyncMock, return_value={
-                       "timestamp": "2026-01-01T00:00:00Z",
-                       "services": {"api": {"status": "healthy"}},
-                       "resources": {
-                           "cpu": {"usage": 10.0, "cores": 4},
-                           "memory": {"used": 1000, "total": 8000, "percent": 12.5, "available": 7000},
-                           "disk": {"used": 5000, "total": 50000, "percent": 10.0, "free": 45000},
-                       },
-                       "containers": [],
-                       "database": {"size_bytes": None, "connections": None, "table_counts": None},
-                   }):
+        with patch(
+            "app.services.system_service.system_monitor_service.get_system_status",
+            new_callable=AsyncMock,
+            return_value={
+                "timestamp": "2026-01-01T00:00:00Z",
+                "services": {"api": {"status": "healthy"}},
+                "resources": {
+                    "cpu": {"usage": 10.0, "cores": 4},
+                    "memory": {"used": 1000, "total": 8000, "percent": 12.5, "available": 7000},
+                    "disk": {"used": 5000, "total": 50000, "percent": 10.0, "free": 45000},
+                },
+                "containers": [],
+                "database": {"size_bytes": None, "connections": None, "table_counts": None},
+            },
+        ):
             response = await client.get("/api/system/status", headers=auth_headers)
 
         assert response.status_code == 200
@@ -40,8 +43,11 @@ class TestSystemMetrics:
 
     @pytest.mark.asyncio
     async def test_get_metrics(self, client, admin_user, auth_headers):
-        with patch("app.services.system_service.system_monitor_service.get_metrics_history",
-                   new_callable=AsyncMock, return_value=[]):
+        with patch(
+            "app.services.system_service.system_monitor_service.get_metrics_history",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
             response = await client.get("/api/system/metrics?period=1h", headers=auth_headers)
 
         assert response.status_code == 200
@@ -58,8 +64,11 @@ class TestSystemThroughput:
 
     @pytest.mark.asyncio
     async def test_get_throughput(self, client, admin_user, auth_headers):
-        with patch("app.services.system_service.system_monitor_service.get_traffic_throughput",
-                   new_callable=AsyncMock, return_value=[]):
+        with patch(
+            "app.services.system_service.system_monitor_service.get_traffic_throughput",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
             response = await client.get("/api/system/throughput?period=1h", headers=auth_headers)
 
         assert response.status_code == 200

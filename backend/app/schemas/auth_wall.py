@@ -45,6 +45,7 @@ class LocalAuthUserResponse(BaseModel):
 # TOTP Setup schemas
 class TotpSetupResponse(BaseModel):
     """Response when initiating TOTP setup - contains secret and QR code."""
+
     secret: str
     provisioning_uri: str
     backup_codes: list[str]
@@ -52,11 +53,13 @@ class TotpSetupResponse(BaseModel):
 
 class TotpVerifyRequest(BaseModel):
     """Request to verify TOTP code during setup or login."""
+
     code: str
 
 
 class TotpVerifyResponse(BaseModel):
     """Response after TOTP verification."""
+
     valid: bool
     message: str = ""
 
@@ -194,6 +197,7 @@ def _check_theme(v: Optional[str]) -> Optional[str]:
 
 class AuthWallAllowList(BaseModel):
     """Who may pass through an OAuth provider. Both empty = any account."""
+
     allowed_emails: Optional[list[str]] = None
     allowed_email_domains: Optional[list[str]] = None
 

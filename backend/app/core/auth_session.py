@@ -4,6 +4,7 @@ Better Auth (in the admin UI) signs people in and stores their session in `auth_
 cookie holds `<token>.<signature>`, the signature being base64(HMAC-SHA256(secret, token)). The
 API accepts that cookie, or the bare token as `Authorization: Bearer <token>` (scripts, tests).
 """
+
 from __future__ import annotations
 
 import base64
@@ -99,9 +100,7 @@ async def verify_user_password(db: AsyncSession, user, password: str) -> bool:
     """Checks a user's sign-in password (their 'credential' account, as Better Auth does)."""
     stored = (
         await db.execute(
-            select(AuthAccount.password).where(
-                AuthAccount.user_id == user.id, AuthAccount.provider_id == "credential"
-            )
+            select(AuthAccount.password).where(AuthAccount.user_id == user.id, AuthAccount.provider_id == "credential")
         )
     ).scalar_one_or_none() or user.password_hash
     return bool(stored) and verify_password(password, stored)

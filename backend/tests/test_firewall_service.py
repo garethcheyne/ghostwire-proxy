@@ -130,9 +130,7 @@ class TestRouterOSConnector:
         mock_response.json.return_value = {"name": "MikroTik"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="password"):
                 result = await connector.test_connection()
 
@@ -148,9 +146,7 @@ class TestRouterOSConnector:
         mock_response.status_code = 401
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="password"):
                 result = await connector.test_connection()
 
@@ -180,9 +176,7 @@ class TestRouterOSConnector:
         mock_response.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.put = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.put = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="password"):
                 result = await connector.add_to_blocklist("192.0.2.1", "Test block")
 
@@ -239,11 +233,15 @@ class TestUniFiConnector:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[
-                make_sites_response(),  # direct sites call
-                make_sites_response(),  # _get_site_uuid call
-                lists_response, policies_response, zones_response
-            ])
+            client_mock.get = AsyncMock(
+                side_effect=[
+                    make_sites_response(),  # direct sites call
+                    make_sites_response(),  # _get_site_uuid call
+                    lists_response,
+                    policies_response,
+                    zones_response,
+                ]
+            )
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.test_connection()
 
@@ -278,9 +276,7 @@ class TestUniFiConnector:
 
         policies_response = MagicMock()
         policies_response.status_code = 200
-        policies_response.json.return_value = {
-            "data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]
-        }
+        policies_response.json.return_value = {"data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]}
 
         zones_response = MagicMock()
         zones_response.status_code = 200
@@ -288,10 +284,15 @@ class TestUniFiConnector:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[
-                make_sites_response(), make_sites_response(),
-                lists_response, policies_response, zones_response
-            ])
+            client_mock.get = AsyncMock(
+                side_effect=[
+                    make_sites_response(),
+                    make_sites_response(),
+                    lists_response,
+                    policies_response,
+                    zones_response,
+                ]
+            )
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.test_connection()
 
@@ -311,9 +312,7 @@ class TestUniFiConnector:
         mock_response.status_code = 401
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="bad_key"):
                 result = await connector.test_connection()
 
@@ -342,25 +341,21 @@ class TestUniFiConnector:
         # _get_or_create_firewall_policy GET — Policy exists
         policies_response = MagicMock()
         policies_response.status_code = 200
-        policies_response.json.return_value = {
-            "data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]
-        }
+        policies_response.json.return_value = {"data": [{"id": "pol-v4", "name": "Ghostwire Drop IPv4"}]}
 
         # _get_traffic_matching_list GET — current items
         list_detail_response = MagicMock()
         list_detail_response.status_code = 200
-        list_detail_response.json.return_value = {
-            "items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}]
-        }
+        list_detail_response.json.return_value = {"items": [{"type": "IP_ADDRESS", "value": "192.0.2.1"}]}
 
         update_response = MagicMock()
         update_response.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[
-                sites_response, lists_response, policies_response, list_detail_response
-            ])
+            client_mock.get = AsyncMock(
+                side_effect=[sites_response, lists_response, policies_response, list_detail_response]
+            )
             client_mock.post = AsyncMock()
             client_mock.put = AsyncMock(return_value=update_response)
 
@@ -404,9 +399,7 @@ class TestUniFiConnector:
         # Get list detail after create (empty so the new IP gets added)
         list_detail_response = MagicMock()
         list_detail_response.status_code = 200
-        list_detail_response.json.return_value = {
-            "items": []
-        }
+        list_detail_response.json.return_value = {"items": []}
 
         # POST responses for create list and create policy
         create_list_response = MagicMock()
@@ -422,14 +415,21 @@ class TestUniFiConnector:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[
-                sites_response, empty_lists_response,
-                empty_policies_response, zones_response,
-                list_detail_response,
-            ])
-            client_mock.post = AsyncMock(side_effect=[
-                create_list_response, create_policy_response,
-            ])
+            client_mock.get = AsyncMock(
+                side_effect=[
+                    sites_response,
+                    empty_lists_response,
+                    empty_policies_response,
+                    zones_response,
+                    list_detail_response,
+                ]
+            )
+            client_mock.post = AsyncMock(
+                side_effect=[
+                    create_list_response,
+                    create_policy_response,
+                ]
+            )
             client_mock.put = AsyncMock(return_value=update_response)
 
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
@@ -473,9 +473,7 @@ class TestUniFiConnector:
 
         with patch("httpx.AsyncClient") as mock_client:
             client_mock = mock_client.return_value.__aenter__.return_value
-            client_mock.get = AsyncMock(side_effect=[
-                sites_response, lists_response, list_detail_response
-            ])
+            client_mock.get = AsyncMock(side_effect=[sites_response, lists_response, list_detail_response])
             client_mock.post = AsyncMock()  # shouldn't be called
             client_mock.put = AsyncMock(return_value=update_response)
 
@@ -528,9 +526,7 @@ class TestPfSenseConnector:
         mock_response.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.test_connection()
 
@@ -549,9 +545,7 @@ class TestOPNsenseConnector:
         mock_response.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
             with patch("app.services.firewall_service.decrypt_data", return_value="api_key"):
                 result = await connector.test_connection()
 

@@ -12,26 +12,29 @@ class TestSystemMonitorService:
     @pytest.mark.asyncio
     async def test_get_system_status(self):
         svc = SystemMonitorService()
-        with patch("psutil.cpu_percent", return_value=25.0), \
-             patch("psutil.cpu_count", return_value=4), \
-             patch("psutil.virtual_memory", return_value=MagicMock(
-                 total=8 * 1024**3, used=4 * 1024**3,
-                 percent=50.0, available=4 * 1024**3
-             )), \
-             patch("psutil.disk_usage", return_value=MagicMock(
-                 total=100 * 1024**3, used=50 * 1024**3,
-                 percent=50.0, free=50 * 1024**3
-             )), \
-             patch("psutil.net_io_counters", return_value=MagicMock(
-                 bytes_sent=1000, bytes_recv=2000
-             )), \
-             patch.object(svc, "_get_services_health", new_callable=AsyncMock, return_value={
-                 "api": {"status": "healthy"}
-             }), \
-             patch.object(svc, "_get_container_info", new_callable=AsyncMock, return_value=[]), \
-             patch.object(svc, "_get_database_stats", new_callable=AsyncMock, return_value={
-                 "size_bytes": None, "connections": None, "table_counts": None
-             }):
+        with (
+            patch("psutil.cpu_percent", return_value=25.0),
+            patch("psutil.cpu_count", return_value=4),
+            patch(
+                "psutil.virtual_memory",
+                return_value=MagicMock(total=8 * 1024**3, used=4 * 1024**3, percent=50.0, available=4 * 1024**3),
+            ),
+            patch(
+                "psutil.disk_usage",
+                return_value=MagicMock(total=100 * 1024**3, used=50 * 1024**3, percent=50.0, free=50 * 1024**3),
+            ),
+            patch("psutil.net_io_counters", return_value=MagicMock(bytes_sent=1000, bytes_recv=2000)),
+            patch.object(
+                svc, "_get_services_health", new_callable=AsyncMock, return_value={"api": {"status": "healthy"}}
+            ),
+            patch.object(svc, "_get_container_info", new_callable=AsyncMock, return_value=[]),
+            patch.object(
+                svc,
+                "_get_database_stats",
+                new_callable=AsyncMock,
+                return_value={"size_bytes": None, "connections": None, "table_counts": None},
+            ),
+        ):
             status = await svc.get_system_status()
 
         assert "timestamp" in status

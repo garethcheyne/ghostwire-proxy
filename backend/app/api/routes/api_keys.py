@@ -4,6 +4,7 @@ Admin session only: a key can never list, mint or revoke keys (api_key_service m
 router session-only). Creating a key needs the admin's current two-factor code, as disabling
 two-factor and regenerating backup codes do.
 """
+
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -42,14 +43,16 @@ def _view(key: ApiKey, emails: dict[str, str]) -> dict:
 
 
 def _audit(db: AsyncSession, request: Request, user: User, action: str, details: str) -> None:
-    db.add(AuditLog(
-        user_id=user.id,
-        email=user.email,
-        action=action,
-        details=details,
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    ))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            email=user.email,
+            action=action,
+            details=details,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
 
 
 @router.get("/scopes", response_model=list[ApiKeyScope])
@@ -95,13 +98,20 @@ async def create_api_key(
 
     try:
         row, key = await api_key_service.create_key(
-            db, current_user, payload.name, payload.scopes, payload.expires_in_days,
+            db,
+            current_user,
+            payload.name,
+            payload.scopes,
+            payload.expires_in_days,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
     _audit(
-        db, request, current_user, "api_key_created",
+        db,
+        request,
+        current_user,
+        "api_key_created",
         f"Created API key '{row.name}' (gwp_{row.prefix}) with scopes: {', '.join(row.scopes)}",
     )
     await db.commit()

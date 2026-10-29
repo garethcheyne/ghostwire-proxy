@@ -9,7 +9,9 @@ class RateLimitRule(Base):
     __tablename__ = "rate_limit_rules"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL = global
+    proxy_host_id = Column(
+        String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True
+    )  # NULL = global
     name = Column(String(255), nullable=False)
     requests_per_second = Column(Integer, nullable=True)
     requests_per_minute = Column(Integer, nullable=True)
@@ -19,7 +21,9 @@ class RateLimitRule(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class GeoipSettings(Base):
@@ -38,7 +42,9 @@ class GeoipRule(Base):
     __tablename__ = "geoip_rules"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    proxy_host_id = Column(String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL = global
+    proxy_host_id = Column(
+        String(36), ForeignKey("proxy_hosts.id", ondelete="CASCADE"), nullable=True, index=True
+    )  # NULL = global
     name = Column(String(255), nullable=False)
     mode = Column(String(20), default="blocklist")  # blocklist, allowlist
     countries = Column(Text, nullable=False)  # JSON array of country codes
@@ -46,4 +52,6 @@ class GeoipRule(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     preset_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )

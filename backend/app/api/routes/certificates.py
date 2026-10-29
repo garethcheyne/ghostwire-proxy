@@ -9,9 +9,7 @@ from app.core.security import encrypt_data, decrypt_data
 from app.models.user import User
 from app.models.certificate import Certificate
 from app.models.audit_log import AuditLog
-from app.schemas.certificate import (
-    CertificateUpload, CertificateLetsEncrypt, CertificateResponse
-)
+from app.schemas.certificate import CertificateUpload, CertificateLetsEncrypt, CertificateResponse
 from app.api.deps import get_current_user, get_current_admin_user
 from app.core.utils import get_client_ip
 from app.services.certificate_service import (
@@ -39,8 +37,10 @@ async def list_certificates(
         query = select(Certificate).order_by(Certificate.created_at.desc()).offset(skip).limit(limit)
         items_result = await db.execute(query)
         total_result = await db.execute(select(func.count()).select_from(Certificate))
-        items = [CertificateResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
-                 for c in items_result.scalars().all()]
+        items = [
+            CertificateResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
+            for c in items_result.scalars().all()
+        ]
         return {"items": items, "total": int(total_result.scalar() or 0)}
 
     payload = await cached_json(cache_key, ttl=15, producer=_compute)

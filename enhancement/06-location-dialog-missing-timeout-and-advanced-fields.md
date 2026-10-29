@@ -67,10 +67,10 @@ location / {                                  # <- proxies to the WEB APP, port 
 
 ```python
 proxy_connect_timeout = Column(Integer, default=60, nullable=False)
-proxy_send_timeout    = Column(Integer, default=60, nullable=False)
-proxy_read_timeout    = Column(Integer, default=60, nullable=False)
+proxy_send_timeout = Column(Integer, default=60, nullable=False)
+proxy_read_timeout = Column(Integer, default=60, nullable=False)
 # Custom nginx directives for this location
-advanced_config       = Column(Text, nullable=True)
+advanced_config = Column(Text, nullable=True)
 ```
 
 `backend/app/services/openresty_service.py`, `_generate_location_block()`:

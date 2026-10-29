@@ -16,6 +16,7 @@ Two data sources, deliberately:
 Both are labelled as such in the response so the UI never implies the detail
 sections cover the lifetime span.
 """
+
 import asyncio
 import json
 import logging
@@ -70,7 +71,7 @@ def _f(value, places: int = 1) -> Optional[float]:
         return None
     try:
         return round(float(value), places)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -78,7 +79,7 @@ def _i(value) -> int:
     """Coerce a SQL aggregate to a plain int."""
     try:
         return int(value or 0)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 
@@ -95,9 +96,7 @@ async def build_host_report(
 
     host_filter = TrafficLog.proxy_host_id == host.id
     window = and_(host_filter, TrafficLog.timestamp >= start)
-    prev_window = and_(
-        host_filter, TrafficLog.timestamp >= prev_start, TrafficLog.timestamp < start
-    )
+    prev_window = and_(host_filter, TrafficLog.timestamp >= prev_start, TrafficLog.timestamp < start)
 
     # Each block opens its own session so they can genuinely run concurrently —
     # a single AsyncSession serialises its queries.
@@ -117,8 +116,17 @@ async def build_host_report(
     )
 
     names = [
-        "overview", "timeseries", "paths", "responses", "clients",
-        "geography", "referrers", "visitors", "security", "lifetime", "nodes",
+        "overview",
+        "timeseries",
+        "paths",
+        "responses",
+        "clients",
+        "geography",
+        "referrers",
+        "visitors",
+        "security",
+        "lifetime",
+        "nodes",
     ]
     report: dict = {}
     for name, value in zip(names, results):
@@ -165,34 +173,40 @@ async def _overview(window, prev_window) -> dict:
         # stayed open 40 minutes is not a 40-minute response time.
         latency_filter = and_(window, TrafficLog.is_streaming.isnot(True))
 
-        row = (await s.execute(
-            select(
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.coalesce(func.sum(TrafficLog.bytes_received), 0),
-                func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
-                func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
-                func.count(distinct(TrafficLog.auth_user)),
-            ).where(window)
-        )).first()
+        row = (
+            await s.execute(
+                select(
+                    func.count(TrafficLog.id),
+                    func.count(distinct(TrafficLog.client_ip)),
+                    func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+                    func.coalesce(func.sum(TrafficLog.bytes_received), 0),
+                    func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
+                    func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
+                    func.count(distinct(TrafficLog.auth_user)),
+                ).where(window)
+            )
+        ).first()
 
-        latency = (await s.execute(
-            select(
-                func.avg(TrafficLog.response_time),
-                func.percentile_cont(0.5).within_group(TrafficLog.response_time.asc()),
-                func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()),
-                func.percentile_cont(0.99).within_group(TrafficLog.response_time.asc()),
-                func.max(TrafficLog.response_time),
-            ).where(and_(latency_filter, TrafficLog.response_time.isnot(None)))
-        )).first()
+        latency = (
+            await s.execute(
+                select(
+                    func.avg(TrafficLog.response_time),
+                    func.percentile_cont(0.5).within_group(TrafficLog.response_time.asc()),
+                    func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()),
+                    func.percentile_cont(0.99).within_group(TrafficLog.response_time.asc()),
+                    func.max(TrafficLog.response_time),
+                ).where(and_(latency_filter, TrafficLog.response_time.isnot(None)))
+            )
+        ).first()
 
-        prev = (await s.execute(
-            select(
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-            ).where(prev_window)
-        )).first()
+        prev = (
+            await s.execute(
+                select(
+                    func.count(TrafficLog.id),
+                    func.count(distinct(TrafficLog.client_ip)),
+                ).where(prev_window)
+            )
+        ).first()
 
     requests = row[0] or 0
     visitors = row[1] or 0
@@ -235,20 +249,22 @@ async def _timeseries(host_id: str, start: datetime, period: str) -> dict:
 
     async with AsyncSessionLocal() as s:
         trunc = func.date_trunc(bucket, TrafficLog.timestamp)
-        rows = (await s.execute(
-            select(
-                trunc.label("bucket"),
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
-                func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
-                func.avg(TrafficLog.response_time),
+        rows = (
+            await s.execute(
+                select(
+                    trunc.label("bucket"),
+                    func.count(TrafficLog.id),
+                    func.count(distinct(TrafficLog.client_ip)),
+                    func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+                    func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
+                    func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
+                    func.avg(TrafficLog.response_time),
+                )
+                .where(and_(TrafficLog.proxy_host_id == host_id, TrafficLog.timestamp >= start))
+                .group_by("bucket")
+                .order_by("bucket")
             )
-            .where(and_(TrafficLog.proxy_host_id == host_id, TrafficLog.timestamp >= start))
-            .group_by("bucket")
-            .order_by("bucket")
-        )).all()
+        ).all()
 
     return {
         "bucket": bucket,
@@ -270,52 +286,60 @@ async def _timeseries(host_id: str, start: datetime, period: str) -> dict:
 async def _top_paths(window) -> dict:
     """Which URLs this site actually serves, and which of them hurt."""
     async with AsyncSessionLocal() as s:
-        popular = (await s.execute(
-            select(
-                TrafficLog.request_uri,
-                func.count(TrafficLog.id).label("requests"),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.avg(TrafficLog.response_time),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
+        popular = (
+            await s.execute(
+                select(
+                    TrafficLog.request_uri,
+                    func.count(TrafficLog.id).label("requests"),
+                    func.count(distinct(TrafficLog.client_ip)),
+                    func.avg(TrafficLog.response_time),
+                    func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+                    func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
+                )
+                .where(window)
+                .group_by(TrafficLog.request_uri)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
             )
-            .where(window)
-            .group_by(TrafficLog.request_uri)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
         # Slowest paths, by p95 rather than mean, and only where there is enough
         # volume for a percentile to mean anything.
-        slowest = (await s.execute(
-            select(
-                TrafficLog.request_uri,
-                func.count(TrafficLog.id).label("requests"),
-                func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()),
-                func.avg(TrafficLog.response_time),
+        slowest = (
+            await s.execute(
+                select(
+                    TrafficLog.request_uri,
+                    func.count(TrafficLog.id).label("requests"),
+                    func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()),
+                    func.avg(TrafficLog.response_time),
+                )
+                .where(
+                    and_(
+                        window,
+                        TrafficLog.response_time.isnot(None),
+                        TrafficLog.is_streaming.isnot(True),
+                    )
+                )
+                .group_by(TrafficLog.request_uri)
+                .having(func.count(TrafficLog.id) >= 10)
+                .order_by(func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()).desc())
+                .limit(TOP_N)
             )
-            .where(and_(
-                window,
-                TrafficLog.response_time.isnot(None),
-                TrafficLog.is_streaming.isnot(True),
-            ))
-            .group_by(TrafficLog.request_uri)
-            .having(func.count(TrafficLog.id) >= 10)
-            .order_by(func.percentile_cont(0.95).within_group(TrafficLog.response_time.asc()).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
-        erroring = (await s.execute(
-            select(
-                TrafficLog.request_uri,
-                func.count(TrafficLog.id).label("errors"),
-                func.max(TrafficLog.status),
+        erroring = (
+            await s.execute(
+                select(
+                    TrafficLog.request_uri,
+                    func.count(TrafficLog.id).label("errors"),
+                    func.max(TrafficLog.status),
+                )
+                .where(and_(window, TrafficLog.status >= 400))
+                .group_by(TrafficLog.request_uri)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
             )
-            .where(and_(window, TrafficLog.status >= 400))
-            .group_by(TrafficLog.request_uri)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
     return {
         "top_paths": [
@@ -339,28 +363,29 @@ async def _top_paths(window) -> dict:
             }
             for r in slowest
         ],
-        "error_paths": [
-            {"uri": r[0], "errors": r[1], "example_status": r[2]}
-            for r in erroring
-        ],
+        "error_paths": [{"uri": r[0], "errors": r[1], "example_status": r[2]} for r in erroring],
     }
 
 
 async def _status_and_methods(window) -> dict:
     async with AsyncSessionLocal() as s:
-        statuses = (await s.execute(
-            select(TrafficLog.status, func.count(TrafficLog.id))
-            .where(window)
-            .group_by(TrafficLog.status)
-            .order_by(func.count(TrafficLog.id).desc())
-        )).all()
+        statuses = (
+            await s.execute(
+                select(TrafficLog.status, func.count(TrafficLog.id))
+                .where(window)
+                .group_by(TrafficLog.status)
+                .order_by(func.count(TrafficLog.id).desc())
+            )
+        ).all()
 
-        methods = (await s.execute(
-            select(TrafficLog.request_method, func.count(TrafficLog.id))
-            .where(window)
-            .group_by(TrafficLog.request_method)
-            .order_by(func.count(TrafficLog.id).desc())
-        )).all()
+        methods = (
+            await s.execute(
+                select(TrafficLog.request_method, func.count(TrafficLog.id))
+                .where(window)
+                .group_by(TrafficLog.request_method)
+                .order_by(func.count(TrafficLog.id).desc())
+            )
+        ).all()
 
     total = sum(c for _, c in statuses) or 0
     families = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "other": 0}
@@ -380,14 +405,8 @@ async def _status_and_methods(window) -> dict:
 
     return {
         "status_families": families,
-        "status_codes": [
-            {"status": c, "requests": n, "percent": _percent(n, total)}
-            for c, n in statuses[:TOP_N]
-        ],
-        "methods": [
-            {"method": m or "UNKNOWN", "requests": n, "percent": _percent(n, total)}
-            for m, n in methods
-        ],
+        "status_codes": [{"status": c, "requests": n, "percent": _percent(n, total)} for c, n in statuses[:TOP_N]],
+        "methods": [{"method": m or "UNKNOWN", "requests": n, "percent": _percent(n, total)} for m, n in methods],
     }
 
 
@@ -398,16 +417,16 @@ async def _client_breakdown(window) -> dict:
     rows and reports how many it looked at.
     """
     async with AsyncSessionLocal() as s:
-        total = (await s.execute(
-            select(func.count(TrafficLog.id)).where(window)
-        )).scalar() or 0
+        total = (await s.execute(select(func.count(TrafficLog.id)).where(window))).scalar() or 0
 
-        rows = (await s.execute(
-            select(TrafficLog.user_agent, TrafficLog.is_bot)
-            .where(window)
-            .order_by(TrafficLog.timestamp.desc())
-            .limit(SAMPLE_LIMIT)
-        )).all()
+        rows = (
+            await s.execute(
+                select(TrafficLog.user_agent, TrafficLog.is_bot)
+                .where(window)
+                .order_by(TrafficLog.timestamp.desc())
+                .limit(SAMPLE_LIMIT)
+            )
+        ).all()
 
     browsers: Counter = Counter()
     systems: Counter = Counter()
@@ -434,10 +453,7 @@ async def _client_breakdown(window) -> dict:
     sample = len(rows)
 
     def top(counter: Counter) -> list[dict]:
-        return [
-            {"name": name, "requests": n, "percent": _percent(n, sample)}
-            for name, n in counter.most_common(TOP_N)
-        ]
+        return [{"name": name, "requests": n, "percent": _percent(n, sample)} for name, n in counter.most_common(TOP_N)]
 
     return {
         "sample_size": sample,
@@ -456,24 +472,25 @@ async def _client_breakdown(window) -> dict:
 
 async def _geography(window) -> dict:
     async with AsyncSessionLocal() as s:
-        rows = (await s.execute(
-            select(
-                TrafficLog.country_code,
-                func.max(TrafficLog.country_name),
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+        rows = (
+            await s.execute(
+                select(
+                    TrafficLog.country_code,
+                    func.max(TrafficLog.country_name),
+                    func.count(TrafficLog.id),
+                    func.count(distinct(TrafficLog.client_ip)),
+                    func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+                )
+                .where(and_(window, TrafficLog.country_code.isnot(None)))
+                .group_by(TrafficLog.country_code)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
             )
-            .where(and_(window, TrafficLog.country_code.isnot(None)))
-            .group_by(TrafficLog.country_code)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
-        unknown = (await s.execute(
-            select(func.count(TrafficLog.id))
-            .where(and_(window, TrafficLog.country_code.is_(None)))
-        )).scalar() or 0
+        unknown = (
+            await s.execute(select(func.count(TrafficLog.id)).where(and_(window, TrafficLog.country_code.is_(None))))
+        ).scalar() or 0
 
     total = sum(r[2] for r in rows) + unknown
 
@@ -496,18 +513,23 @@ async def _geography(window) -> dict:
 async def _referrers(window) -> dict:
     """Where visitors arrived from. Direct traffic sends no Referer at all."""
     async with AsyncSessionLocal() as s:
-        rows = (await s.execute(
-            select(TrafficLog.referer, func.count(TrafficLog.id))
-            .where(and_(window, TrafficLog.referer.isnot(None), TrafficLog.referer != ""))
-            .group_by(TrafficLog.referer)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        rows = (
+            await s.execute(
+                select(TrafficLog.referer, func.count(TrafficLog.id))
+                .where(and_(window, TrafficLog.referer.isnot(None), TrafficLog.referer != ""))
+                .group_by(TrafficLog.referer)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
+            )
+        ).all()
 
-        direct = (await s.execute(
-            select(func.count(TrafficLog.id))
-            .where(and_(window, (TrafficLog.referer.is_(None)) | (TrafficLog.referer == "")))
-        )).scalar() or 0
+        direct = (
+            await s.execute(
+                select(func.count(TrafficLog.id)).where(
+                    and_(window, (TrafficLog.referer.is_(None)) | (TrafficLog.referer == ""))
+                )
+            )
+        ).scalar() or 0
 
     # Group by originating domain as well as exact URL — "which site sends me
     # traffic" is usually the more useful question.
@@ -521,42 +543,44 @@ async def _referrers(window) -> dict:
 
     return {
         "referrers": [{"referer": r[0], "requests": r[1]} for r in rows],
-        "referring_domains": [
-            {"domain": d, "requests": n} for d, n in domains.most_common(TOP_N)
-        ],
+        "referring_domains": [{"domain": d, "requests": n} for d, n in domains.most_common(TOP_N)],
         "direct_requests": direct,
     }
 
 
 async def _visitors(window) -> dict:
     async with AsyncSessionLocal() as s:
-        top_ips = (await s.execute(
-            select(
-                TrafficLog.client_ip,
-                func.count(TrafficLog.id),
-                func.max(TrafficLog.country_name),
-                func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-                func.max(TrafficLog.timestamp),
-                func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
+        top_ips = (
+            await s.execute(
+                select(
+                    TrafficLog.client_ip,
+                    func.count(TrafficLog.id),
+                    func.max(TrafficLog.country_name),
+                    func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
+                    func.max(TrafficLog.timestamp),
+                    func.sum(case((TrafficLog.is_bot.is_(True), 1), else_=0)),
+                )
+                .where(window)
+                .group_by(TrafficLog.client_ip)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
             )
-            .where(window)
-            .group_by(TrafficLog.client_ip)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
-        users = (await s.execute(
-            select(
-                TrafficLog.auth_user,
-                func.count(TrafficLog.id),
-                func.count(distinct(TrafficLog.client_ip)),
-                func.max(TrafficLog.timestamp),
+        users = (
+            await s.execute(
+                select(
+                    TrafficLog.auth_user,
+                    func.count(TrafficLog.id),
+                    func.count(distinct(TrafficLog.client_ip)),
+                    func.max(TrafficLog.timestamp),
+                )
+                .where(and_(window, TrafficLog.auth_user.isnot(None)))
+                .group_by(TrafficLog.auth_user)
+                .order_by(func.count(TrafficLog.id).desc())
+                .limit(TOP_N)
             )
-            .where(and_(window, TrafficLog.auth_user.isnot(None)))
-            .group_by(TrafficLog.auth_user)
-            .order_by(func.count(TrafficLog.id).desc())
-            .limit(TOP_N)
-        )).all()
+        ).all()
 
     return {
         "top_ips": [
@@ -587,68 +611,96 @@ async def _security(host_id: str, start: datetime, prev_start: datetime) -> dict
     scoped = and_(ThreatEvent.proxy_host_id == host_id, ThreatEvent.timestamp >= start)
 
     async with AsyncSessionLocal() as s:
-        totals = (await s.execute(
-            select(
-                func.count(ThreatEvent.id),
-                func.count(distinct(ThreatEvent.client_ip)),
-                func.sum(case((ThreatEvent.action_taken == "blocked", 1), else_=0)),
-                func.sum(case((ThreatEvent.action_taken == "blocklisted", 1), else_=0)),
-                func.sum(case((ThreatEvent.action_taken == "logged", 1), else_=0)),
-            ).where(scoped)
-        )).first()
-
-        previous = (await s.execute(
-            select(func.count(ThreatEvent.id)).where(and_(
-                ThreatEvent.proxy_host_id == host_id,
-                ThreatEvent.timestamp >= prev_start,
-                ThreatEvent.timestamp < start,
-            ))
-        )).scalar() or 0
-
-        categories = (await s.execute(
-            select(ThreatEvent.category, func.count(ThreatEvent.id))
-            .where(scoped).group_by(ThreatEvent.category)
-            .order_by(func.count(ThreatEvent.id).desc()).limit(TOP_N)
-        )).all()
-
-        severities = (await s.execute(
-            select(ThreatEvent.severity, func.count(ThreatEvent.id))
-            .where(scoped).group_by(ThreatEvent.severity)
-            .order_by(func.count(ThreatEvent.id).desc())
-        )).all()
-
-        attackers = (await s.execute(
-            select(
-                ThreatEvent.client_ip,
-                func.count(ThreatEvent.id),
-                func.max(ThreatEvent.timestamp),
-                func.max(ThreatEvent.category),
-                func.sum(case((ThreatEvent.action_taken.in_(("blocked", "blocklisted")), 1), else_=0)),
+        totals = (
+            await s.execute(
+                select(
+                    func.count(ThreatEvent.id),
+                    func.count(distinct(ThreatEvent.client_ip)),
+                    func.sum(case((ThreatEvent.action_taken == "blocked", 1), else_=0)),
+                    func.sum(case((ThreatEvent.action_taken == "blocklisted", 1), else_=0)),
+                    func.sum(case((ThreatEvent.action_taken == "logged", 1), else_=0)),
+                ).where(scoped)
             )
-            .where(scoped).group_by(ThreatEvent.client_ip)
-            .order_by(func.count(ThreatEvent.id).desc()).limit(TOP_N)
-        )).all()
+        ).first()
 
-        targets = (await s.execute(
-            select(ThreatEvent.request_uri, func.count(ThreatEvent.id))
-            .where(scoped).group_by(ThreatEvent.request_uri)
-            .order_by(func.count(ThreatEvent.id).desc()).limit(TOP_N)
-        )).all()
-
-        rules = (await s.execute(
-            select(ThreatEvent.rule_name, func.count(ThreatEvent.id))
-            .where(and_(scoped, ThreatEvent.rule_name.isnot(None)))
-            .group_by(ThreatEvent.rule_name)
-            .order_by(func.count(ThreatEvent.id).desc()).limit(TOP_N)
-        )).all()
-
-        daily = (await s.execute(
-            select(
-                func.date_trunc("day", ThreatEvent.timestamp).label("bucket"),
-                func.count(ThreatEvent.id),
+        previous = (
+            await s.execute(
+                select(func.count(ThreatEvent.id)).where(
+                    and_(
+                        ThreatEvent.proxy_host_id == host_id,
+                        ThreatEvent.timestamp >= prev_start,
+                        ThreatEvent.timestamp < start,
+                    )
+                )
             )
-            .where(scoped).group_by("bucket").order_by("bucket")
-        )).all()
+        ).scalar() or 0
+
+        categories = (
+            await s.execute(
+                select(ThreatEvent.category, func.count(ThreatEvent.id))
+                .where(scoped)
+                .group_by(ThreatEvent.category)
+                .order_by(func.count(ThreatEvent.id).desc())
+                .limit(TOP_N)
+            )
+        ).all()
+
+        severities = (
+            await s.execute(
+                select(ThreatEvent.severity, func.count(ThreatEvent.id))
+                .where(scoped)
+                .group_by(ThreatEvent.severity)
+                .order_by(func.count(ThreatEvent.id).desc())
+            )
+        ).all()
+
+        attackers = (
+            await s.execute(
+                select(
+                    ThreatEvent.client_ip,
+                    func.count(ThreatEvent.id),
+                    func.max(ThreatEvent.timestamp),
+                    func.max(ThreatEvent.category),
+                    func.sum(case((ThreatEvent.action_taken.in_(("blocked", "blocklisted")), 1), else_=0)),
+                )
+                .where(scoped)
+                .group_by(ThreatEvent.client_ip)
+                .order_by(func.count(ThreatEvent.id).desc())
+                .limit(TOP_N)
+            )
+        ).all()
+
+        targets = (
+            await s.execute(
+                select(ThreatEvent.request_uri, func.count(ThreatEvent.id))
+                .where(scoped)
+                .group_by(ThreatEvent.request_uri)
+                .order_by(func.count(ThreatEvent.id).desc())
+                .limit(TOP_N)
+            )
+        ).all()
+
+        rules = (
+            await s.execute(
+                select(ThreatEvent.rule_name, func.count(ThreatEvent.id))
+                .where(and_(scoped, ThreatEvent.rule_name.isnot(None)))
+                .group_by(ThreatEvent.rule_name)
+                .order_by(func.count(ThreatEvent.id).desc())
+                .limit(TOP_N)
+            )
+        ).all()
+
+        daily = (
+            await s.execute(
+                select(
+                    func.date_trunc("day", ThreatEvent.timestamp).label("bucket"),
+                    func.count(ThreatEvent.id),
+                )
+                .where(scoped)
+                .group_by("bucket")
+                .order_by("bucket")
+            )
+        ).all()
 
     total_events = totals[0] or 0
     blocked = (totals[2] or 0) + (totals[3] or 0)
@@ -661,9 +713,7 @@ async def _security(host_id: str, start: datetime, prev_start: datetime) -> dict
         "logged_only": totals[4] or 0,
         "blocked_percent": _percent(blocked, total_events),
         "previous_period_events": previous,
-        "events_change_percent": (
-            round((total_events - previous) / previous * 100, 1) if previous else None
-        ),
+        "events_change_percent": (round((total_events - previous) / previous * 100, 1) if previous else None),
         "by_category": [{"category": c or "uncategorised", "events": n} for c, n in categories],
         "by_severity": [{"severity": sv or "unknown", "events": n} for sv, n in severities],
         "top_attackers": [
@@ -678,10 +728,7 @@ async def _security(host_id: str, start: datetime, prev_start: datetime) -> dict
         ],
         "targeted_paths": [{"uri": r[0], "events": r[1]} for r in targets],
         "triggered_rules": [{"rule_name": r[0], "events": r[1]} for r in rules],
-        "daily": [
-            {"date": r[0].strftime("%Y-%m-%d") if r[0] else None, "events": r[1]}
-            for r in daily
-        ],
+        "daily": [{"date": r[0].strftime("%Y-%m-%d") if r[0] else None, "events": r[1]} for r in daily],
     }
 
 
@@ -692,39 +739,45 @@ async def _lifetime(host_id: str) -> dict:
     "total traffic ever" — which is exactly what a site owner asks for.
     """
     async with AsyncSessionLocal() as s:
-        row = (await s.execute(
-            select(
-                func.coalesce(func.sum(AnalyticsDaily.total_requests), 0),
-                func.coalesce(func.sum(AnalyticsDaily.blocked_requests), 0),
-                func.coalesce(func.sum(AnalyticsDaily.total_threats), 0),
-                func.coalesce(func.sum(AnalyticsDaily.bytes_sent), 0),
-                func.coalesce(func.sum(AnalyticsDaily.bytes_received), 0),
-                func.coalesce(func.sum(AnalyticsDaily.bot_requests), 0),
-                func.min(AnalyticsDaily.date),
-                func.max(AnalyticsDaily.date),
-                func.count(AnalyticsDaily.id),
-                func.max(AnalyticsDaily.unique_ips),
-            ).where(AnalyticsDaily.proxy_host_id == host_id)
-        )).first()
-
-        busiest = (await s.execute(
-            select(AnalyticsDaily.date, AnalyticsDaily.total_requests)
-            .where(AnalyticsDaily.proxy_host_id == host_id)
-            .order_by(AnalyticsDaily.total_requests.desc())
-            .limit(1)
-        )).first()
-
-        countries = (await s.execute(
-            select(
-                AnalyticsGeo.country_code,
-                func.coalesce(func.sum(AnalyticsGeo.requests), 0),
-                func.coalesce(func.sum(AnalyticsGeo.threats), 0),
+        row = (
+            await s.execute(
+                select(
+                    func.coalesce(func.sum(AnalyticsDaily.total_requests), 0),
+                    func.coalesce(func.sum(AnalyticsDaily.blocked_requests), 0),
+                    func.coalesce(func.sum(AnalyticsDaily.total_threats), 0),
+                    func.coalesce(func.sum(AnalyticsDaily.bytes_sent), 0),
+                    func.coalesce(func.sum(AnalyticsDaily.bytes_received), 0),
+                    func.coalesce(func.sum(AnalyticsDaily.bot_requests), 0),
+                    func.min(AnalyticsDaily.date),
+                    func.max(AnalyticsDaily.date),
+                    func.count(AnalyticsDaily.id),
+                    func.max(AnalyticsDaily.unique_ips),
+                ).where(AnalyticsDaily.proxy_host_id == host_id)
             )
-            .where(AnalyticsGeo.proxy_host_id == host_id)
-            .group_by(AnalyticsGeo.country_code)
-            .order_by(func.sum(AnalyticsGeo.requests).desc())
-            .limit(TOP_N)
-        )).all()
+        ).first()
+
+        busiest = (
+            await s.execute(
+                select(AnalyticsDaily.date, AnalyticsDaily.total_requests)
+                .where(AnalyticsDaily.proxy_host_id == host_id)
+                .order_by(AnalyticsDaily.total_requests.desc())
+                .limit(1)
+            )
+        ).first()
+
+        countries = (
+            await s.execute(
+                select(
+                    AnalyticsGeo.country_code,
+                    func.coalesce(func.sum(AnalyticsGeo.requests), 0),
+                    func.coalesce(func.sum(AnalyticsGeo.threats), 0),
+                )
+                .where(AnalyticsGeo.proxy_host_id == host_id)
+                .group_by(AnalyticsGeo.country_code)
+                .order_by(func.sum(AnalyticsGeo.requests).desc())
+                .limit(TOP_N)
+            )
+        ).all()
 
     days = row[8] or 0
     total = _i(row[0])
@@ -744,11 +797,6 @@ async def _lifetime(host_id: str) -> dict:
         # store a daily figure, and summing those would count a returning
         # visitor once per day.
         "peak_daily_unique_ips": _i(row[9]),
-        "busiest_day": (
-            {"date": busiest[0], "requests": busiest[1]} if busiest else None
-        ),
-        "top_countries": [
-            {"country_code": c, "requests": _i(n), "threats": _i(t)}
-            for c, n, t in countries
-        ],
+        "busiest_day": ({"date": busiest[0], "requests": busiest[1]} if busiest else None),
+        "top_countries": [{"country_code": c, "requests": _i(n), "threats": _i(t)} for c, n, t in countries],
     }

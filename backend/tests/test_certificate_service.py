@@ -27,9 +27,11 @@ def _self_signed_pem(days_valid: int = 90) -> str:
     from cryptography.hazmat.primitives.asymmetric import rsa
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "test.example.com"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "test.example.com"),
+        ]
+    )
     now = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()
@@ -88,14 +90,27 @@ class TestRequestLetsEncryptCertificate:
         mock_result.returncode = 0
         mock_result.stdout = "Success"
 
-        with patch("subprocess.run", return_value=mock_result), \
-             patch("os.path.exists", return_value=True), \
-             patch("builtins.open", MagicMock(side_effect=[
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))),
-                           __exit__=MagicMock(return_value=False)),
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="KEY_PEM"))),
-                           __exit__=MagicMock(return_value=False)),
-             ])):
+        with (
+            patch("subprocess.run", return_value=mock_result),
+            patch("os.path.exists", return_value=True),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    side_effect=[
+                        MagicMock(
+                            __enter__=MagicMock(
+                                return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))
+                            ),
+                            __exit__=MagicMock(return_value=False),
+                        ),
+                        MagicMock(
+                            __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="KEY_PEM"))),
+                            __exit__=MagicMock(return_value=False),
+                        ),
+                    ]
+                ),
+            ),
+        ):
             success, msg = await request_letsencrypt_certificate(db_session, "test-cert-2")
 
         assert success is True
@@ -127,6 +142,7 @@ class TestRequestLetsEncryptCertificate:
     @pytest.mark.asyncio
     async def test_certbot_timeout(self, db_session):
         import subprocess
+
         cert = Certificate(
             id="test-cert-4",
             name="LE Cert",
@@ -185,14 +201,27 @@ class TestRenewCertificate:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        with patch("subprocess.run", return_value=mock_result), \
-             patch("app.services.certificate_service.os.path.exists", return_value=True), \
-             patch("builtins.open", MagicMock(side_effect=[
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))),
-                           __exit__=MagicMock(return_value=False)),
-                 MagicMock(__enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="NEW_KEY"))),
-                           __exit__=MagicMock(return_value=False)),
-             ])):
+        with (
+            patch("subprocess.run", return_value=mock_result),
+            patch("app.services.certificate_service.os.path.exists", return_value=True),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    side_effect=[
+                        MagicMock(
+                            __enter__=MagicMock(
+                                return_value=MagicMock(read=MagicMock(return_value=_self_signed_pem()))
+                            ),
+                            __exit__=MagicMock(return_value=False),
+                        ),
+                        MagicMock(
+                            __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="NEW_KEY"))),
+                            __exit__=MagicMock(return_value=False),
+                        ),
+                    ]
+                ),
+            ),
+        ):
             success, msg = await renew_certificate(db_session, "test-renew-2")
 
         assert success is True
@@ -213,9 +242,11 @@ class TestRenewCertificate:
         await db_session.commit()
 
         request = AsyncMock(return_value=(True, "Certificate issued"))
-        with patch("app.services.certificate_service.os.path.exists", return_value=False) as exists, \
-             patch("app.services.certificate_service.request_letsencrypt_certificate", request), \
-             patch("subprocess.run") as run:
+        with (
+            patch("app.services.certificate_service.os.path.exists", return_value=False) as exists,
+            patch("app.services.certificate_service.request_letsencrypt_certificate", request),
+            patch("subprocess.run") as run,
+        ):
             success, msg = await renew_certificate(db_session, "test-renew-3")
 
         assert (success, msg) == (True, "Certificate issued")

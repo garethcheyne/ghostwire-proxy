@@ -44,8 +44,8 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 
 # Specific rate limits for different endpoint types
 RATE_LIMITS = {
-    "auth": "5/minute",       # Login attempts
+    "auth": "5/minute",  # Login attempts
     "api_write": "30/minute",  # Create/Update/Delete operations
     "api_read": "100/minute",  # Read operations
-    "internal": "1000/minute", # Internal API calls from nginx
+    "internal": "1000/minute",  # Internal API calls from nginx
 }

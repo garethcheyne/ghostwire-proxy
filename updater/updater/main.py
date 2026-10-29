@@ -22,10 +22,7 @@ import docker
 import redis.asyncio as redis
 import httpx
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -83,10 +80,7 @@ class UpdaterService:
 
         try:
             while self.running:
-                message = await pubsub.get_message(
-                    ignore_subscribe_messages=True,
-                    timeout=1.0
-                )
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
 
                 if message and message["type"] == "message":
                     try:
@@ -170,10 +164,7 @@ class UpdaterService:
         await self.redis.hset(f"update:{update_id}", mapping=status_data)
 
         # Also publish for real-time updates
-        await self.redis.publish(
-            "ghostwire:update_status",
-            json.dumps(status_data)
-        )
+        await self.redis.publish("ghostwire:update_status", json.dumps(status_data))
 
         logger.info(f"Update {update_id}: {status} ({progress}%) - {message or error or ''}")
 
@@ -194,7 +185,7 @@ class UpdaterService:
                     "notification_type": notification_type,
                     "data": data or {},
                 },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN}
+                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
             )
             if response.status_code == 200:
                 logger.info(f"Push notification sent: {title}")
@@ -223,69 +214,45 @@ class UpdaterService:
         """
         try:
             # Step 1: Pre-flight checks
-            await self.update_status(
-                update_id, "in_progress", 5,
-                "Running pre-flight checks..."
-            )
+            await self.update_status(update_id, "in_progress", 5, "Running pre-flight checks...")
 
             if not await self.preflight_checks():
                 raise Exception("Pre-flight checks failed")
 
             # Step 2: Create backup
-            await self.update_status(
-                update_id, "in_progress", 10,
-                "Creating pre-update backup..."
-            )
+            await self.update_status(update_id, "in_progress", 10, "Creating pre-update backup...")
 
             backup_id = await self.create_pre_update_backup()
             await self.store_backup_id(update_id, backup_id)
 
             # Step 3: Pull new version
-            await self.update_status(
-                update_id, "in_progress", 25,
-                f"Pulling version {target_version}..."
-            )
+            await self.update_status(update_id, "in_progress", 25, f"Pulling version {target_version}...")
 
             await self.pull_new_version(target_version)
 
             # Step 4: Build new images
-            await self.update_status(
-                update_id, "in_progress", 40,
-                "Building new container images..."
-            )
+            await self.update_status(update_id, "in_progress", 40, "Building new container images...")
 
             await self.build_images()
 
             # Step 5: Database migrations
-            await self.update_status(
-                update_id, "in_progress", 55,
-                "Running database migrations..."
-            )
+            await self.update_status(update_id, "in_progress", 55, "Running database migrations...")
 
             await self.run_migrations()
 
             # Step 6: Restart containers (in order)
-            await self.update_status(
-                update_id, "in_progress", 70,
-                "Restarting containers..."
-            )
+            await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
 
             await self.restart_containers_ordered()
 
             # Step 7: Health checks
-            await self.update_status(
-                update_id, "in_progress", 90,
-                "Running health checks..."
-            )
+            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
             if not await self.post_update_health_checks():
                 raise Exception("Post-update health checks failed")
 
             # Success!
-            await self.update_status(
-                update_id, "completed", 100,
-                f"Successfully updated to {target_version}"
-            )
+            await self.update_status(update_id, "completed", 100, f"Successfully updated to {target_version}")
 
             # Send push notification
             await self.send_push_notification(
@@ -300,20 +267,17 @@ class UpdaterService:
 
             # Attempt automatic rollback
             await self.update_status(
-                update_id, "in_progress",
-                message="Update failed, attempting automatic rollback..."
+                update_id, "in_progress", message="Update failed, attempting automatic rollback..."
             )
             try:
                 await self.perform_automatic_rollback(update_id)
-                await self.update_status(
-                    update_id, "failed",
-                    error=f"Update failed and was rolled back: {e}"
-                )
+                await self.update_status(update_id, "failed", error=f"Update failed and was rolled back: {e}")
             except Exception as rollback_error:
                 logger.error(f"Automatic rollback failed: {rollback_error}")
                 await self.update_status(
-                    update_id, "failed",
-                    error=f"Update failed and rollback also failed: {e}. Rollback error: {rollback_error}"
+                    update_id,
+                    "failed",
+                    error=f"Update failed and rollback also failed: {e}. Rollback error: {rollback_error}",
                 )
 
     async def preflight_checks(self) -> bool:
@@ -356,7 +320,7 @@ class UpdaterService:
                     "include_configs": True,
                     "include_traffic_logs": False,
                 },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN}
+                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
             )
 
             if response.status_code in [200, 201]:
@@ -378,25 +342,16 @@ class UpdaterService:
         os.chdir(COMPOSE_PROJECT_DIR)
 
         # Fetch tags
-        result = subprocess.run(
-            ["git", "fetch", "--tags", "--force"],
-            capture_output=True, text=True, timeout=120
-        )
+        result = subprocess.run(["git", "fetch", "--tags", "--force"], capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
             raise Exception(f"Git fetch failed: {result.stderr}")
 
         # Stash any local changes
-        subprocess.run(
-            ["git", "stash"],
-            capture_output=True, text=True
-        )
+        subprocess.run(["git", "stash"], capture_output=True, text=True)
 
         # Checkout version tag
         tag_name = f"v{version}" if not version.startswith("v") else version
-        result = subprocess.run(
-            ["git", "checkout", tag_name],
-            capture_output=True, text=True, timeout=60
-        )
+        result = subprocess.run(["git", "checkout", tag_name], capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             raise Exception(f"Git checkout failed: {result.stderr}")
 
@@ -408,8 +363,7 @@ class UpdaterService:
 
         # Build without cache to ensure fresh images
         result = subprocess.run(
-            ["docker-compose", "build", "--no-cache", "--parallel"],
-            capture_output=True, text=True, timeout=600
+            ["docker-compose", "build", "--no-cache", "--parallel"], capture_output=True, text=True, timeout=600
         )
         if result.returncode != 0:
             raise Exception(f"Docker build failed: {result.stderr}")
@@ -420,10 +374,7 @@ class UpdaterService:
         """Run database migrations."""
         try:
             container = self.docker_client.containers.get(CONTAINERS["api"])
-            exit_code, output = container.exec_run(
-                "alembic upgrade head",
-                workdir="/app"
-            )
+            exit_code, output = container.exec_run("alembic upgrade head", workdir="/app")
 
             if exit_code != 0:
                 logger.warning(f"Migration output: {output.decode()}")
@@ -455,7 +406,9 @@ class UpdaterService:
                     os.chdir(COMPOSE_PROJECT_DIR)
                     result = subprocess.run(
                         ["docker-compose", "up", "-d", "--force-recreate", service_name],
-                        capture_output=True, text=True, timeout=120
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
                     )
 
                     if result.returncode != 0:
@@ -476,15 +429,12 @@ class UpdaterService:
 
         for i in range(max_retries):
             try:
-                response = await self.http_client.get(
-                    f"{API_URL}/health",
-                    timeout=5.0
-                )
+                response = await self.http_client.get(f"{API_URL}/health", timeout=5.0)
                 if response.status_code == 200:
                     logger.info("Health check passed")
                     return True
             except Exception as e:
-                logger.debug(f"Health check attempt {i+1}/{max_retries} failed: {e}")
+                logger.debug(f"Health check attempt {i + 1}/{max_retries} failed: {e}")
 
             await asyncio.sleep(2)
 
@@ -510,7 +460,7 @@ class UpdaterService:
                     "restore_letsencrypt": True,
                     "restore_configs": True,
                 },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN}
+                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
             )
 
             if response.status_code not in [200, 201]:
@@ -537,8 +487,7 @@ class UpdaterService:
         """
         try:
             await self.update_status(
-                update_id, "in_progress", 10,
-                f"Starting base image update for {container_name}..."
+                update_id, "in_progress", 10, f"Starting base image update for {container_name}..."
             )
 
             # Validate container name
@@ -546,18 +495,12 @@ class UpdaterService:
                 raise ValueError(f"Cannot update base image for: {container_name}")
 
             # Create backup first
-            await self.update_status(
-                update_id, "in_progress", 20,
-                "Creating pre-update backup..."
-            )
+            await self.update_status(update_id, "in_progress", 20, "Creating pre-update backup...")
 
             backup_id = await self.create_pre_update_backup()
             await self.store_backup_id(update_id, backup_id)
 
-            await self.update_status(
-                update_id, "in_progress", 40,
-                "Pulling latest base image and rebuilding..."
-            )
+            await self.update_status(update_id, "in_progress", 40, "Pulling latest base image and rebuilding...")
 
             # Rebuild specific service with --pull to get latest base image
             os.chdir(COMPOSE_PROJECT_DIR)
@@ -565,41 +508,36 @@ class UpdaterService:
 
             result = subprocess.run(
                 ["docker-compose", "build", "--pull", "--no-cache", service_name],
-                capture_output=True, text=True, timeout=300
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
 
             if result.returncode != 0:
                 raise Exception(f"Build failed: {result.stderr}")
 
-            await self.update_status(
-                update_id, "in_progress", 70,
-                "Restarting container with new image..."
-            )
+            await self.update_status(update_id, "in_progress", 70, "Restarting container with new image...")
 
             # Recreate just this container
             result = subprocess.run(
                 ["docker-compose", "up", "-d", "--force-recreate", service_name],
-                capture_output=True, text=True, timeout=120
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
 
             if result.returncode != 0:
                 raise Exception(f"Container restart failed: {result.stderr}")
 
             # Health check
-            await self.update_status(
-                update_id, "in_progress", 90,
-                "Running health checks..."
-            )
+            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
             await asyncio.sleep(10)  # Wait for container to start
 
             if not await self.post_update_health_checks():
                 raise Exception("Health checks failed after base image update")
 
-            await self.update_status(
-                update_id, "completed", 100,
-                f"Successfully updated {container_name} base image"
-            )
+            await self.update_status(update_id, "completed", 100, f"Successfully updated {container_name} base image")
 
             # Send push notification
             await self.send_push_notification(
@@ -625,29 +563,18 @@ class UpdaterService:
     # ROLLBACK
     # =========================================================================
 
-    async def perform_rollback(
-        self,
-        update_id: str,
-        original_update_id: str,
-        backup_id: str
-    ):
+    async def perform_rollback(self, update_id: str, original_update_id: str, backup_id: str):
         """
         Perform rollback to previous version.
         """
         try:
-            await self.update_status(
-                update_id, "in_progress", 10,
-                "Starting rollback..."
-            )
+            await self.update_status(update_id, "in_progress", 10, "Starting rollback...")
 
             if not backup_id:
                 raise ValueError("No backup ID provided for rollback")
 
             # Restore from backup
-            await self.update_status(
-                update_id, "in_progress", 30,
-                "Restoring from backup..."
-            )
+            await self.update_status(update_id, "in_progress", 30, "Restoring from backup...")
 
             response = await self.http_client.post(
                 f"{API_URL}/api/backups/restore",
@@ -658,33 +585,24 @@ class UpdaterService:
                     "restore_letsencrypt": True,
                     "restore_configs": True,
                 },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN}
+                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
             )
 
             if response.status_code not in [200, 201]:
                 raise Exception(f"Restore failed: {response.text}")
 
-            await self.update_status(
-                update_id, "in_progress", 70,
-                "Restarting containers..."
-            )
+            await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
 
             # Restart all application containers
             await self.restart_containers_ordered()
 
             # Health check
-            await self.update_status(
-                update_id, "in_progress", 90,
-                "Running health checks..."
-            )
+            await self.update_status(update_id, "in_progress", 90, "Running health checks...")
 
             if not await self.post_update_health_checks():
                 raise Exception("Health checks failed after rollback")
 
-            await self.update_status(
-                update_id, "completed", 100,
-                "Rollback completed successfully"
-            )
+            await self.update_status(update_id, "completed", 100, "Rollback completed successfully")
 
         except Exception as e:
             logger.error(f"Rollback failed: {e}", exc_info=True)

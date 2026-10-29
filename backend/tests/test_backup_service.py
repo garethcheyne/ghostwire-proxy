@@ -33,15 +33,17 @@ class TestBackupService:
     @pytest.mark.asyncio
     async def test_create_backup(self, db_session):
         svc = BackupService()
-        with patch("os.makedirs"), \
-             patch("shutil.make_archive", return_value="/data/backups/test.tar.gz"), \
-             patch("os.path.getsize", return_value=1024), \
-             patch("shutil.rmtree"), \
-             patch("shutil.copy2"), \
-             patch("os.path.exists", return_value=True), \
-             patch("os.listdir", return_value=[]), \
-             patch("tarfile.open", MagicMock()), \
-             patch("builtins.open", MagicMock()):
+        with (
+            patch("os.makedirs"),
+            patch("shutil.make_archive", return_value="/data/backups/test.tar.gz"),
+            patch("os.path.getsize", return_value=1024),
+            patch("shutil.rmtree"),
+            patch("shutil.copy2"),
+            patch("os.path.exists", return_value=True),
+            patch("os.listdir", return_value=[]),
+            patch("tarfile.open", MagicMock()),
+            patch("builtins.open", MagicMock()),
+        ):
             backup = await svc.create_backup(
                 db=db_session,
                 user_id="user-1",

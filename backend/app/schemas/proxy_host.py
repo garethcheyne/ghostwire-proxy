@@ -64,6 +64,7 @@ class UpstreamServerUpsert(UpstreamServerBase):
     """A server in a full-list replace: rows with an id are updated (keeping
     their health history), rows without one are added, and saved rows missing
     from the list are removed."""
+
     id: Optional[str] = None
 
 
@@ -119,6 +120,7 @@ class UpstreamServerResponse(BaseModel):
 
 class LoadBalancingSettings(BaseModel):
     """Host-level load-balancing fields, shared by create and the preview."""
+
     lb_method: str = "round_robin"
     upstream_keepalive: int = 32
     health_check_type: str = "http"
@@ -178,6 +180,7 @@ def _check_health_timeout(v):
 
 class UpstreamPreviewRequest(LoadBalancingSettings):
     """What the editor has on screen, rendered without saving anything."""
+
     host_id: Optional[str] = None
     forward_scheme: str = "http"
     websockets_support: bool = True
@@ -202,6 +205,7 @@ class UpstreamCheckResult(BaseModel):
 
 class UpstreamServerEventResponse(BaseModel):
     """A backend going down or coming back, and what happened to its alert."""
+
     id: str
     upstream_server_id: Optional[str] = None
     server: str
@@ -221,6 +225,7 @@ class UpstreamServerEventResponse(BaseModel):
 # ============================================================================
 # ProxyLocation Schemas
 # ============================================================================
+
 
 class ProxyLocationBase(BaseModel):
     path: str
@@ -367,6 +372,7 @@ class LocationReorderRequest(BaseModel):
 # ============================================================================
 # ProxyHost Schemas
 # ============================================================================
+
 
 class ProxyHostBase(LoadBalancingSettings):
     domain_names: list[str]

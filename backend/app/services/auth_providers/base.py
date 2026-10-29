@@ -2,6 +2,7 @@
 Base class for auth providers.
 All auth providers must implement this interface.
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
@@ -10,6 +11,7 @@ from typing import Optional
 @dataclass
 class UserInfo:
     """Standardized user info returned by all providers."""
+
     user_id: str  # Unique identifier from provider
     username: str
     email: Optional[str] = None

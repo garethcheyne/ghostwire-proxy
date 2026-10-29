@@ -5,6 +5,7 @@ records its own `last_sent_at`, and the due check compares against that rather
 than against "did this tick land in the right minute" — so a restart, a slow
 tick or a container that was down at 07:00 doesn't silently skip a report.
 """
+
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -78,9 +79,9 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
 
     try:
         if schedule.proxy_host_id:
-            host = (await db.execute(
-                select(ProxyHost).where(ProxyHost.id == schedule.proxy_host_id)
-            )).scalar_one_or_none()
+            host = (
+                await db.execute(select(ProxyHost).where(ProxyHost.id == schedule.proxy_host_id))
+            ).scalar_one_or_none()
             if not host:
                 raise ValueError(f"Proxy host {schedule.proxy_host_id} no longer exists")
             report = await build_host_report(db, host, schedule.period)
@@ -94,9 +95,7 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
             for host in hosts:
                 report = await build_host_report(db, host, schedule.period)
                 subject, text, html = render_report_email(report)
-                await email_service.send_email(
-                    db, to=recipients, subject=subject, text_body=text, html_body=html
-                )
+                await email_service.send_email(db, to=recipients, subject=subject, text_body=text, html_body=html)
                 sent_for += 1
 
             schedule.last_sent_at = datetime.now(timezone.utc)
@@ -106,9 +105,7 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
             await db.commit()
             return True, f"Sent {sent_for} host reports to {len(recipients)} recipient(s)"
 
-        await email_service.send_email(
-            db, to=recipients, subject=subject, text_body=text, html_body=html
-        )
+        await email_service.send_email(db, to=recipients, subject=subject, text_body=text, html_body=html)
 
         schedule.last_sent_at = datetime.now(timezone.utc)
         schedule.last_status = "sent"
@@ -130,9 +127,7 @@ async def deliver_schedule(db: AsyncSession, schedule: ReportSchedule) -> tuple[
 
 async def run_due_schedules(db: AsyncSession) -> int:
     """Send every schedule whose slot has arrived. Returns how many were sent."""
-    schedules = (await db.execute(
-        select(ReportSchedule).where(ReportSchedule.enabled == True)
-    )).scalars().all()
+    schedules = (await db.execute(select(ReportSchedule).where(ReportSchedule.enabled == True))).scalars().all()
 
     now = datetime.now(timezone.utc)
     sent = 0

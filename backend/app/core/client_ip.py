@@ -9,6 +9,7 @@ identified by its socket address, whatever headers it sends.
 Configure with TRUSTED_PROXIES: a comma-separated list of IPs, CIDRs and/or
 host names (names are re-resolved every minute).
 """
+
 from __future__ import annotations
 
 import ipaddress

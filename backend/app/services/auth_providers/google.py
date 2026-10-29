@@ -1,6 +1,7 @@
 """
 Google OAuth2 authentication provider.
 """
+
 from typing import Optional
 import httpx
 
@@ -70,6 +71,7 @@ class GoogleAuthProvider(AuthProviderBase):
         query_string = "&".join(f"{k}={httpx.QueryParams({k: v})}" for k, v in params.items())
         # Use proper URL encoding
         from urllib.parse import urlencode
+
         return f"{auth_url}?{urlencode(params)}"
 
     async def handle_callback(

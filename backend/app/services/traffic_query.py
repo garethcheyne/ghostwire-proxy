@@ -20,6 +20,7 @@ latency figures (their "response time" is how long someone stayed connected).
 
 All SQL is built from fixed fragments; every value is a bound parameter.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -36,8 +37,25 @@ from app.models.traffic_log import UPSTREAM_HOST_SQL, UPSTREAM_SQL
 # Histogram bucket bounds, milliseconds. width_bucket() puts a value below the
 # first bound in slot 0 and one at/above the last in slot len(bounds).
 LATENCY_BOUNDS_MS: tuple[int, ...] = (
-    1, 2, 5, 10, 20, 50, 100, 200, 300, 500, 750,
-    1000, 1500, 2000, 3000, 5000, 10000, 30000, 60000,
+    1,
+    2,
+    5,
+    10,
+    20,
+    50,
+    100,
+    200,
+    300,
+    500,
+    750,
+    1000,
+    1500,
+    2000,
+    3000,
+    5000,
+    10000,
+    30000,
+    60000,
 )
 HIST_LEN = len(LATENCY_BOUNDS_MS) + 1
 _BOUNDS_SQL = "'{" + ",".join(str(b) for b in LATENCY_BOUNDS_MS) + "}'::int[]"
@@ -87,8 +105,12 @@ def ceil_hour(dt: datetime) -> datetime:
 
 
 def resolve_range(
-    range_: Optional[str], start: Optional[datetime], end: Optional[datetime],
-    *, default: Optional[str] = "24h", now: Optional[datetime] = None,
+    range_: Optional[str],
+    start: Optional[datetime],
+    end: Optional[datetime],
+    *,
+    default: Optional[str] = "24h",
+    now: Optional[datetime] = None,
 ) -> tuple[Optional[datetime], Optional[datetime]]:
     """Turn a preset ("24h") or explicit start/end into aware UTC datetimes."""
     now = now or datetime.now(timezone.utc)
@@ -113,7 +135,7 @@ def _aware(dt: datetime) -> datetime:
 @dataclass
 class TrafficFilters:
     start: Optional[datetime] = None  # inclusive
-    end: Optional[datetime] = None    # exclusive; None = now
+    end: Optional[datetime] = None  # exclusive; None = now
     host_ids: list[str] = field(default_factory=list)
     # Backends: "10.0.0.5:8080" matches that upstream exactly, "10.0.0.5" every
     # port on that machine.
@@ -172,10 +194,17 @@ class TrafficFilters:
     def method_rollup_compatible(self) -> bool:
         """The per-method rollup keeps only time and proxy host."""
         return (
-            self.status_min is None and self.status_max is None
-            and not self.status_classes and not self.statuses and not self.backends
-            and not self.path and not self.client_ip and not self.countries
-            and not self.user_agent and self.bot is None and self.min_response_ms is None
+            self.status_min is None
+            and self.status_max is None
+            and not self.status_classes
+            and not self.statuses
+            and not self.backends
+            and not self.path
+            and not self.client_ip
+            and not self.countries
+            and not self.user_agent
+            and self.bot is None
+            and self.min_response_ms is None
             and not self.search
         )
 
@@ -309,7 +338,10 @@ class _Plan:
 
 
 def plan_sources(
-    f: TrafficFilters, watermark: Optional[datetime], *, stride: Optional[timedelta] = None,
+    f: TrafficFilters,
+    watermark: Optional[datetime],
+    *,
+    stride: Optional[timedelta] = None,
     rollup_ok: bool = True,
 ) -> _Plan:
     """Split the window between the rollup (whole, summarised hours) and raw rows."""
@@ -358,21 +390,29 @@ def _measure_cols_raw() -> list[str]:
 
 def _measure_cols_rollup() -> list[str]:
     cols = [
-        "sum(requests) AS requests", "sum(bot_requests) AS bot_requests", "sum(failovers) AS failovers",
-        "sum(bytes_sent) AS bytes_sent", "sum(bytes_received) AS bytes_received",
-        "sum(rt_count) AS rt_count", "sum(rt_sum) AS rt_sum", "max(last_seen) AS last_seen",
+        "sum(requests) AS requests",
+        "sum(bot_requests) AS bot_requests",
+        "sum(failovers) AS failovers",
+        "sum(bytes_sent) AS bytes_sent",
+        "sum(bytes_received) AS bytes_received",
+        "sum(rt_count) AS rt_count",
+        "sum(rt_sum) AS rt_sum",
+        "max(last_seen) AS last_seen",
     ]
     cols += [f"sum(rt_hist[{i + 1}]) AS h{i}" for i in range(HIST_LEN)]
     return cols
 
 
-_OUTER_MEASURES = (
-    ["sum(requests)::bigint AS requests", "sum(bot_requests)::bigint AS bot_requests",
-     "sum(failovers)::bigint AS failovers",
-     "sum(bytes_sent)::bigint AS bytes_sent", "sum(bytes_received)::bigint AS bytes_received",
-     "sum(rt_count)::bigint AS rt_count", "sum(rt_sum)::bigint AS rt_sum", "max(last_seen) AS last_seen"]
-    + [f"sum(h{i})::bigint AS h{i}" for i in range(HIST_LEN)]
-)
+_OUTER_MEASURES = [
+    "sum(requests)::bigint AS requests",
+    "sum(bot_requests)::bigint AS bot_requests",
+    "sum(failovers)::bigint AS failovers",
+    "sum(bytes_sent)::bigint AS bytes_sent",
+    "sum(bytes_received)::bigint AS bytes_received",
+    "sum(rt_count)::bigint AS rt_count",
+    "sum(rt_sum)::bigint AS rt_sum",
+    "max(last_seen) AS last_seen",
+] + [f"sum(h{i})::bigint AS h{i}" for i in range(HIST_LEN)]
 
 
 async def aggregate(
@@ -404,7 +444,9 @@ async def aggregate(
         cols = []
         if stride is not None:
             src = "bucket" if rollup else "timestamp"
-            cols.append(f"date_bin(CAST({p.add(stride)} AS interval), {src}, CAST({p.add(ORIGIN)} AS timestamptz)) AS bucket")
+            cols.append(
+                f"date_bin(CAST({p.add(stride)} AS interval), {src}, CAST({p.add(ORIGIN)} AS timestamptz)) AS bucket"
+            )
         for d in dims:
             cols.append(f"{DIMENSIONS[d][1 if rollup else 0]} AS {d}")
         return cols
@@ -430,10 +472,7 @@ async def aggregate(
         f"FROM traffic_logs WHERE {raw_where(f, p, plan.raw)}"
     )
     raw_cols = raw_dim_names + _measure_cols_raw()
-    parts.append(
-        f"SELECT {', '.join(raw_cols)} FROM ({inner}) r"
-        + (f" GROUP BY {group_idx}" if group_names else "")
-    )
+    parts.append(f"SELECT {', '.join(raw_cols)} FROM ({inner}) r" + (f" GROUP BY {group_idx}" if group_names else ""))
     union = " UNION ALL ".join(f"({q})" for q in parts)
     outer_cols = group_names + _OUTER_MEASURES
     sql = f"SELECT {', '.join(outer_cols)} FROM ({union}) u"
@@ -451,11 +490,15 @@ async def aggregate(
     for r in rows:
         d = {k: r[k] for k in group_names}
         d.update(
-            requests=int(r["requests"] or 0), bot_requests=int(r["bot_requests"] or 0),
+            requests=int(r["requests"] or 0),
+            bot_requests=int(r["bot_requests"] or 0),
             failovers=int(r["failovers"] or 0),
-            bytes_sent=int(r["bytes_sent"] or 0), bytes_received=int(r["bytes_received"] or 0),
-            rt_count=int(r["rt_count"] or 0), rt_sum=int(r["rt_sum"] or 0),
-            last_seen=r["last_seen"], hist=[int(r[f"h{i}"] or 0) for i in range(HIST_LEN)],
+            bytes_sent=int(r["bytes_sent"] or 0),
+            bytes_received=int(r["bytes_received"] or 0),
+            rt_count=int(r["rt_count"] or 0),
+            rt_sum=int(r["rt_sum"] or 0),
+            last_seen=r["last_seen"],
+            hist=[int(r[f"h{i}"] or 0) for i in range(HIST_LEN)],
         )
         out.append(d)
     return out
@@ -465,8 +508,9 @@ async def _raw_timeout(db: AsyncSession) -> None:
     await db.execute(text(f"SET LOCAL statement_timeout = {RAW_STATEMENT_TIMEOUT_MS}"))
 
 
-async def method_counts(db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None,
-                        limit: int = 20) -> list[dict]:
+async def method_counts(
+    db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None, limit: int = 20
+) -> list[dict]:
     """Requests per method; from the method rollup when only time/host filter."""
     if watermark is None:
         watermark = await rolled_until(db)
@@ -527,17 +571,20 @@ async def top_raw(db: AsyncSession, f: TrafficFilters, dimension: str, *, limit:
         f"{label or 'NULL'} AS label",
     ]
     sql = (
-        f"SELECT {', '.join(cols)} FROM traffic_logs WHERE {where} "
-        f"GROUP BY 1 ORDER BY requests DESC LIMIT {int(limit)}"
+        f"SELECT {', '.join(cols)} FROM traffic_logs WHERE {where} GROUP BY 1 ORDER BY requests DESC LIMIT {int(limit)}"
     )
     await _raw_timeout(db)
     rows = (await db.execute(text(sql), dict(p))).mappings().all()
     return [
         {
-            "value": r["value"], "label": r["label"], "requests": int(r["requests"]),
-            "errors_4xx": int(r["errors_4xx"]), "errors_5xx": int(r["errors_5xx"]),
+            "value": r["value"],
+            "label": r["label"],
+            "requests": int(r["requests"]),
+            "errors_4xx": int(r["errors_4xx"]),
+            "errors_5xx": int(r["errors_5xx"]),
             "avg_response_time": float(r["avg_rt"]) if r["avg_rt"] is not None else None,
-            "bytes_sent": int(r["bytes_sent"]), "last_seen": r["last_seen"],
+            "bytes_sent": int(r["bytes_sent"]),
+            "last_seen": r["last_seen"],
         }
         for r in rows
     ]
@@ -564,7 +611,9 @@ async def failover_pairs(db: AsyncSession, f: TrafficFilters, *, limit: int = 20
     return [{"from": r["from_node"], "to": r["to_node"], "requests": int(r["requests"])} for r in rows]
 
 
-async def count_matching(db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None) -> tuple[int, bool]:
+async def count_matching(
+    db: AsyncSession, f: TrafficFilters, *, watermark: Optional[datetime] = None
+) -> tuple[int, bool]:
     """Total rows matching ``f``: exact from the rollup when it can answer,
     otherwise a raw count capped at COUNT_CAP. Returns (count, capped)."""
     if f.rollup_compatible:
@@ -580,10 +629,28 @@ async def count_matching(db: AsyncSession, f: TrafficFilters, *, watermark: Opti
 
 
 LIST_COLUMNS = (
-    "id", "proxy_host_id", "timestamp", "client_ip", "request_method", "request_uri",
-    "query_string", "status", "response_time", "bytes_sent", "bytes_received",
-    "upstream_addr", "upstream_response_time", "ssl_protocol", "ssl_cipher",
-    "user_agent", "referer", "country_code", "country_name", "auth_user", "is_bot", "is_streaming",
+    "id",
+    "proxy_host_id",
+    "timestamp",
+    "client_ip",
+    "request_method",
+    "request_uri",
+    "query_string",
+    "status",
+    "response_time",
+    "bytes_sent",
+    "bytes_received",
+    "upstream_addr",
+    "upstream_response_time",
+    "ssl_protocol",
+    "ssl_cipher",
+    "user_agent",
+    "referer",
+    "country_code",
+    "country_name",
+    "auth_user",
+    "is_bot",
+    "is_streaming",
 )
 
 
@@ -625,8 +692,17 @@ def percentile(hist: list[int], q: float) -> Optional[float]:
 
 def merge(rows: Iterable[dict]) -> dict:
     """Sum the measures of several aggregate rows."""
-    out = {"requests": 0, "bot_requests": 0, "failovers": 0, "bytes_sent": 0, "bytes_received": 0,
-           "rt_count": 0, "rt_sum": 0, "last_seen": None, "hist": [0] * HIST_LEN}
+    out = {
+        "requests": 0,
+        "bot_requests": 0,
+        "failovers": 0,
+        "bytes_sent": 0,
+        "bytes_received": 0,
+        "rt_count": 0,
+        "rt_sum": 0,
+        "last_seen": None,
+        "hist": [0] * HIST_LEN,
+    }
     for r in rows:
         for k in ("requests", "bot_requests", "failovers", "bytes_sent", "bytes_received", "rt_count", "rt_sum"):
             out[k] += r[k]

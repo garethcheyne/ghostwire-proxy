@@ -10,6 +10,7 @@ dropping records silently.
 An attacker firing several probes at once is precisely the traffic that
 produces this, so it fails exactly when it is least affordable.
 """
+
 import asyncio
 import os
 
@@ -59,9 +60,7 @@ async def _log_one(maker, ip: str, severity: str = "high"):
 class TestConcurrentThreatEvents:
     @pytest.mark.asyncio
     async def test_simultaneous_events_for_a_new_ip_all_succeed(self, db_session, sessions):
-        results = await asyncio.gather(
-            *[_log_one(sessions, IP) for _ in range(12)], return_exceptions=True
-        )
+        results = await asyncio.gather(*[_log_one(sessions, IP) for _ in range(12)], return_exceptions=True)
         errors = [r for r in results if isinstance(r, Exception)]
         assert not errors, f"{len(errors)} failed, first: {errors[0]!r}"
 
@@ -71,15 +70,13 @@ class TestConcurrentThreatEvents:
         await asyncio.gather(*[_log_one(sessions, ip) for _ in range(10)])
 
         async with sessions() as db:
-            actors = (await db.execute(
-                select(func.count()).select_from(ThreatActor).where(ThreatActor.ip_address == ip)
-            )).scalar()
-            events = (await db.execute(
-                select(func.count()).select_from(ThreatEvent).where(ThreatEvent.client_ip == ip)
-            )).scalar()
-            actor = (await db.execute(
-                select(ThreatActor).where(ThreatActor.ip_address == ip)
-            )).scalar_one()
+            actors = (
+                await db.execute(select(func.count()).select_from(ThreatActor).where(ThreatActor.ip_address == ip))
+            ).scalar()
+            events = (
+                await db.execute(select(func.count()).select_from(ThreatEvent).where(ThreatEvent.client_ip == ip))
+            ).scalar()
+            actor = (await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))).scalar_one()
 
         assert actors == 1
         assert events == 10, "a blocked request went unrecorded"
@@ -92,9 +89,7 @@ class TestConcurrentThreatEvents:
         ip = "198.51.100.202"
         await _log_one(sessions, ip)
         async with sessions() as db:
-            actor = (await db.execute(
-                select(ThreatActor).where(ThreatActor.ip_address == ip)
-            )).scalar_one()
+            actor = (await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))).scalar_one()
             actor.country_code = "NZ"
             actor.country_name = "New Zealand"
             await db.commit()
@@ -102,7 +97,5 @@ class TestConcurrentThreatEvents:
         await _log_one(sessions, ip)
 
         async with sessions() as db:
-            actor = (await db.execute(
-                select(ThreatActor).where(ThreatActor.ip_address == ip)
-            )).scalar_one()
+            actor = (await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))).scalar_one()
         assert actor.country_code == "NZ"

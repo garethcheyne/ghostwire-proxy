@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Try to import Docker SDK (optional dependency)
 try:
     import docker
+
     DOCKER_AVAILABLE = True
 except ImportError:
     DOCKER_AVAILABLE = False
@@ -96,6 +97,7 @@ class SystemMonitorService:
         # Check Redis
         try:
             from app.core.redis import get_redis
+
             client = await get_redis()
             await client.ping()
             services["redis"] = {"status": "healthy"}
@@ -113,6 +115,7 @@ class SystemMonitorService:
         # Primary: HTTP health check against the nginx container
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=3.0) as client:
                 resp = await client.get("http://ghostwire-proxy-nginx:80/health")
                 if resp.status_code == 200:
@@ -123,9 +126,7 @@ class SystemMonitorService:
         # Fallback: Docker API
         if self.docker_client:
             try:
-                containers = self.docker_client.containers.list(
-                    filters={"name": "ghostwire-proxy-nginx"}
-                )
+                containers = self.docker_client.containers.list(filters={"name": "ghostwire-proxy-nginx"})
                 if containers:
                     container = containers[0]
                     if container.status == "running":
@@ -140,7 +141,7 @@ class SystemMonitorService:
             try:
                 if 'nginx' in proc.info['name'].lower():
                     return {"status": "healthy", "process": True}
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except psutil.NoSuchProcess, psutil.AccessDenied:
                 continue
 
         return {"status": "unknown"}
@@ -232,16 +233,11 @@ class SystemMonitorService:
         try:
             docker_containers = await loop.run_in_executor(
                 None,
-                lambda: self.docker_client.containers.list(
-                    all=True, filters={"name": "ghostwire-proxy"}
-                ),
+                lambda: self.docker_client.containers.list(all=True, filters={"name": "ghostwire-proxy"}),
             )
 
             # Fetch stats for all containers in parallel — each stats() call blocks ~1s
-            tasks = [
-                loop.run_in_executor(None, self._get_single_container_info, c)
-                for c in docker_containers
-            ]
+            tasks = [loop.run_in_executor(None, self._get_single_container_info, c) for c in docker_containers]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             return [r for r in results if not isinstance(r, Exception)]
 
@@ -342,9 +338,7 @@ class SystemMonitorService:
         try:
             async with AsyncSessionLocal() as session:
                 # Get database size
-                size_result = await session.execute(
-                    text("SELECT pg_database_size(current_database())")
-                )
+                size_result = await session.execute(text("SELECT pg_database_size(current_database())"))
                 db_size = size_result.scalar() or 0
 
                 # Get connection count
@@ -357,9 +351,7 @@ class SystemMonitorService:
                 table_counts = {}
                 for table in ["traffic_logs", "proxy_hosts", "certificates", "users"]:
                     try:
-                        count_result = await session.execute(
-                            text(f"SELECT count(*) FROM {table}")
-                        )
+                        count_result = await session.execute(text(f"SELECT count(*) FROM {table}"))
                         table_counts[table] = count_result.scalar() or 0
                     except Exception:
                         pass
@@ -373,11 +365,7 @@ class SystemMonitorService:
             logger.warning(f"Could not get database stats: {e}")
             return {"error": str(e)}
 
-    async def get_metrics_history(
-        self,
-        period: str = "24h",
-        db: AsyncSession = None
-    ) -> list:
+    async def get_metrics_history(self, period: str = "24h", db: AsyncSession = None) -> list:
         """Get historical system metrics."""
         period_map = {
             "1h": timedelta(hours=1),
@@ -395,17 +383,9 @@ class SystemMonitorService:
                 return await self._fetch_metrics_history(session, start_time)
         return await self._fetch_metrics_history(db, start_time)
 
-    async def _fetch_metrics_history(
-        self,
-        db: AsyncSession,
-        start_time: datetime
-    ) -> list:
+    async def _fetch_metrics_history(self, db: AsyncSession, start_time: datetime) -> list:
         """Fetch metrics from database."""
-        query = (
-            select(SystemMetrics)
-            .where(SystemMetrics.timestamp >= start_time)
-            .order_by(SystemMetrics.timestamp)
-        )
+        query = select(SystemMetrics).where(SystemMetrics.timestamp >= start_time).order_by(SystemMetrics.timestamp)
         result = await db.execute(query)
         metrics = result.scalars().all()
 
@@ -425,11 +405,7 @@ class SystemMonitorService:
             for m in metrics
         ]
 
-    async def get_traffic_throughput(
-        self,
-        period: str = "24h",
-        db: AsyncSession = None
-    ) -> list:
+    async def get_traffic_throughput(self, period: str = "24h", db: AsyncSession = None) -> list:
         """Get traffic throughput metrics from traffic logs."""
         period_map = {
             "1h": (timedelta(hours=1), timedelta(minutes=5)),
@@ -497,9 +473,7 @@ class SystemMonitorService:
             async with AsyncSessionLocal() as session:
                 one_min_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
                 req_count = await session.execute(
-                    select(func.count(TrafficLog.id)).where(
-                        TrafficLog.timestamp >= one_min_ago
-                    )
+                    select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= one_min_ago)
                 )
                 request_count = req_count.scalar() or 0
 
@@ -540,15 +514,11 @@ class SystemMonitorService:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
                 # Delete old system metrics
-                await session.execute(
-                    text("DELETE FROM system_metrics WHERE timestamp < :cutoff"),
-                    {"cutoff": cutoff}
-                )
+                await session.execute(text("DELETE FROM system_metrics WHERE timestamp < :cutoff"), {"cutoff": cutoff})
 
                 # Delete old container metrics
                 await session.execute(
-                    text("DELETE FROM container_metrics WHERE timestamp < :cutoff"),
-                    {"cutoff": cutoff}
+                    text("DELETE FROM container_metrics WHERE timestamp < :cutoff"), {"cutoff": cutoff}
                 )
 
                 await session.commit()

@@ -5,6 +5,7 @@ by app.services.traffic_query, which reads the hourly rollup where it can and ra
 traffic_logs otherwise. Lists are paginated and every aggregate is bounded (time
 window, LIMIT, statement timeout).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -73,12 +74,23 @@ def traffic_filters(default_range: Optional[str]) -> Callable[..., tq.TrafficFil
             s, e = tq.resolve_range(range, start or start_date, end or end_date, default=default_range)
             hosts = list(host) + ([proxy_host_id] if proxy_host_id else [])
             return tq.TrafficFilters(
-                start=s, end=e, host_ids=hosts, backends=backend,
-                status_classes=status_class, statuses=status_code,
-                status_min=status_min, status_max=status_max, methods=method,
-                path=path or None, path_mode=path_mode, client_ip=client_ip or None,
-                countries=country, user_agent=ua or None, bot=bot,
-                min_response_ms=min_rt, search=search or None,
+                start=s,
+                end=e,
+                host_ids=hosts,
+                backends=backend,
+                status_classes=status_class,
+                statuses=status_code,
+                status_min=status_min,
+                status_max=status_max,
+                methods=method,
+                path=path or None,
+                path_mode=path_mode,
+                client_ip=client_ip or None,
+                countries=country,
+                user_agent=ua or None,
+                bot=bot,
+                min_response_ms=min_rt,
+                search=search or None,
             )
         except tq.FilterError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -151,7 +163,9 @@ async def get_traffic_stats(
         f = tq.TrafficFilters(start=now - timedelta(days=days), host_ids=[proxy_host_id] if proxy_host_id else [])
         watermark = await tq.rolled_until(db)
         # Day buckets (UTC midnight-aligned) give today / this week exactly.
-        rows = await tq.aggregate(db, f, ["proxy_host_id", "status_class"], stride=timedelta(days=1), watermark=watermark)
+        rows = await tq.aggregate(
+            db, f, ["proxy_host_id", "status_class"], stride=timedelta(days=1), watermark=watermark
+        )
         totals = tq.merge(rows)
         by_class = {c: 0 for c in (2, 3, 4, 5)}
         per_host: dict[str, int] = {}
@@ -169,7 +183,9 @@ async def get_traffic_stats(
         names = await tn.host_names(db, top_ids)
         top_ips = []
         if include_top_ips:
-            top_ips = [{"ip": r["value"], "count": r["requests"]} for r in await tq.top_raw(db, f, "client_ip", limit=10)]
+            top_ips = [
+                {"ip": r["value"], "count": r["requests"]} for r in await tq.top_raw(db, f, "client_ip", limit=10)
+            ]
         avg = totals["rt_sum"] / totals["rt_count"] if totals["rt_count"] else None
         return TrafficStatsResponse(
             total_requests=totals["requests"],
@@ -216,8 +232,13 @@ async def traffic_overview(
         for b in tn.buckets(f.start, f.end or now, stride, series):
             rs = series.get(b, [])
             m = tq.merge(rs)
-            point = {"t": b.isoformat(), "requests": m["requests"], "bytes_sent": m["bytes_sent"],
-                     "bytes_received": m["bytes_received"], **{f"s{c}xx": 0 for c in (1, 2, 3, 4, 5)}}
+            point = {
+                "t": b.isoformat(),
+                "requests": m["requests"],
+                "bytes_sent": m["bytes_sent"],
+                "bytes_received": m["bytes_received"],
+                **{f"s{c}xx": 0 for c in (1, 2, 3, 4, 5)},
+            }
             for r in rs:
                 cls = max(1, min(5, r["status"] // 100))
                 point[f"s{cls}xx"] += r["requests"]
@@ -229,9 +250,12 @@ async def traffic_overview(
             "range": {"start": f.start, "end": f.end, "stride_seconds": int(stride.total_seconds())},
             "rolled_until": watermark,
             "totals": {
-                "requests": total, "bot_requests": totals["bot_requests"],
-                "bytes_sent": totals["bytes_sent"], "bytes_received": totals["bytes_received"],
-                "errors_4xx": e4, "errors_5xx": e5,
+                "requests": total,
+                "bot_requests": totals["bot_requests"],
+                "bytes_sent": totals["bytes_sent"],
+                "bytes_received": totals["bytes_received"],
+                "errors_4xx": e4,
+                "errors_5xx": e5,
                 "error_rate": round((e4 + e5) / total * 100, 2) if total else 0.0,
                 "server_error_rate": round(e5 / total * 100, 2) if total else 0.0,
                 "latency": tq.latency_summary(totals),
@@ -245,15 +269,26 @@ async def traffic_overview(
 
 
 TOP_DIMENSIONS = {
-    "path", "client_ip", "country", "user_agent", "referer", "method",
-    "status", "proxy_host", "backend", "backend_host",
+    "path",
+    "client_ip",
+    "country",
+    "user_agent",
+    "referer",
+    "method",
+    "status",
+    "proxy_host",
+    "backend",
+    "backend_host",
 }
 
 
 @router.get("/top")
 async def traffic_top(
     request: Request,
-    dimension: str = Query(..., description="path, client_ip, country, user_agent, referer, method, status, proxy_host, backend, backend_host"),
+    dimension: str = Query(
+        ...,
+        description="path, client_ip, country, user_agent, referer, method, status, proxy_host, backend, backend_host",
+    ),
     limit: int = Query(10, ge=1, le=50),
     f: tq.TrafficFilters = Depends(view_filters),
     current_user: User = Depends(get_current_user),
@@ -273,7 +308,12 @@ async def traffic_top(
             return items
         if dimension == "method":
             return await tq.method_counts(db, f, limit=limit)
-        dim = {"status": "status", "proxy_host": "proxy_host_id", "backend": "upstream", "backend_host": "upstream_host"}[dimension]
+        dim = {
+            "status": "status",
+            "proxy_host": "proxy_host_id",
+            "backend": "upstream",
+            "backend_host": "upstream_host",
+        }[dimension]
         rows = await tq.aggregate(db, f, [dim, "status_class"])
         grouped: dict = {}
         for r in rows:
@@ -281,13 +321,18 @@ async def traffic_top(
         items = []
         for value, rs in grouped.items():
             m = tq.merge(rs)
-            items.append({
-                "value": value, "label": None, "requests": m["requests"],
-                "errors_4xx": sum(r["requests"] for r in rs if r["status_class"] == 4),
-                "errors_5xx": sum(r["requests"] for r in rs if r["status_class"] == 5),
-                "avg_response_time": tq.latency_summary(m)["avg"],
-                "bytes_sent": m["bytes_sent"], "last_seen": m["last_seen"],
-            })
+            items.append(
+                {
+                    "value": value,
+                    "label": None,
+                    "requests": m["requests"],
+                    "errors_4xx": sum(r["requests"] for r in rs if r["status_class"] == 4),
+                    "errors_5xx": sum(r["requests"] for r in rs if r["status_class"] == 5),
+                    "avg_response_time": tq.latency_summary(m)["avg"],
+                    "bytes_sent": m["bytes_sent"],
+                    "last_seen": m["last_seen"],
+                }
+            )
         items.sort(key=lambda i: -i["requests"])
         items = items[:limit]
         if dimension == "proxy_host":
@@ -302,7 +347,9 @@ async def traffic_top(
 @router.get("/backends")
 async def traffic_backends(
     request: Request,
-    group: str = Query("host", pattern="^(host|hostport)$", description="host: one row per machine; hostport: per upstream"),
+    group: str = Query(
+        "host", pattern="^(host|hostport)$", description="host: one row per machine; hostport: per upstream"
+    ),
     limit: int = Query(200, ge=1, le=500),
     f: tq.TrafficFilters = Depends(view_filters),
     current_user: User = Depends(get_current_user),
@@ -328,21 +375,27 @@ async def traffic_backends(
             e5 = sum(r["requests"] for r in rs if r["status_class"] == 5)
             lat = tq.latency_summary(m)
             total = m["requests"]
-            out.append({
-                "backend": backend,  # '' = answered by the proxy itself (no upstream)
-                "requests": total,
-                "errors_4xx": e4, "errors_5xx": e5,
-                "error_rate": round((e4 + e5) / total * 100, 2) if total else 0.0,
-                "server_error_rate": round(e5 / total * 100, 2) if total else 0.0,
-                "p50": lat["p50"], "p95": lat["p95"], "avg": lat["avg"],
-                "bytes_sent": m["bytes_sent"], "bytes_received": m["bytes_received"],
-                "last_seen": m["last_seen"],
-                "hosts": sorted(
-                    [{"id": h, "name": names.get(h, "Unknown"), "requests": n} for h, n in hosts.items()],
-                    key=lambda x: -x["requests"],
-                ),
-                **meta.get(tn.host_part(backend), tn.empty_meta()),
-            })
+            out.append(
+                {
+                    "backend": backend,  # '' = answered by the proxy itself (no upstream)
+                    "requests": total,
+                    "errors_4xx": e4,
+                    "errors_5xx": e5,
+                    "error_rate": round((e4 + e5) / total * 100, 2) if total else 0.0,
+                    "server_error_rate": round(e5 / total * 100, 2) if total else 0.0,
+                    "p50": lat["p50"],
+                    "p95": lat["p95"],
+                    "avg": lat["avg"],
+                    "bytes_sent": m["bytes_sent"],
+                    "bytes_received": m["bytes_received"],
+                    "last_seen": m["last_seen"],
+                    "hosts": sorted(
+                        [{"id": h, "name": names.get(h, "Unknown"), "requests": n} for h, n in hosts.items()],
+                        key=lambda x: -x["requests"],
+                    ),
+                    **meta.get(tn.host_part(backend), tn.empty_meta()),
+                }
+            )
         out.sort(key=lambda b: -b["requests"])
         return out[:limit]
 
@@ -393,15 +446,35 @@ async def client_info(
         "ip": ip,
         "known": {"label": known.label, "category": known.category, "trusted": known.trusted} if known else None,
         "enrichment": {
-            k: getattr(enr, k) for k in (
-                "country_code", "country_name", "city", "region", "isp", "org", "asn", "as_name",
-                "reverse_dns", "abuse_score", "is_tor", "is_proxy", "is_vpn", "is_datacenter", "is_crawler",
+            k: getattr(enr, k)
+            for k in (
+                "country_code",
+                "country_name",
+                "city",
+                "region",
+                "isp",
+                "org",
+                "asn",
+                "as_name",
+                "reverse_dns",
+                "abuse_score",
+                "is_tor",
+                "is_proxy",
+                "is_vpn",
+                "is_datacenter",
+                "is_crawler",
             )
-        } if enr else None,
+        }
+        if enr
+        else None,
         "threat": {
-            "status": actor.current_status, "score": actor.threat_score,
-            "events": actor.total_events, "last_seen": actor.last_seen,
-        } if actor else None,
+            "status": actor.current_status,
+            "score": actor.threat_score,
+            "events": actor.total_events,
+            "last_seen": actor.last_seen,
+        }
+        if actor
+        else None,
     }
 
 
@@ -447,22 +520,37 @@ async def get_city_heatmap(
         base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
     query = (
         select(
-            IpEnrichment.city, IpEnrichment.country_code, IpEnrichment.country_name,
-            IpEnrichment.latitude, IpEnrichment.longitude,
+            IpEnrichment.city,
+            IpEnrichment.country_code,
+            IpEnrichment.country_name,
+            IpEnrichment.latitude,
+            IpEnrichment.longitude,
             func.count(TrafficLog.id).label("count"),
             func.count(func.distinct(TrafficLog.client_ip)).label("unique_ips"),
         )
         .join(IpEnrichment, TrafficLog.client_ip == IpEnrichment.ip_address)
         .where(and_(*base_filter))
-        .group_by(IpEnrichment.city, IpEnrichment.country_code, IpEnrichment.country_name,
-                  IpEnrichment.latitude, IpEnrichment.longitude)
+        .group_by(
+            IpEnrichment.city,
+            IpEnrichment.country_code,
+            IpEnrichment.country_name,
+            IpEnrichment.latitude,
+            IpEnrichment.longitude,
+        )
         .order_by(func.count(TrafficLog.id).desc())
         .limit(200)
     )
     result = await db.execute(query)
     return [
-        {"city": r[0] or "Unknown", "country_code": r[1], "country_name": r[2],
-         "lat": float(r[3]), "lon": float(r[4]), "count": r[5], "unique_ips": r[6]}
+        {
+            "city": r[0] or "Unknown",
+            "country_code": r[1],
+            "country_name": r[2],
+            "lat": float(r[3]),
+            "lon": float(r[4]),
+            "count": r[5],
+            "unique_ips": r[6],
+        }
         for r in result.all()
     ]
 
@@ -474,13 +562,18 @@ async def get_enrichment_status(
 ):
     """Get the status of IP enrichment backfill — how many IPs still need enrichment."""
     subq = select(IpEnrichment.ip_address)
-    total = (await db.execute(
-        select(func.count(func.distinct(TrafficLog.client_ip))).where(TrafficLog.client_ip.isnot(None))
-    )).scalar() or 0
-    enriched = (await db.execute(
-        select(func.count(func.distinct(TrafficLog.client_ip)))
-        .where(TrafficLog.client_ip.isnot(None), TrafficLog.client_ip.in_(subq))
-    )).scalar() or 0
+    total = (
+        await db.execute(
+            select(func.count(func.distinct(TrafficLog.client_ip))).where(TrafficLog.client_ip.isnot(None))
+        )
+    ).scalar() or 0
+    enriched = (
+        await db.execute(
+            select(func.count(func.distinct(TrafficLog.client_ip))).where(
+                TrafficLog.client_ip.isnot(None), TrafficLog.client_ip.in_(subq)
+            )
+        )
+    ).scalar() or 0
     return {
         "total_unique_ips": total,
         "enriched": enriched,
@@ -509,7 +602,7 @@ def _safe_headers(raw: Optional[str]) -> Optional[dict]:
         return None
     try:
         headers = json.loads(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if not isinstance(headers, dict):
         return None
@@ -533,17 +626,34 @@ async def get_traffic_log(
     events = []
     if log.timestamp:
         window = timedelta(seconds=5)
-        evs = (await db.execute(
-            select(ThreatEvent)
-            .where(ThreatEvent.client_ip == log.client_ip,
-                   ThreatEvent.timestamp >= log.timestamp - window,
-                   ThreatEvent.timestamp <= log.timestamp + window)
-            .order_by(ThreatEvent.timestamp).limit(20)
-        )).scalars().all()
+        evs = (
+            (
+                await db.execute(
+                    select(ThreatEvent)
+                    .where(
+                        ThreatEvent.client_ip == log.client_ip,
+                        ThreatEvent.timestamp >= log.timestamp - window,
+                        ThreatEvent.timestamp <= log.timestamp + window,
+                    )
+                    .order_by(ThreatEvent.timestamp)
+                    .limit(20)
+                )
+            )
+            .scalars()
+            .all()
+        )
         events = [
-            {"id": e.id, "timestamp": e.timestamp, "category": e.category, "rule_name": e.rule_name,
-             "rule_id": e.rule_id, "severity": e.severity, "action_taken": e.action_taken,
-             "request_uri": e.request_uri, "matched_payload": (e.matched_payload or "")[:500]}
+            {
+                "id": e.id,
+                "timestamp": e.timestamp,
+                "category": e.category,
+                "rule_name": e.rule_name,
+                "rule_id": e.rule_id,
+                "severity": e.severity,
+                "action_taken": e.action_taken,
+                "request_uri": e.request_uri,
+                "matched_payload": (e.matched_payload or "")[:500],
+            }
             for e in evs
         ]
     upstream = tq.host_of(log.upstream_addr.split(",")[-1].strip()) if log.upstream_addr else None
@@ -558,8 +668,10 @@ async def get_traffic_log(
         "request_headers": _safe_headers(log.request_headers),
         "client": {
             "known_label": known.get(log.client_ip),
-            "isp": enr.isp if enr else None, "org": enr.org if enr else None,
-            "asn": enr.asn if enr else None, "reverse_dns": enr.reverse_dns if enr else None,
+            "isp": enr.isp if enr else None,
+            "org": enr.org if enr else None,
+            "asn": enr.asn if enr else None,
+            "reverse_dns": enr.reverse_dns if enr else None,
             "region": enr.region if enr else None,
         },
         "backend": {"host": upstream, **backend} if backend else None,
@@ -615,13 +727,16 @@ async def delete_traffic_log(
     log = (await db.execute(select(TrafficLog).where(TrafficLog.id == log_id))).scalar_one_or_none()
     if not log:
         raise HTTPException(status_code=404, detail="Traffic log not found")
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="traffic_log_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted traffic log {log_id}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="traffic_log_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted traffic log {log_id}",
+        )
+    )
     ts = log.timestamp
     await db.delete(log)
     await db.flush()
@@ -641,12 +756,15 @@ async def purge_traffic_logs(
     count = (await db.execute(text("SELECT count(*) FROM traffic_logs"))).scalar() or 0
     await db.execute(sa_delete(TrafficLog))
     await traffic_rollup_service.clear(db)
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="traffic_logs_purged",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Purged all traffic logs ({count} records)",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="traffic_logs_purged",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Purged all traffic logs ({count} records)",
+        )
+    )
     await db.commit()
     return {"status": "ok", "deleted": count}

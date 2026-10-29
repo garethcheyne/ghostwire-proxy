@@ -59,9 +59,7 @@ class TestGetCurrentUser:
 
         forged = quote(f"{session.token}.{sign(session.token, 'another-secret')}", safe="")
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(
-                request=make_request(cookies={"gwp.session_token": forged}), db=db_session
-            )
+            await get_current_user(request=make_request(cookies={"gwp.session_token": forged}), db=db_session)
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio

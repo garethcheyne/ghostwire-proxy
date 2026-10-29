@@ -41,9 +41,7 @@ class TestRecordThreatEvent:
             action_taken="blocked",
         )
 
-        result = await db_session.execute(
-            select(ThreatActor).where(ThreatActor.ip_address == "10.0.0.1")
-        )
+        result = await db_session.execute(select(ThreatActor).where(ThreatActor.ip_address == "10.0.0.1"))
         actor = result.scalar_one_or_none()
         assert actor is not None
         assert actor.ip_address == "10.0.0.1"
@@ -67,9 +65,7 @@ class TestRecordThreatEvent:
             action_taken="logged",
         )
 
-        result = await db_session.execute(
-            select(ThreatActor).where(ThreatActor.ip_address == "10.0.0.2")
-        )
+        result = await db_session.execute(select(ThreatActor).where(ThreatActor.ip_address == "10.0.0.2"))
         actor = result.scalar_one_or_none()
         assert actor is not None
         assert actor.total_events >= 2

@@ -21,8 +21,11 @@ class TestDispatchAlert:
     @pytest.mark.asyncio
     async def test_dispatch_with_no_preferences(self, db_session):
         result = await dispatch_alert(
-            db_session, alert_type="security", severity="high",
-            title="Test Alert", message="Something happened",
+            db_session,
+            alert_type="security",
+            severity="high",
+            title="Test Alert",
+            message="Something happened",
         )
         assert result["sent"] == 0
         assert result["errors"] == 0
@@ -40,8 +43,11 @@ class TestDispatchAlert:
         await db_session.commit()
 
         result = await dispatch_alert(
-            db_session, alert_type="security", severity="low",
-            title="Low Alert", message="Not important",
+            db_session,
+            alert_type="security",
+            severity="low",
+            title="Low Alert",
+            message="Not important",
         )
         assert result["sent"] == 0
 
@@ -58,8 +64,11 @@ class TestDispatchAlert:
         await db_session.commit()
 
         result = await dispatch_alert(
-            db_session, alert_type="security", severity="critical",
-            title="Critical", message="Important",
+            db_session,
+            alert_type="security",
+            severity="critical",
+            title="Critical",
+            message="Important",
         )
         assert result["sent"] == 0
 
@@ -95,9 +104,7 @@ class TestSendToChannel:
         channel.channel_type = "email"
         channel.config = json.dumps({"recipients": ["ops@example.com"]})
 
-        with patch(
-            "app.services.email_service.send_email", new=AsyncMock(return_value=None)
-        ) as mock_send:
+        with patch("app.services.email_service.send_email", new=AsyncMock(return_value=None)) as mock_send:
             result = await _send_to_channel(db_session, channel, "Title", "Message")
 
         assert result is True
@@ -125,9 +132,9 @@ class TestSendWebhook:
         mock_resp.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
-                post=AsyncMock(return_value=mock_resp)
-            ))
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=MagicMock(post=AsyncMock(return_value=mock_resp))
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await _send_webhook(channel, "Title", "Message")
 
@@ -147,9 +154,9 @@ class TestSendWebhook:
         channel.config = json.dumps({"url": "https://example.com/hook"})
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
-                post=AsyncMock(side_effect=Exception("Connection refused"))
-            ))
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=MagicMock(post=AsyncMock(side_effect=Exception("Connection refused")))
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await _send_webhook(channel, "Title", "Message")
 
@@ -176,9 +183,9 @@ class TestSendSlack:
         mock_resp.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
-                post=AsyncMock(return_value=mock_resp)
-            ))
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=MagicMock(post=AsyncMock(return_value=mock_resp))
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await _send_slack(channel, "Title", "Message")
 
@@ -213,9 +220,9 @@ class TestSendTelegram:
         mock_resp.status_code = 200
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
-                post=AsyncMock(return_value=mock_resp)
-            ))
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=MagicMock(post=AsyncMock(return_value=mock_resp))
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await _send_telegram(channel, "Title", "Message")
 
@@ -237,9 +244,7 @@ class TestSendEmail:
         channel = MagicMock(spec=AlertChannel)
         channel.config = json.dumps({"recipients": "a@example.com, b@example.com"})
 
-        with patch(
-            "app.services.email_service.send_email", new=AsyncMock(return_value=None)
-        ) as mock_send:
+        with patch("app.services.email_service.send_email", new=AsyncMock(return_value=None)) as mock_send:
             result = await _send_email(channel, "Title", "Message")
 
         assert result is True

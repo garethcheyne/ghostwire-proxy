@@ -24,7 +24,9 @@ class TestAdminOnly:
         ],
     )
     async def test_regular_user_is_refused(self, client, user_auth_headers, method, path):
-        r = await getattr(client, method)(path, headers=user_auth_headers, **({"json": {}} if method in ("post", "put") else {}))
+        r = await getattr(client, method)(
+            path, headers=user_auth_headers, **({"json": {}} if method in ("post", "put") else {})
+        )
         assert r.status_code == 403, (method, path, r.status_code)
 
 

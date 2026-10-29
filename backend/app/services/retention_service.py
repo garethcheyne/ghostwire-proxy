@@ -3,6 +3,7 @@ Data retention service — prunes old traffic_logs, threat_events, and audit_log
 based on configurable retention periods stored in the settings table.
 Runs in batches to avoid long-running transactions and table locks.
 """
+
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -31,7 +32,7 @@ async def _get_retention_setting(session: AsyncSession, key: str) -> int:
     if row is not None:
         try:
             return int(row)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
     return DEFAULT_RETENTION.get(key, 90)
 
@@ -74,6 +75,7 @@ async def run_retention_cleanup() -> dict:
             # The Traffic page's hourly summaries follow the raw rows they describe.
             try:
                 from app.services.traffic_rollup_service import prune_before
+
                 await prune_before(session, cutoff)
                 await session.commit()
             except Exception as e:  # noqa: BLE001 — summaries are rebuildable; never block retention
@@ -113,6 +115,7 @@ async def run_retention_cleanup() -> dict:
                 # VACUUM requires being outside a transaction — use raw connection
                 from app.core.database import engine
                 from sqlalchemy import text as sa_text
+
                 async with engine.connect() as conn:
                     await conn.execution_options(isolation_level="AUTOCOMMIT")
                     await conn.execute(sa_text("VACUUM ANALYZE traffic_logs"))
@@ -133,15 +136,11 @@ async def get_table_sizes() -> dict:
         tables = ["traffic_logs", "threat_events", "audit_logs", "system_metrics", "container_metrics"]
         for table in tables:
             try:
-                result = await session.execute(
-                    text(f"SELECT COUNT(*) FROM {table}")
-                )
+                result = await session.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = result.scalar() or 0
 
                 # PostgreSQL table size
-                result = await session.execute(
-                    text(f"SELECT pg_total_relation_size('{table}')")
-                )
+                result = await session.execute(text(f"SELECT pg_total_relation_size('{table}')"))
                 size_bytes = result.scalar() or 0
 
                 sizes[table] = {
@@ -154,9 +153,7 @@ async def get_table_sizes() -> dict:
 
         # Total DB size
         try:
-            result = await session.execute(
-                text("SELECT pg_database_size(current_database())")
-            )
+            result = await session.execute(text("SELECT pg_database_size(current_database())"))
             total = result.scalar() or 0
             sizes["_total"] = {
                 "size_bytes": total,

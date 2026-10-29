@@ -6,6 +6,7 @@ multicast, reserved or unspecified. A host name is resolved and every address
 it resolves to must pass. Set `alerts_allow_internal_webhooks` to "true" to
 allow internal targets (e.g. a webhook receiver on the same LAN).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -54,7 +55,7 @@ async def _resolve(host: str) -> list[str]:
     loop = asyncio.get_running_loop()
     try:
         infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=5)
-    except (OSError, asyncio.TimeoutError):
+    except OSError, asyncio.TimeoutError:
         raise OutboundUrlError(f"Could not resolve {host}")
     return list({info[4][0] for info in infos})
 
@@ -76,9 +77,7 @@ async def validate_outbound_url(url: str, allow_internal: bool = False, resolver
         except ValueError:
             raise OutboundUrlError(f"Unexpected address for {host}")
         if _is_internal(ip):
-            raise OutboundUrlError(
-                "Internal addresses (private, loopback, link-local, metadata) are not allowed"
-            )
+            raise OutboundUrlError("Internal addresses (private, loopback, link-local, metadata) are not allowed")
 
 
 async def internal_targets_allowed(db: AsyncSession) -> bool:

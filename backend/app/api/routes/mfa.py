@@ -9,6 +9,7 @@ Enrolment is a three-step handshake:
 These need a signed-in session. A user caught by the org-wide requirement at sign-in has no
 session yet; the admin UI's Better Auth plugin enrols them through internal_admin_mfa.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,14 +34,16 @@ router = APIRouter()
 
 
 async def _audit(db: AsyncSession, request: Request, user: User, action: str, details: str = None):
-    db.add(AuditLog(
-        user_id=user.id,
-        email=user.email,
-        action=action,
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=details,
-    ))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            email=user.email,
+            action=action,
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=details,
+        )
+    )
     await db.commit()
 
 
@@ -210,7 +213,8 @@ async def get_mfa_policy(
         "enrolled_count": len(enrolled),
         "not_enrolled": [
             {"id": u.id, "email": u.email, "name": u.name, "role": u.role}
-            for u in users if not admin_mfa_service.is_enrolled(u)
+            for u in users
+            if not admin_mfa_service.is_enrolled(u)
         ],
     }
 
@@ -238,7 +242,9 @@ async def set_mfa_policy(
 
     await admin_mfa_service.set_mfa_required(db, required)
     await _audit(
-        db, request, current_user,
+        db,
+        request,
+        current_user,
         "mfa_policy_changed",
         f"Org-wide MFA requirement {'enabled' if required else 'disabled'}",
     )

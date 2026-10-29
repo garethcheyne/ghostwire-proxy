@@ -19,6 +19,7 @@ different things and does not conflate them:
 Edge containers (anything publishing a port to the internet — in this stack the
 proxy) are flagged, because a vulnerable package there is reachable by anyone.
 """
+
 import asyncio
 import json
 import logging
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import docker
+
     DOCKER_AVAILABLE = True
 except ImportError:  # pragma: no cover
     DOCKER_AVAILABLE = False
@@ -101,9 +103,7 @@ class ContainerSecurityScanner:
         return info
 
     def _detect_package_manager(self, container) -> Optional[str]:
-        checks = " ; ".join(
-            f"command -v {pm} >/dev/null 2>&1 && echo {pm}" for pm in _PACKAGE_MANAGERS
-        )
+        checks = " ; ".join(f"command -v {pm} >/dev/null 2>&1 && echo {pm}" for pm in _PACKAGE_MANAGERS)
         code, output = self._exec(container, checks)
         for line in (output or "").split():
             if line in _PACKAGE_MANAGERS:
@@ -179,11 +179,13 @@ class ContainerSecurityScanner:
                 # "(1/3) Upgrading busybox (1.36.1-r5 -> 1.36.1-r7)"
                 match = re.search(r"Upgrading\s+(\S+)\s+\(([^\s]+)\s*->\s*([^)]+)\)", line)
                 if match:
-                    packages.append({
-                        "name": match.group(1),
-                        "current_version": match.group(2),
-                        "available_version": match.group(3).strip(),
-                    })
+                    packages.append(
+                        {
+                            "name": match.group(1),
+                            "current_version": match.group(2),
+                            "available_version": match.group(3).strip(),
+                        }
+                    )
             return {"count": len(packages), "packages": packages}
 
         if manager == "apt-get":
@@ -200,12 +202,14 @@ class ContainerSecurityScanner:
                 match = re.match(r"^Inst\s+(\S+)\s+\[([^\]]+)\]\s+\(([^\s]+)\s+(.*)\)", line)
                 if match:
                     source = match.group(4)
-                    packages.append({
-                        "name": match.group(1),
-                        "current_version": match.group(2),
-                        "available_version": match.group(3),
-                        "security": "security" in source.lower(),
-                    })
+                    packages.append(
+                        {
+                            "name": match.group(1),
+                            "current_version": match.group(2),
+                            "available_version": match.group(3),
+                            "security": "security" in source.lower(),
+                        }
+                    )
             return {
                 "count": len(packages),
                 "packages": packages,
@@ -222,12 +226,14 @@ class ContainerSecurityScanner:
             for line in out.splitlines():
                 parts = line.split()
                 if len(parts) >= 3 and not line.startswith(("Last metadata", "Obsoleting")):
-                    packages.append({
-                        "name": parts[0],
-                        "current_version": None,
-                        "available_version": parts[1],
-                        "security": "security" in line.lower(),
-                    })
+                    packages.append(
+                        {
+                            "name": parts[0],
+                            "current_version": None,
+                            "available_version": parts[1],
+                            "security": "security" in line.lower(),
+                        }
+                    )
             return {
                 "count": len(packages),
                 "packages": packages,
@@ -251,19 +257,21 @@ class ContainerSecurityScanner:
                 "command -v unattended-upgrade >/dev/null 2>&1 && echo HAS_UNATTENDED",
             )
             has_binary = "HAS_UNATTENDED" in (out or "")
-            periodic = re.search(
-                r'APT::Periodic::Unattended-Upgrade\s+"(\d+)"', out or ""
-            )
+            periodic = re.search(r'APT::Periodic::Unattended-Upgrade\s+"(\d+)"', out or "")
             enabled = bool(has_binary and periodic and periodic.group(1) != "0")
-            status.update({
-                "enabled": enabled,
-                "mechanism": "unattended-upgrades" if has_binary else None,
-                "detail": (
-                    "unattended-upgrades installed and enabled" if enabled
-                    else "unattended-upgrades installed but not enabled" if has_binary
-                    else "unattended-upgrades not installed"
-                ),
-            })
+            status.update(
+                {
+                    "enabled": enabled,
+                    "mechanism": "unattended-upgrades" if has_binary else None,
+                    "detail": (
+                        "unattended-upgrades installed and enabled"
+                        if enabled
+                        else "unattended-upgrades installed but not enabled"
+                        if has_binary
+                        else "unattended-upgrades not installed"
+                    ),
+                }
+            )
             return status
 
         if manager == "apk":
@@ -278,14 +286,17 @@ class ContainerSecurityScanner:
             )
             matches = [line for line in (out or "").splitlines() if line.strip()]
             found = bool(matches)
-            status.update({
-                "enabled": found,
-                "mechanism": "cron (apk upgrade)" if found else None,
-                "detail": (
-                    f"A cron entry runs apk upgrade ({', '.join(matches[:3])})" if found
-                    else "Alpine has no automatic updater; rebuild the image to pick up fixes"
-                ),
-            })
+            status.update(
+                {
+                    "enabled": found,
+                    "mechanism": "cron (apk upgrade)" if found else None,
+                    "detail": (
+                        f"A cron entry runs apk upgrade ({', '.join(matches[:3])})"
+                        if found
+                        else "Alpine has no automatic updater; rebuild the image to pick up fixes"
+                    ),
+                }
+            )
             return status
 
         status["detail"] = "No automatic update mechanism detected"
@@ -322,7 +333,7 @@ class ContainerSecurityScanner:
             return None
         try:
             return int((out or "0").strip().splitlines()[-1])
-        except (ValueError, IndexError):
+        except ValueError, IndexError:
             return None
 
     def _image_info(self, container) -> dict:
@@ -377,14 +388,17 @@ class ContainerSecurityScanner:
         result.update(self._image_info(container))
 
         if container.status != "running":
-            result.update({
-                "scannable": False,
-                "reason": f"Container is {container.status}",
-                "os": {}, "package_manager": None,
-                "installed_count": 0, "pending": {"count": 0, "packages": []},
-                "auto_update": {"enabled": False, "mechanism": None,
-                                "detail": "Container not running"},
-            })
+            result.update(
+                {
+                    "scannable": False,
+                    "reason": f"Container is {container.status}",
+                    "os": {},
+                    "package_manager": None,
+                    "installed_count": 0,
+                    "pending": {"count": 0, "packages": []},
+                    "auto_update": {"enabled": False, "mechanism": None, "detail": "Container not running"},
+                }
+            )
             return result
 
         os_info = self._detect_os(container)
@@ -396,16 +410,19 @@ class ContainerSecurityScanner:
         if not manager:
             # Distroless / scratch images have no package manager at all. That
             # is a good security property, not a scan failure.
-            result.update({
-                "scannable": False,
-                "reason": "No package manager (distroless or scratch image)",
-                "installed_count": 0,
-                "pending": {"count": 0, "packages": []},
-                "auto_update": {
-                    "enabled": False, "mechanism": None,
-                    "detail": "No package manager; rebuild the image to update",
-                },
-            })
+            result.update(
+                {
+                    "scannable": False,
+                    "reason": "No package manager (distroless or scratch image)",
+                    "installed_count": 0,
+                    "pending": {"count": 0, "packages": []},
+                    "auto_update": {
+                        "enabled": False,
+                        "mechanism": None,
+                        "detail": "No package manager; rebuild the image to update",
+                    },
+                }
+            )
             return result
 
         installed_count, packages = self._installed_packages(container, manager)
@@ -413,16 +430,18 @@ class ContainerSecurityScanner:
         auto_update = self._auto_update_status(container, manager)
 
         stale = self._stale_process_count(container)
-        result.update({
-            "scannable": True,
-            "installed_count": installed_count,
-            "pending": pending,
-            "auto_update": auto_update,
-            "stale_processes": stale,
-            # Patched on disk but still running the old code — a restart is the
-            # only thing that closes it.
-            "restart_required": bool(stale),
-        })
+        result.update(
+            {
+                "scannable": True,
+                "installed_count": installed_count,
+                "pending": pending,
+                "auto_update": auto_update,
+                "stale_processes": stale,
+                # Patched on disk but still running the old code — a restart is the
+                # only thing that closes it.
+                "restart_required": bool(stale),
+            }
+        )
 
         if include_packages:
             result["installed_packages"] = packages
@@ -462,8 +481,7 @@ class ContainerSecurityScanner:
 
         if scan.get("restart_required"):
             reasons.append(
-                f"{scan.get('stale_processes')} process(es) still running pre-upgrade libraries "
-                "— restart required"
+                f"{scan.get('stale_processes')} process(es) still running pre-upgrade libraries — restart required"
             )
             # On an internet-facing container this is the live exposure, not a
             # tidiness issue: the patched file is on disk and the vulnerable
@@ -514,14 +532,16 @@ class ContainerSecurityScanner:
         for container, result in zip(containers, results):
             if isinstance(result, Exception):
                 logger.warning("Scan of %s failed: %s", container.name, result)
-                scans.append({
-                    "name": container.name,
-                    "id": container.short_id,
-                    "status": container.status,
-                    "scannable": False,
-                    "reason": f"Scan failed: {result}",
-                    "risk": {"level": "unknown", "reasons": ["scan failed"]},
-                })
+                scans.append(
+                    {
+                        "name": container.name,
+                        "id": container.short_id,
+                        "status": container.status,
+                        "scannable": False,
+                        "reason": f"Scan failed: {result}",
+                        "risk": {"level": "unknown", "reasons": ["scan failed"]},
+                    }
+                )
             else:
                 scans.append(result)
 
@@ -578,9 +598,7 @@ def _apply_command(manager: str, security_only: bool) -> Optional[str]:
         if security_only:
             # Restrict to the security suites so a routine patch run cannot
             # drag in unrelated version churn.
-            return base + (
-                "-t $(. /etc/os-release; echo ${VERSION_CODENAME}-security) upgrade"
-            )
+            return base + ("-t $(. /etc/os-release; echo ${VERSION_CODENAME}-security) upgrade")
         return base + "upgrade"
 
     if manager in ("dnf", "yum"):
@@ -634,18 +652,20 @@ def apply_updates_sync(
 
     after = scanner._pending_updates(container, manager).get("count", 0)
 
-    result.update({
-        "applied": code == 0,
-        "exit_code": code,
-        "pending_before": before,
-        "pending_after": after,
-        "upgraded": max(0, before - after),
-        "stale_processes": scanner._stale_process_count(container),
-        # The tail is what a human needs to see when it goes wrong; the whole
-        # transcript of an apt run is noise in an alert.
-        "output_tail": output.strip().splitlines()[-15:] if output.strip() else [],
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-    })
+    result.update(
+        {
+            "applied": code == 0,
+            "exit_code": code,
+            "pending_before": before,
+            "pending_after": after,
+            "upgraded": max(0, before - after),
+            "stale_processes": scanner._stale_process_count(container),
+            # The tail is what a human needs to see when it goes wrong; the whole
+            # transcript of an apt run is noise in an alert.
+            "output_tail": output.strip().splitlines()[-15:] if output.strip() else [],
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     if code != 0:
         result["error"] = f"Package manager exited {code}"
 
@@ -691,15 +711,11 @@ async def apply_updates(
             # Re-read: a healthy restart should clear every stale mapping.
             await asyncio.sleep(3)
             container.reload()
-            remaining = await loop.run_in_executor(
-                None, scanner._stale_process_count, container
-            )
+            remaining = await loop.run_in_executor(None, scanner._stale_process_count, container)
             result["restarted"] = True
             result["stale_processes_after_restart"] = remaining
             if remaining:
-                result["warning"] = (
-                    f"{remaining} process(es) still map replaced libraries after restart"
-                )
+                result["warning"] = f"{remaining} process(es) still map replaced libraries after restart"
             logger.info("Restarted %s to load upgraded libraries", container_name)
         except Exception as e:
             result["restart_error"] = str(e)
@@ -734,20 +750,25 @@ async def apply_updates_all(
     results = []
     for container in containers:
         if container.name in excluded:
-            results.append({
-                "container": container.name, "applied": False, "skipped": True,
-                "error": "Excluded by policy",
-            })
+            results.append(
+                {
+                    "container": container.name,
+                    "applied": False,
+                    "skipped": True,
+                    "error": "Excluded by policy",
+                }
+            )
             continue
         try:
-            results.append(
-                await apply_updates(container.name, security_only, excluded, restart_if_needed)
-            )
+            results.append(await apply_updates(container.name, security_only, excluded, restart_if_needed))
         except asyncio.TimeoutError:
-            results.append({
-                "container": container.name, "applied": False,
-                "error": f"Timed out after {UPGRADE_TIMEOUT_SECONDS}s",
-            })
+            results.append(
+                {
+                    "container": container.name,
+                    "applied": False,
+                    "error": f"Timed out after {UPGRADE_TIMEOUT_SECONDS}s",
+                }
+            )
         except Exception as e:
             results.append({"container": container.name, "applied": False, "error": str(e)})
 

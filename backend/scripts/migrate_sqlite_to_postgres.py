@@ -62,7 +62,6 @@ TABLES_IN_ORDER = [
     "threat_thresholds",
     "rate_limit_rules",
     "geoip_rules",
-
     # Second level (single FK)
     "local_auth_users",
     "auth_providers",
@@ -73,10 +72,8 @@ TABLES_IN_ORDER = [
     "waf_rules",
     "firewall_blocklist",
     "push_subscriptions",
-
     # Third level (depends on multiple tables above)
     "proxy_hosts",
-
     # Fourth level (depends on proxy_hosts)
     "upstream_servers",
     "proxy_locations",
@@ -85,7 +82,6 @@ TABLES_IN_ORDER = [
     "analytics_daily",
     "analytics_geo",
     "traffic_logs",
-
     # Fifth level
     "alert_preferences",
     "audit_logs",
@@ -115,9 +111,7 @@ def get_sqlite_tables(sqlite_conn) -> set:
 def get_postgres_tables(pg_conn) -> set:
     """Get all table names from PostgreSQL."""
     cursor = pg_conn.cursor()
-    cursor.execute(
-        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != 'alembic_version'"
-    )
+    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != 'alembic_version'")
     return {row[0] for row in cursor.fetchall()}
 
 
@@ -132,7 +126,7 @@ def get_postgres_columns(pg_conn, table_name: str) -> list:
     cursor = pg_conn.cursor()
     cursor.execute(
         "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
-        (table_name,)
+        (table_name,),
     )
     return [row[0] for row in cursor.fetchall()]
 
@@ -142,7 +136,7 @@ def get_postgres_column_types(pg_conn, table_name: str) -> dict:
     cursor = pg_conn.cursor()
     cursor.execute(
         "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
-        (table_name,)
+        (table_name,),
     )
     return {row[0]: row[1] for row in cursor.fetchall()}
 
@@ -212,8 +206,7 @@ def migrate_table(sqlite_conn, pg_conn, table_name: str, batch_size: int = 1000)
     for row in cursor:
         # Convert each value based on PostgreSQL column type
         row_data = tuple(
-            convert_value(row[i], pg_column_types.get(columns_list[i], 'text'))
-            for i in range(len(columns_list))
+            convert_value(row[i], pg_column_types.get(columns_list[i], 'text')) for i in range(len(columns_list))
         )
         batch.append(row_data)
 

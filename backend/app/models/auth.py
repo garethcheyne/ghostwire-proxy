@@ -5,6 +5,7 @@ table is our `users` table; these hold its sessions, credentials and one-time to
 only reads sessions (see app/api/deps.py) and writes credentials when admins manage users.
 Column names follow the field mapping in frontend/src/lib/auth.ts.
 """
+
 from datetime import datetime, timezone
 import uuid
 

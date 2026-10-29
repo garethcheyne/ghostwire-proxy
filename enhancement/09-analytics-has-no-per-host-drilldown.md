@@ -28,7 +28,9 @@ and already aggregates the interesting dimensions:
 ```python
 top_pages_query = (
     select(TrafficLog.request_uri, func.count(...), func.avg(TrafficLog.response_time))
-    .group_by(TrafficLog.request_uri).order_by(...).limit(10)
+    .group_by(TrafficLog.request_uri)
+    .order_by(...)
+    .limit(10)
 )
 top_referrers_query = ...
 ```

@@ -218,7 +218,13 @@ class UniFiConnector(BaseFirewallConnector):
                 sites = data.get("data", [])
                 site_count = data.get("totalCount", len(sites))
                 site_names = [s.get("name", "Unknown") for s in sites[:3]]
-                findings.append({"item": "API Connection", "status": "ok", "detail": f"{site_count} site(s): {', '.join(site_names)}"})
+                findings.append(
+                    {
+                        "item": "API Connection",
+                        "status": "ok",
+                        "detail": f"{site_count} site(s): {', '.join(site_names)}",
+                    }
+                )
 
                 # Resolve site UUID
                 site_uuid = await self._get_site_uuid(client)
@@ -242,9 +248,17 @@ class UniFiConnector(BaseFirewallConnector):
                     ("IPv6 Address List", self._get_list_name_ipv6(), "IPV6_ADDRESSES"),
                 ]:
                     if name in existing_lists:
-                        findings.append({"item": label, "status": "ok", "detail": f"'{name}' found ({existing_lists[name]})"})
+                        findings.append(
+                            {"item": label, "status": "ok", "detail": f"'{name}' found ({existing_lists[name]})"}
+                        )
                     else:
-                        findings.append({"item": label, "status": "missing", "detail": f"'{name}' not found — will be created on first sync/block"})
+                        findings.append(
+                            {
+                                "item": label,
+                                "status": "missing",
+                                "detail": f"'{name}' not found — will be created on first sync/block",
+                            }
+                        )
 
                 # 3. Check firewall policies
                 resp = await client.get(
@@ -263,14 +277,22 @@ class UniFiConnector(BaseFirewallConnector):
                     if name in existing_policies:
                         findings.append({"item": label, "status": "ok", "detail": f"'{name}' found"})
                     else:
-                        findings.append({"item": label, "status": "missing", "detail": f"'{name}' not found — will be created on first sync/block"})
+                        findings.append(
+                            {
+                                "item": label,
+                                "status": "missing",
+                                "detail": f"'{name}' not found — will be created on first sync/block",
+                            }
+                        )
 
                 # 4. Check firewall zones
                 zones = await self._get_firewall_zones(client, site_uuid)
                 if zones.get("external"):
                     findings.append({"item": "External Zone", "status": "ok", "detail": "Found"})
                 else:
-                    findings.append({"item": "External Zone", "status": "warning", "detail": "Not found — policy creation may fail"})
+                    findings.append(
+                        {"item": "External Zone", "status": "warning", "detail": "Not found — policy creation may fail"}
+                    )
 
                 info = f"Connected to UniFi v1 API ({site_count} site(s): {', '.join(site_names)})"
                 return {"success": True, "info": info, "findings": findings}
@@ -278,16 +300,17 @@ class UniFiConnector(BaseFirewallConnector):
             return {"success": False, "error": str(e), "findings": findings}
 
     async def _get_or_create_traffic_matching_list(
-        self, client: httpx.AsyncClient, site_uuid: str,
-        list_name: str | None = None, list_type: str = "IPV4_ADDRESSES",
+        self,
+        client: httpx.AsyncClient,
+        site_uuid: str,
+        list_name: str | None = None,
+        list_type: str = "IPV4_ADDRESSES",
     ) -> str | None:
         """Get or create a Traffic Matching List for blocked IPs."""
         if list_name is None:
             list_name = self._get_list_name_ipv4()
 
-        placeholder = (
-            "192.0.2.1" if list_type == "IPV4_ADDRESSES" else "2001:db8::1"
-        )
+        placeholder = "192.0.2.1" if list_type == "IPV4_ADDRESSES" else "2001:db8::1"
 
         # List existing traffic matching lists
         resp = await client.get(
@@ -368,8 +391,12 @@ class UniFiConnector(BaseFirewallConnector):
         return result
 
     async def _get_or_create_firewall_policy(
-        self, client: httpx.AsyncClient, site_uuid: str, list_id: str,
-        policy_name: str | None = None, ip_version: str = "IPV4",
+        self,
+        client: httpx.AsyncClient,
+        site_uuid: str,
+        list_id: str,
+        policy_name: str | None = None,
+        ip_version: str = "IPV4",
     ) -> str | None:
         """Ensure a firewall policy exists that blocks traffic from the IP list."""
         if policy_name is None:
@@ -458,7 +485,9 @@ class UniFiConnector(BaseFirewallConnector):
                     if not list_id:
                         results[label] = {"success": False, "error": f"Could not get or create '{list_name}'"}
                         continue
-                    policy_id = await self._get_or_create_firewall_policy(client, site_uuid, list_id, policy_name, ip_ver)
+                    policy_id = await self._get_or_create_firewall_policy(
+                        client, site_uuid, list_id, policy_name, ip_ver
+                    )
                     if not policy_id:
                         results[label] = {"success": False, "error": f"Could not get or create '{policy_name}'"}
                         continue
@@ -495,9 +524,13 @@ class UniFiConnector(BaseFirewallConnector):
                     return False, f"UniFi: could not get or create list '{list_name}'"
 
                 # Ensure firewall policy exists
-                policy_id = await self._get_or_create_firewall_policy(client, site_uuid, list_id, policy_name, ip_version)
+                policy_id = await self._get_or_create_firewall_policy(
+                    client, site_uuid, list_id, policy_name, ip_version
+                )
                 if not policy_id:
-                    logger.warning(f"UniFi: could not ensure firewall policy '{policy_name}' - IPs added but may not be blocked")
+                    logger.warning(
+                        f"UniFi: could not ensure firewall policy '{policy_name}' - IPs added but may not be blocked"
+                    )
 
                 # Get current list items
                 current_list = await self._get_traffic_matching_list(client, site_uuid, list_id)
@@ -804,6 +837,7 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
                     # Push notification: IP blocked on firewall
                     try:
                         from app.services.push_service import push_service
+
                         await push_service.notify_ip_blocked(
                             ip=entry.ip_address,
                             reason=f"Blocked on {connector.name} ({connector.connector_type})",
@@ -817,7 +851,9 @@ async def sync_blocklist(db: AsyncSession, connector_id: Optional[str] = None) -
                     failed += 1
                     logger.warning(
                         "Firewall push failed: %s → %s: %s",
-                        entry.ip_address, connector.name, response_msg,
+                        entry.ip_address,
+                        connector.name,
+                        response_msg,
                     )
             except Exception as e:
                 entry.error_message = f"{connector.name}: {e}"

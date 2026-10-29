@@ -55,6 +55,7 @@ class PushService:
         if self._webpush is None:
             try:
                 from pywebpush import webpush
+
                 self._webpush = webpush
             except ImportError:
                 logger.warning("pywebpush not installed - push notifications disabled")
@@ -64,11 +65,7 @@ class PushService:
         """Check if VAPID keys are configured."""
         return bool(settings.vapid_public_key and settings.vapid_private_key)
 
-    async def _get_subscriptions(
-        self,
-        db: AsyncSession,
-        user_id: Optional[str] = None
-    ) -> List[PushSubscription]:
+    async def _get_subscriptions(self, db: AsyncSession, user_id: Optional[str] = None) -> List[PushSubscription]:
         """Get push subscriptions from database."""
         query = select(PushSubscription)
         if user_id:
@@ -76,11 +73,7 @@ class PushService:
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def _send_to_subscription(
-        self,
-        subscription: PushSubscription,
-        payload: dict
-    ) -> bool:
+    async def _send_to_subscription(self, subscription: PushSubscription, payload: dict) -> bool:
         """Send notification to a single subscription."""
         if not self.webpush or not self.is_configured():
             return False

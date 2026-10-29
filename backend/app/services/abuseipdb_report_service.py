@@ -12,6 +12,7 @@ Gated on the `abuseipdb_auto_report_enabled` setting (default off - opt in
 from Settings, same place the API key lives). Trusted IPs are always excluded
 so testing from an admin's own trusted IP never gets reported.
 """
+
 import csv
 import io
 import ipaddress
@@ -44,12 +45,12 @@ BULK_REPORT_URL = "https://api.abuseipdb.com/api/v2/bulk-report"
 
 # Internal category -> AbuseIPDB category IDs (see abuseipdb.com/categories).
 CATEGORY_MAP: dict[str, list[int]] = {
-    "sqli": [16, 21],             # SQL Injection, Web App Attack
-    "xss": [21],                  # Web App Attack
-    "path_traversal": [21],       # Web App Attack
-    "rce": [15, 21],              # Hacking, Web App Attack
-    "scanner": [14, 21],          # Port Scan, Web App Attack
-    "honeypot": [15, 21],         # Hacking, Web App Attack
+    "sqli": [16, 21],  # SQL Injection, Web App Attack
+    "xss": [21],  # Web App Attack
+    "path_traversal": [21],  # Web App Attack
+    "rce": [15, 21],  # Hacking, Web App Attack
+    "scanner": [14, 21],  # Port Scan, Web App Attack
+    "honeypot": [15, 21],  # Hacking, Web App Attack
 }
 DEFAULT_CATEGORIES = [15]  # Hacking - fallback for an unmapped/unknown category
 
@@ -65,7 +66,7 @@ async def _get_trusted_networks(db: AsyncSession) -> list:
 
     try:
         raw = json.loads(setting.value)
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return []
 
     networks = []
@@ -94,7 +95,9 @@ def _categories_for(categories_seen: set[str]) -> str:
     return ",".join(str(i) for i in sorted(ids))
 
 
-def _build_comment(categories_seen: set[str], event_count: int, sample_uri: Optional[str], sample_method: Optional[str]) -> str:
+def _build_comment(
+    categories_seen: set[str], event_count: int, sample_uri: Optional[str], sample_method: Optional[str]
+) -> str:
     """PII-stripped summary - category/count/path only, never raw headers,
     cookies, or User-Agent strings (per AbuseIPDB's PII guidance)."""
     cats = ", ".join(sorted(categories_seen)) if categories_seen else "suspicious activity"
@@ -127,7 +130,8 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
         )
     )
     candidates = [
-        a for a in result.scalars().all()
+        a
+        for a in result.scalars().all()
         if a.abuseipdb_reported_at is None or (a.last_seen and a.abuseipdb_reported_at < a.last_seen)
     ]
 
@@ -158,16 +162,19 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
         categories_seen = {e.category for e in events if e.category}
         latest = events[0] if events else None
 
-        rows.append({
-            "ip": actor.ip_address,
-            "categories": _categories_for(categories_seen),
-            "report_date": (actor.last_seen or datetime.now(timezone.utc)).isoformat(),
-            "comment": _build_comment(
-                categories_seen, len(events) or actor.total_events or 1,
-                latest.request_uri if latest else None,
-                latest.request_method if latest else None,
-            ),
-        })
+        rows.append(
+            {
+                "ip": actor.ip_address,
+                "categories": _categories_for(categories_seen),
+                "report_date": (actor.last_seen or datetime.now(timezone.utc)).isoformat(),
+                "comment": _build_comment(
+                    categories_seen,
+                    len(events) or actor.total_events or 1,
+                    latest.request_uri if latest else None,
+                    latest.request_method if latest else None,
+                ),
+            }
+        )
 
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
@@ -206,12 +213,18 @@ async def submit_bulk_reports(db: AsyncSession, api_key: str, force: bool = Fals
     await db.commit()
 
     if rejected:
-        logger.warning("AbuseIPDB bulk-report: %d entries rejected: %s",
-                        len(rejected), [f"{r.get('input')} ({r.get('error')})" for r in rejected][:10])
+        logger.warning(
+            "AbuseIPDB bulk-report: %d entries rejected: %s",
+            len(rejected),
+            [f"{r.get('input')} ({r.get('error')})" for r in rejected][:10],
+        )
 
     logger.info(
         "AbuseIPDB bulk-report: submitted %d IPs (%d accepted, %d rejected, %d skipped as trusted)",
-        len(rows), reported_count, len(rejected), skipped_trusted,
+        len(rows),
+        reported_count,
+        len(rejected),
+        skipped_trusted,
     )
     return {
         "status": "reported",

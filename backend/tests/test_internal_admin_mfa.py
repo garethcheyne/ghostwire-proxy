@@ -70,9 +70,7 @@ class TestVerify:
     @pytest.mark.asyncio
     async def test_wrong_code(self, client, enrolled):
         user, _ = enrolled
-        response = await client.post(
-            f"{BASE}/verify", json={"user_id": user.id, "code": "000000"}, headers=INTERNAL
-        )
+        response = await client.post(f"{BASE}/verify", json={"user_id": user.id, "code": "000000"}, headers=INTERNAL)
         assert response.json()["ok"] is False
 
     @pytest.mark.asyncio

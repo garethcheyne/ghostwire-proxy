@@ -25,16 +25,31 @@ WINDOW = timedelta(minutes=5)
 
 
 def _server(port, status="up", announced="up", **kw):
-    values = dict(id=f"srv-{port}", host="10.0.0.5", port=port, enabled=True, down=False, auto_down=False,
-                  last_status=status, last_error=None, last_latency_ms=None, alert_status=announced,
-                  alert_down_at=None)
+    values = dict(
+        id=f"srv-{port}",
+        host="10.0.0.5",
+        port=port,
+        enabled=True,
+        down=False,
+        auto_down=False,
+        last_status=status,
+        last_error=None,
+        last_latency_ms=None,
+        alert_status=announced,
+        alert_down_at=None,
+    )
     values.update(kw)
     return SimpleNamespace(**values)
 
 
 def _host(**kw):
-    values = dict(id="host-1", domain_names=["app.example.com", "www.app.example.com"], health_status="up",
-                  lb_method="least_conn", lb_auto_down=False)
+    values = dict(
+        id="host-1",
+        domain_names=["app.example.com", "www.app.example.com"],
+        health_status="up",
+        lb_method="least_conn",
+        lb_auto_down=False,
+    )
     values.update(kw)
     return SimpleNamespace(**values)
 
@@ -46,6 +61,7 @@ def _plan(host, servers, transition=None, now=T0, previous=None):
 # ---------------------------------------------------------------------------
 # Transition logic
 # ---------------------------------------------------------------------------
+
 
 class TestTransitions:
     def test_up_to_down_sends_once(self):
@@ -87,6 +103,7 @@ class TestTransitions:
 # Flap protection
 # ---------------------------------------------------------------------------
 
+
 class TestFlapProtection:
     def test_second_drop_inside_window_is_held_then_sent_when_window_ends(self):
         a, b = _server(8050, "down"), _server(8051)
@@ -109,7 +126,10 @@ class TestFlapProtection:
 
     def test_back_up_before_held_alert_sends_nothing(self):
         a = _server(8050, "down", alert_down_at=T0)
-        assert _plan(_host(), [a, _server(8051)], now=T0 + timedelta(minutes=2), previous={a.id: "up"})[0]["alert"] == "held"
+        assert (
+            _plan(_host(), [a, _server(8051)], now=T0 + timedelta(minutes=2), previous={a.id: "up"})[0]["alert"]
+            == "held"
+        )
         a.last_status = "up"
         items = _plan(_host(), [a, _server(8051)], now=T0 + timedelta(minutes=3), previous={a.id: "down"})
         assert [(i["event"], i["alert"]) for i in items] == [("recovered", "held")]
@@ -134,6 +154,7 @@ class TestFlapProtection:
 # ---------------------------------------------------------------------------
 # Whole-host outage
 # ---------------------------------------------------------------------------
+
 
 class TestAllDown:
     def test_host_down_cycle_groups_server_alerts(self):
@@ -164,6 +185,7 @@ class TestAllDown:
 # Maintenance and disabled servers
 # ---------------------------------------------------------------------------
 
+
 class TestMaintenance:
     def test_maintenance_server_is_never_announced(self):
         a = _server(8050, "down", down=True)
@@ -187,15 +209,23 @@ class TestMaintenance:
 # Content
 # ---------------------------------------------------------------------------
 
+
 class TestContent:
     def test_down_message(self):
-        servers = [_server(8050, "down", last_error="timed out after 5s", auto_down=True),
-                   _server(8051), _server(8052), _server(8053, "down"), _server(8054, down=True)]
+        servers = [
+            _server(8050, "down", last_error="timed out after 5s", auto_down=True),
+            _server(8051),
+            _server(8052),
+            _server(8053, "down"),
+            _server(8054, down=True),
+        ]
         host = _host(lb_auto_down=True)
         c = health_service.server_alert_content(host, servers, servers[0], "down", T0)
         assert c["title"] == "Backend Down - app.example.com"
-        assert c["message"] == ("10.0.0.5:8050 stopped answering health checks (timed out after 5s). "
-                                "2 of 4 backends healthy (1 in maintenance). Taken out of rotation automatically.")
+        assert c["message"] == (
+            "10.0.0.5:8050 stopped answering health checks (timed out after 5s). "
+            "2 of 4 backends healthy (1 in maintenance). Taken out of rotation automatically."
+        )
         d = c["data"]
         assert d["domains"] == ["app.example.com", "www.app.example.com"]
         assert d["server"] == "10.0.0.5:8050" and d["server_id"] == "srv-8050"
@@ -205,8 +235,9 @@ class TestContent:
 
     def test_recovered_message(self):
         servers = [_server(8050, "up", last_latency_ms=12), _server(8051)]
-        c = health_service.server_alert_content(_host(), servers, servers[0], "recovered",
-                                                T0 + timedelta(minutes=7), down_since=T0)
+        c = health_service.server_alert_content(
+            _host(), servers, servers[0], "recovered", T0 + timedelta(minutes=7), down_since=T0
+        )
         assert c["title"] == "Backend Recovered - app.example.com"
         assert c["message"] == "10.0.0.5:8050 is answering again (12 ms, down for 7m). 2 of 2 backends healthy."
         assert c["data"]["downtime"] == "7m" and c["data"]["error"] is None
@@ -222,9 +253,15 @@ class TestContent:
 # The health loop end to end (probes mocked)
 # ---------------------------------------------------------------------------
 
+
 async def _make_host(db_session, ports):
-    host = ProxyHost(id=str(uuid.uuid4()), domain_names=["lb.example.com"], forward_host="10.0.0.5",
-                     forward_port=ports[0], lb_method="round_robin")
+    host = ProxyHost(
+        id=str(uuid.uuid4()),
+        domain_names=["lb.example.com"],
+        forward_host="10.0.0.5",
+        forward_port=ports[0],
+        lb_method="round_robin",
+    )
     host.upstream_servers = [UpstreamServer(host="10.0.0.5", port=p) for p in ports]
     db_session.add(host)
     await db_session.commit()
@@ -244,11 +281,13 @@ class TestHealthLoop:
 
         dispatch = AsyncMock(return_value={"sent": 1, "errors": 0})
         push_all = AsyncMock(return_value={"sent": 0})
-        with patch.object(health_service, "probe_server", side_effect=fake_probe), \
-             patch.object(push_service, "notify_all", new=push_all), \
-             patch.object(push_service, "notify_host_down", new=AsyncMock()), \
-             patch.object(push_service, "notify_host_recovered", new=AsyncMock()), \
-             patch("app.services.alert_service.dispatch_alert", new=dispatch):
+        with (
+            patch.object(health_service, "probe_server", side_effect=fake_probe),
+            patch.object(push_service, "notify_all", new=push_all),
+            patch.object(push_service, "notify_host_down", new=AsyncMock()),
+            patch.object(push_service, "notify_host_recovered", new=AsyncMock()),
+            patch("app.services.alert_service.dispatch_alert", new=dispatch),
+        ):
             result = await health_service.run_health_checks(db_session)
         types = [c.kwargs["alert_type"] for c in dispatch.call_args_list]
         return result, types, dispatch, push_all
@@ -271,10 +310,17 @@ class TestHealthLoop:
         result, types, dispatch, _ = await self._cycle(db_session, {8050, 8051})
         assert types == ["upstream_server_recovered"] and result["servers_recovered"] == 1
 
-        events = (await db_session.execute(
-            select(UpstreamServerEvent).where(UpstreamServerEvent.proxy_host_id == host_id)
-            .order_by(UpstreamServerEvent.created_at)
-        )).scalars().all()
+        events = (
+            (
+                await db_session.execute(
+                    select(UpstreamServerEvent)
+                    .where(UpstreamServerEvent.proxy_host_id == host_id)
+                    .order_by(UpstreamServerEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert [(e.event, e.alert, e.server, e.healthy, e.total) for e in events] == [
             ("down", "sent", "10.0.0.5:8051", 1, 2),
             ("recovered", "sent", "10.0.0.5:8051", 2, 2),
@@ -292,9 +338,11 @@ class TestHealthLoop:
     async def test_maintenance_server_down_is_silent(self, db_session):
         host_id = await _make_host(db_session, [8050, 8051])
         await self._cycle(db_session, {8050, 8051})
-        host = (await db_session.execute(
-            select(ProxyHost).options(selectinload(ProxyHost.upstream_servers)).where(ProxyHost.id == host_id)
-        )).scalar_one()
+        host = (
+            await db_session.execute(
+                select(ProxyHost).options(selectinload(ProxyHost.upstream_servers)).where(ProxyHost.id == host_id)
+            )
+        ).scalar_one()
         next(s for s in host.upstream_servers if s.port == 8051).down = True
         await db_session.commit()
         for _ in range(3):
@@ -304,14 +352,23 @@ class TestHealthLoop:
     async def test_history_is_capped(self, db_session):
         host_id = await _make_host(db_session, [8050, 8051])
         for i in range(health_service.EVENTS_KEPT_PER_HOST + 5):
-            db_session.add(UpstreamServerEvent(proxy_host_id=host_id, server="10.0.0.5:8051", event="down",
-                                               alert="sent", created_at=T0 + timedelta(seconds=i)))
+            db_session.add(
+                UpstreamServerEvent(
+                    proxy_host_id=host_id,
+                    server="10.0.0.5:8051",
+                    event="down",
+                    alert="sent",
+                    created_at=T0 + timedelta(seconds=i),
+                )
+            )
         await db_session.commit()
         await health_service._prune_events(db_session, {host_id})
         await db_session.commit()
-        rows = (await db_session.execute(
-            select(UpstreamServerEvent).where(UpstreamServerEvent.proxy_host_id == host_id)
-        )).scalars().all()
+        rows = (
+            (await db_session.execute(select(UpstreamServerEvent).where(UpstreamServerEvent.proxy_host_id == host_id)))
+            .scalars()
+            .all()
+        )
         assert len(rows) == health_service.EVENTS_KEPT_PER_HOST
         assert min(r.created_at for r in rows) == T0 + timedelta(seconds=5)
 
@@ -319,6 +376,7 @@ class TestHealthLoop:
 # ---------------------------------------------------------------------------
 # Routing: default on, following the host-down preference
 # ---------------------------------------------------------------------------
+
 
 class TestRouting:
     def test_preference_schema_accepts_new_types(self):
@@ -328,27 +386,48 @@ class TestRouting:
             AlertPreferenceCreate(alert_type="upstream_server_sideways")
 
     async def test_inherits_host_down_channels(self, db_session):
-        channel = AlertChannel(id="ch-1", user_id="u1", channel_type="webhook", name="hook",
-                               config=json.dumps({"url": "https://hooks.example.com/x"}), enabled=True)
-        db_session.add_all([
-            channel,
-            AlertPreference(user_id="u1", alert_type="host_down", min_severity="medium",
-                            channels=json.dumps(["ch-1"]), enabled=True),
-        ])
+        channel = AlertChannel(
+            id="ch-1",
+            user_id="u1",
+            channel_type="webhook",
+            name="hook",
+            config=json.dumps({"url": "https://hooks.example.com/x"}),
+            enabled=True,
+        )
+        db_session.add_all(
+            [
+                channel,
+                AlertPreference(
+                    user_id="u1",
+                    alert_type="host_down",
+                    min_severity="medium",
+                    channels=json.dumps(["ch-1"]),
+                    enabled=True,
+                ),
+            ]
+        )
         await db_session.commit()
         prefs = await preferences_for(db_session, "upstream_server_down")
         assert [p.alert_type for p in prefs] == ["host_down"]
 
         with patch("app.services.alert_service._send_to_channel", new=AsyncMock(return_value=True)) as send:
-            result = await dispatch_alert(db_session, alert_type="upstream_server_down", severity="high",
-                                          title="Backend Down - x", message="m", skip_push=True)
+            result = await dispatch_alert(
+                db_session,
+                alert_type="upstream_server_down",
+                severity="high",
+                title="Backend Down - x",
+                message="m",
+                skip_push=True,
+            )
         assert result["sent"] == 1 and send.call_args.args[1].id == "ch-1"
 
     async def test_own_preference_overrides_and_can_turn_it_off(self, db_session):
-        db_session.add_all([
-            AlertPreference(user_id="u1", alert_type="host_down", enabled=True),
-            AlertPreference(user_id="u1", alert_type="upstream_server_down", enabled=False),
-        ])
+        db_session.add_all(
+            [
+                AlertPreference(user_id="u1", alert_type="host_down", enabled=True),
+                AlertPreference(user_id="u1", alert_type="upstream_server_down", enabled=False),
+            ]
+        )
         await db_session.commit()
         assert await preferences_for(db_session, "upstream_server_down") == []
         assert await users_opted_out(db_session, "upstream_server_down") == {"u1"}
@@ -365,14 +444,33 @@ class TestRouting:
 # API
 # ---------------------------------------------------------------------------
 
+
 async def test_events_endpoint(client, auth_headers, db_session):
     host_id = await _make_host(db_session, [8050, 8051])
-    db_session.add_all([
-        UpstreamServerEvent(proxy_host_id=host_id, server="10.0.0.5:8051", event="down", alert="sent",
-                            error="connection refused", healthy=1, total=2, created_at=T0),
-        UpstreamServerEvent(proxy_host_id=host_id, server="10.0.0.5:8051", event="recovered", alert="sent",
-                            latency_ms=4, healthy=2, total=2, created_at=T0 + timedelta(minutes=3)),
-    ])
+    db_session.add_all(
+        [
+            UpstreamServerEvent(
+                proxy_host_id=host_id,
+                server="10.0.0.5:8051",
+                event="down",
+                alert="sent",
+                error="connection refused",
+                healthy=1,
+                total=2,
+                created_at=T0,
+            ),
+            UpstreamServerEvent(
+                proxy_host_id=host_id,
+                server="10.0.0.5:8051",
+                event="recovered",
+                alert="sent",
+                latency_ms=4,
+                healthy=2,
+                total=2,
+                created_at=T0 + timedelta(minutes=3),
+            ),
+        ]
+    )
     await db_session.commit()
     res = await client.get(f"/api/proxy-hosts/{host_id}/upstream-events", headers=auth_headers)
     assert res.status_code == 200

@@ -20,8 +20,7 @@ from app.api import router as api_router
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=getattr(logging, settings.log_level.upper()), format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -249,7 +248,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now(timezone.utc)
                     try:
                         slot = croniter(settings_obj.schedule_cron, now).get_prev(datetime)
-                    except (ValueError, KeyError):
+                    except ValueError, KeyError:
                         logger.error(f"Invalid cron expression: {settings_obj.schedule_cron}")
                         continue
 
@@ -275,6 +274,7 @@ async def lifespan(app: FastAPI):
                             logger.info("Scheduled backup completed successfully")
                             try:
                                 from app.services.push_service import push_service
+
                                 await push_service.notify_backup_completed(
                                     backup_id=created_backup.id,
                                     size_mb=round((created_backup.file_size or 0) / 1048576, 1),
@@ -289,6 +289,7 @@ async def lifespan(app: FastAPI):
                             try:
                                 from app.services.push_service import push_service
                                 from app.services.alert_service import dispatch_alert
+
                                 await push_service.notify_backup_failed(error=str(e), db=session)
                                 await dispatch_alert(
                                     db=session,
@@ -426,9 +427,11 @@ async def lifespan(app: FastAPI):
 
                     # Check if enough time has elapsed since last check
                     now = datetime.now(timezone.utc)
-                    if (update_settings.last_check and
-                            (now - update_settings.last_check).total_seconds() <
-                            update_settings.check_interval_hours * 3600):
+                    if (
+                        update_settings.last_check
+                        and (now - update_settings.last_check).total_seconds()
+                        < update_settings.check_interval_hours * 3600
+                    ):
                         await asyncio.sleep(600)  # Re-check eligibility in 10 min
                         continue
 
@@ -450,17 +453,13 @@ async def lifespan(app: FastAPI):
                             "app_latest_version": app_result.get("latest_version") or "",
                             "app_current_version": app_result.get("current_version", APP_VERSION),
                             "base_image_updates": str(len(base_updates)),
-                            "base_image_details": json.dumps([
-                                {"container": r["container"], "image": r["image"]}
-                                for r in base_updates
-                            ]),
+                            "base_image_details": json.dumps(
+                                [{"container": r["container"], "image": r["image"]} for r in base_updates]
+                            ),
                         }
                         await redis.hset("ghostwire:update_check", mapping=cache)
                         # Expire after 2x check interval
-                        await redis.expire(
-                            "ghostwire:update_check",
-                            update_settings.check_interval_hours * 7200
-                        )
+                        await redis.expire("ghostwire:update_check", update_settings.check_interval_hours * 7200)
                     except Exception as e:
                         logger.debug(f"Failed to cache update check results: {e}")
 
@@ -487,15 +486,9 @@ async def lifespan(app: FastAPI):
                                 logger.warning(f"Auto-update skipped for {img['container']}: {e}")
 
                     if app_result.get("update_available"):
-                        logger.info(
-                            f"App update available: "
-                            f"v{APP_VERSION} → v{app_result['latest_version']}"
-                        )
+                        logger.info(f"App update available: v{APP_VERSION} → v{app_result['latest_version']}")
                     if base_updates:
-                        logger.info(
-                            f"Base image updates available: "
-                            f"{', '.join(r['container'] for r in base_updates)}"
-                        )
+                        logger.info(f"Base image updates available: {', '.join(r['container'] for r in base_updates)}")
 
                 # Sleep for the configured interval
                 await asyncio.sleep(update_settings.check_interval_hours * 3600)
@@ -535,9 +528,9 @@ async def lifespan(app: FastAPI):
                     from app.models.setting import Setting as _Setting
                     from sqlalchemy import select as _select
 
-                    _row = (await session.execute(
-                        _select(_Setting).where(_Setting.key == "enrichment_backfill_enabled")
-                    )).scalar_one_or_none()
+                    _row = (
+                        await session.execute(_select(_Setting).where(_Setting.key == "enrichment_backfill_enabled"))
+                    ).scalar_one_or_none()
                     _enabled = bool(_row and str(_row.value).strip().lower() in ("true", "1", "yes", "on"))
 
                     if not _enabled:
@@ -553,7 +546,8 @@ async def lifespan(app: FastAPI):
                     if result["enriched"] > 0:
                         logger.info(
                             "IP enrichment backfill: enriched %d IPs, %d remaining",
-                            result["enriched"], result["remaining"],
+                            result["enriched"],
+                            result["remaining"],
                         )
 
                     # Run stale record cleanup every ~6 hours (72 iterations * 300s)
@@ -594,9 +588,8 @@ async def lifespan(app: FastAPI):
             try:
                 async with AsyncSessionLocal() as session:
                     from app.models.setting import Setting
-                    setting_result = await session.execute(
-                        select(Setting).where(Setting.key == "abuseipdb_api_key")
-                    )
+
+                    setting_result = await session.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
                     setting = setting_result.scalar_one_or_none()
                     if setting and setting.value:
                         result = await sync_abuseipdb_blacklist(session, setting.value)
@@ -629,24 +622,23 @@ async def lifespan(app: FastAPI):
             try:
                 async with AsyncSessionLocal() as session:
                     from app.models.setting import Setting
-                    key_result = await session.execute(
-                        select(Setting).where(Setting.key == "abuseipdb_api_key")
-                    )
+
+                    key_result = await session.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
                     key_setting = key_result.scalar_one_or_none()
                     enabled_result = await session.execute(
                         select(Setting).where(Setting.key == "abuseipdb_auto_report_enabled")
                     )
                     enabled_setting = enabled_result.scalar_one_or_none()
 
-                    if (
-                        key_setting and key_setting.value
-                        and enabled_setting and enabled_setting.value == "true"
-                    ):
+                    if key_setting and key_setting.value and enabled_setting and enabled_setting.value == "true":
                         result = await submit_bulk_reports(session, key_setting.value)
                         if result["status"] == "reported":
                             logger.info(
                                 "AbuseIPDB report: submitted %d IPs (%d accepted, %d rejected, %d skipped as trusted)",
-                                result["submitted"], result["accepted"], result["rejected"], result["skipped_trusted"],
+                                result["submitted"],
+                                result["accepted"],
+                                result["rejected"],
+                                result["skipped_trusted"],
                             )
             except asyncio.CancelledError:
                 logger.info("AbuseIPDB report task cancelled")
@@ -661,7 +653,9 @@ async def lifespan(app: FastAPI):
     # Data retention cleanup — prune old traffic_logs, threat_events, audit_logs daily
     from app.services.retention_service import run_retention_cleanup
     from app.services.analytics_service import (
-        aggregate_hourly, aggregate_daily, aggregate_geo,
+        aggregate_hourly,
+        aggregate_daily,
+        aggregate_geo,
     )
 
     async def roll_up_analytics(hours_back: int = 3, days_back: int = 2) -> None:
@@ -772,9 +766,9 @@ async def lifespan(app: FastAPI):
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select as _select, func as _func
 
-                    last = (await session.execute(
-                        _select(_func.max(Backup.created_at)).where(Backup.status == "completed")
-                    )).scalar()
+                    last = (
+                        await session.execute(_select(_func.max(Backup.created_at)).where(Backup.status == "completed"))
+                    ).scalar()
 
                     now = datetime.now(timezone.utc)
                     if last is not None:
@@ -845,7 +839,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now(timezone.utc)
                     try:
                         slot = croniter(policy["cron"], now).get_prev(datetime)
-                    except (ValueError, KeyError):
+                    except ValueError, KeyError:
                         logger.error("Invalid container update cron: %s", policy["cron"])
                         await asyncio.sleep(300)
                         continue
@@ -859,27 +853,34 @@ async def lifespan(app: FastAPI):
                     logger.info("Running scheduled container package update...")
 
                     results = await apply_updates_all(
-                        security_only=policy["security_only"], excluded=excluded,
+                        security_only=policy["security_only"],
+                        excluded=excluded,
                     )
                     upgraded = sum(r.get("upgraded", 0) or 0 for r in results)
                     failures = [r for r in results if r.get("error") and not r.get("skipped")]
 
                     await _set_setting(session, "container_auto_update_last_run", now.isoformat())
                     await _set_setting(
-                        session, "container_auto_update_last_result",
-                        json.dumps({
-                            "upgraded": upgraded,
-                            "failed": [f["container"] for f in failures],
-                            "containers": len(results),
-                        }),
+                        session,
+                        "container_auto_update_last_result",
+                        json.dumps(
+                            {
+                                "upgraded": upgraded,
+                                "failed": [f["container"] for f in failures],
+                                "containers": len(results),
+                            }
+                        ),
                     )
                     logger.info(
                         "Container update run: %d packages upgraded across %d containers, %d failed",
-                        upgraded, len(results), len(failures),
+                        upgraded,
+                        len(results),
+                        len(failures),
                     )
 
                     if failures:
                         from app.services.alert_service import dispatch_alert
+
                         await dispatch_alert(
                             db=session,
                             alert_type="container_update_failed",
@@ -916,7 +917,9 @@ async def lifespan(app: FastAPI):
             try:
                 async with AsyncSessionLocal() as session:
                     due = await check_expiring_certificates(
-                        session, days_before_expiry=30, send_notifications=True,
+                        session,
+                        days_before_expiry=30,
+                        send_notifications=True,
                     )
 
                 if due:
@@ -933,7 +936,8 @@ async def lifespan(app: FastAPI):
                             else:
                                 logger.warning(
                                     "Certificate auto-renewal: failed to renew %s: %s",
-                                    domain, message,
+                                    domain,
+                                    message,
                                 )
                         except Exception as e:
                             logger.error("Certificate auto-renewal: error renewing %s: %s", domain, e)

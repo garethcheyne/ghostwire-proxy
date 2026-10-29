@@ -1,5 +1,37 @@
 from fastapi import APIRouter
-from app.api.routes import users, internal_admin_mfa, proxy_hosts, certificates, access_lists, auth_walls, traffic, settings, setup, dns, internal, analytics, waf, firewalls, alerts, rate_limits, geoip, auth_portal, system, backup, presets, updates, honeypot, search, known_ips, mfa, reports, containers, api_keys, config_tools, mcp
+from app.api.routes import (
+    users,
+    internal_admin_mfa,
+    proxy_hosts,
+    certificates,
+    access_lists,
+    auth_walls,
+    traffic,
+    settings,
+    setup,
+    dns,
+    internal,
+    analytics,
+    waf,
+    firewalls,
+    alerts,
+    rate_limits,
+    geoip,
+    auth_portal,
+    system,
+    backup,
+    presets,
+    updates,
+    honeypot,
+    search,
+    known_ips,
+    mfa,
+    reports,
+    containers,
+    api_keys,
+    config_tools,
+    mcp,
+)
 
 router = APIRouter()
 

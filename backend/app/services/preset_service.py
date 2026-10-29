@@ -39,16 +39,18 @@ def list_presets(category: Optional[str] = None) -> list[dict]:
             try:
                 data = _load_preset_file(preset_file)
                 # Return summary (without full rule definitions)
-                presets.append({
-                    "id": data["id"],
-                    "name": data["name"],
-                    "description": data["description"],
-                    "category": data["category"],
-                    "severity": data.get("severity", "medium"),
-                    "tags": data.get("tags", []),
-                    "version": data.get("version", "1.0.0"),
-                    "rule_count": len(data.get("rules", data.get("thresholds", []))),
-                })
+                presets.append(
+                    {
+                        "id": data["id"],
+                        "name": data["name"],
+                        "description": data["description"],
+                        "category": data["category"],
+                        "severity": data.get("severity", "medium"),
+                        "tags": data.get("tags", []),
+                        "version": data.get("version", "1.0.0"),
+                        "rule_count": len(data.get("rules", data.get("thresholds", []))),
+                    }
+                )
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Failed to load preset {preset_file}: {e}")
 
@@ -68,7 +70,7 @@ def get_preset(preset_id: str) -> Optional[dict]:
                 data = _load_preset_file(preset_file)
                 if data.get("id") == preset_id:
                     return data
-            except (json.JSONDecodeError, KeyError):
+            except json.JSONDecodeError, KeyError:
                 continue
 
     return None
@@ -78,9 +80,7 @@ async def get_applied_presets(db: AsyncSession) -> set[str]:
     """Return the set of preset_ids currently applied in the database."""
     applied = set()
     for model in (WafRuleSet, WafRule, RateLimitRule, GeoipRule, ThreatThreshold):
-        result = await db.execute(
-            select(model.preset_id).where(model.preset_id.isnot(None)).distinct()
-        )
+        result = await db.execute(select(model.preset_id).where(model.preset_id.isnot(None)).distinct())
         applied.update(row[0] for row in result.fetchall())
     return applied
 
@@ -88,9 +88,7 @@ async def get_applied_presets(db: AsyncSession) -> set[str]:
 async def is_preset_applied(preset_id: str, db: AsyncSession) -> bool:
     """Check if a preset is already applied by looking for rules tagged with its ID."""
     for model in (WafRuleSet, WafRule, RateLimitRule, GeoipRule, ThreatThreshold):
-        result = await db.execute(
-            select(func.count()).where(model.preset_id == preset_id)
-        )
+        result = await db.execute(select(func.count()).where(model.preset_id == preset_id))
         if result.scalar() > 0:
             return True
     return False
@@ -108,21 +106,23 @@ async def remove_preset(
 
     removed = 0
     for model in (WafRule, WafRuleSet, RateLimitRule, GeoipRule, ThreatThreshold):
-        result = await db.execute(
-            delete(model).where(model.preset_id == preset_id)
-        )
+        result = await db.execute(delete(model).where(model.preset_id == preset_id))
         removed += result.rowcount
 
-    db.add(AuditLog(
-        action="preset_removed",
-        user_id=user_id,
-        ip_address=client_ip,
-        details=json.dumps({
-            "preset_id": preset_id,
-            "preset_name": preset_name,
-            "items_removed": removed,
-        }),
-    ))
+    db.add(
+        AuditLog(
+            action="preset_removed",
+            user_id=user_id,
+            ip_address=client_ip,
+            details=json.dumps(
+                {
+                    "preset_id": preset_id,
+                    "preset_name": preset_name,
+                    "items_removed": removed,
+                }
+            ),
+        )
+    )
     await db.commit()
 
     return {
@@ -167,17 +167,21 @@ async def apply_preset(
         raise ValueError(f"Unknown preset category: {category}")
 
     # Audit log
-    db.add(AuditLog(
-        action="preset_applied",
-        user_id=user_id,
-        ip_address=client_ip,
-        details=json.dumps({
-            "preset_id": preset_id,
-            "preset_name": preset["name"],
-            "category": category,
-            "items_created": len(created),
-        }),
-    ))
+    db.add(
+        AuditLog(
+            action="preset_applied",
+            user_id=user_id,
+            ip_address=client_ip,
+            details=json.dumps(
+                {
+                    "preset_id": preset_id,
+                    "preset_name": preset["name"],
+                    "category": category,
+                    "items_created": len(created),
+                }
+            ),
+        )
+    )
     await db.commit()
 
     return {

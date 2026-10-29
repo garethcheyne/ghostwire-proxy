@@ -16,6 +16,7 @@ including ones added later: anything not listed is refused to keys (default deny
 could hand over the instance — users, API keys, two-factor, updates, container actions, backup
 restore/upload/download, the kill switch — never accept a key, whatever its scopes.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -58,18 +59,18 @@ SESSION_ONLY = "session-only"
 # Ordered for display. `admin` includes every other scope.
 SCOPES: dict[str, str] = {
     "read": "Read proxy hosts, upstreams, certificates, access lists, auth walls, security rules, "
-            "traffic, analytics, health and the audit log. Dry-run previews of config changes.",
+    "traffic, analytics, health and the audit log. Dry-run previews of config changes.",
     "write:proxy-hosts": "Create, change, enable, disable and delete proxy hosts and their locations, "
-                         "including the load-balancing method and replacing the whole upstream list.",
+    "including the load-balancing method and replacing the whole upstream list.",
     "write:upstreams": "Add, change, remove and health-check a host's individual upstream servers.",
     "write:certificates": "Request, upload, renew and delete TLS certificates.",
     "write:access": "Change access lists and auth walls.",
     "write:security": "Change WAF rules and thresholds, threat-actor blocks, rate limits, GeoIP rules, "
-                      "known IPs, honeypot traps and security presets.",
+    "known IPs, honeypot traps and security presets.",
     "write:nginx": "Test the nginx configuration and regenerate/reload OpenResty.",
     "admin": "Everything above, plus settings, DNS providers, firewall connectors, alerts, reports, "
-             "backups (list/create), system maintenance and update/container status. Never users, "
-             "API keys, two-factor, updates, backup restore or the kill switch.",
+    "backups (list/create), system maintenance and update/container status. Never users, "
+    "API keys, two-factor, updates, backup restore or the kill switch.",
 }
 
 _READ_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -87,29 +88,28 @@ _RULES: list[tuple[set[str] | None, re.Pattern, str]] = [
     (_ANY, re.compile(r"^/api/system/kill-switch/?$"), SESSION_ONLY),
     (None, re.compile(r"^/api/updates/(app|base-image|rollback|check-now|settings)(/|$)"), "_updates"),
     (None, re.compile(r"^/api/containers/auto-update(/|$)"), "_containers"),
-
     # Dry runs render config without changing anything.
     ({"POST"}, re.compile(r"^/api/config/preview/?$"), READ),
     ({"POST"}, re.compile(r"^/api/proxy-hosts/upstream-preview/?$"), READ),
-
     # nginx operations.
     ({"POST"}, re.compile(r"^/api/config/(test|reload)/?$"), "write:nginx"),
     ({"POST"}, re.compile(r"^/api/settings/reload-nginx/?$"), "write:nginx"),
-
     # Writes, by area.
     (None, re.compile(r"^/api/proxy-hosts/[^/]+/upstreams(/|$)"), "_write:upstreams"),
     (None, re.compile(r"^/api/proxy-hosts(/|$)"), "_write:proxy-hosts"),
     (None, re.compile(r"^/api/certificates(/|$)"), "_write:certificates"),
     (None, re.compile(r"^/api/(access-lists|auth-walls)(/|$)"), "_write:access"),
     (None, re.compile(r"^/api/(waf|rate-limits|geoip|known-ips|honeypot|presets)(/|$)"), "_write:security"),
-
     # Read-only areas.
     (_READ_METHODS, re.compile(r"^/api/(traffic|analytics|search|audit-logs)(/|$)"), READ),
     (_READ_METHODS, re.compile(r"^/api/reports/hosts/[^/]+/?$"), READ),
     (_READ_METHODS, re.compile(r"^/api/system/(status|metrics|throughput|containers|database-health)/?$"), READ),
-
     # The rest of the admin surface.
-    (_ANY, re.compile(r"^/api/(settings|dns|firewalls|alerts|reports|backups|system|traffic|updates|containers)(/|$)"), ADMIN),
+    (
+        _ANY,
+        re.compile(r"^/api/(settings|dns|firewalls|alerts|reports|backups|system|traffic|updates|containers)(/|$)"),
+        ADMIN,
+    ),
 ]
 
 
@@ -151,6 +151,7 @@ def normalize_scopes(scopes: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Minting and hashing
 # ---------------------------------------------------------------------------
+
 
 def hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
@@ -215,6 +216,7 @@ def key_status(key: ApiKey, now: datetime | None = None) -> str:
 # Failed-attempt throttle
 # ---------------------------------------------------------------------------
 
+
 class FailedAttemptLimiter:
     """Refuses a client after too many bad keys in a window.
 
@@ -259,6 +261,7 @@ failed_attempts = FailedAttemptLimiter()
 # Authentication
 # ---------------------------------------------------------------------------
 
+
 class ApiKeyError(Exception):
     def __init__(self, status_code: int, detail: str):
         super().__init__(detail)
@@ -269,6 +272,7 @@ class ApiKeyError(Exception):
 @dataclass
 class ApiKeyPrincipal:
     """Who is calling: the key and the admin it acts for."""
+
     key_id: str
     name: str
     prefix: str
@@ -288,9 +292,7 @@ async def authenticate(db: AsyncSession, token: str, client_ip: str | None) -> A
     match = _KEY_RE.match(token or "")
     row: ApiKey | None = None
     if match:
-        row = (
-            await db.execute(select(ApiKey).where(ApiKey.prefix == match.group(1)))
-        ).scalar_one_or_none()
+        row = (await db.execute(select(ApiKey).where(ApiKey.prefix == match.group(1)))).scalar_one_or_none()
 
     presented = hash_key(token or "")
     # Always one constant-time comparison, so a wrong prefix and a wrong secret cost the same.
@@ -319,7 +321,11 @@ async def authenticate(db: AsyncSession, token: str, client_ip: str | None) -> A
         row.last_used_ip = client_ip
 
     return ApiKeyPrincipal(
-        key_id=row.id, name=row.name, prefix=row.prefix, scopes=list(row.scopes or []), user=user,
+        key_id=row.id,
+        name=row.name,
+        prefix=row.prefix,
+        scopes=list(row.scopes or []),
+        user=user,
     )
 
 
@@ -333,7 +339,9 @@ def check_request_scope(principal: ApiKeyPrincipal, method: str, path: str) -> s
             "This endpoint is not available to API keys; sign in to the admin UI to use it.",
         )
     if not principal.allows(needed):
-        logger.warning("api_key.refused reason=scope needed=%s key=%s method=%s path=%s", needed, principal.prefix, method, path)
+        logger.warning(
+            "api_key.refused reason=scope needed=%s key=%s method=%s path=%s", needed, principal.prefix, method, path
+        )
         raise ApiKeyError(403, f"This API key lacks the '{needed}' scope required for {method} {path}")
     return needed
 
@@ -357,19 +365,26 @@ async def record_use(
 
     logger.info(
         "api_key.used key=%s name=%r user=%s method=%s path=%s client=%s",
-        principal.prefix, principal.name, principal.user.email, method, path, client_ip,
+        principal.prefix,
+        principal.name,
+        principal.user.email,
+        method,
+        path,
+        client_ip,
     )
     try:
         # Same database as the request, separate transaction.
         async with _Session(bind=db.bind, expire_on_commit=False) as session:
-            session.add(AuditLog(
-                user_id=principal.user.id,
-                email=principal.user.email,
-                action="api_key_used",
-                details=f"API key '{principal.name}' (gwp_{principal.prefix}) {method} {path}",
-                ip_address=client_ip,
-                user_agent=user_agent,
-            ))
+            session.add(
+                AuditLog(
+                    user_id=principal.user.id,
+                    email=principal.user.email,
+                    action="api_key_used",
+                    details=f"API key '{principal.name}' (gwp_{principal.prefix}) {method} {path}",
+                    ip_address=client_ip,
+                    user_agent=user_agent,
+                )
+            )
             await session.commit()
     except Exception as e:  # never fail the request over the audit trail
         logger.warning("api_key.audit_failed key=%s error=%s", principal.prefix, e)

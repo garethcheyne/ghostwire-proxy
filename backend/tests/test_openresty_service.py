@@ -183,8 +183,8 @@ class TestAccessListRules:
         host = _host_with_access_list("whitelist", [("203.0.113.7", "allow")])
         result = generate_server_block(host)
         assert result.index("deny all;") < result.index("location /")
-        acme = result[result.index("location /.well-known/acme-challenge/"):]
-        assert "allow all;" in acme[:acme.index("}")]
+        acme = result[result.index("location /.well-known/acme-challenge/") :]
+        assert "allow all;" in acme[: acme.index("}")]
 
     def test_invalid_entry_is_skipped_not_written(self):
         host = _host_with_access_list("whitelist", [("1.2.3.4; return 200", "allow"), ("198.51.100.1", "allow")])
@@ -220,9 +220,9 @@ class TestAccessListBlockedResponse:
 
     def test_blocked_location_is_reachable_despite_deny_all(self):
         result = self._render("444")
-        named = result[result.index("location @ip_access_blocked {"):]
-        assert "allow all;" in named[:named.index("}")]
-        assert "return 444;" in named[:named.index("}")]
+        named = result[result.index("location @ip_access_blocked {") :]
+        assert "allow all;" in named[: named.index("}")]
+        assert "return 444;" in named[: named.index("}")]
 
     def test_welcome_page(self):
         assert "<title>Ghostwire Proxy</title>" in self._render("congratulations")
@@ -242,8 +242,8 @@ class TestAuthPortal:
         host.auth_wall_id = "wall-1"
         host.auth_wall = SimpleNamespace(auth_type="multi", name="Wall", theme="default")
         result = generate_server_block(host)
-        portal = result[result.index("location /__auth/ {"):]
-        portal = portal[:portal.index("}")]
+        portal = result[result.index("location /__auth/ {") :]
+        portal = portal[: portal.index("}")]
         assert "try_files $uri $uri/ /__auth/index.html;" in portal
 
 
@@ -305,8 +305,7 @@ class TestNginxOperations:
         mock_result.returncode = 0
         mock_result.stdout = "test is successful"
 
-        with patch("subprocess.run", return_value=mock_result), \
-             patch("os.path.exists", return_value=False):
+        with patch("subprocess.run", return_value=mock_result), patch("os.path.exists", return_value=False):
             success, output = test_nginx_config()
 
         assert success is True
@@ -316,8 +315,7 @@ class TestNginxOperations:
         mock_result.returncode = 1
         mock_result.stderr = "syntax error"
 
-        with patch("subprocess.run", return_value=mock_result), \
-             patch("os.path.exists", return_value=False):
+        with patch("subprocess.run", return_value=mock_result), patch("os.path.exists", return_value=False):
             success, output = test_nginx_config()
 
         assert success is False
@@ -326,8 +324,10 @@ class TestNginxOperations:
         mock_sock = MagicMock()
         mock_sock.recv.return_value = b"HTTP/1.1 204 No Content\r\n"
 
-        with patch("app.services.openresty_service.os.path.exists", return_value=True), \
-             patch("app.services.openresty_service.socket.socket", return_value=mock_sock):
+        with (
+            patch("app.services.openresty_service.os.path.exists", return_value=True),
+            patch("app.services.openresty_service.socket.socket", return_value=mock_sock),
+        ):
             success, output = reload_nginx()
 
         assert success is True
@@ -337,8 +337,7 @@ class TestNginxOperations:
 
     @pytest.mark.asyncio
     async def test_remove_config_file_exists(self):
-        with patch("os.path.exists", return_value=True), \
-             patch("os.remove") as mock_remove:
+        with patch("os.path.exists", return_value=True), patch("os.remove") as mock_remove:
             result = await remove_config("host-123")
 
         assert result is True

@@ -1,5 +1,6 @@
 """The MCP endpoint: JSON-RPC protocol (a port of ghostwire-load's protocol.test.ts) and the
 /api/mcp route with real API keys and tools."""
+
 import pytest
 
 from app.core.rate_limiter import limiter
@@ -13,8 +14,14 @@ INFO = ServerInfo(name="ghostwire-proxy", title="Ghostwire Proxy", version="1.0.
 def make_tool(handler=None) -> McpTool:
     async def pong(_args):
         return {"content": [{"type": "text", "text": "pong"}]}
-    return McpTool(name="ghostwire_ping", title="Ping", description="Returns pong.",
-                   input_schema={"type": "object"}, handler=handler or pong)
+
+    return McpTool(
+        name="ghostwire_ping",
+        title="Ping",
+        description="Returns pong.",
+        input_schema={"type": "object"},
+        handler=handler or pong,
+    )
 
 
 async def call(message, tools=None):
@@ -46,14 +53,18 @@ class TestProtocol:
         assert "handler" not in described
 
     async def test_tools_call_returns_content(self):
-        r = await call({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "ghostwire_ping", "arguments": {}}})
+        r = await call(
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "ghostwire_ping", "arguments": {}}}
+        )
         assert r["result"]["content"][0]["text"] == "pong"
 
     async def test_thrown_tool_is_a_result_not_protocol_error(self):
         async def boom(_args):
             raise RuntimeError("the database is down")
-        r = await call({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "ghostwire_ping"}},
-                       [make_tool(boom)])
+
+        r = await call(
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "ghostwire_ping"}}, [make_tool(boom)]
+        )
         assert "error" not in r
         assert r["result"]["isError"] is True
         assert r["result"]["content"][0]["text"] == "the database is down"
@@ -114,7 +125,9 @@ class TestEndpoint:
         r = await client.post("/api/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
         assert r.status_code == 401
         # A session token is not an API key.
-        r = await client.post("/api/mcp", headers=auth_headers, json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+        r = await client.post(
+            "/api/mcp", headers=auth_headers, json={"jsonrpc": "2.0", "id": 1, "method": "initialize"}
+        )
         assert r.status_code == 401
 
     async def test_invalid_key_rejected(self, client):
@@ -129,21 +142,30 @@ class TestEndpoint:
 
         r = await rpc(client, key, "tools/list")
         names = {t["name"] for t in r.json()["result"]["tools"]}
-        assert {"ghostwire_proxy_list_proxy_hosts", "ghostwire_proxy_create_proxy_host",
-                "ghostwire_proxy_add_upstream", "ghostwire_proxy_set_load_balancing",
-                "ghostwire_proxy_request_certificate", "ghostwire_proxy_reload_nginx"} <= names
+        assert {
+            "ghostwire_proxy_list_proxy_hosts",
+            "ghostwire_proxy_create_proxy_host",
+            "ghostwire_proxy_add_upstream",
+            "ghostwire_proxy_set_load_balancing",
+            "ghostwire_proxy_request_certificate",
+            "ghostwire_proxy_reload_nginx",
+        } <= names
         assert not any("delete" in n for n in names)
 
     async def test_notification_is_202(self, client, db_session, admin_user):
         key = await make_key(db_session, admin_user, ["read"])
-        r = await client.post("/api/mcp", headers={"Authorization": f"Bearer {key}"},
-                              json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+        r = await client.post(
+            "/api/mcp",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+        )
         assert r.status_code == 202
 
     async def test_batch_rejected(self, client, db_session, admin_user):
         key = await make_key(db_session, admin_user, ["read"])
-        r = await client.post("/api/mcp", headers={"Authorization": f"Bearer {key}"},
-                              json=[{"jsonrpc": "2.0", "id": 1, "method": "ping"}])
+        r = await client.post(
+            "/api/mcp", headers={"Authorization": f"Bearer {key}"}, json=[{"jsonrpc": "2.0", "id": 1, "method": "ping"}]
+        )
         assert r.status_code == 400
 
     async def test_foreign_origin_rejected(self, client, db_session, admin_user):
@@ -172,8 +194,9 @@ class TestTools:
 
     async def test_read_key_cannot_mutate(self, client, db_session, admin_user, host):
         key = await make_key(db_session, admin_user, ["read"])
-        result = await tool_call(client, key, "ghostwire_proxy_set_proxy_host_enabled",
-                                 {"host": "app.example.com", "enabled": False})
+        result = await tool_call(
+            client, key, "ghostwire_proxy_set_proxy_host_enabled", {"host": "app.example.com", "enabled": False}
+        )
         assert result["isError"] is True
         assert "write:proxy-hosts" in result["content"][0]["text"]
         await db_session.refresh(host)
@@ -181,9 +204,17 @@ class TestTools:
 
     async def test_dry_run_create_renders_config(self, client, db_session, admin_user):
         key = await make_key(db_session, admin_user, ["write:proxy-hosts"])
-        result = await tool_call(client, key, "ghostwire_proxy_create_proxy_host", {
-            "domain_names": ["new.example.com"], "forward_host": "10.1.1.1", "forward_port": 3000, "dry_run": True,
-        })
+        result = await tool_call(
+            client,
+            key,
+            "ghostwire_proxy_create_proxy_host",
+            {
+                "domain_names": ["new.example.com"],
+                "forward_host": "10.1.1.1",
+                "forward_port": 3000,
+                "dry_run": True,
+            },
+        )
         assert not result.get("isError"), result
         preview = result["structuredContent"]
         assert "server_name new.example.com;" in preview["config"]
@@ -194,9 +225,18 @@ class TestTools:
 
     async def test_dry_run_upstream_change_renders_upstream_block(self, client, db_session, admin_user, host):
         key = await make_key(db_session, admin_user, ["write:upstreams"])
-        result = await tool_call(client, key, "ghostwire_proxy_add_upstream", {
-            "host": "app.example.com", "address": "10.0.0.7", "port": 8080, "backup": True, "dry_run": True,
-        })
+        result = await tool_call(
+            client,
+            key,
+            "ghostwire_proxy_add_upstream",
+            {
+                "host": "app.example.com",
+                "address": "10.0.0.7",
+                "port": 8080,
+                "backup": True,
+                "dry_run": True,
+            },
+        )
         assert not result.get("isError"), result
         config = result["structuredContent"]["config"]
         assert "10.0.0.7:8080" in config
@@ -205,8 +245,12 @@ class TestTools:
 
     async def test_invalid_change_is_reported(self, client, db_session, admin_user, host):
         key = await make_key(db_session, admin_user, ["write:proxy-hosts"])
-        result = await tool_call(client, key, "ghostwire_proxy_set_load_balancing",
-                                 {"host": host.id, "lb_method": "fastest", "dry_run": True})
+        result = await tool_call(
+            client,
+            key,
+            "ghostwire_proxy_set_load_balancing",
+            {"host": host.id, "lb_method": "fastest", "dry_run": True},
+        )
         assert result["isError"] is True
         assert "lb_method" in result["content"][0]["text"]
 

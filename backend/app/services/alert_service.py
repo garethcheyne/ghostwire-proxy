@@ -26,31 +26,41 @@ async def preferences_for(db: AsyncSession, alert_type: str) -> list[AlertPrefer
     A user with their own preference for the type (enabled or not) is governed
     by it; everyone else inherits their preference for the fallback type.
     """
-    rows = (await db.execute(
-        select(AlertPreference).where(AlertPreference.alert_type == alert_type)
-    )).scalars().all()
+    rows = (await db.execute(select(AlertPreference).where(AlertPreference.alert_type == alert_type))).scalars().all()
     prefs = [p for p in rows if p.enabled]
     fallback = PREFERENCE_FALLBACK.get(alert_type)
     if fallback:
         own = {p.user_id for p in rows}
-        inherited = (await db.execute(
-            select(AlertPreference).where(
-                AlertPreference.alert_type == fallback,
-                AlertPreference.enabled == True,  # noqa: E712
+        inherited = (
+            (
+                await db.execute(
+                    select(AlertPreference).where(
+                        AlertPreference.alert_type == fallback,
+                        AlertPreference.enabled == True,  # noqa: E712
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
         prefs.extend(p for p in inherited if p.user_id not in own)
     return prefs
 
 
 async def users_opted_out(db: AsyncSession, alert_type: str) -> set[str]:
     """Users who switched this alert type off themselves (for direct push sends)."""
-    rows = (await db.execute(
-        select(AlertPreference.user_id).where(
-            AlertPreference.alert_type == alert_type,
-            AlertPreference.enabled == False,  # noqa: E712
+    rows = (
+        (
+            await db.execute(
+                select(AlertPreference.user_id).where(
+                    AlertPreference.alert_type == alert_type,
+                    AlertPreference.enabled == False,  # noqa: E712
+                )
+            )
         )
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
     return set(rows)
 
 
@@ -197,18 +207,16 @@ async def _send_push(
     try:
         from pywebpush import webpush, WebPushException
 
-        result = await db.execute(
-            select(PushSubscription).where(
-                PushSubscription.user_id == channel.user_id
-            )
-        )
+        result = await db.execute(select(PushSubscription).where(PushSubscription.user_id == channel.user_id))
         subscriptions = result.scalars().all()
 
-        payload = json.dumps({
-            "title": title,
-            "body": message,
-            "data": data or {},
-        })
+        payload = json.dumps(
+            {
+                "title": title,
+                "body": message,
+                "data": data or {},
+            }
+        )
 
         config = json.loads(channel.config) if channel.config else {}
         vapid_private_key = config.get("vapid_private_key", "")
@@ -350,7 +358,7 @@ async def _send_email(
 
     try:
         config = json.loads(channel.config) if isinstance(channel.config, str) else (channel.config or {})
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         logger.error("Email channel %s has unreadable config", channel.id)
         return False
 
@@ -365,8 +373,7 @@ async def _send_email(
     detail = ""
     if data:
         rows = "".join(
-            f"<tr><td style='padding:4px 12px 4px 0;color:#666'>{k}</td>"
-            f"<td style='padding:4px 0'>{v}</td></tr>"
+            f"<tr><td style='padding:4px 12px 4px 0;color:#666'>{k}</td><td style='padding:4px 0'>{v}</td></tr>"
             for k, v in data.items()
         )
         detail = f"<table style='margin-top:16px;font-size:14px'>{rows}</table>"

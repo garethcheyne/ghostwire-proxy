@@ -14,6 +14,7 @@ The last entry is the one that produced the response. An attempt that never
 reached a server shows "-" for its status/time, and when no server was
 available at all the address is the upstream's name instead of host:port.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -75,30 +76,33 @@ def _split(value: Optional[str]) -> list[str]:
 def _int(value: str) -> Optional[int]:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
 def _ms(value: str) -> Optional[int]:
     try:
         return int(round(float(value) * 1000))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
-def parse_upstream(addr: Optional[str], status: Optional[str] = None,
-                   response_time: Optional[str] = None) -> UpstreamResult:
+def parse_upstream(
+    addr: Optional[str], status: Optional[str] = None, response_time: Optional[str] = None
+) -> UpstreamResult:
     """Pair up nginx's per-attempt lists. Missing or short lists give None values."""
     addrs = _split(addr)
     statuses = _split(status)
     times = _split(response_time)
     attempts = []
     for i, a in enumerate(addrs):
-        attempts.append(UpstreamAttempt(
-            addr=a,
-            status=_int(statuses[i]) if i < len(statuses) else None,
-            time_ms=_ms(times[i]) if i < len(times) else None,
-        ))
+        attempts.append(
+            UpstreamAttempt(
+                addr=a,
+                status=_int(statuses[i]) if i < len(statuses) else None,
+                time_ms=_ms(times[i]) if i < len(times) else None,
+            )
+        )
     if not attempts and times:
         # Response time without an address (shouldn't happen, but keep the timing)
         attempts.append(UpstreamAttempt(addr="", time_ms=_ms(times[-1])))

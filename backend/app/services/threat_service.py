@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # GeoIP lookup helper
 _geoip_reader = None
 
+
 def _get_geoip_reader():
     global _geoip_reader
     if _geoip_reader is not None:
@@ -26,6 +27,7 @@ def _get_geoip_reader():
     try:
         import geoip2.database
         import os
+
         db_path = os.environ.get("GEOIP_DB_PATH", "/data/geoip/GeoLite2-Country.mmdb")
         if os.path.exists(db_path):
             _geoip_reader = geoip2.database.Reader(db_path)
@@ -37,6 +39,7 @@ def _get_geoip_reader():
         _geoip_reader = False
         logger.warning(f"GeoIP init failed: {e}")
     return _geoip_reader
+
 
 def lookup_country(ip: str) -> tuple[Optional[str], Optional[str]]:
     """Return (country_code, country_name) for an IP, or (None, None)."""
@@ -60,6 +63,7 @@ def _send_push_notification_background(coro):
             loop.run_until_complete(coro)
     except Exception as e:
         logger.debug(f"Could not send push notification: {e}")
+
 
 # An "under attack" alert is about volume across the whole fleet, not any one
 # actor: this many threat events inside the window trips it.
@@ -135,9 +139,7 @@ async def record_threat_event(
     # increments the existing row instead of failing. The counters are computed
     # from the stored column rather than a value read earlier, so no update is
     # lost either.
-    result = await db.execute(
-        select(ThreatActor).where(ThreatActor.ip_address == client_ip)
-    )
+    result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))
     existing = result.scalar_one_or_none()
 
     now = datetime.now(timezone.utc)
@@ -181,9 +183,7 @@ async def record_threat_event(
 
     # Re-read so threshold evaluation sees the committed counters, including
     # any increment applied concurrently by another request.
-    actor = (
-        await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))
-    ).scalar_one()
+    actor = (await db.execute(select(ThreatActor).where(ThreatActor.ip_address == client_ip))).scalar_one()
     await db.refresh(actor)
 
     # Evaluate thresholds
@@ -195,6 +195,7 @@ async def record_threat_event(
     if severity in ("high", "critical"):
         try:
             from app.services.push_service import push_service
+
             _send_push_notification_background(
                 push_service.notify_threat_detected(
                     ip=client_ip,
@@ -221,17 +222,12 @@ async def _maybe_notify_under_attack(db: AsyncSession) -> None:
     global _last_under_attack_alert
 
     now = datetime.now(timezone.utc)
-    if (
-        _last_under_attack_alert
-        and (now - _last_under_attack_alert).total_seconds() < UNDER_ATTACK_COOLDOWN_SECONDS
-    ):
+    if _last_under_attack_alert and (now - _last_under_attack_alert).total_seconds() < UNDER_ATTACK_COOLDOWN_SECONDS:
         return
 
     window_start = now - timedelta(minutes=1)
     try:
-        count_result = await db.execute(
-            select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= window_start)
-        )
+        count_result = await db.execute(select(func.count(ThreatEvent.id)).where(ThreatEvent.timestamp >= window_start))
         events_per_minute = int(count_result.scalar() or 0)
         if events_per_minute < UNDER_ATTACK_EVENTS_PER_MINUTE:
             return
@@ -261,6 +257,7 @@ async def _maybe_notify_under_attack(db: AsyncSession) -> None:
         )
 
         from app.services.push_service import push_service
+
         _send_push_notification_background(
             push_service.notify_under_attack(
                 attack_type=top_category,
@@ -275,9 +272,7 @@ async def _maybe_notify_under_attack(db: AsyncSession) -> None:
 async def evaluate_thresholds(db: AsyncSession, actor: ThreatActor) -> None:
     """Evaluate threat thresholds and escalate response if needed."""
     result = await db.execute(
-        select(ThreatThreshold)
-        .where(ThreatThreshold.enabled == True)
-        .order_by(ThreatThreshold.priority.desc())
+        select(ThreatThreshold).where(ThreatThreshold.enabled == True).order_by(ThreatThreshold.priority.desc())
     )
     thresholds = result.scalars().all()
 
@@ -387,9 +382,7 @@ async def apply_response(
 
 async def check_ip_blocked(db: AsyncSession, ip_address: str) -> tuple[bool, Optional[str]]:
     """Check if an IP is currently blocked. Returns (is_blocked, reason)."""
-    result = await db.execute(
-        select(ThreatActor).where(ThreatActor.ip_address == ip_address)
-    )
+    result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip_address))
     actor = result.scalar_one_or_none()
 
     if not actor:

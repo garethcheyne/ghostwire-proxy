@@ -171,7 +171,9 @@ class TestApplyPreset:
         if not presets:
             pytest.skip("No rate limit presets available")
         result = await apply_preset(
-            presets[0]["id"], db_session, "test-user-id",
+            presets[0]["id"],
+            db_session,
+            "test-user-id",
             proxy_host_id="host-123",
         )
         assert result["items_created"] > 0

@@ -1,4 +1,5 @@
 """Container OS package inventory and security-update posture."""
+
 import logging
 from typing import Optional
 
@@ -154,9 +155,7 @@ async def get_auto_update_policy(db: AsyncSession) -> dict:
         "cron": await _get_setting(db, "container_auto_update_cron") or DEFAULT_UPDATE_CRON,
         # Security-only unless explicitly turned off: a routine patch run should
         # not drag in unrelated version churn on a proxy that is serving.
-        "security_only": _truthy(
-            await _get_setting(db, "container_auto_update_security_only") or "true"
-        ),
+        "security_only": _truthy(await _get_setting(db, "container_auto_update_security_only") or "true"),
         "excluded": user_excluded,
         "always_excluded": list(DEFAULT_EXCLUDED),
     }
@@ -184,7 +183,7 @@ async def write_auto_update_policy(
     if "cron" in payload and payload["cron"]:
         try:
             croniter(str(payload["cron"]))
-        except (ValueError, KeyError):
+        except ValueError, KeyError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Not a valid cron expression: {payload['cron']}",
@@ -194,9 +193,7 @@ async def write_auto_update_policy(
     if "enabled" in payload:
         await _set_setting(db, "container_auto_update_enabled", "true" if payload["enabled"] else "false")
     if "security_only" in payload:
-        await _set_setting(
-            db, "container_auto_update_security_only", "true" if payload["security_only"] else "false"
-        )
+        await _set_setting(db, "container_auto_update_security_only", "true" if payload["security_only"] else "false")
     if "excluded" in payload:
         names = payload["excluded"]
         if isinstance(names, list):
@@ -219,7 +216,10 @@ async def run_auto_update_now(
     outcome, including which packages moved.
     """
     from app.services.container_security_service import (
-        apply_updates, apply_updates_all, DOCKER_AVAILABLE, scanner,
+        apply_updates,
+        apply_updates_all,
+        DOCKER_AVAILABLE,
+        scanner,
     )
 
     if not DOCKER_AVAILABLE or scanner.client is None:

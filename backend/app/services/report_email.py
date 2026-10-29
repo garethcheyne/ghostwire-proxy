@@ -7,6 +7,7 @@ output, formatted differently.
 Deliberately table-based, inline-styled HTML — that is what survives Outlook,
 Gmail and Apple Mail. No external CSS, no web fonts, no images.
 """
+
 from typing import Optional
 
 BRAND = "#0ea5e9"
@@ -27,7 +28,7 @@ def _bytes_human(value: Optional[int]) -> str:
 def _num(value) -> str:
     try:
         return f"{int(value):,}"
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "—"
 
 
@@ -38,7 +39,7 @@ def _ms(value) -> str:
         return "—"
     try:
         return f"{float(value):,.0f} ms"
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return str(value)
 
 
@@ -51,10 +52,7 @@ def _change(value: Optional[float]) -> str:
 
 
 def _escape(text) -> str:
-    return (
-        str(text if text is not None else "")
-        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
+    return str(text if text is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _stat(label: str, value: str, extra: str = "") -> str:
@@ -87,11 +85,13 @@ def _table(headers: list[str], rows: list[list[str]], aligns: Optional[list[str]
         for h, a in zip(headers, aligns)
     )
     body = "".join(
-        "<tr>" + "".join(
+        "<tr>"
+        + "".join(
             f"<td style='text-align:{a};padding:6px 10px;font:14px sans-serif;"
             f"color:{INK};border-bottom:1px solid #f1f5f9'>{c}</td>"
             for c, a in zip(row, aligns)
-        ) + "</tr>"
+        )
+        + "</tr>"
         for row in rows
     )
     return (
@@ -117,24 +117,25 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
     subject = f"Ghostwire Proxy — {domain} traffic report ({period})"
 
     # ---- plain text fallback -------------------------------------------------
-    text = "\n".join([
-        f"{domain} — traffic report ({period})",
-        f"Generated {meta.get('generated_at', '')}",
-        "",
-        f"Requests:         {_num(ov.get('total_requests'))}",
-        f"Unique visitors:  {_num(ov.get('unique_visitors'))}",
-        f"Data sent:        {_bytes_human(ov.get('bytes_sent'))}",
-        f"Error rate:       {ov.get('error_rate', 0)}%",
-        f"Bot traffic:      {ov.get('bot_percent', 0)}%",
-        f"p95 response:     {_ms(ov.get('p95_response_time_ms'))}",
-        "",
-        f"Security events:  {_num(sec.get('total_events'))}",
-        f"Unique attackers: {_num(sec.get('unique_attackers'))}",
-        f"Blocked:          {_num(sec.get('blocked'))}",
-        "",
-        f"Lifetime requests: {_num(life.get('total_requests'))} "
-        f"over {_num(life.get('days_with_traffic'))} days",
-    ])
+    text = "\n".join(
+        [
+            f"{domain} — traffic report ({period})",
+            f"Generated {meta.get('generated_at', '')}",
+            "",
+            f"Requests:         {_num(ov.get('total_requests'))}",
+            f"Unique visitors:  {_num(ov.get('unique_visitors'))}",
+            f"Data sent:        {_bytes_human(ov.get('bytes_sent'))}",
+            f"Error rate:       {ov.get('error_rate', 0)}%",
+            f"Bot traffic:      {ov.get('bot_percent', 0)}%",
+            f"p95 response:     {_ms(ov.get('p95_response_time_ms'))}",
+            "",
+            f"Security events:  {_num(sec.get('total_events'))}",
+            f"Unique attackers: {_num(sec.get('unique_attackers'))}",
+            f"Blocked:          {_num(sec.get('blocked'))}",
+            "",
+            f"Lifetime requests: {_num(life.get('total_requests'))} over {_num(life.get('days_with_traffic'))} days",
+        ]
+    )
 
     # ---- headline stats ------------------------------------------------------
     stats_row_1 = (
@@ -156,8 +157,7 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
         + "</tr>"
     )
     stats = (
-        f"<table style='width:100%;border-collapse:separate;border-spacing:0 12px'>"
-        f"{stats_row_1}{stats_row_2}</table>"
+        f"<table style='width:100%;border-collapse:separate;border-spacing:0 12px'>{stats_row_1}{stats_row_2}</table>"
     )
 
     # ---- sections ------------------------------------------------------------
@@ -178,15 +178,13 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
 
     browsers = _table(
         ["Browser", "Share"],
-        [[_escape(b.get("name")), f"{b.get('percent', 0)}%"]
-         for b in (clients.get("browsers") or [])[:top_n]],
+        [[_escape(b.get("name")), f"{b.get('percent', 0)}%"] for b in (clients.get("browsers") or [])[:top_n]],
         ["left", "right"],
     )
 
     devices = _table(
         ["Device", "Share"],
-        [[_escape(d.get("name")), f"{d.get('percent', 0)}%"]
-         for d in (clients.get("devices") or [])[:top_n]],
+        [[_escape(d.get("name")), f"{d.get('percent', 0)}%"] for d in (clients.get("devices") or [])[:top_n]],
         ["left", "right"],
     )
 
@@ -205,8 +203,7 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
 
     referrers = _table(
         ["Referring domain", "Requests"],
-        [[_escape(r.get("domain")), _num(r.get("requests"))]
-         for r in (refs.get("referring_domains") or [])[:top_n]],
+        [[_escape(r.get("domain")), _num(r.get("requests"))] for r in (refs.get("referring_domains") or [])[:top_n]],
         ["left", "right"],
     )
 
@@ -236,8 +233,7 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
 
     targeted = _table(
         ["Targeted path", "Events"],
-        [[_escape(t.get("uri", ""))[:80], _num(t.get("events"))]
-         for t in (sec.get("targeted_paths") or [])[:top_n]],
+        [[_escape(t.get("uri", ""))[:80], _num(t.get("events"))] for t in (sec.get("targeted_paths") or [])[:top_n]],
         ["left", "right"],
     )
 
@@ -253,7 +249,8 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
                 "Busiest day",
                 (
                     f"{life['busiest_day']['date']} ({_num(life['busiest_day']['requests'])})"
-                    if life.get("busiest_day") else "—"
+                    if life.get("busiest_day")
+                    else "—"
                 ),
             ],
         ],
@@ -263,21 +260,24 @@ def render_report_email(report: dict, top_n: int = 10) -> tuple[str, str, str]:
     node_rows = [n for n in ((report.get("nodes") or {}).get("nodes") or []) if n.get("node")]
     nodes_section = ""
     if node_rows:
-        nodes_section = _section("Backend nodes", _table(
-            ["Node", "Share", "Requests", "Errors", "p95", "Failovers in / out"],
-            [
+        nodes_section = _section(
+            "Backend nodes",
+            _table(
+                ["Node", "Share", "Requests", "Errors", "p95", "Failovers in / out"],
                 [
-                    _escape(n.get("node")) + (f" ({_escape(n['label'])})" if n.get("label") else ""),
-                    f"{n.get('share', 0)}%",
-                    _num(n.get("requests")),
-                    f"{n.get('error_rate', 0)}%",
-                    _ms(n.get("p95")),
-                    f"{_num(n.get('failovers_in'))} / {_num(n.get('failovers_out'))}",
-                ]
-                for n in node_rows[:top_n]
-            ],
-            ["left", "right", "right", "right", "right", "right"],
-        ))
+                    [
+                        _escape(n.get("node")) + (f" ({_escape(n['label'])})" if n.get("label") else ""),
+                        f"{n.get('share', 0)}%",
+                        _num(n.get("requests")),
+                        f"{n.get('error_rate', 0)}%",
+                        _ms(n.get("p95")),
+                        f"{_num(n.get('failovers_in'))} / {_num(n.get('failovers_out'))}",
+                    ]
+                    for n in node_rows[:top_n]
+                ],
+                ["left", "right", "right", "right", "right", "right"],
+            ),
+        )
 
     sampled_note = ""
     if clients.get("sampled"):

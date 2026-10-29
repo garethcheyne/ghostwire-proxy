@@ -22,22 +22,56 @@ async def _fresh_cache():
     yield
 
 
-def _log(host_id, minutes_ago, *, status=200, upstream="10.0.0.5:8080", ip="198.51.100.7",
-         uri="/", method="GET", rt=40, country="NZ", bot=False, ua="Mozilla/5.0", streaming=False):
+def _log(
+    host_id,
+    minutes_ago,
+    *,
+    status=200,
+    upstream="10.0.0.5:8080",
+    ip="198.51.100.7",
+    uri="/",
+    method="GET",
+    rt=40,
+    country="NZ",
+    bot=False,
+    ua="Mozilla/5.0",
+    streaming=False,
+):
     return TrafficLog(
-        id=str(uuid.uuid4()), proxy_host_id=host_id, timestamp=NOW - timedelta(minutes=minutes_ago),
-        client_ip=ip, request_method=method, request_uri=uri, status=status, response_time=rt,
-        bytes_sent=1000, bytes_received=100, upstream_addr=upstream, country_code=country,
-        is_bot=bot, user_agent=ua, is_streaming=streaming,
+        id=str(uuid.uuid4()),
+        proxy_host_id=host_id,
+        timestamp=NOW - timedelta(minutes=minutes_ago),
+        client_ip=ip,
+        request_method=method,
+        request_uri=uri,
+        status=status,
+        response_time=rt,
+        bytes_sent=1000,
+        bytes_received=100,
+        upstream_addr=upstream,
+        country_code=country,
+        is_bot=bot,
+        user_agent=ua,
+        is_streaming=streaming,
     )
 
 
 @pytest.fixture
 async def traffic(db_session):
-    a = ProxyHost(id=str(uuid.uuid4()), domain_names=["a.example.test"], forward_scheme="http",
-                  forward_host="10.0.0.5", forward_port=8080)
-    b = ProxyHost(id=str(uuid.uuid4()), domain_names=["b.example.test"], forward_scheme="http",
-                  forward_host="10.0.0.6", forward_port=80)
+    a = ProxyHost(
+        id=str(uuid.uuid4()),
+        domain_names=["a.example.test"],
+        forward_scheme="http",
+        forward_host="10.0.0.5",
+        forward_port=8080,
+    )
+    b = ProxyHost(
+        id=str(uuid.uuid4()),
+        domain_names=["b.example.test"],
+        forward_scheme="http",
+        forward_host="10.0.0.6",
+        forward_port=80,
+    )
     db_session.add_all([a, b])
     await db_session.flush()
     logs = []
@@ -45,8 +79,19 @@ async def traffic(db_session):
     for i in range(60):
         logs.append(_log(a.id, i * 70, status=200 if i % 5 else 502, uri=f"/api/item/{i % 3}", rt=20 + i))
     for i in range(30):
-        logs.append(_log(b.id, i * 90, upstream="10.0.0.6:80", ip="203.0.113.9", uri="/login",
-                         method="POST", status=404 if i % 3 == 0 else 200, country="AU", bot=i % 2 == 0))
+        logs.append(
+            _log(
+                b.id,
+                i * 90,
+                upstream="10.0.0.6:80",
+                ip="203.0.113.9",
+                uri="/login",
+                method="POST",
+                status=404 if i % 3 == 0 else 200,
+                country="AU",
+                bot=i % 2 == 0,
+            )
+        )
     # A retried request: nginx records both upstreams; the last one answered.
     logs.append(_log(a.id, 5, upstream="10.0.0.9:8080, 10.0.0.5:8081"))
     # A websocket: excluded from latency.
@@ -61,7 +106,9 @@ async def _all_raw(db, f, dims, stride=None):
 
 
 def _key(rows, dims):
-    return sorted((tuple(r[d] for d in dims), r["requests"], r["bytes_sent"], r["rt_count"], tuple(r["hist"])) for r in rows)
+    return sorted(
+        (tuple(r[d] for d in dims), r["requests"], r["bytes_sent"], r["rt_count"], tuple(r["hist"])) for r in rows
+    )
 
 
 class TestFilters:
@@ -161,8 +208,9 @@ class TestRawFilters:
 
 class TestRoutes:
     async def test_list_filters_and_total(self, client, auth_headers, traffic):
-        r = await client.get("/api/traffic/", headers=auth_headers,
-                             params={"backend": "10.0.0.6", "status_class": 4, "limit": 5})
+        r = await client.get(
+            "/api/traffic/", headers=auth_headers, params={"backend": "10.0.0.6", "status_class": 4, "limit": 5}
+        )
         assert r.status_code == 200
         assert r.headers["x-total-count"] == "10" and r.headers["x-total-count-capped"] == "false"
         assert all(row["status"] == 404 and row["host_name"] == "b.example.test" for row in r.json())

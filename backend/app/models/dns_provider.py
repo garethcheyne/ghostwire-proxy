@@ -7,6 +7,7 @@ from app.core.database import Base
 
 class DnsProvider(Base):
     """DNS Provider configuration (Cloudflare, GoDaddy, etc.)"""
+
     __tablename__ = "dns_providers"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -29,11 +30,14 @@ class DnsProvider(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class DnsZone(Base):
     """DNS Zone (domain) from a provider"""
+
     __tablename__ = "dns_zones"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -48,4 +52,6 @@ class DnsZone(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )

@@ -2,6 +2,7 @@
 Auth Providers Module
 Modular authentication providers for Auth Wall.
 """
+
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 

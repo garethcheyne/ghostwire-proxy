@@ -3,6 +3,7 @@
 The failure mode that matters is a schedule that silently stops sending — so
 these focus on due-ness and on what happens to `last_sent_at` when a send fails.
 """
+
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -75,12 +76,10 @@ class TestDueness:
         assert is_due(naive, MONDAY_0800) is True
 
     def test_daily_uses_a_shorter_gap(self):
-        daily = make(frequency="daily", send_day=None,
-                     last_sent_at=MONDAY_0800 - timedelta(hours=21))
+        daily = make(frequency="daily", send_day=None, last_sent_at=MONDAY_0800 - timedelta(hours=21))
         assert is_due(daily, MONDAY_0800) is True
 
-        recent = make(frequency="daily", send_day=None,
-                      last_sent_at=MONDAY_0800 - timedelta(hours=2))
+        recent = make(frequency="daily", send_day=None, last_sent_at=MONDAY_0800 - timedelta(hours=2))
         assert is_due(recent, MONDAY_0800) is False
 
     def test_monthly_fires_on_its_day_of_month(self):

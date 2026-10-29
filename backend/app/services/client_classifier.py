@@ -15,22 +15,63 @@ Deliberately conservative: this only claims "bot" on positive evidence. Anything
 unrecognised is left as not-a-bot rather than guessed at, because a wrong "bot"
 silently removes real traffic from the numbers.
 """
+
 import re
 from typing import Optional
 
 # Substrings that appear in self-identifying automated clients. Matched
 # case-insensitively against the User-Agent.
 _BOT_MARKERS = (
-    "bot", "crawler", "spider", "scraper", "slurp",
-    "curl/", "wget/", "python-requests", "python-urllib", "go-http-client",
-    "java/", "okhttp", "axios/", "node-fetch", "libwww-perl", "httpie",
-    "postmanruntime", "insomnia", "guzzlehttp", "apache-httpclient",
-    "headlesschrome", "phantomjs", "puppeteer", "playwright", "selenium",
-    "masscan", "nmap", "nikto", "sqlmap", "zgrab", "nuclei", "wpscan",
-    "censys", "shodan", "internetmeasurement", "paloaltonetworks",
-    "uptime", "pingdom", "statuscake", "newrelic", "datadog", "prometheus",
-    "monitoring", "healthcheck", "check_http",
-    "feedfetcher", "rss", "preview", "linkchecker", "validator",
+    "bot",
+    "crawler",
+    "spider",
+    "scraper",
+    "slurp",
+    "curl/",
+    "wget/",
+    "python-requests",
+    "python-urllib",
+    "go-http-client",
+    "java/",
+    "okhttp",
+    "axios/",
+    "node-fetch",
+    "libwww-perl",
+    "httpie",
+    "postmanruntime",
+    "insomnia",
+    "guzzlehttp",
+    "apache-httpclient",
+    "headlesschrome",
+    "phantomjs",
+    "puppeteer",
+    "playwright",
+    "selenium",
+    "masscan",
+    "nmap",
+    "nikto",
+    "sqlmap",
+    "zgrab",
+    "nuclei",
+    "wpscan",
+    "censys",
+    "shodan",
+    "internetmeasurement",
+    "paloaltonetworks",
+    "uptime",
+    "pingdom",
+    "statuscake",
+    "newrelic",
+    "datadog",
+    "prometheus",
+    "monitoring",
+    "healthcheck",
+    "check_http",
+    "feedfetcher",
+    "rss",
+    "preview",
+    "linkchecker",
+    "validator",
 )
 
 # Well-known crawlers worth naming, so the UI can say *which* bot.

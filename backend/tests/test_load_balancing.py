@@ -30,16 +30,30 @@ UP = "upstream_11111111_2222_3333_4444_555555555555"
 
 
 def srv(port, host="10.0.0.5", **kw):
-    base = dict(host=host, port=port, weight=1, max_fails=3, fail_timeout=30,
-                backup=False, down=False, max_conns=None, enabled=True, auto_down=False)
+    base = dict(
+        host=host,
+        port=port,
+        weight=1,
+        max_fails=3,
+        fail_timeout=30,
+        backup=False,
+        down=False,
+        max_conns=None,
+        enabled=True,
+        auto_down=False,
+    )
     base.update(kw)
     return SimpleNamespace(**base)
 
 
 def lb_host(servers, **kw):
     base = dict(
-        id=HOST_ID, lb_method="round_robin", upstream_keepalive=32, lb_auto_down=False,
-        websockets_support=False, upstream_servers=servers,
+        id=HOST_ID,
+        lb_method="round_robin",
+        upstream_keepalive=32,
+        lb_auto_down=False,
+        websockets_support=False,
+        upstream_servers=servers,
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -48,18 +62,46 @@ def lb_host(servers, **kw):
 def full_host(servers, **kw):
     """A host with every attribute generate_server_block reads."""
     base = dict(
-        id=HOST_ID, domain_names=["shop.example.com"], forward_scheme="http",
-        forward_host="10.0.0.5", forward_port=8050, ssl_enabled=False, http2_support=True,
-        hsts_enabled=False, hsts_subdomains=False, websockets_support=False, block_exploits=False,
-        access_list_id=None, access_list=None, auth_wall_id=None, auth_wall=None,
-        advanced_config=None, server_advanced_config=None, client_max_body_size="100m",
-        proxy_buffering=True, proxy_buffer_size="4k", proxy_buffers="8 4k",
-        proxy_connect_timeout=60, proxy_send_timeout=60, proxy_read_timeout=60,
-        cache_enabled=False, cache_valid=None, cache_bypass=None, rate_limit_enabled=False,
-        rate_limit_requests=100, rate_limit_period="1s", rate_limit_burst=50,
-        custom_error_pages=None, honeypot_enabled=False, traffic_logging_enabled=False,
-        cdn_provider="none", locations=[], upstream_servers=servers,
-        lb_method="round_robin", upstream_keepalive=32, lb_auto_down=False,
+        id=HOST_ID,
+        domain_names=["shop.example.com"],
+        forward_scheme="http",
+        forward_host="10.0.0.5",
+        forward_port=8050,
+        ssl_enabled=False,
+        http2_support=True,
+        hsts_enabled=False,
+        hsts_subdomains=False,
+        websockets_support=False,
+        block_exploits=False,
+        access_list_id=None,
+        access_list=None,
+        auth_wall_id=None,
+        auth_wall=None,
+        advanced_config=None,
+        server_advanced_config=None,
+        client_max_body_size="100m",
+        proxy_buffering=True,
+        proxy_buffer_size="4k",
+        proxy_buffers="8 4k",
+        proxy_connect_timeout=60,
+        proxy_send_timeout=60,
+        proxy_read_timeout=60,
+        cache_enabled=False,
+        cache_valid=None,
+        cache_bypass=None,
+        rate_limit_enabled=False,
+        rate_limit_requests=100,
+        rate_limit_period="1s",
+        rate_limit_burst=50,
+        custom_error_pages=None,
+        honeypot_enabled=False,
+        traffic_logging_enabled=False,
+        cdn_provider="none",
+        locations=[],
+        upstream_servers=servers,
+        lb_method="round_robin",
+        upstream_keepalive=32,
+        lb_auto_down=False,
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -76,37 +118,44 @@ class TestUpstreamBlock:
         assert generate_upstream_block(lb_host([srv(8050, enabled=False)])) == ""
 
     def test_round_robin_snapshot(self):
-        assert generate_upstream_block(lb_host(FOUR)) == "\n".join([
-            f"upstream {UP} {{",
-            "    # Load balancing: Round robin",
-            f"    zone {UP} 64k;",
-            "    server 10.0.0.5:8050;",
-            "    server 10.0.0.5:8051;",
-            "    server 10.0.0.5:8052;",
-            "    server 10.0.0.5:8053;",
-            "    keepalive 32;",
-            "}",
-        ])
+        assert generate_upstream_block(lb_host(FOUR)) == "\n".join(
+            [
+                f"upstream {UP} {{",
+                "    # Load balancing: Round robin",
+                f"    zone {UP} 64k;",
+                "    server 10.0.0.5:8050;",
+                "    server 10.0.0.5:8051;",
+                "    server 10.0.0.5:8052;",
+                "    server 10.0.0.5:8053;",
+                "    keepalive 32;",
+                "}",
+            ]
+        )
 
     def test_least_conn_snapshot(self):
-        assert generate_upstream_block(lb_host(FOUR, lb_method="least_conn")) == "\n".join([
-            f"upstream {UP} {{",
-            "    # Load balancing: Least connections",
-            f"    zone {UP} 64k;",
-            "    least_conn;",
-            "    server 10.0.0.5:8050;",
-            "    server 10.0.0.5:8051;",
-            "    server 10.0.0.5:8052;",
-            "    server 10.0.0.5:8053;",
-            "    keepalive 32;",
-            "}",
-        ])
+        assert generate_upstream_block(lb_host(FOUR, lb_method="least_conn")) == "\n".join(
+            [
+                f"upstream {UP} {{",
+                "    # Load balancing: Least connections",
+                f"    zone {UP} 64k;",
+                "    least_conn;",
+                "    server 10.0.0.5:8050;",
+                "    server 10.0.0.5:8051;",
+                "    server 10.0.0.5:8052;",
+                "    server 10.0.0.5:8053;",
+                "    keepalive 32;",
+                "}",
+            ]
+        )
 
-    @pytest.mark.parametrize("method,directive", [
-        ("ip_hash", "    ip_hash;"),
-        ("hash_uri", "    hash $request_uri consistent;"),
-        ("random_two", "    random two least_conn;"),
-    ])
+    @pytest.mark.parametrize(
+        "method,directive",
+        [
+            ("ip_hash", "    ip_hash;"),
+            ("hash_uri", "    hash $request_uri consistent;"),
+            ("random_two", "    random two least_conn;"),
+        ],
+    )
     def test_method_directive_before_servers_and_keepalive(self, method, directive):
         lines = generate_upstream_block(lb_host(FOUR, lb_method=method)).split("\n")
         assert lines[3] == directive
@@ -117,11 +166,16 @@ class TestUpstreamBlock:
         assert "Round robin" in block and "least_conn" not in block
 
     def test_server_params(self):
-        block = generate_upstream_block(lb_host([
-            srv(8050, weight=3, max_fails=5, fail_timeout=10, max_conns=200),
-            srv(8051, backup=True),
-            srv(8052, down=True),
-        ], lb_method="least_conn"))
+        block = generate_upstream_block(
+            lb_host(
+                [
+                    srv(8050, weight=3, max_fails=5, fail_timeout=10, max_conns=200),
+                    srv(8051, backup=True),
+                    srv(8052, down=True),
+                ],
+                lb_method="least_conn",
+            )
+        )
         assert "    server 10.0.0.5:8050 weight=3 max_fails=5 fail_timeout=10s max_conns=200;" in block
         assert "    server 10.0.0.5:8051 backup;" in block
         assert "    server 10.0.0.5:8052 down;" in block
@@ -165,12 +219,14 @@ class TestLocationDirectives:
         host = lb_host(FOUR, websockets_support=True)
         lines = generate_upstream_location_directives(host, indent="")
         assert not any("Connection" in line for line in lines)  # set by the WebSocket block instead
-        assert generate_upstream_connection_map(host) == "\n".join([
-            "map $http_upgrade $gw_conn_11111111222233334444555555555555 {",
-            "    default upgrade;",
-            "    ''      \"\";",
-            "}",
-        ])
+        assert generate_upstream_connection_map(host) == "\n".join(
+            [
+                "map $http_upgrade $gw_conn_11111111222233334444555555555555 {",
+                "    default upgrade;",
+                "    ''      \"\";",
+                "}",
+            ]
+        )
 
     def test_no_map_without_keepalive(self):
         assert generate_upstream_connection_map(lb_host(FOUR, websockets_support=True, upstream_keepalive=0)) == ""
@@ -251,7 +307,9 @@ class TestFieldValidation:
         assert format_server_address("fd00::5", 80) == "[fd00::5]:80"
         assert format_server_address("10.0.0.1", 80) == "10.0.0.1:80"
 
-    @pytest.mark.parametrize("field,value", [("weight", 0), ("weight", 101), ("max_conns", 0), ("port", 70000), ("fail_timeout", 0)])
+    @pytest.mark.parametrize(
+        "field,value", [("weight", 0), ("weight", 101), ("max_conns", 0), ("port", 70000), ("fail_timeout", 0)]
+    )
     def test_server_ranges(self, field, value):
         with pytest.raises(ValidationError):
             UpstreamServerCreate(**{"host": "10.0.0.5", "port": 8050, field: value})
@@ -274,14 +332,17 @@ class TestFieldValidation:
 # API
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def nginx_ok():
     """Config generation and reload pass without touching nginx or the disk."""
-    with patch("app.api.routes.proxy_hosts.generate_all_configs", new=AsyncMock(return_value=[])), \
-         patch("app.api.routes.proxy_hosts.backup_configs"), \
-         patch("app.api.routes.proxy_hosts.test_nginx_config", return_value=(True, "ok")), \
-         patch("app.api.routes.proxy_hosts.reload_nginx", return_value=(True, "ok")), \
-         patch("app.api.routes.proxy_hosts.cache_delete_prefix", new=AsyncMock()):
+    with (
+        patch("app.api.routes.proxy_hosts.generate_all_configs", new=AsyncMock(return_value=[])),
+        patch("app.api.routes.proxy_hosts.backup_configs"),
+        patch("app.api.routes.proxy_hosts.test_nginx_config", return_value=(True, "ok")),
+        patch("app.api.routes.proxy_hosts.reload_nginx", return_value=(True, "ok")),
+        patch("app.api.routes.proxy_hosts.cache_delete_prefix", new=AsyncMock()),
+    ):
         yield
 
 
@@ -293,10 +354,15 @@ def host_payload(**kw):
 
 class TestApi:
     async def test_create_load_balanced(self, client, auth_headers, nginx_ok):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            lb_method="least_conn", cdn_provider="cloudflare",
-            upstream_servers=[{"host": "10.0.0.5", "port": p} for p in range(8050, 8054)],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                lb_method="least_conn",
+                cdn_provider="cloudflare",
+                upstream_servers=[{"host": "10.0.0.5", "port": p} for p in range(8050, 8054)],
+            ),
+        )
         assert res.status_code == 201, res.text
         body = res.json()
         assert body["lb_method"] == "least_conn"
@@ -306,37 +372,58 @@ class TestApi:
         assert body["upstream_servers"][0]["last_status"] == "unknown"
 
     async def test_create_rejects_ip_hash_with_backup(self, client, auth_headers, nginx_ok):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            lb_method="ip_hash",
-            upstream_servers=[{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051, "backup": True}],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                lb_method="ip_hash",
+                upstream_servers=[
+                    {"host": "10.0.0.5", "port": 8050},
+                    {"host": "10.0.0.5", "port": 8051, "backup": True},
+                ],
+            ),
+        )
         assert res.status_code == 422
         assert "backup" in res.json()["detail"]
 
     async def test_create_rejects_config_injection(self, client, auth_headers, nginx_ok):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            upstream_servers=[{"host": "10.0.0.5; include /etc/passwd", "port": 8050}],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                upstream_servers=[{"host": "10.0.0.5; include /etc/passwd", "port": 8050}],
+            ),
+        )
         assert res.status_code == 422
 
     async def test_update_replaces_servers_and_keeps_health(self, client, auth_headers, nginx_ok, db_session):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            upstream_servers=[{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051}],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                upstream_servers=[{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051}],
+            ),
+        )
         host = res.json()
         keep = host["upstream_servers"][0]
         await db_session.execute(
-            UpstreamServer.__table__.update().where(UpstreamServer.id == keep["id"]).values(last_status="up", last_latency_ms=12)
+            UpstreamServer.__table__.update()
+            .where(UpstreamServer.id == keep["id"])
+            .values(last_status="up", last_latency_ms=12)
         )
         await db_session.commit()
 
-        res = await client.put(f"/api/proxy-hosts/{host['id']}", headers=auth_headers, json={
-            "lb_method": "least_conn",
-            "upstream_servers": [
-                {"id": keep["id"], "host": "10.0.0.5", "port": 8050, "weight": 2},
-                {"host": "10.0.0.5", "port": 8052, "backup": True},
-            ],
-        })
+        res = await client.put(
+            f"/api/proxy-hosts/{host['id']}",
+            headers=auth_headers,
+            json={
+                "lb_method": "least_conn",
+                "upstream_servers": [
+                    {"id": keep["id"], "host": "10.0.0.5", "port": 8050, "weight": 2},
+                    {"host": "10.0.0.5", "port": 8052, "backup": True},
+                ],
+            },
+        )
         assert res.status_code == 200, res.text
         body = res.json()
         assert body["lb_method"] == "least_conn"
@@ -347,37 +434,61 @@ class TestApi:
         assert ports[8052]["backup"] is True
 
     async def test_update_to_single_backend(self, client, auth_headers, nginx_ok):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            upstream_servers=[{"host": "10.0.0.5", "port": 8050}],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                upstream_servers=[{"host": "10.0.0.5", "port": 8050}],
+            ),
+        )
         hid = res.json()["id"]
         res = await client.put(f"/api/proxy-hosts/{hid}", headers=auth_headers, json={"upstream_servers": []})
         assert res.status_code == 200 and res.json()["upstream_servers"] == []
 
     async def test_method_change_checked_against_saved_servers(self, client, auth_headers, nginx_ok):
-        res = await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload(
-            upstream_servers=[{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051, "backup": True}],
-        ))
+        res = await client.post(
+            "/api/proxy-hosts/",
+            headers=auth_headers,
+            json=host_payload(
+                upstream_servers=[
+                    {"host": "10.0.0.5", "port": 8050},
+                    {"host": "10.0.0.5", "port": 8051, "backup": True},
+                ],
+            ),
+        )
         hid = res.json()["id"]
         res = await client.put(f"/api/proxy-hosts/{hid}", headers=auth_headers, json={"lb_method": "hash_uri"})
         assert res.status_code == 422
 
     async def test_upstream_crud(self, client, auth_headers, nginx_ok):
         hid = (await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload())).json()["id"]
-        a = await client.post(f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8050})
+        a = await client.post(
+            f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8050}
+        )
         assert a.status_code == 201, a.text
-        b = await client.post(f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8051})
+        b = await client.post(
+            f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8051}
+        )
         assert b.status_code == 201
-        dup = await client.post(f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8051})
+        dup = await client.post(
+            f"/api/proxy-hosts/{hid}/upstreams", headers=auth_headers, json={"host": "10.0.0.5", "port": 8051}
+        )
         assert dup.status_code == 422
 
-        patched = await client.patch(f"/api/proxy-hosts/{hid}/upstreams/{b.json()['id']}", headers=auth_headers,
-                                     json={"down": True, "max_conns": 50})
+        patched = await client.patch(
+            f"/api/proxy-hosts/{hid}/upstreams/{b.json()['id']}",
+            headers=auth_headers,
+            json={"down": True, "max_conns": 50},
+        )
         assert patched.status_code == 200, patched.text
         assert patched.json()["down"] is True and patched.json()["max_conns"] == 50
 
         # Removing the only primary while a backup remains is refused
-        await client.put(f"/api/proxy-hosts/{hid}/upstreams/{b.json()['id']}", headers=auth_headers, json={"backup": True, "down": False})
+        await client.put(
+            f"/api/proxy-hosts/{hid}/upstreams/{b.json()['id']}",
+            headers=auth_headers,
+            json={"backup": True, "down": False},
+        )
         res = await client.delete(f"/api/proxy-hosts/{hid}/upstreams/{a.json()['id']}", headers=auth_headers)
         assert res.status_code == 422
 
@@ -386,14 +497,21 @@ class TestApi:
 
     async def test_upstreams_require_admin(self, client, user_auth_headers, auth_headers, nginx_ok):
         hid = (await client.post("/api/proxy-hosts/", headers=auth_headers, json=host_payload())).json()["id"]
-        res = await client.post(f"/api/proxy-hosts/{hid}/upstreams", headers=user_auth_headers, json={"host": "10.0.0.5", "port": 8050})
+        res = await client.post(
+            f"/api/proxy-hosts/{hid}/upstreams", headers=user_auth_headers, json={"host": "10.0.0.5", "port": 8050}
+        )
         assert res.status_code == 403
 
     async def test_preview(self, client, auth_headers):
-        res = await client.post("/api/proxy-hosts/upstream-preview", headers=auth_headers, json={
-            "lb_method": "least_conn", "websockets_support": False,
-            "servers": [{"host": "10.0.0.5", "port": p} for p in range(8050, 8054)],
-        })
+        res = await client.post(
+            "/api/proxy-hosts/upstream-preview",
+            headers=auth_headers,
+            json={
+                "lb_method": "least_conn",
+                "websockets_support": False,
+                "servers": [{"host": "10.0.0.5", "port": p} for p in range(8050, 8054)],
+            },
+        )
         assert res.status_code == 200, res.text
         body = res.json()
         assert "least_conn;" in body["upstream_block"]
@@ -402,10 +520,15 @@ class TestApi:
         assert body["errors"] == []
 
     async def test_preview_reports_rule_errors(self, client, auth_headers):
-        res = await client.post("/api/proxy-hosts/upstream-preview", headers=auth_headers, json={
-            "lb_method": "ip_hash", "host_id": "x; evil",
-            "servers": [{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051, "backup": True}],
-        })
+        res = await client.post(
+            "/api/proxy-hosts/upstream-preview",
+            headers=auth_headers,
+            json={
+                "lb_method": "ip_hash",
+                "host_id": "x; evil",
+                "servers": [{"host": "10.0.0.5", "port": 8050}, {"host": "10.0.0.5", "port": 8051, "backup": True}],
+            },
+        )
         body = res.json()
         assert body["errors"] and "evil" not in body["upstream_block"]
 
@@ -414,9 +537,11 @@ class TestApi:
 # Health checks
 # ---------------------------------------------------------------------------
 
+
 async def _make_host(db_session, ports, **kw):
-    host = ProxyHost(id=str(uuid.uuid4()), domain_names=["lb.example.com"], forward_host="10.0.0.5",
-                     forward_port=ports[0], **kw)
+    host = ProxyHost(
+        id=str(uuid.uuid4()), domain_names=["lb.example.com"], forward_host="10.0.0.5", forward_port=ports[0], **kw
+    )
     host.upstream_servers = [UpstreamServer(host="10.0.0.5", port=p) for p in ports]
     db_session.add(host)
     await db_session.commit()
@@ -438,9 +563,11 @@ class TestHealth:
         async def fake_probe(scheme, host, port, check_type, path, timeout):
             return (True, None, 7) if port == 8050 else (False, "connection refused", None)
 
-        with patch.object(health_service, "probe_server", side_effect=fake_probe), \
-             patch("app.services.push_service.push_service.notify_host_down", new=AsyncMock()), \
-             patch("app.services.alert_service.dispatch_alert", new=AsyncMock()):
+        with (
+            patch.object(health_service, "probe_server", side_effect=fake_probe),
+            patch("app.services.push_service.push_service.notify_host_down", new=AsyncMock()),
+            patch("app.services.alert_service.dispatch_alert", new=AsyncMock()),
+        ):
             await health_service.run_health_checks(db_session)
 
         await db_session.refresh(host, attribute_names=["upstream_servers", "health_status"])
@@ -450,9 +577,18 @@ class TestHealth:
         assert host.health_status == "up"  # one backend answering keeps the host up
 
     async def test_probe_args_use_host_settings(self, db_session):
-        host = await _make_host(db_session, [8050], health_check_type="tcp", health_check_path="/healthz", health_check_timeout=2)
+        host = await _make_host(
+            db_session, [8050], health_check_type="tcp", health_check_path="/healthz", health_check_timeout=2
+        )
         args = health_service._probe_args(host, host.upstream_servers[0])
-        assert args == {"scheme": "http", "host": "10.0.0.5", "port": 8050, "check_type": "tcp", "path": "/healthz", "timeout": 2.0}
+        assert args == {
+            "scheme": "http",
+            "host": "10.0.0.5",
+            "port": 8050,
+            "check_type": "tcp",
+            "path": "/healthz",
+            "timeout": 2.0,
+        }
 
     def test_auto_down_keeps_one_server(self):
         host = SimpleNamespace(lb_auto_down=True)
@@ -470,7 +606,10 @@ class TestHealth:
     def test_auto_down_off_changes_nothing(self):
         host = SimpleNamespace(lb_auto_down=False)
         a = SimpleNamespace(last_status="down", auto_down=False, down=False)
-        assert health_service._update_auto_down(host, [a, SimpleNamespace(last_status="up", auto_down=False, down=False)]) is False
+        assert (
+            health_service._update_auto_down(host, [a, SimpleNamespace(last_status="up", auto_down=False, down=False)])
+            is False
+        )
         assert a.auto_down is False
 
     async def test_probe_server_http_never_follows_redirects(self):
@@ -496,9 +635,12 @@ class TestHealth:
 
     async def test_probe_server_5xx_is_down(self):
         import httpx
+
         real_client = httpx.AsyncClient
         transport = httpx.MockTransport(lambda r: httpx.Response(503))
-        with patch.object(health_service.httpx, "AsyncClient", side_effect=lambda **kw: real_client(transport=transport, **kw)):
+        with patch.object(
+            health_service.httpx, "AsyncClient", side_effect=lambda **kw: real_client(transport=transport, **kw)
+        ):
             ok, error, _ = await health_service.probe_server("http", "10.0.0.5", 8050, "http", "/", 2)
         assert ok is False and error == "HTTP 503"
 
@@ -509,10 +651,13 @@ class TestHealth:
 
 async def test_probe_url_has_no_empty_query():
     import httpx
+
     seen = []
     real_client = httpx.AsyncClient
     transport = httpx.MockTransport(lambda r: (seen.append(str(r.url)), httpx.Response(200))[1])
-    with patch.object(health_service.httpx, "AsyncClient", side_effect=lambda **kw: real_client(transport=transport, **kw)):
+    with patch.object(
+        health_service.httpx, "AsyncClient", side_effect=lambda **kw: real_client(transport=transport, **kw)
+    ):
         await health_service.probe_server("http", "10.0.0.5", 8050, "http", "/healthz", 2)
     assert seen == ["http://10.0.0.5:8050/healthz"]
 
@@ -565,7 +710,10 @@ class TestUpstreamLogParsing:
         assert split_host_port("upstream_x") == ("upstream_x", None)
 
     async def test_match_by_ip_and_port(self):
-        servers = [SimpleNamespace(id="a", host="10.0.0.5", port=8050), SimpleNamespace(id="b", host="10.0.0.5", port=8051)]
+        servers = [
+            SimpleNamespace(id="a", host="10.0.0.5", port=8050),
+            SimpleNamespace(id="b", host="10.0.0.5", port=8051),
+        ]
         assert await match_upstream_server("10.0.0.5:8051", servers) == "b"
         assert await match_upstream_server("10.0.0.6:8051", servers) is None
         assert await match_upstream_server("upstream_x", servers) is None
@@ -578,17 +726,32 @@ class TestUpstreamLogParsing:
 
 class TestTrafficLogEndpoint:
     async def _post(self, client, **kw):
-        body = {"timestamp": 1790000000, "client_ip": "203.0.113.9", "method": "GET", "uri": "/",
-                "host": "lb.example.com", "status_code": 200, "response_time_ms": 125.0}
+        body = {
+            "timestamp": 1790000000,
+            "client_ip": "203.0.113.9",
+            "method": "GET",
+            "uri": "/",
+            "host": "lb.example.com",
+            "status_code": 200,
+            "response_time_ms": 125.0,
+        }
         body.update(kw)
-        return await client.post("/api/internal/traffic/log", json=body,
-                                 headers={"X-Internal-Auth": __import__("app.api.routes.internal", fromlist=["x"]).INTERNAL_AUTH_TOKEN})
+        return await client.post(
+            "/api/internal/traffic/log",
+            json=body,
+            headers={"X-Internal-Auth": __import__("app.api.routes.internal", fromlist=["x"]).INTERNAL_AUTH_TOKEN},
+        )
 
     async def test_records_failover_and_server(self, client, db_session):
         from app.models.traffic_log import TrafficLog
+
         host = await _make_host(db_session, [8050, 8051])
-        res = await self._post(client, upstream_addr="10.0.0.5:8050, 10.0.0.5:8051",
-                               upstream_status="502, 200", upstream_response_time="0.004, 0.120")
+        res = await self._post(
+            client,
+            upstream_addr="10.0.0.5:8050, 10.0.0.5:8051",
+            upstream_status="502, 200",
+            upstream_response_time="0.004, 0.120",
+        )
         assert res.json() == {"status": "logged"}
         row = (await db_session.execute(select(TrafficLog))).scalar_one()
         by_port = {s.port: s.id for s in host.upstream_servers}
@@ -602,7 +765,10 @@ class TestTrafficLogEndpoint:
 
     async def test_single_backend_host_unchanged(self, client, db_session):
         from app.models.traffic_log import TrafficLog
-        db_session.add(ProxyHost(id=str(uuid.uuid4()), domain_names=["lb.example.com"], forward_host="10.0.0.5", forward_port=3000))
+
+        db_session.add(
+            ProxyHost(id=str(uuid.uuid4()), domain_names=["lb.example.com"], forward_host="10.0.0.5", forward_port=3000)
+        )
         await db_session.commit()
         await self._post(client, upstream_addr="10.0.0.5:3000", upstream_status="200", upstream_response_time="0.050")
         row = (await db_session.execute(select(TrafficLog))).scalar_one()
@@ -612,18 +778,21 @@ class TestTrafficLogEndpoint:
 
 
 class TestUpdateValidation:
-    @pytest.mark.parametrize("payload", [
-        {"forward_port": 70000},
-        {"forward_port": 0},
-        {"forward_scheme": "ftp"},
-        {"domain_names": []},
-        {"domain_names": ["bad domain"]},
-        {"forward_host": "10.0.0.5; include /etc/passwd"},
-        {"forward_host": "http://10.0.0.5"},
-        {"upstream_keepalive": 5000},
-        {"health_check_path": "//evil.example/"},
-        {"upstream_servers": [{"host": "10.0.0.5", "port": 8050, "weight": 0}]},
-    ])
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"forward_port": 70000},
+            {"forward_port": 0},
+            {"forward_scheme": "ftp"},
+            {"domain_names": []},
+            {"domain_names": ["bad domain"]},
+            {"forward_host": "10.0.0.5; include /etc/passwd"},
+            {"forward_host": "http://10.0.0.5"},
+            {"upstream_keepalive": 5000},
+            {"health_check_path": "//evil.example/"},
+            {"upstream_servers": [{"host": "10.0.0.5", "port": 8050, "weight": 0}]},
+        ],
+    )
     def test_schema_rejects(self, payload):
         with pytest.raises(ValidationError):
             ProxyHostUpdate(**payload)

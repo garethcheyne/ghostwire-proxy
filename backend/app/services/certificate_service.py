@@ -2,6 +2,7 @@
 Certificate management service.
 Handles Let's Encrypt certificate requests and renewals.
 """
+
 import os
 import subprocess
 from datetime import datetime, timezone
@@ -55,10 +56,13 @@ async def request_letsencrypt_certificate(
             domain_args.extend(["-d", domain])
 
         cmd = [
-            "certbot", "certonly",
+            "certbot",
+            "certonly",
             "--webroot",
-            "-w", "/var/www/certbot",
-            "--email", cert.letsencrypt_email,
+            "-w",
+            "/var/www/certbot",
+            "--email",
+            cert.letsencrypt_email,
             "--agree-tos",
             "--non-interactive",
             *domain_args,
@@ -73,7 +77,7 @@ async def request_letsencrypt_certificate(
             cmd,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes
+            timeout=300,  # 5 minutes
         )
 
         if result.returncode != 0:
@@ -152,20 +156,17 @@ async def renew_certificate(
     try:
         # Run certbot renew
         cmd = [
-            "certbot", "renew",
-            "--cert-name", domain,
+            "certbot",
+            "renew",
+            "--cert-name",
+            domain,
             "--non-interactive",
         ]
 
         if settings.letsencrypt_staging:
             cmd.append("--staging")
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
         if result.returncode != 0:
             cert.status = "error"
@@ -247,10 +248,10 @@ async def check_expiring_certificates(
 
     result = await db.execute(
         select(Certificate).where(
-            (Certificate.expires_at != None) &
-            (Certificate.expires_at <= expiry_threshold) &
-            (Certificate.auto_renew == True) &
-            (Certificate.is_letsencrypt == True)
+            (Certificate.expires_at != None)
+            & (Certificate.expires_at <= expiry_threshold)
+            & (Certificate.auto_renew == True)
+            & (Certificate.is_letsencrypt == True)
         )
     )
 
@@ -293,12 +294,10 @@ def validate_certificate_pem(certificate_pem: str, key_pem: str) -> tuple[bool, 
 
         # Check if key matches certificate
         cert_public_key = cert.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         key_public_key = key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
         if cert_public_key != key_public_key:

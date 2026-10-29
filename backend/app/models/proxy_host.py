@@ -105,18 +105,27 @@ class ProxyHost(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     certificate = relationship("Certificate", back_populates="proxy_hosts")
     access_list = relationship("AccessList", back_populates="proxy_hosts")
     auth_wall = relationship("AuthWall", back_populates="proxy_hosts")
     upstream_servers = relationship(
-        "UpstreamServer", back_populates="proxy_host", cascade="all, delete-orphan",
+        "UpstreamServer",
+        back_populates="proxy_host",
+        cascade="all, delete-orphan",
         # Stable order, so the generated upstream block doesn't shuffle between renders
         order_by="[UpstreamServer.created_at, UpstreamServer.port]",
     )
-    locations = relationship("ProxyLocation", back_populates="proxy_host", cascade="all, delete-orphan", order_by="desc(ProxyLocation.priority)")
+    locations = relationship(
+        "ProxyLocation",
+        back_populates="proxy_host",
+        cascade="all, delete-orphan",
+        order_by="desc(ProxyLocation.priority)",
+    )
     traffic_logs = relationship("TrafficLog", back_populates="proxy_host", cascade="all, delete-orphan")
 
 
@@ -167,6 +176,7 @@ class UpstreamServerEvent(Base):
     server is stored by address as well as id so the history still reads after
     a server is removed.
     """
+
     __tablename__ = "upstream_server_events"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -187,6 +197,7 @@ class UpstreamServerEvent(Base):
 
 class ProxyLocation(Base):
     """Custom location blocks for a proxy host with different backends per path"""
+
     __tablename__ = "proxy_locations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -233,7 +244,9 @@ class ProxyLocation(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     proxy_host = relationship("ProxyHost", back_populates="locations")

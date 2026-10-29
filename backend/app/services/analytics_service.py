@@ -28,15 +28,15 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
-            func.avg(TrafficLog.response_time).filter(
-                TrafficLog.is_streaming.isnot(True)
-            ).label('avg_response_time'),
-            func.percentile_cont(0.95).within_group(
-                TrafficLog.response_time.asc()
-            ).filter(TrafficLog.is_streaming.isnot(True)).label('p95_response_time'),
-            func.percentile_cont(0.99).within_group(
-                TrafficLog.response_time.asc()
-            ).filter(TrafficLog.is_streaming.isnot(True)).label('p99_response_time'),
+            func.avg(TrafficLog.response_time).filter(TrafficLog.is_streaming.isnot(True)).label('avg_response_time'),
+            func.percentile_cont(0.95)
+            .within_group(TrafficLog.response_time.asc())
+            .filter(TrafficLog.is_streaming.isnot(True))
+            .label('p95_response_time'),
+            func.percentile_cont(0.99)
+            .within_group(TrafficLog.response_time.asc())
+            .filter(TrafficLog.is_streaming.isnot(True))
+            .label('p99_response_time'),
             func.count(func.nullif(TrafficLog.is_bot.is_(True), False)).label('bot_requests'),
             func.count(func.nullif(TrafficLog.status < 300, False)).label('status_2xx'),
             func.count(func.nullif(and_(TrafficLog.status >= 300, TrafficLog.status < 400), False)).label('status_3xx'),
@@ -116,15 +116,15 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             func.count(TrafficLog.id).label('total_requests'),
             func.sum(TrafficLog.bytes_sent).label('bytes_sent'),
             func.sum(TrafficLog.bytes_received).label('bytes_received'),
-            func.avg(TrafficLog.response_time).filter(
-                TrafficLog.is_streaming.isnot(True)
-            ).label('avg_response_time'),
-            func.percentile_cont(0.95).within_group(
-                TrafficLog.response_time.asc()
-            ).filter(TrafficLog.is_streaming.isnot(True)).label('p95_response_time'),
-            func.percentile_cont(0.99).within_group(
-                TrafficLog.response_time.asc()
-            ).filter(TrafficLog.is_streaming.isnot(True)).label('p99_response_time'),
+            func.avg(TrafficLog.response_time).filter(TrafficLog.is_streaming.isnot(True)).label('avg_response_time'),
+            func.percentile_cont(0.95)
+            .within_group(TrafficLog.response_time.asc())
+            .filter(TrafficLog.is_streaming.isnot(True))
+            .label('p95_response_time'),
+            func.percentile_cont(0.99)
+            .within_group(TrafficLog.response_time.asc())
+            .filter(TrafficLog.is_streaming.isnot(True))
+            .label('p99_response_time'),
             func.count(func.nullif(TrafficLog.is_bot.is_(True), False)).label('bot_requests'),
             func.count(func.distinct(TrafficLog.client_ip)).label('unique_ips'),
         )

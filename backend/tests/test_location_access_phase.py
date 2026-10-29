@@ -71,7 +71,7 @@ def _location_body(config: str, directive: str) -> str:
         elif config[i] == "}":
             depth -= 1
             if depth == 0:
-                return config[start:i + 1]
+                return config[start : i + 1]
     raise AssertionError("unterminated location")
 
 
@@ -80,8 +80,7 @@ WALL = SimpleNamespace(auth_type="multi", name="Staff", theme="default")
 
 class TestCustomLocationAccessPhase:
     def test_walled_host_custom_location_checks_the_wall_and_waf(self):
-        host = _host(auth_wall_id="wall-1", auth_wall=WALL, block_exploits=True,
-                     locations=[_location()])
+        host = _host(auth_wall_id="wall-1", auth_wall=WALL, block_exploits=True, locations=[_location()])
         config = generate_server_block(host)
         body = _location_body(config, "/api")
         assert "require('auth_wall').access()" in body
@@ -90,10 +89,12 @@ class TestCustomLocationAccessPhase:
 
     def test_custom_location_matches_the_default_location(self):
         for wall, waf in [(True, True), (True, False), (False, True)]:
-            host = _host(auth_wall_id="wall-1" if wall else None,
-                         auth_wall=WALL if wall else None,
-                         block_exploits=waf,
-                         locations=[_location(), _location(id="loc-2", path="\\.php$", match_type="regex")])
+            host = _host(
+                auth_wall_id="wall-1" if wall else None,
+                auth_wall=WALL if wall else None,
+                block_exploits=waf,
+                locations=[_location(), _location(id="loc-2", path="\\.php$", match_type="regex")],
+            )
             config = generate_server_block(host)
             root = _location_body(config, "/")
             root_phase = re.search(r"access_by_lua_block \{.*?\}\n", root, re.S).group(0)
@@ -113,15 +114,13 @@ class TestCustomLocationAccessPhase:
         assert "access_by_lua" not in config
 
     def test_auth_portal_locations_stay_open(self):
-        host = _host(auth_wall_id="wall-1", auth_wall=WALL, block_exploits=True,
-                     locations=[_location()])
+        host = _host(auth_wall_id="wall-1", auth_wall=WALL, block_exploits=True, locations=[_location()])
         config = generate_server_block(host)
         for directive in ("/__auth/", "/api/auth-portal/", "/.well-known/acme-challenge/"):
             assert "access_by_lua" not in _location_body(config, directive), directive
 
     def test_disabled_location_is_not_written(self):
-        host = _host(auth_wall_id="wall-1", auth_wall=WALL,
-                     locations=[_location(enabled=False)])
+        host = _host(auth_wall_id="wall-1", auth_wall=WALL, locations=[_location(enabled=False)])
         assert "location /api {" not in generate_server_block(host)
 
 
@@ -135,8 +134,13 @@ def _snapshot_hosts():
         locations=[
             _location(rate_limit_enabled=True, rate_limit_burst=10),
             _location(id="loc-2", path="/ws", forward_port=9001, websockets_support=True, priority=5),
-            _location(id="loc-3", path="\\.(png|jpg)$", match_type="regex_case_insensitive",
-                      cache_enabled=True, cache_valid="200 10m"),
+            _location(
+                id="loc-3",
+                path="\\.(png|jpg)$",
+                match_type="regex_case_insensitive",
+                cache_enabled=True,
+                cache_valid="200 10m",
+            ),
         ],
     )
     balanced = _host(
@@ -147,8 +151,16 @@ def _snapshot_hosts():
         block_exploits=False,
         lb_method="least_conn",
         upstream_servers=[
-            SimpleNamespace(**{**_defaults(UpstreamServer), "id": f"s{i}", "host": f"10.0.1.{i}",
-                               "port": 8080, "enabled": True, "backup": i == 4})
+            SimpleNamespace(
+                **{
+                    **_defaults(UpstreamServer),
+                    "id": f"s{i}",
+                    "host": f"10.0.1.{i}",
+                    "port": 8080,
+                    "enabled": True,
+                    "backup": i == 4,
+                }
+            )
             for i in range(1, 5)
         ],
         locations=[_location(path="/admin")],

@@ -3,6 +3,7 @@ Auth Portal API routes.
 Handles login, logout, OAuth callbacks, and TOTP verification for auth walls.
 These endpoints are accessed via /__auth/* paths through nginx.
 """
+
 import json
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -150,9 +151,7 @@ async def local_login(
     """Login with local username/password."""
     # Get auth wall
     result = await db.execute(
-        select(AuthWall)
-        .options(selectinload(AuthWall.local_users))
-        .where(AuthWall.id == auth_wall_id)
+        select(AuthWall).options(selectinload(AuthWall.local_users)).where(AuthWall.id == auth_wall_id)
     )
     auth_wall = result.scalar_one_or_none()
 
@@ -160,10 +159,7 @@ async def local_login(
         raise HTTPException(status_code=404, detail="Auth wall not found")
 
     # Find user
-    user = next(
-        (u for u in auth_wall.local_users if u.username == login_data.username and u.is_active),
-        None
-    )
+    user = next((u for u in auth_wall.local_users if u.username == login_data.username and u.is_active), None)
 
     # Get client info for audit
     client_ip = get_client_ip(request)
@@ -187,10 +183,12 @@ async def local_login(
 
     # Authenticate
     local_provider = LocalAuthProvider(auth_wall=auth_wall, db=db)
-    user_info = await local_provider.authenticate({
-        "username": login_data.username,
-        "password": login_data.password,
-    })
+    user_info = await local_provider.authenticate(
+        {
+            "username": login_data.username,
+            "password": login_data.password,
+        }
+    )
 
     if not user_info:
         # Log failed attempt
@@ -208,14 +206,17 @@ async def local_login(
     if local_provider.requires_totp(user):
         # Create partial session for TOTP verification
         partial_id = secrets.token_hex(32)
-        await _set_partial_session(partial_id, {
-            "user_id": user.id,
-            "auth_wall_id": auth_wall_id,
-            "username": user.username,
-            "email": user.email,
-            "display_name": user.display_name,
-            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
-        })
+        await _set_partial_session(
+            partial_id,
+            {
+                "user_id": user.id,
+                "auth_wall_id": auth_wall_id,
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name,
+                "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+            },
+        )
         return LocalLoginResponse(
             success=True,
             requires_totp=True,
@@ -287,9 +288,7 @@ async def totp_login(
 
     # Get auth wall and user
     result = await db.execute(
-        select(AuthWall)
-        .options(selectinload(AuthWall.local_users))
-        .where(AuthWall.id == auth_wall_id)
+        select(AuthWall).options(selectinload(AuthWall.local_users)).where(AuthWall.id == auth_wall_id)
     )
     auth_wall = result.scalar_one_or_none()
 
@@ -410,13 +409,16 @@ async def start_oauth(
 
     # Generate state and store in Redis with 10-minute TTL
     state = secrets.token_hex(32)
-    await _set_oauth_state(state, {
-        "auth_wall_id": auth_wall_id,
-        "provider_id": provider_id,
-        "redirect_url": target,
-        "callback_url": callback_url,
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
-    })
+    await _set_oauth_state(
+        state,
+        {
+            "auth_wall_id": auth_wall_id,
+            "provider_id": provider_id,
+            "redirect_url": target,
+            "callback_url": callback_url,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        },
+    )
 
     auth_url = await oauth_provider.get_authorization_url(
         callback_url=callback_url,
@@ -494,13 +496,17 @@ async def oauth_callback(
     user_agent = request.headers.get("user-agent")
 
     # Validate user: verified email (provider rules), then the wall's allow-list
-    if not await oauth_provider.validate_user(user_info, auth_wall_id) or not is_email_allowed(auth_wall, user_info.email):
-        db.add(AuditLog(
-            action="auth_wall_login_denied",
-            ip_address=client_ip,
-            user_agent=user_agent,
-            details=f"Auth wall: {auth_wall.name}, Provider: {provider.provider_type}, not on the allow-list: {user_info.email or user_info.username}",
-        ))
+    if not await oauth_provider.validate_user(user_info, auth_wall_id) or not is_email_allowed(
+        auth_wall, user_info.email
+    ):
+        db.add(
+            AuditLog(
+                action="auth_wall_login_denied",
+                ip_address=client_ip,
+                user_agent=user_agent,
+                details=f"Auth wall: {auth_wall.name}, Provider: {provider.provider_type}, not on the allow-list: {user_info.email or user_info.username}",
+            )
+        )
         await db.commit()
         return _portal_error(auth_wall_id, "This account is not allowed to access this site.", redirect_url)
 

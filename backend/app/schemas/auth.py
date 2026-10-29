@@ -25,6 +25,7 @@ class LoginChallengeResponse(BaseModel):
     `get_current_user` rejects both, because they carry a `type` other than
     "access". They only unlock the endpoint named by `challenge`.
     """
+
     # "totp"  -> user is enrolled, must supply a code at /auth/login/totp
     # "enrol" -> MFA is required org-wide but this user has not enrolled yet
     challenge: str
@@ -48,6 +49,7 @@ class MfaStatusResponse(BaseModel):
 
 class MfaSetupResponse(BaseModel):
     """Returned once, when enrolment begins. The secret is never shown again."""
+
     secret: str
     provisioning_uri: str
     qr_code: Optional[str] = None  # inline PNG data URI
@@ -61,6 +63,7 @@ class MfaVerifyRequest(BaseModel):
 class MfaVerifiedResponse(BaseModel):
     """Confirming enrolment during a forced enrolment also completes the login,
     so the tokens come back here rather than forcing a second sign-in."""
+
     success: bool
     message: str
     access_token: Optional[str] = None
@@ -70,6 +73,7 @@ class MfaVerifiedResponse(BaseModel):
 class MfaDisableRequest(BaseModel):
     """Disabling requires re-proving both factors, so a walk-up attacker with an
     open session can't quietly remove it."""
+
     password: str
     code: str
 

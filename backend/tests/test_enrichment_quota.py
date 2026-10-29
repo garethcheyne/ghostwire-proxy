@@ -6,6 +6,7 @@ was not one bug but three compounding ones — a refresh wiped the stored score,
 the blank score then looked like a cache miss, and a 429 was indistinguishable
 from a real answer of "nothing known".
 """
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -44,9 +45,11 @@ class TestNeverQueriesAnIpTwice:
     async def test_second_lookup_uses_the_stored_answer(self, db_session):
         calls = []
         abuse, ipapi, rdns = _fake_sources(calls)
-        with patch.object(es, "_lookup_abuseipdb", abuse), \
-             patch.object(es, "_lookup_ip_api", ipapi), \
-             patch.object(es, "_reverse_dns", rdns):
+        with (
+            patch.object(es, "_lookup_abuseipdb", abuse),
+            patch.object(es, "_lookup_ip_api", ipapi),
+            patch.object(es, "_reverse_dns", rdns),
+        ):
             await es.enrich_ip(db_session, "203.0.113.1", abuseipdb_key="k")
             await es.enrich_ip(db_session, "203.0.113.1", abuseipdb_key="k")
 
@@ -56,9 +59,11 @@ class TestNeverQueriesAnIpTwice:
     async def test_forced_refresh_still_does_not_re_query(self, db_session):
         calls = []
         abuse, ipapi, rdns = _fake_sources(calls)
-        with patch.object(es, "_lookup_abuseipdb", abuse), \
-             patch.object(es, "_lookup_ip_api", ipapi), \
-             patch.object(es, "_reverse_dns", rdns):
+        with (
+            patch.object(es, "_lookup_abuseipdb", abuse),
+            patch.object(es, "_lookup_ip_api", ipapi),
+            patch.object(es, "_reverse_dns", rdns),
+        ):
             await es.enrich_ip(db_session, "203.0.113.2", abuseipdb_key="k")
             # force=True refreshes geo/rDNS, which are free — it must not buy
             # another metered reputation call.
@@ -72,14 +77,16 @@ class TestNeverQueriesAnIpTwice:
         which made the row look unchecked and bought another call."""
         calls = []
         abuse, ipapi, rdns = _fake_sources(calls, score=88)
-        with patch.object(es, "_lookup_abuseipdb", abuse), \
-             patch.object(es, "_lookup_ip_api", ipapi), \
-             patch.object(es, "_reverse_dns", rdns):
+        with (
+            patch.object(es, "_lookup_abuseipdb", abuse),
+            patch.object(es, "_lookup_ip_api", ipapi),
+            patch.object(es, "_reverse_dns", rdns),
+        ):
             await es.enrich_ip(db_session, "203.0.113.3", abuseipdb_key="k")
 
-            row = (await db_session.execute(
-                select(IpEnrichment).where(IpEnrichment.ip_address == "203.0.113.3")
-            )).scalar_one()
+            row = (
+                await db_session.execute(select(IpEnrichment).where(IpEnrichment.ip_address == "203.0.113.3"))
+            ).scalar_one()
             old = datetime.now(timezone.utc) - timedelta(days=30)
             row.updated_at = old
             row.enriched_at = old
@@ -87,9 +94,9 @@ class TestNeverQueriesAnIpTwice:
 
             await es.enrich_ip(db_session, "203.0.113.3", abuseipdb_key="k")
 
-        row = (await db_session.execute(
-            select(IpEnrichment).where(IpEnrichment.ip_address == "203.0.113.3")
-        )).scalar_one()
+        row = (
+            await db_session.execute(select(IpEnrichment).where(IpEnrichment.ip_address == "203.0.113.3"))
+        ).scalar_one()
         assert len(calls) == 1
         assert row.abuse_score == 88
         assert row.abuse_checked_at is not None
@@ -98,9 +105,11 @@ class TestNeverQueriesAnIpTwice:
     async def test_a_different_ip_is_still_looked_up(self, db_session):
         calls = []
         abuse, ipapi, rdns = _fake_sources(calls)
-        with patch.object(es, "_lookup_abuseipdb", abuse), \
-             patch.object(es, "_lookup_ip_api", ipapi), \
-             patch.object(es, "_reverse_dns", rdns):
+        with (
+            patch.object(es, "_lookup_abuseipdb", abuse),
+            patch.object(es, "_lookup_ip_api", ipapi),
+            patch.object(es, "_reverse_dns", rdns),
+        ):
             await es.enrich_ip(db_session, "203.0.113.4", abuseipdb_key="k")
             await es.enrich_ip(db_session, "203.0.113.5", abuseipdb_key="k")
 
@@ -110,9 +119,11 @@ class TestNeverQueriesAnIpTwice:
     async def test_no_key_means_no_call(self, db_session):
         calls = []
         abuse, ipapi, rdns = _fake_sources(calls)
-        with patch.object(es, "_lookup_abuseipdb", abuse), \
-             patch.object(es, "_lookup_ip_api", ipapi), \
-             patch.object(es, "_reverse_dns", rdns):
+        with (
+            patch.object(es, "_lookup_abuseipdb", abuse),
+            patch.object(es, "_lookup_ip_api", ipapi),
+            patch.object(es, "_reverse_dns", rdns),
+        ):
             await es.enrich_ip(db_session, "203.0.113.6", abuseipdb_key=None)
 
         assert calls == []
@@ -123,14 +134,22 @@ class TestRateLimitCooldown:
     async def test_429_reports_failure_not_an_empty_answer(self):
         """A 429 must not be recorded as 'AbuseIPDB knows nothing about this
         IP' — that is what made a rate-limited day poison the cache."""
+
         class Resp:
             status_code = 429
-            def json(self): return {}
+
+            def json(self):
+                return {}
 
         class Client:
             calls = 0
-            async def __aenter__(self): return self
-            async def __aexit__(self, *a): return False
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
             async def get(self, *a, **k):
                 Client.calls += 1
                 return Resp()

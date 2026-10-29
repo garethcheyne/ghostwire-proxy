@@ -7,6 +7,7 @@ from datetime import datetime
 
 # ── Honeypot Traps ─────────────────────────────────────────────
 
+
 class HoneypotTrapCreate(BaseModel):
     path: str = Field(..., max_length=500, description="URL path to trap (e.g. /wp-login.php)")
     name: str = Field(..., max_length=255)
@@ -54,6 +55,7 @@ class HoneypotTrapResponse(BaseModel):
 
 # ── Honeypot Hits ──────────────────────────────────────────────
 
+
 class HoneypotHitResponse(BaseModel):
     id: str
     trap_id: str
@@ -75,6 +77,7 @@ class HoneypotHitResponse(BaseModel):
 
 
 # ── IP Enrichment ──────────────────────────────────────────────
+
 
 class IpEnrichmentResponse(BaseModel):
     id: str
@@ -111,6 +114,7 @@ class IpLookupRequest(BaseModel):
 
 
 # ── Honeypot Stats ─────────────────────────────────────────────
+
 
 class HoneypotStatsResponse(BaseModel):
     total_traps: int

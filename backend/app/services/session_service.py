@@ -2,6 +2,7 @@
 Session Service for Auth Wall authentication.
 Handles session creation, validation, revocation, and cookie signing.
 """
+
 import hmac
 import hashlib
 import secrets
@@ -31,11 +32,9 @@ class SessionService:
 
     def _sign_session_id(self, session_id: str) -> str:
         """Generate HMAC-SHA256 signature for session ID."""
-        signature = hmac.new(
-            self._get_signing_key(),
-            session_id.encode(),
-            hashlib.sha256
-        ).hexdigest()[:self.SIGNATURE_LENGTH]
+        signature = hmac.new(self._get_signing_key(), session_id.encode(), hashlib.sha256).hexdigest()[
+            : self.SIGNATURE_LENGTH
+        ]
         return signature
 
     def create_session_cookie(self, session_id: str) -> str:
@@ -79,9 +78,7 @@ class SessionService:
             Tuple of (session, cookie_value)
         """
         # Get auth wall for session timeout
-        result = await self.db.execute(
-            select(AuthWall).where(AuthWall.id == auth_wall_id)
-        )
+        result = await self.db.execute(select(AuthWall).where(AuthWall.id == auth_wall_id))
         auth_wall = result.scalar_one_or_none()
         if not auth_wall:
             raise ValueError(f"Auth wall not found: {auth_wall_id}")

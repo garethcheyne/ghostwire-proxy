@@ -8,6 +8,7 @@ Configuration lives in the `settings` key/value table rather than the
 environment, so it can be changed from the UI without a redeploy. The password
 is Fernet-encrypted at rest with the same key everything else uses.
 """
+
 import asyncio
 import logging
 import smtplib
@@ -45,9 +46,7 @@ class EmailNotConfigured(RuntimeError):
 
 async def get_smtp_config(db: AsyncSession, include_password: bool = False) -> dict:
     """Read SMTP settings. The password is redacted unless asked for."""
-    result = await db.execute(
-        select(Setting).where(Setting.key.in_(list(SMTP_KEYS.keys())))
-    )
+    result = await db.execute(select(Setting).where(Setting.key.in_(list(SMTP_KEYS.keys()))))
     stored = {s.key: s.value for s in result.scalars().all()}
 
     config = {
@@ -91,9 +90,7 @@ async def save_smtp_config(db: AsyncSession, payload: dict) -> dict:
 
     existing = {
         s.key: s
-        for s in (await db.execute(
-            select(Setting).where(Setting.key.in_(list(values.keys())))
-        )).scalars().all()
+        for s in (await db.execute(select(Setting).where(Setting.key.in_(list(values.keys()))))).scalars().all()
     }
 
     for key, value in values.items():
@@ -146,9 +143,7 @@ async def send_email(
     config = await get_smtp_config(db, include_password=True)
 
     if not config["configured"]:
-        raise EmailNotConfigured(
-            "No SMTP server is configured. Set one up under Settings before sending mail."
-        )
+        raise EmailNotConfigured("No SMTP server is configured. Set one up under Settings before sending mail.")
 
     recipients = [address.strip() for address in to if address and address.strip()]
     if not recipients:

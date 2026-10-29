@@ -1,6 +1,7 @@
 """
 GitHub OAuth2 authentication provider.
 """
+
 from typing import Optional
 import httpx
 
@@ -59,6 +60,7 @@ class GitHubAuthProvider(AuthProviderBase):
         auth_url = self.provider.authorization_url or self.AUTHORIZATION_URL
 
         from urllib.parse import urlencode
+
         params = {
             "client_id": self.client_id,
             "redirect_uri": callback_url,

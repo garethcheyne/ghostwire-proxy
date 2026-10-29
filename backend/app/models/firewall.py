@@ -21,7 +21,9 @@ class FirewallConnector(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     last_sync_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class FirewallBlocklist(Base):
@@ -37,6 +39,4 @@ class FirewallBlocklist(Base):
     error_message = Column(Text, nullable=True)
     raw_response = Column(Text, nullable=True)  # Raw vendor API response for audit
 
-    __table_args__ = (
-        Index('idx_firewall_blocklist_status', 'status'),
-    )
+    __table_args__ = (Index('idx_firewall_blocklist_status', 'status'),)

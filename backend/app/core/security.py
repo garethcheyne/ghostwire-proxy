@@ -9,6 +9,7 @@ import hashlib
 
 from app.core.config import settings
 
+
 def _truncate_password(password: str) -> str:
     """Truncate password to 72 bytes for bcrypt compatibility"""
     password_bytes = password.encode('utf-8')

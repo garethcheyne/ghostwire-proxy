@@ -7,8 +7,8 @@ from pathlib import Path
 def get_app_version() -> str:
     """Read application version from VERSION file."""
     for candidate in [
-        Path("/app/VERSION"),                            # Docker volume mount
-        Path(__file__).parent.parent.parent / "VERSION", # Local dev (backend/)
+        Path("/app/VERSION"),  # Docker volume mount
+        Path(__file__).parent.parent.parent / "VERSION",  # Local dev (backend/)
         Path(__file__).parent.parent.parent.parent / "VERSION",  # Project root
     ]:
         try:

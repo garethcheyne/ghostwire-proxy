@@ -4,6 +4,7 @@ The important properties here are the ones whose failure is silent: a backup
 code that can be reused, a secret stored in plaintext, or an enrolment that goes
 live before the user has proved they can generate a code.
 """
+
 import json
 
 import pyotp
@@ -177,9 +178,7 @@ class TestPolicy:
 
 class TestQrCode:
     def test_renders_an_inline_png(self):
-        uri = pyotp.TOTP(pyotp.random_base32()).provisioning_uri(
-            name="a@b.c", issuer_name="Ghostwire Proxy"
-        )
+        uri = pyotp.TOTP(pyotp.random_base32()).provisioning_uri(name="a@b.c", issuer_name="Ghostwire Proxy")
         data_uri = mfa.build_qr_data_uri(uri)
 
         assert data_uri is not None

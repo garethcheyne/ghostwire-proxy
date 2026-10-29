@@ -8,6 +8,7 @@ user agent, …) and the not-yet-rolled-up tail; traffic_query stitches the two.
 All hours before ``TrafficRollupState.rolled_until`` are complete; the tail after it
 is always read from traffic_logs.
 """
+
 from sqlalchemy import BigInteger, Column, DateTime, Index, SmallInteger, String
 from sqlalchemy.dialects.postgresql import ARRAY
 

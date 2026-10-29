@@ -27,7 +27,9 @@ class AlertChannel(Base):
     config = Column(Text, nullable=True)  # JSON config
     enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class AlertPreference(Base):
@@ -40,6 +42,4 @@ class AlertPreference(Base):
     channels = Column(Text, nullable=True)  # JSON array of channel IDs
     enabled = Column(Boolean, default=True, nullable=False)
 
-    __table_args__ = (
-        Index('idx_alert_preferences_user_type', 'user_id', 'alert_type'),
-    )
+    __table_args__ = (Index('idx_alert_preferences_user_type', 'user_id', 'alert_type'),)

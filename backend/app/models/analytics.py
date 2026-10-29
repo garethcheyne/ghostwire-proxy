@@ -28,9 +28,7 @@ class AnalyticsHourly(Base):
     status_5xx = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
 
-    __table_args__ = (
-        Index('idx_analytics_hourly_host_hour', 'proxy_host_id', 'hour', unique=True),
-    )
+    __table_args__ = (Index('idx_analytics_hourly_host_hour', 'proxy_host_id', 'hour', unique=True),)
 
 
 class AnalyticsDaily(Base):
@@ -52,9 +50,7 @@ class AnalyticsDaily(Base):
     top_countries = Column(String, nullable=True)  # JSON
     top_ips = Column(String, nullable=True)  # JSON
 
-    __table_args__ = (
-        Index('idx_analytics_daily_host_date', 'proxy_host_id', 'date', unique=True),
-    )
+    __table_args__ = (Index('idx_analytics_daily_host_date', 'proxy_host_id', 'date', unique=True),)
 
 
 class AnalyticsGeo(Base):

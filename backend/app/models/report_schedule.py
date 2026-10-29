@@ -11,6 +11,7 @@ class ReportSchedule(Base):
     proxy_host_id NULL means "all hosts", matching the convention WAF rules,
     rate limits and GeoIP rules already use for global scope.
     """
+
     __tablename__ = "report_schedules"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -34,7 +35,7 @@ class ReportSchedule(Base):
     enabled = Column(Boolean, default=True, nullable=False)
 
     last_sent_at = Column(DateTime(timezone=True), nullable=True)
-    last_status = Column(String(20), nullable=True)   # sent | failed
+    last_status = Column(String(20), nullable=True)  # sent | failed
     last_error = Column(Text, nullable=True)
     send_count = Column(Integer, default=0, nullable=False)
 

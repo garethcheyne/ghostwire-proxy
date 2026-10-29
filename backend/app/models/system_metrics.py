@@ -7,6 +7,7 @@ from app.core.database import Base
 
 class SystemMetrics(Base):
     """Stores periodic system metrics for historical monitoring."""
+
     __tablename__ = "system_metrics"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -40,13 +41,12 @@ class SystemMetrics(Base):
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    __table_args__ = (
-        Index('idx_system_metrics_timestamp', 'timestamp'),
-    )
+    __table_args__ = (Index('idx_system_metrics_timestamp', 'timestamp'),)
 
 
 class ContainerMetrics(Base):
     """Stores container-specific metrics."""
+
     __tablename__ = "container_metrics"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -32,7 +32,9 @@ class AuthWall(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     proxy_hosts = relationship("ProxyHost", back_populates="auth_wall")
@@ -43,6 +45,7 @@ class AuthWall(Base):
 
 class LocalAuthUser(Base):
     """Basic auth users for auth walls with optional TOTP support"""
+
     __tablename__ = "local_auth_users"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -71,7 +74,9 @@ class LocalAuthUser(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     auth_wall = relationship("AuthWall", back_populates="local_users")
@@ -85,6 +90,7 @@ class LocalAuthUser(Base):
 
 class AuthProvider(Base):
     """OAuth/SSO providers for auth walls"""
+
     __tablename__ = "auth_providers"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -112,7 +118,9 @@ class AuthProvider(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     auth_wall = relationship("AuthWall", back_populates="auth_providers")
@@ -120,6 +128,7 @@ class AuthProvider(Base):
 
 class LdapConfig(Base):
     """LDAP configuration for auth walls"""
+
     __tablename__ = "ldap_configs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -151,7 +160,9 @@ class LdapConfig(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     auth_wall = relationship("AuthWall", back_populates="ldap_configs")

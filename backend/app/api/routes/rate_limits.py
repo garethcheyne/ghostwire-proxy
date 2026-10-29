@@ -11,7 +11,9 @@ from app.models.user import User
 from app.models.rate_limit import RateLimitRule
 from app.models.audit_log import AuditLog
 from app.schemas.rate_limit import (
-    RateLimitRuleCreate, RateLimitRuleUpdate, RateLimitRuleResponse,
+    RateLimitRuleCreate,
+    RateLimitRuleUpdate,
+    RateLimitRuleResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
 
@@ -31,8 +33,10 @@ async def list_rate_limits(
         if proxy_host_id:
             query = query.where(RateLimitRule.proxy_host_id == proxy_host_id)
         result = await db.execute(query)
-        return [RateLimitRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
-                for r in result.scalars().all()]
+        return [
+            RateLimitRuleResponse.model_validate(r, from_attributes=True).model_dump(mode="json")
+            for r in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
 
@@ -47,13 +51,16 @@ async def create_rate_limit(
     rule = RateLimitRule(**data.model_dump())
     db.add(rule)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="rate_limit_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created rate limit rule: {data.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="rate_limit_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created rate limit rule: {data.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("rate_limits:")
     await db.refresh(rule)
@@ -89,13 +96,16 @@ async def update_rate_limit(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="rate_limit_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated rate limit rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="rate_limit_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated rate limit rule: {rule.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("rate_limits:")
     await db.refresh(rule)
@@ -114,13 +124,16 @@ async def delete_rate_limit(
     if not rule:
         raise HTTPException(status_code=404, detail="Rate limit rule not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="rate_limit_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted rate limit rule: {rule.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="rate_limit_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted rate limit rule: {rule.name}",
+        )
+    )
     await db.delete(rule)
     await db.commit()
     await cache_delete_prefix("rate_limits:")

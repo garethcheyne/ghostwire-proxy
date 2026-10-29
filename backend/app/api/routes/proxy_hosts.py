@@ -16,19 +16,35 @@ from app.models.user import User
 from app.models.proxy_host import ProxyHost, UpstreamServer, UpstreamServerEvent, ProxyLocation
 from app.models.audit_log import AuditLog
 from app.schemas.proxy_host import (
-    ProxyHostCreate, ProxyHostUpdate, ProxyHostResponse,
-    UpstreamServerCreate, UpstreamServerUpdate, UpstreamServerUpsert, UpstreamServerResponse,
-    UpstreamPreviewRequest, UpstreamPreviewResponse, UpstreamCheckResult, UpstreamServerEventResponse,
-    ProxyLocationCreate, ProxyLocationUpdate, ProxyLocationResponse,
-    LocationReorderRequest
+    ProxyHostCreate,
+    ProxyHostUpdate,
+    ProxyHostResponse,
+    UpstreamServerCreate,
+    UpstreamServerUpdate,
+    UpstreamServerUpsert,
+    UpstreamServerResponse,
+    UpstreamPreviewRequest,
+    UpstreamPreviewResponse,
+    UpstreamCheckResult,
+    UpstreamServerEventResponse,
+    ProxyLocationCreate,
+    ProxyLocationUpdate,
+    ProxyLocationResponse,
+    LocationReorderRequest,
 )
 from app.services.load_balancing import check_lb_rules
 from app.api.deps import get_current_user, get_current_admin_user
 from app.services.openresty_service import (
-    generate_all_configs, reload_nginx, remove_config,
-    backup_configs, restore_configs, test_nginx_config,
-    generate_upstream_block, generate_upstream_connection_map,
-    generate_upstream_location_directives, upstream_name,
+    generate_all_configs,
+    reload_nginx,
+    remove_config,
+    backup_configs,
+    restore_configs,
+    test_nginx_config,
+    generate_upstream_block,
+    generate_upstream_connection_map,
+    generate_upstream_location_directives,
+    upstream_name,
 )
 
 router = APIRouter()
@@ -77,10 +93,7 @@ def _replace_upstream_servers(host: ProxyHost, items: list[UpstreamServerUpsert]
 async def _load_host(db: AsyncSession, host_id: str) -> ProxyHost | None:
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host_id)
         .execution_options(populate_existing=True)
     )
@@ -123,10 +136,7 @@ async def validate_and_apply(
     if not test_ok:
         restore_configs()
         await db.rollback()
-        return False, (
-            "Config validation failed — nothing was saved and nginx is unchanged.\n\n"
-            f"{test_msg}"
-        )
+        return False, (f"Config validation failed — nothing was saved and nginx is unchanged.\n\n{test_msg}")
 
     # 4. Config is valid — reload nginx
     reload_ok, reload_msg = reload_nginx()
@@ -159,10 +169,7 @@ async def list_proxy_hosts(
     cache_key = f"proxy_hosts:list:{skip}:{limit}:{enabled}:{search or ''}"
 
     async def _compute() -> dict:
-        query = select(ProxyHost).options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        query = select(ProxyHost).options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         count_query = select(func.count()).select_from(ProxyHost)
 
         if enabled is not None:
@@ -177,8 +184,10 @@ async def list_proxy_hosts(
         items_result = await db.execute(query)
         total_result = await db.execute(count_query)
 
-        items = [ProxyHostResponse.model_validate(h, from_attributes=True).model_dump(mode="json")
-                 for h in items_result.scalars().all()]
+        items = [
+            ProxyHostResponse.model_validate(h, from_attributes=True).model_dump(mode="json")
+            for h in items_result.scalars().all()
+        ]
         return {"items": items, "total": int(total_result.scalar() or 0)}
 
     payload = await cached_json(cache_key, ttl=15, producer=_compute)
@@ -203,19 +212,13 @@ async def create_proxy_host(
     # Add upstream servers if provided
     if host_data.upstream_servers:
         for server_data in host_data.upstream_servers:
-            server = UpstreamServer(
-                proxy_host_id=host.id,
-                **server_data.model_dump()
-            )
+            server = UpstreamServer(proxy_host_id=host.id, **server_data.model_dump())
             db.add(server)
 
     # Add locations if provided
     if host_data.locations:
         for loc_data in host_data.locations:
-            location = ProxyLocation(
-                proxy_host_id=host.id,
-                **loc_data.model_dump()
-            )
+            location = ProxyLocation(proxy_host_id=host.id, **loc_data.model_dump())
             db.add(location)
 
     # Audit log
@@ -237,10 +240,7 @@ async def create_proxy_host(
     # Reload with relationships
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host.id)
     )
     host = result.scalar_one()
@@ -288,10 +288,7 @@ async def get_proxy_host(
     """Get proxy host by ID"""
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host_id)
     )
     host = result.scalar_one_or_none()
@@ -316,10 +313,7 @@ async def update_proxy_host(
     """Update proxy host"""
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host_id)
     )
     host = result.scalar_one_or_none()
@@ -409,10 +403,7 @@ async def enable_proxy_host(
     """Enable proxy host"""
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host_id)
     )
     host = result.scalar_one_or_none()
@@ -455,10 +446,7 @@ async def disable_proxy_host(
     """Disable proxy host"""
     result = await db.execute(
         select(ProxyHost)
-        .options(
-            selectinload(ProxyHost.upstream_servers),
-            selectinload(ProxyHost.locations)
-        )
+        .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
         .where(ProxyHost.id == host_id)
     )
     host = result.scalar_one_or_none()
@@ -504,14 +492,18 @@ async def preview_upstream(
     """
     errors, warnings = check_lb_rules(preview.lb_method, preview.servers)
     # The id only names the upstream in the preview text; keep it to UUID characters.
-    host_id = preview.host_id if preview.host_id and re.fullmatch(r"[A-Za-z0-9-]{1,36}", preview.host_id) else "new-host"
+    host_id = (
+        preview.host_id if preview.host_id and re.fullmatch(r"[A-Za-z0-9-]{1,36}", preview.host_id) else "new-host"
+    )
     host = SimpleNamespace(
         id=host_id,
         lb_method=preview.lb_method,
         upstream_keepalive=preview.upstream_keepalive,
         lb_auto_down=preview.lb_auto_down,
         websockets_support=preview.websockets_support,
-        upstream_servers=[SimpleNamespace(auto_down=False, **srv.model_dump(exclude={"id"})) for srv in preview.servers],
+        upstream_servers=[
+            SimpleNamespace(auto_down=False, **srv.model_dump(exclude={"id"})) for srv in preview.servers
+        ],
     )
     block = generate_upstream_block(host)
     connection_map = generate_upstream_connection_map(host)
@@ -521,14 +513,16 @@ async def preview_upstream(
     if block:
         # The parts of the default location that load balancing adds; the
         # rest (headers, timeouts, WAF) is unchanged and elided.
-        location = "\n".join([
-            "location / {",
-            f"    proxy_pass {preview.forward_scheme}://{upstream_name(host)};",
-            "    proxy_http_version 1.1;",
-            *generate_upstream_location_directives(host, indent="    "),
-            "    # ... headers, timeouts and the rest as usual",
-            "}",
-        ])
+        location = "\n".join(
+            [
+                "location / {",
+                f"    proxy_pass {preview.forward_scheme}://{upstream_name(host)};",
+                "    proxy_http_version 1.1;",
+                *generate_upstream_location_directives(host, indent="    "),
+                "    # ... headers, timeouts and the rest as usual",
+                "}",
+            ]
+        )
     return UpstreamPreviewResponse(
         upstream_block=block,
         location_directives=location,
@@ -567,10 +561,7 @@ async def add_upstream_server(
 
     _enforce_lb_rules(host.lb_method, [*host.upstream_servers, server_data])
 
-    server = UpstreamServer(
-        proxy_host_id=host_id,
-        **server_data.model_dump()
-    )
+    server = UpstreamServer(proxy_host_id=host_id, **server_data.model_dump())
     host.upstream_servers.append(server)
 
     # Upstream changes alter the generated upstream block, so they go through
@@ -603,7 +594,9 @@ async def update_upstream_server(
     for field in ("host", "port", "weight", "max_fails", "fail_timeout", "backup", "down", "enabled"):
         if field in changes and changes[field] is None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{field} can't be null")
-    moved = ("host" in changes and changes["host"] != server.host) or ("port" in changes and changes["port"] != server.port)
+    moved = ("host" in changes and changes["host"] != server.host) or (
+        "port" in changes and changes["port"] != server.port
+    )
     for field, value in changes.items():
         setattr(server, field, value)
     if moved:
@@ -696,6 +689,7 @@ async def check_upstream_servers_now(
 # Location management endpoints
 # ============================================================================
 
+
 @router.get("/{host_id}/locations", response_model=list[ProxyLocationResponse])
 async def list_locations(
     host_id: str,
@@ -713,9 +707,7 @@ async def list_locations(
         )
 
     result = await db.execute(
-        select(ProxyLocation)
-        .where(ProxyLocation.proxy_host_id == host_id)
-        .order_by(ProxyLocation.priority.desc())
+        select(ProxyLocation).where(ProxyLocation.proxy_host_id == host_id).order_by(ProxyLocation.priority.desc())
     )
     return result.scalars().all()
 
@@ -738,10 +730,7 @@ async def create_location(
             detail="Proxy host not found",
         )
 
-    location = ProxyLocation(
-        proxy_host_id=host_id,
-        **location_data.model_dump()
-    )
+    location = ProxyLocation(proxy_host_id=host_id, **location_data.model_dump())
     db.add(location)
 
     # Audit log
@@ -774,10 +763,7 @@ async def get_location(
 ):
     """Get a specific location"""
     result = await db.execute(
-        select(ProxyLocation).where(
-            (ProxyLocation.id == location_id) &
-            (ProxyLocation.proxy_host_id == host_id)
-        )
+        select(ProxyLocation).where((ProxyLocation.id == location_id) & (ProxyLocation.proxy_host_id == host_id))
     )
     location = result.scalar_one_or_none()
 
@@ -801,10 +787,7 @@ async def update_location(
 ):
     """Update a location"""
     result = await db.execute(
-        select(ProxyLocation).where(
-            (ProxyLocation.id == location_id) &
-            (ProxyLocation.proxy_host_id == host_id)
-        )
+        select(ProxyLocation).where((ProxyLocation.id == location_id) & (ProxyLocation.proxy_host_id == host_id))
     )
     location = result.scalar_one_or_none()
 
@@ -849,10 +832,7 @@ async def delete_location(
 ):
     """Delete a location"""
     result = await db.execute(
-        select(ProxyLocation).where(
-            (ProxyLocation.id == location_id) &
-            (ProxyLocation.proxy_host_id == host_id)
-        )
+        select(ProxyLocation).where((ProxyLocation.id == location_id) & (ProxyLocation.proxy_host_id == host_id))
     )
     location = result.scalar_one_or_none()
 
@@ -902,10 +882,7 @@ async def reorder_locations(
     # Update priorities
     for item in reorder_data.locations:
         result = await db.execute(
-            select(ProxyLocation).where(
-                (ProxyLocation.id == item.id) &
-                (ProxyLocation.proxy_host_id == host_id)
-            )
+            select(ProxyLocation).where((ProxyLocation.id == item.id) & (ProxyLocation.proxy_host_id == host_id))
         )
         location = result.scalar_one_or_none()
         if location:
@@ -918,9 +895,7 @@ async def reorder_locations(
 
     # Fetch updated locations
     result = await db.execute(
-        select(ProxyLocation)
-        .where(ProxyLocation.proxy_host_id == host_id)
-        .order_by(ProxyLocation.priority.desc())
+        select(ProxyLocation).where(ProxyLocation.proxy_host_id == host_id).order_by(ProxyLocation.priority.desc())
     )
     locations = result.scalars().all()
 

@@ -2,6 +2,7 @@
 Cloudflare API integration service.
 Manages DNS records for domains configured in proxy hosts.
 """
+
 import httpx
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,9 +28,7 @@ class CloudflareClient:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(
-                    f"{CLOUDFLARE_API_BASE}/user/tokens/verify",
-                    headers=self.headers,
-                    timeout=10.0
+                    f"{CLOUDFLARE_API_BASE}/user/tokens/verify", headers=self.headers, timeout=10.0
                 )
                 data = response.json()
                 if data.get("success"):
@@ -43,10 +42,7 @@ class CloudflareClient:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(
-                    f"{CLOUDFLARE_API_BASE}/zones",
-                    headers=self.headers,
-                    params={"per_page": 50},
-                    timeout=10.0
+                    f"{CLOUDFLARE_API_BASE}/zones", headers=self.headers, params={"per_page": 50}, timeout=10.0
                 )
                 data = response.json()
                 if data.get("success"):
@@ -60,9 +56,7 @@ class CloudflareClient:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(
-                    f"{CLOUDFLARE_API_BASE}/zones/{zone_id}",
-                    headers=self.headers,
-                    timeout=10.0
+                    f"{CLOUDFLARE_API_BASE}/zones/{zone_id}", headers=self.headers, timeout=10.0
                 )
                 data = response.json()
                 if data.get("success"):
@@ -71,7 +65,9 @@ class CloudflareClient:
             except Exception as e:
                 return False, str(e)
 
-    async def list_dns_records(self, zone_id: str, record_type: str = None, name: str = None) -> tuple[bool, list | str]:
+    async def list_dns_records(
+        self, zone_id: str, record_type: str = None, name: str = None
+    ) -> tuple[bool, list | str]:
         """List DNS records for a zone"""
         async with httpx.AsyncClient() as client:
             try:
@@ -85,7 +81,7 @@ class CloudflareClient:
                     f"{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records",
                     headers=self.headers,
                     params=params,
-                    timeout=10.0
+                    timeout=10.0,
                 )
                 data = response.json()
                 if data.get("success"):
@@ -116,7 +112,7 @@ class CloudflareClient:
                         "ttl": ttl,
                         "proxied": proxied,
                     },
-                    timeout=10.0
+                    timeout=10.0,
                 )
                 data = response.json()
                 if data.get("success"):
@@ -148,7 +144,7 @@ class CloudflareClient:
                         "ttl": ttl,
                         "proxied": proxied,
                     },
-                    timeout=10.0
+                    timeout=10.0,
                 )
                 data = response.json()
                 if data.get("success"):
@@ -162,9 +158,7 @@ class CloudflareClient:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.delete(
-                    f"{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records/{record_id}",
-                    headers=self.headers,
-                    timeout=10.0
+                    f"{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records/{record_id}", headers=self.headers, timeout=10.0
                 )
                 data = response.json()
                 if data.get("success"):
@@ -178,9 +172,9 @@ async def get_cloudflare_client(db: AsyncSession, provider_id: str) -> Optional[
     """Get a Cloudflare client for a provider"""
     result = await db.execute(
         select(DnsProvider).where(
-            (DnsProvider.id == provider_id) &
-            (DnsProvider.provider_type == "cloudflare") &
-            (DnsProvider.enabled == True)
+            (DnsProvider.id == provider_id)
+            & (DnsProvider.provider_type == "cloudflare")
+            & (DnsProvider.enabled == True)
         )
     )
     provider = result.scalar_one_or_none()
@@ -209,10 +203,7 @@ async def sync_zones(db: AsyncSession, provider_id: str) -> tuple[bool, str]:
     # Update local zones
     for zone_data in zones_or_error:
         result = await db.execute(
-            select(DnsZone).where(
-                (DnsZone.provider_id == provider_id) &
-                (DnsZone.zone_id == zone_data["id"])
-            )
+            select(DnsZone).where((DnsZone.provider_id == provider_id) & (DnsZone.zone_id == zone_data["id"]))
         )
         zone = result.scalar_one_or_none()
 
@@ -233,6 +224,7 @@ async def sync_zones(db: AsyncSession, provider_id: str) -> tuple[bool, str]:
     provider = result.scalar_one_or_none()
     if provider:
         from datetime import datetime, timezone
+
         provider.last_sync_at = datetime.now(timezone.utc)
 
     await db.commit()
@@ -262,10 +254,7 @@ async def check_domain_dns(
     for i in range(len(parts) - 1):
         potential_zone = ".".join(parts[i:])
         result = await db.execute(
-            select(DnsZone).where(
-                (DnsZone.provider_id == provider_id) &
-                (DnsZone.name == potential_zone)
-            )
+            select(DnsZone).where((DnsZone.provider_id == provider_id) & (DnsZone.name == potential_zone))
         )
         zone = result.scalar_one_or_none()
         if zone:

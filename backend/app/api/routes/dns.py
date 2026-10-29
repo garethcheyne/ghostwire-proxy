@@ -1,6 +1,7 @@
 """
 DNS Provider and Zone Management API Routes
 """
+
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,27 +67,27 @@ async def list_providers(
 
     response = []
     for provider in providers:
-        zones_result = await db.execute(
-            select(DnsZone).where(DnsZone.provider_id == provider.id)
-        )
+        zones_result = await db.execute(select(DnsZone).where(DnsZone.provider_id == provider.id))
         zones = zones_result.scalars().all()
 
-        response.append({
-            "id": provider.id,
-            "name": provider.name,
-            "provider_type": provider.provider_type,
-            "enabled": provider.enabled,
-            "zones": [
-                {
-                    "id": z.id,
-                    "zone_id": z.zone_id,
-                    "domain": z.name,
-                    "status": z.status or "active",
-                    "records_count": 0,
-                }
-                for z in zones
-            ],
-        })
+        response.append(
+            {
+                "id": provider.id,
+                "name": provider.name,
+                "provider_type": provider.provider_type,
+                "enabled": provider.enabled,
+                "zones": [
+                    {
+                        "id": z.id,
+                        "zone_id": z.zone_id,
+                        "domain": z.name,
+                        "status": z.status or "active",
+                        "records_count": 0,
+                    }
+                    for z in zones
+                ],
+            }
+        )
 
     return response
 
@@ -194,7 +195,9 @@ async def sync_zones(
     try:
         api_key = decrypt_data(provider.api_key)
     except Exception:
-        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
+        raise HTTPException(
+            status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
+        )
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -204,9 +207,7 @@ async def sync_zones(
             raise HTTPException(status_code=400, detail=f"Failed to fetch zones: {zones}")
 
         # Get existing zones
-        existing_result = await db.execute(
-            select(DnsZone).where(DnsZone.provider_id == provider_id)
-        )
+        existing_result = await db.execute(select(DnsZone).where(DnsZone.provider_id == provider_id))
         existing_zones = {z.zone_id: z for z in existing_result.scalars().all()}
 
         for zone_data in zones:
@@ -244,9 +245,7 @@ async def list_records(
         raise HTTPException(status_code=404, detail="Zone not found")
 
     # Get provider
-    provider_result = await db.execute(
-        select(DnsProvider).where(DnsProvider.id == zone.provider_id)
-    )
+    provider_result = await db.execute(select(DnsProvider).where(DnsProvider.id == zone.provider_id))
     provider = provider_result.scalar_one_or_none()
 
     if not provider:
@@ -257,7 +256,9 @@ async def list_records(
     try:
         api_key = decrypt_data(provider.api_key)
     except Exception:
-        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
+        raise HTTPException(
+            status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
+        )
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -296,9 +297,7 @@ async def create_record(
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
 
-    provider_result = await db.execute(
-        select(DnsProvider).where(DnsProvider.id == zone.provider_id)
-    )
+    provider_result = await db.execute(select(DnsProvider).where(DnsProvider.id == zone.provider_id))
     provider = provider_result.scalar_one_or_none()
 
     if not provider.api_key:
@@ -306,7 +305,9 @@ async def create_record(
     try:
         api_key = decrypt_data(provider.api_key)
     except Exception:
-        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
+        raise HTTPException(
+            status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
+        )
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -355,9 +356,7 @@ async def update_record(
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
 
-    provider_result = await db.execute(
-        select(DnsProvider).where(DnsProvider.id == zone.provider_id)
-    )
+    provider_result = await db.execute(select(DnsProvider).where(DnsProvider.id == zone.provider_id))
     provider = provider_result.scalar_one_or_none()
 
     if not provider.api_key:
@@ -365,7 +364,9 @@ async def update_record(
     try:
         api_key = decrypt_data(provider.api_key)
     except Exception:
-        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
+        raise HTTPException(
+            status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
+        )
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -428,9 +429,7 @@ async def delete_record(
     if not zone:
         raise HTTPException(status_code=404, detail="Zone not found")
 
-    provider_result = await db.execute(
-        select(DnsProvider).where(DnsProvider.id == zone.provider_id)
-    )
+    provider_result = await db.execute(select(DnsProvider).where(DnsProvider.id == zone.provider_id))
     provider = provider_result.scalar_one_or_none()
 
     if not provider.api_key:
@@ -438,7 +437,9 @@ async def delete_record(
     try:
         api_key = decrypt_data(provider.api_key)
     except Exception:
-        raise HTTPException(status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)')
+        raise HTTPException(
+            status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
+        )
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)

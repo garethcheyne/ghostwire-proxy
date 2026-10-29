@@ -36,7 +36,11 @@ async def _api_key_user(request: Request, db: AsyncSession, token: str) -> User:
     # Changes are audited; reads and dry-run previews (scope "read") are not.
     if scope != api_key_service.READ:
         await api_key_service.record_use(
-            db, principal, request.method.upper(), request.url.path, client_ip,
+            db,
+            principal,
+            request.method.upper(),
+            request.url.path,
+            client_ip,
             request.headers.get("user-agent"),
         )
     return principal.user

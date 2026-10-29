@@ -45,8 +45,8 @@ async def _lookup_ip_api(ip: str) -> dict:
                     f"http://ip-api.com/json/{ip}",
                     params={
                         "fields": "status,message,country,countryCode,region,regionName,"
-                                  "city,zip,lat,lon,timezone,isp,org,as,asname,"
-                                  "mobile,proxy,hosting,query"
+                        "city,zip,lat,lon,timezone,isp,org,as,asname,"
+                        "mobile,proxy,hosting,query"
                     },
                 )
                 if resp.status_code == 200:
@@ -65,7 +65,7 @@ async def _reverse_dns(ip: str) -> Optional[str]:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: socket.gethostbyaddr(ip))
         return result[0] if result else None
-    except (socket.herror, socket.gaierror, OSError):
+    except socket.herror, socket.gaierror, OSError:
         return None
 
 
@@ -171,7 +171,8 @@ async def sync_abuseipdb_blacklist(
             "country_code": item.get("countryCode"),
             "last_reported_at": (
                 datetime.fromisoformat(item["lastReportedAt"].replace("Z", "+00:00"))
-                if item.get("lastReportedAt") else None
+                if item.get("lastReportedAt")
+                else None
             ),
             "synced_at": now,
         }
@@ -192,9 +193,7 @@ async def sync_abuseipdb_blacklist(
 
 async def check_local_blacklist(db: AsyncSession, ip: str) -> Optional[AbuseIPDBBlacklistEntry]:
     """Look up an IP in the local AbuseIPDB blacklist cache - free, no API call."""
-    result = await db.execute(
-        select(AbuseIPDBBlacklistEntry).where(AbuseIPDBBlacklistEntry.ip_address == ip)
-    )
+    result = await db.execute(select(AbuseIPDBBlacklistEntry).where(AbuseIPDBBlacklistEntry.ip_address == ip))
     return result.scalar_one_or_none()
 
 
@@ -209,9 +208,7 @@ async def enrich_ip(
     Returns cached data if available and fresh, or fetches new data.
     """
     # Check for existing enrichment
-    result = await db.execute(
-        select(IpEnrichment).where(IpEnrichment.ip_address == ip)
-    )
+    result = await db.execute(select(IpEnrichment).where(IpEnrichment.ip_address == ip))
     existing = result.scalar_one_or_none()
 
     if existing and not force:
@@ -268,8 +265,7 @@ async def enrich_ip(
             "abuseConfidenceScore": local_blacklist_hit.abuse_confidence_score,
             "totalReports": None,
             "lastReportedAt": (
-                local_blacklist_hit.last_reported_at.isoformat()
-                if local_blacklist_hit.last_reported_at else None
+                local_blacklist_hit.last_reported_at.isoformat() if local_blacklist_hit.last_reported_at else None
             ),
             "isTor": None,
         }
@@ -324,8 +320,11 @@ async def enrich_ip(
         # spent another metered call — the loop behind 641 rejected requests in
         # a single day.
         abuse_fields = {
-            "abuse_score", "abuse_reports", "abuse_last_reported",
-            "is_tor", "abuse_checked_at",
+            "abuse_score",
+            "abuse_reports",
+            "abuse_last_reported",
+            "is_tor",
+            "abuse_checked_at",
         }
         for field, value in enrichment_data.items():
             if field == "ip_address":
@@ -346,9 +345,7 @@ async def enrich_ip(
 
 async def get_enrichment(db: AsyncSession, ip: str) -> Optional[IpEnrichment]:
     """Get existing enrichment data for an IP, or None."""
-    result = await db.execute(
-        select(IpEnrichment).where(IpEnrichment.ip_address == ip)
-    )
+    result = await db.execute(select(IpEnrichment).where(IpEnrichment.ip_address == ip))
     return result.scalar_one_or_none()
 
 
@@ -376,10 +373,9 @@ async def backfill_enrichment(db: AsyncSession, batch_size: int = 40) -> dict:
 
     # Get optional AbuseIPDB key
     from app.models.setting import Setting
+
     abuseipdb_key = None
-    setting_result = await db.execute(
-        select(Setting).where(Setting.key == "abuseipdb_api_key")
-    )
+    setting_result = await db.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
     setting = setting_result.scalar_one_or_none()
     if setting and setting.value:
         abuseipdb_key = setting.value
@@ -396,8 +392,7 @@ async def backfill_enrichment(db: AsyncSession, batch_size: int = 40) -> dict:
 
     # Count how many are still remaining
     remaining_result = await db.execute(
-        select(func.count(func.distinct(TrafficLog.client_ip)))
-        .where(
+        select(func.count(func.distinct(TrafficLog.client_ip))).where(
             TrafficLog.client_ip.isnot(None),
             ~TrafficLog.client_ip.in_(subq),
         )
@@ -421,9 +416,7 @@ async def cleanup_stale_enrichments(db: AsyncSession) -> int:
     from sqlalchemy import delete
 
     cutoff = datetime.now(timezone.utc) - ENRICHMENT_MAX_AGE
-    result = await db.execute(
-        delete(IpEnrichment).where(IpEnrichment.updated_at < cutoff)
-    )
+    result = await db.execute(delete(IpEnrichment).where(IpEnrichment.updated_at < cutoff))
     await db.commit()
     deleted = result.rowcount
     if deleted:

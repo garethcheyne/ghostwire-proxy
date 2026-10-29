@@ -308,9 +308,7 @@ async def get_kill_switch_status(
     """
     Get the current kill switch status.
     """
-    result = await db.execute(
-        select(Setting).where(Setting.key == "kill_switch_active")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "kill_switch_active"))
     setting = result.scalar_one_or_none()
 
     active = setting.value == "true" if setting else False
@@ -322,29 +320,21 @@ async def get_kill_switch_status(
 
     if active:
         # Get activation details
-        result = await db.execute(
-            select(Setting).where(Setting.key == "kill_switch_activated_at")
-        )
+        result = await db.execute(select(Setting).where(Setting.key == "kill_switch_activated_at"))
         at_setting = result.scalar_one_or_none()
         if at_setting:
             activated_at = at_setting.value
 
-        result = await db.execute(
-            select(Setting).where(Setting.key == "kill_switch_activated_by")
-        )
+        result = await db.execute(select(Setting).where(Setting.key == "kill_switch_activated_by"))
         by_setting = result.scalar_one_or_none()
         if by_setting:
             activated_by = by_setting.value
 
-        result = await db.execute(
-            select(Setting).where(Setting.key == "kill_switch_mode")
-        )
+        result = await db.execute(select(Setting).where(Setting.key == "kill_switch_mode"))
         mode_setting = result.scalar_one_or_none()
         mode = mode_setting.value if mode_setting else "maintenance"
 
-        result = await db.execute(
-            select(Setting).where(Setting.key == "kill_switch_redirect_url")
-        )
+        result = await db.execute(select(Setting).where(Setting.key == "kill_switch_redirect_url"))
         url_setting = result.scalar_one_or_none()
         if url_setting:
             redirect_url = url_setting.value
@@ -473,9 +463,7 @@ def _reload_nginx_via_docker():
 
 async def _save_setting(db: AsyncSession, key: str, value: str) -> None:
     """Helper to save or update a setting."""
-    result = await db.execute(
-        select(Setting).where(Setting.key == key)
-    )
+    result = await db.execute(select(Setting).where(Setting.key == key))
     setting = result.scalar_one_or_none()
 
     if setting:
@@ -487,12 +475,14 @@ async def _save_setting(db: AsyncSession, key: str, value: str) -> None:
 
 # ── Data Retention / Database Health ───────────────────────────
 
+
 @router.get("/database-health")
 async def get_database_health(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Get table sizes and row counts for monitoring DB growth."""
     from app.services.retention_service import get_table_sizes
+
     sizes = await get_table_sizes()
     return {"status": "ok", "tables": sizes}
 
@@ -503,6 +493,7 @@ async def trigger_retention_cleanup(
 ) -> dict:
     """Manually trigger data retention cleanup (prunes old traffic logs, events, etc.)."""
     from app.services.retention_service import run_retention_cleanup
+
     summary = await run_retention_cleanup()
     total_deleted = sum(v.get("deleted", 0) for v in summary.values() if isinstance(v, dict))
     return {"status": "ok", "total_deleted": total_deleted, "details": summary}

@@ -16,8 +16,12 @@ from app.models.user import User
 from app.models.honeypot import HoneypotTrap, HoneypotHit, IpEnrichment
 from app.models.audit_log import AuditLog
 from app.schemas.honeypot import (
-    HoneypotTrapCreate, HoneypotTrapUpdate, HoneypotTrapResponse,
-    HoneypotHitResponse, IpEnrichmentResponse, IpLookupRequest,
+    HoneypotTrapCreate,
+    HoneypotTrapUpdate,
+    HoneypotTrapResponse,
+    HoneypotHitResponse,
+    IpEnrichmentResponse,
+    IpLookupRequest,
     HoneypotStatsResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
@@ -28,6 +32,7 @@ router = APIRouter()
 
 
 # ── Honeypot Traps CRUD ───────────────────────────────────────
+
 
 @router.get("/traps", response_model=list[HoneypotTrapResponse])
 async def list_traps(
@@ -42,8 +47,10 @@ async def list_traps(
         if enabled is not None:
             query = query.where(HoneypotTrap.enabled == enabled)
         result = await db.execute(query)
-        return [HoneypotTrapResponse.model_validate(t, from_attributes=True).model_dump(mode="json")
-                for t in result.scalars().all()]
+        return [
+            HoneypotTrapResponse.model_validate(t, from_attributes=True).model_dump(mode="json")
+            for t in result.scalars().all()
+        ]
 
     return await cached_json(cache_key, ttl=30, producer=_compute)
 
@@ -73,13 +80,16 @@ async def create_trap(
     trap.path = path
     db.add(trap)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="honeypot_trap_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created honeypot trap: {data.name} ({path})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="honeypot_trap_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created honeypot trap: {data.name} ({path})",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("honeypot:")
     await db.refresh(trap)
@@ -123,13 +133,16 @@ async def update_trap(
     for field, value in update_data.items():
         setattr(trap, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="honeypot_trap_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated honeypot trap: {trap.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="honeypot_trap_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated honeypot trap: {trap.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("honeypot:")
     await db.refresh(trap)
@@ -150,13 +163,16 @@ async def delete_trap(
     if not trap:
         raise HTTPException(status_code=404, detail="Honeypot trap not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="honeypot_trap_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted honeypot trap: {trap.name} ({trap.path})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="honeypot_trap_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted honeypot trap: {trap.name} ({trap.path})",
+        )
+    )
     await db.delete(trap)
     await db.commit()
     await cache_delete_prefix("honeypot:")
@@ -165,6 +181,7 @@ async def delete_trap(
 
 
 # ── Honeypot Hits ──────────────────────────────────────────────
+
 
 @router.get("/hits", response_model=list[HoneypotHitResponse])
 async def list_hits(
@@ -187,6 +204,7 @@ async def list_hits(
 
 # ── IP Enrichment ──────────────────────────────────────────────
 
+
 @router.get("/enrich/{ip}", response_model=IpEnrichmentResponse)
 async def get_ip_enrichment(
     ip: str,
@@ -202,10 +220,9 @@ async def get_ip_enrichment(
 
     # Get optional AbuseIPDB key from settings
     from app.models.setting import Setting
+
     abuseipdb_key = None
-    result = await db.execute(
-        select(Setting).where(Setting.key == "abuseipdb_api_key")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
     setting = result.scalar_one_or_none()
     if setting and setting.value:
         abuseipdb_key = setting.value
@@ -222,16 +239,12 @@ async def list_enrichments(
     db: AsyncSession = Depends(get_db),
 ):
     """List all enriched IPs, most recent first."""
-    result = await db.execute(
-        select(IpEnrichment)
-        .order_by(IpEnrichment.enriched_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    result = await db.execute(select(IpEnrichment).order_by(IpEnrichment.enriched_at.desc()).offset(skip).limit(limit))
     return result.scalars().all()
 
 
 # ── Honeypot Stats ─────────────────────────────────────────────
+
 
 @router.get("/stats", response_model=HoneypotStatsResponse)
 async def get_honeypot_stats(
@@ -244,28 +257,26 @@ async def get_honeypot_stats(
 
     # Trap counts
     total_traps = (await db.execute(select(func.count(HoneypotTrap.id)))).scalar() or 0
-    active_traps = (await db.execute(
-        select(func.count(HoneypotTrap.id)).where(HoneypotTrap.enabled == True)
-    )).scalar() or 0
+    active_traps = (
+        await db.execute(select(func.count(HoneypotTrap.id)).where(HoneypotTrap.enabled == True))
+    ).scalar() or 0
 
     # Hit counts
     total_hits = (await db.execute(select(func.count(HoneypotHit.id)))).scalar() or 0
-    hits_today = (await db.execute(
-        select(func.count(HoneypotHit.id)).where(HoneypotHit.timestamp >= today_start)
-    )).scalar() or 0
-    hits_this_week = (await db.execute(
-        select(func.count(HoneypotHit.id)).where(HoneypotHit.timestamp >= week_start)
-    )).scalar() or 0
+    hits_today = (
+        await db.execute(select(func.count(HoneypotHit.id)).where(HoneypotHit.timestamp >= today_start))
+    ).scalar() or 0
+    hits_this_week = (
+        await db.execute(select(func.count(HoneypotHit.id)).where(HoneypotHit.timestamp >= week_start))
+    ).scalar() or 0
 
     # Unique IPs
-    unique_ips = (await db.execute(
-        select(func.count(distinct(HoneypotHit.client_ip)))
-    )).scalar() or 0
+    unique_ips = (await db.execute(select(func.count(distinct(HoneypotHit.client_ip))))).scalar() or 0
 
     # Auto-blocked count
-    auto_blocked = (await db.execute(
-        select(func.count(HoneypotHit.id)).where(HoneypotHit.action_taken == "blocked")
-    )).scalar() or 0
+    auto_blocked = (
+        await db.execute(select(func.count(HoneypotHit.id)).where(HoneypotHit.action_taken == "blocked"))
+    ).scalar() or 0
 
     # Top traps by hit count
     top_traps_result = await db.execute(
@@ -287,16 +298,10 @@ async def get_honeypot_stats(
         .order_by(func.count(HoneypotHit.id).desc())
         .limit(10)
     )
-    top_attackers = [
-        {"ip": r[0], "hits": r[1], "country": r[2]} for r in top_attackers_result.all()
-    ]
+    top_attackers = [{"ip": r[0], "hits": r[1], "country": r[2]} for r in top_attackers_result.all()]
 
     # Recent hits
-    recent_result = await db.execute(
-        select(HoneypotHit)
-        .order_by(HoneypotHit.timestamp.desc())
-        .limit(10)
-    )
+    recent_result = await db.execute(select(HoneypotHit).order_by(HoneypotHit.timestamp.desc()).limit(10))
     recent_hits = [
         {
             "ip": h.client_ip,
@@ -323,6 +328,7 @@ async def get_honeypot_stats(
 
 
 # ── Preset Traps ───────────────────────────────────────────────
+
 
 @router.post("/traps/install-defaults", status_code=status.HTTP_201_CREATED)
 async def install_default_traps(
@@ -448,9 +454,7 @@ async def install_default_traps(
 
     installed = []
     for trap_data in defaults:
-        existing = await db.execute(
-            select(HoneypotTrap).where(HoneypotTrap.path == trap_data["path"])
-        )
+        existing = await db.execute(select(HoneypotTrap).where(HoneypotTrap.path == trap_data["path"]))
         if existing.scalar_one_or_none():
             continue
 
@@ -464,13 +468,16 @@ async def install_default_traps(
         installed.append(trap_data["path"])
 
     if installed:
-        db.add(AuditLog(
-            user_id=current_user.id, email=current_user.email,
-            action="honeypot_defaults_installed",
-            ip_address=get_client_ip(request),
-            user_agent=request.headers.get("user-agent"),
-            details=f"Installed {len(installed)} default honeypot traps",
-        ))
+        db.add(
+            AuditLog(
+                user_id=current_user.id,
+                email=current_user.email,
+                action="honeypot_defaults_installed",
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+                details=f"Installed {len(installed)} default honeypot traps",
+            )
+        )
         await db.commit()
         await cache_delete_prefix("honeypot:")
         await _notify_nginx_reload()

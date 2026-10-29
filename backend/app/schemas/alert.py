@@ -59,8 +59,13 @@ class AlertChannelResponse(BaseModel):
 # follow the user's host_down preference until they have one of their own
 # (see alert_service.PREFERENCE_FALLBACK).
 ALERT_TYPES = (
-    'threat_detected', 'ip_blocked', 'firewall_pushed', 'cert_expiring', 'host_down',
-    'upstream_server_down', 'upstream_server_recovered',
+    'threat_detected',
+    'ip_blocked',
+    'firewall_pushed',
+    'cert_expiring',
+    'host_down',
+    'upstream_server_down',
+    'upstream_server_recovered',
 )
 
 

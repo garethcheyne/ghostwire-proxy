@@ -1,12 +1,13 @@
 """Config tooling for scripts and AI agents: dry-run previews, `nginx -t`, and a full reload.
 
-    POST /api/config/preview  render a host's nginx config with proposed changes, plus a diff
-                              against what nginx runs now. Saves nothing. (scope: read)
-    POST /api/config/test     run `nginx -t` on the configs nginx has now. (scope: write:nginx)
-    POST /api/config/reload   regenerate every host's config from the database, `nginx -t`,
-                              reload; all-or-nothing like any save. (scope: write:nginx)
-    GET  /api/audit-logs      recent changes, newest first. (scope: read)
+POST /api/config/preview  render a host's nginx config with proposed changes, plus a diff
+                          against what nginx runs now. Saves nothing. (scope: read)
+POST /api/config/test     run `nginx -t` on the configs nginx has now. (scope: write:nginx)
+POST /api/config/reload   regenerate every host's config from the database, `nginx -t`,
+                          reload; all-or-nothing like any save. (scope: write:nginx)
+GET  /api/audit-logs      recent changes, newest first. (scope: read)
 """
+
 import difflib
 import os
 from types import SimpleNamespace
@@ -61,9 +62,7 @@ def _server_ns(data: dict[str, Any]) -> SimpleNamespace:
 
 
 def _validation_detail(e: ValidationError) -> str:
-    return "; ".join(
-        f"{'.'.join(str(p) for p in err['loc']) or 'body'}: {err['msg']}" for err in e.errors()
-    )
+    return "; ".join(f"{'.'.join(str(p) for p in err['loc']) or 'body'}: {err['msg']}" for err in e.errors())
 
 
 @router.post("/preview")
@@ -81,11 +80,13 @@ async def preview_config(
 
     existing: ProxyHost | None = None
     if payload.host_id:
-        existing = (await db.execute(
-            select(ProxyHost)
-            .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
-            .where(ProxyHost.id == payload.host_id)
-        )).scalar_one_or_none()
+        existing = (
+            await db.execute(
+                select(ProxyHost)
+                .options(selectinload(ProxyHost.upstream_servers), selectinload(ProxyHost.locations))
+                .where(ProxyHost.id == payload.host_id)
+            )
+        ).scalar_one_or_none()
         if existing is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proxy host not found")
 
@@ -120,21 +121,35 @@ async def preview_config(
     # Related rows the generator reads, loaded for the (possibly changed) ids.
     access_list = None
     if values.get("access_list_id"):
-        access_list = (await db.execute(
-            select(AccessList).options(selectinload(AccessList.entries)).where(AccessList.id == values["access_list_id"])
-        )).scalar_one_or_none()
+        access_list = (
+            await db.execute(
+                select(AccessList)
+                .options(selectinload(AccessList.entries))
+                .where(AccessList.id == values["access_list_id"])
+            )
+        ).scalar_one_or_none()
         if access_list is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="access_list_id: no such access list")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="access_list_id: no such access list"
+            )
     auth_wall = None
     if values.get("auth_wall_id"):
-        auth_wall = (await db.execute(select(AuthWall).where(AuthWall.id == values["auth_wall_id"]))).scalar_one_or_none()
+        auth_wall = (
+            await db.execute(select(AuthWall).where(AuthWall.id == values["auth_wall_id"]))
+        ).scalar_one_or_none()
         if auth_wall is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="auth_wall_id: no such auth wall")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="auth_wall_id: no such auth wall"
+            )
     cert = None
     if values.get("ssl_enabled") and values.get("certificate_id"):
-        cert = (await db.execute(select(Certificate).where(Certificate.id == values["certificate_id"]))).scalar_one_or_none()
+        cert = (
+            await db.execute(select(Certificate).where(Certificate.id == values["certificate_id"]))
+        ).scalar_one_or_none()
         if cert is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="certificate_id: no such certificate")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="certificate_id: no such certificate"
+            )
 
     cert_has_data = bool(cert and cert.certificate and cert.certificate_key)
 
@@ -149,6 +164,7 @@ async def preview_config(
 
     try:
         from app.services.trusted_proxy_service import get_ranges
+
         set_trusted_proxy_ranges(await get_ranges(db))
     except Exception:
         pass
@@ -156,6 +172,7 @@ async def preview_config(
     warnings: list[str] = []
     try:
         from app.services.load_balancing import check_lb_rules
+
         errors, lb_warnings = check_lb_rules(values.get("lb_method"), servers)
         warnings.extend(lb_warnings)
     except ImportError:  # older generator without load balancing
@@ -181,12 +198,14 @@ async def preview_config(
             with open(path, "r", encoding="utf-8", newline="") as f:
                 current_text = f.read()
 
-    diff = "".join(difflib.unified_diff(
-        (current_text or "").splitlines(keepends=True),
-        rendered.splitlines(keepends=True),
-        fromfile="running" if current_text is not None else "/dev/null",
-        tofile="proposed",
-    ))
+    diff = "".join(
+        difflib.unified_diff(
+            (current_text or "").splitlines(keepends=True),
+            rendered.splitlines(keepends=True),
+            fromfile="running" if current_text is not None else "/dev/null",
+            tofile="proposed",
+        )
+    )
 
     return {
         "host_id": payload.host_id,
@@ -220,14 +239,16 @@ async def reload_config(
     """Regenerate every config from the database, test and reload — all or nothing."""
     from app.api.routes.proxy_hosts import validate_and_apply
 
-    db.add(AuditLog(
-        user_id=current_user.id,
-        email=current_user.email,
-        action="nginx_regenerated",
-        details="Regenerated all host configs and reloaded nginx",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="nginx_regenerated",
+            details="Regenerated all host configs and reloaded nginx",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
     ok, message = await validate_and_apply(db)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)

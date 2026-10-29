@@ -71,6 +71,7 @@ router = APIRouter(dependencies=[Depends(verify_internal_auth)])
 
 class TrafficLogRequest(BaseModel):
     """Traffic log data from nginx Lua script."""
+
     timestamp: int  # Unix timestamp
     client_ip: str
     method: str
@@ -132,9 +133,11 @@ async def log_traffic(
     upstream_time = upstream.final_time_ms
     upstream_server_id = None
     if upstream.final_addr:
-        servers = (await db.execute(
-            select(UpstreamServer).where(UpstreamServer.proxy_host_id == proxy_host_id)
-        )).scalars().all()
+        servers = (
+            (await db.execute(select(UpstreamServer).where(UpstreamServer.proxy_host_id == proxy_host_id)))
+            .scalars()
+            .all()
+        )
         if servers:
             upstream_server_id = await match_upstream_server(upstream.final_addr, servers)
 
@@ -188,6 +191,7 @@ async def log_traffic(
 
 class ThreatLogRequest(BaseModel):
     """Threat event data from nginx WAF Lua script."""
+
     client_ip: str
     category: str
     severity: str
@@ -254,6 +258,7 @@ async def log_threat(
 # WAF / GeoIP / Blocklist Internal Endpoints (called by Lua)
 # ============================================================================
 
+
 @router.get("/waf/rules")
 async def get_waf_rules(
     db: AsyncSession = Depends(get_db),
@@ -261,9 +266,7 @@ async def get_waf_rules(
     """Return all enabled WAF rules for Lua to cache."""
     from app.models.waf import WafRule
 
-    result = await db.execute(
-        select(WafRule).where(WafRule.enabled == True, WafRule.is_lua == True)
-    )
+    result = await db.execute(select(WafRule).where(WafRule.enabled == True, WafRule.is_lua == True))
     rules = result.scalars().all()
 
     return [
@@ -287,12 +290,11 @@ async def get_geoip_rules(
     """Return all enabled GeoIP rules for Lua to cache."""
     from app.models.rate_limit import GeoipRule
 
-    result = await db.execute(
-        select(GeoipRule).where(GeoipRule.enabled == True)
-    )
+    result = await db.execute(select(GeoipRule).where(GeoipRule.enabled == True))
     rules = result.scalars().all()
 
     import json
+
     return [
         {
             "id": r.id,
@@ -314,9 +316,7 @@ async def get_trusted_ips(
     import json as _json
     from app.models.setting import Setting
 
-    result = await db.execute(
-        select(Setting).where(Setting.key == "trusted_ips")
-    )
+    result = await db.execute(select(Setting).where(Setting.key == "trusted_ips"))
     setting = result.scalar_one_or_none()
 
     if not setting or not setting.value:
@@ -324,7 +324,7 @@ async def get_trusted_ips(
 
     try:
         return _json.loads(setting.value)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return []
 
 
@@ -339,9 +339,7 @@ async def get_blocked_ips(
     now = datetime.now(timezone.utc)
 
     result = await db.execute(
-        select(ThreatActor).where(
-            ThreatActor.current_status.in_(["temp_blocked", "perm_blocked", "firewall_banned"])
-        )
+        select(ThreatActor).where(ThreatActor.current_status.in_(["temp_blocked", "perm_blocked", "firewall_banned"]))
     )
     actors = result.scalars().all()
 
@@ -351,11 +349,13 @@ async def get_blocked_ips(
         if actor.current_status == "temp_blocked" and actor.temp_block_until:
             if actor.temp_block_until < now:
                 continue
-        blocked.append({
-            "ip": actor.ip_address,
-            "status": actor.current_status,
-            "until": actor.temp_block_until.isoformat() if actor.temp_block_until else None,
-        })
+        blocked.append(
+            {
+                "ip": actor.ip_address,
+                "status": actor.current_status,
+                "until": actor.temp_block_until.isoformat() if actor.temp_block_until else None,
+            }
+        )
 
     return blocked
 
@@ -364,6 +364,7 @@ async def get_blocked_ips(
 # Honeypot Internal Endpoints (called by Lua)
 # ============================================================================
 
+
 @router.get("/honeypot/traps")
 async def get_honeypot_traps(
     db: AsyncSession = Depends(get_db),
@@ -371,9 +372,7 @@ async def get_honeypot_traps(
     """Return all enabled honeypot traps for Lua to cache."""
     from app.models.honeypot import HoneypotTrap
 
-    result = await db.execute(
-        select(HoneypotTrap).where(HoneypotTrap.enabled == True)
-    )
+    result = await db.execute(select(HoneypotTrap).where(HoneypotTrap.enabled == True))
     traps = result.scalars().all()
 
     return [
@@ -394,6 +393,7 @@ async def get_honeypot_traps(
 
 class HoneypotHitRequest(BaseModel):
     """Honeypot hit data from nginx Lua script."""
+
     trap_id: str
     trap_path: str
     client_ip: str
@@ -442,9 +442,7 @@ async def log_honeypot_hit(
     db.add(hit)
 
     # Increment trap hit count
-    result = await db.execute(
-        select(HoneypotTrap).where(HoneypotTrap.id == data.trap_id)
-    )
+    result = await db.execute(select(HoneypotTrap).where(HoneypotTrap.id == data.trap_id))
     trap = result.scalar_one_or_none()
     if trap:
         trap.hit_count = (trap.hit_count or 0) + 1
@@ -475,9 +473,7 @@ async def log_honeypot_hit(
         from app.models.setting import Setting
 
         abuseipdb_key = None
-        setting_result = await db.execute(
-            select(Setting).where(Setting.key == "abuseipdb_api_key")
-        )
+        setting_result = await db.execute(select(Setting).where(Setting.key == "abuseipdb_api_key"))
         setting = setting_result.scalar_one_or_none()
         if setting and setting.value:
             abuseipdb_key = setting.value
@@ -503,9 +499,7 @@ async def get_rate_limit_rules(
     """Return all enabled rate limit rules for Lua to cache."""
     from app.models.rate_limit import RateLimitRule
 
-    result = await db.execute(
-        select(RateLimitRule).where(RateLimitRule.enabled == True)
-    )
+    result = await db.execute(select(RateLimitRule).where(RateLimitRule.enabled == True))
     rules = result.scalars().all()
 
     return [
@@ -527,8 +521,10 @@ async def get_rate_limit_rules(
 # Auth Wall Internal Endpoints (called by Lua)
 # ============================================================================
 
+
 class SessionValidateRequestBody(BaseModel):
     """Request body for session validation."""
+
     session_id: str
     auth_wall_id: str
     signature: str
@@ -626,6 +622,7 @@ async def get_auth_wall_config(
 
 class SessionActivityRequest(BaseModel):
     """Request to update session activity."""
+
     session_id: str
 
 
@@ -647,8 +644,10 @@ async def update_session_activity(
 # Push Notification Endpoint (called by updater sidecar)
 # ============================================================================
 
+
 class PushNotificationRequest(BaseModel):
     """Request to send push notification from updater."""
+
     title: str
     body: str
     notification_type: str = "general"

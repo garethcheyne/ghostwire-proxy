@@ -11,13 +11,20 @@ from app.models.user import User
 from app.models.alert import PushSubscription, AlertChannel, AlertPreference
 from app.models.audit_log import AuditLog
 from app.schemas.alert import (
-    PushSubscriptionCreate, PushSubscriptionResponse,
-    AlertChannelCreate, AlertChannelUpdate, AlertChannelResponse,
-    AlertPreferenceCreate, AlertPreferenceUpdate, AlertPreferenceResponse,
+    PushSubscriptionCreate,
+    PushSubscriptionResponse,
+    AlertChannelCreate,
+    AlertChannelUpdate,
+    AlertChannelResponse,
+    AlertPreferenceCreate,
+    AlertPreferenceUpdate,
+    AlertPreferenceResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
 from app.services.outbound_url import (
-    OutboundUrlError, internal_targets_allowed, validate_outbound_url,
+    OutboundUrlError,
+    internal_targets_allowed,
+    validate_outbound_url,
 )
 from app.services.alert_service import dispatch_alert
 from app.services.push_service import push_service
@@ -37,7 +44,7 @@ async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) 
 
     try:
         config = json.loads(config_json)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(status_code=422, detail="Channel config must be valid JSON")
     if not isinstance(config, dict):
         raise HTTPException(status_code=422, detail="Channel config must be a JSON object")
@@ -52,14 +59,12 @@ async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) 
 
 # ── VAPID Key ─────────────────────────────────────────────────
 
+
 @router.get("/push/vapid-key")
 async def get_vapid_public_key():
     """Get the VAPID public key for push notification subscription."""
     if not settings.vapid_public_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Push notifications not configured. VAPID keys not set."
-        )
+        raise HTTPException(status_code=503, detail="Push notifications not configured. VAPID keys not set.")
     return {
         "public_key": settings.vapid_public_key,
         "configured": push_service.is_configured(),
@@ -68,6 +73,7 @@ async def get_vapid_public_key():
 
 # ── Push Subscriptions ─────────────────────────────────────────
 
+
 @router.post("/push/subscribe", response_model=PushSubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def subscribe_push(
     data: PushSubscriptionCreate,
@@ -75,9 +81,7 @@ async def subscribe_push(
     db: AsyncSession = Depends(get_db),
 ):
     # Remove existing subscription with same endpoint
-    result = await db.execute(
-        select(PushSubscription).where(PushSubscription.endpoint == data.endpoint)
-    )
+    result = await db.execute(select(PushSubscription).where(PushSubscription.endpoint == data.endpoint))
     existing = result.scalar_one_or_none()
     if existing:
         await db.delete(existing)
@@ -116,15 +120,16 @@ async def unsubscribe_push(
 
 # ── Alert Channels ─────────────────────────────────────────────
 
+
 @router.get("/channels", response_model=list[AlertChannelResponse])
 async def list_channels(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(AlertChannel).where(
-            (AlertChannel.user_id == current_user.id) | (AlertChannel.user_id == None)
-        ).order_by(AlertChannel.name)
+        select(AlertChannel)
+        .where((AlertChannel.user_id == current_user.id) | (AlertChannel.user_id == None))
+        .order_by(AlertChannel.name)
     )
     return result.scalars().all()
 
@@ -146,13 +151,16 @@ async def create_channel(
     )
     db.add(channel)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="alert_channel_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created alert channel: {data.name} ({data.channel_type})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="alert_channel_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created alert channel: {data.name} ({data.channel_type})",
+        )
+    )
     await db.commit()
     await db.refresh(channel)
     return channel
@@ -176,13 +184,16 @@ async def update_channel(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(channel, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="alert_channel_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated alert channel: {channel.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="alert_channel_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated alert channel: {channel.name}",
+        )
+    )
     await db.commit()
     await db.refresh(channel)
     return channel
@@ -202,27 +213,29 @@ async def delete_channel(
     if channel.user_id and channel.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized to delete this channel")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="alert_channel_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted alert channel: {channel.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="alert_channel_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted alert channel: {channel.name}",
+        )
+    )
     await db.delete(channel)
     await db.commit()
 
 
 # ── Alert Preferences ─────────────────────────────────────────
 
+
 @router.get("/preferences", response_model=list[AlertPreferenceResponse])
 async def list_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(AlertPreference).where(AlertPreference.user_id == current_user.id)
-    )
+    result = await db.execute(select(AlertPreference).where(AlertPreference.user_id == current_user.id))
     return result.scalars().all()
 
 
@@ -303,6 +316,7 @@ async def delete_preference(
 
 # ── Test Alert ─────────────────────────────────────────────────
 
+
 @router.post("/test")
 async def send_test_alert(
     current_user: User = Depends(get_current_admin_user),
@@ -327,10 +341,7 @@ async def send_test_push(
 ):
     """Send a test push notification directly to all subscriptions."""
     if not push_service.is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail="Push notifications not configured. VAPID keys not set."
-        )
+        raise HTTPException(status_code=503, detail="Push notifications not configured. VAPID keys not set.")
 
     result = await push_service.notify_all(
         title="Test Notification",
@@ -348,9 +359,7 @@ async def list_my_subscriptions(
     db: AsyncSession = Depends(get_db),
 ):
     """List current user's push subscriptions."""
-    result = await db.execute(
-        select(PushSubscription).where(PushSubscription.user_id == current_user.id)
-    )
+    result = await db.execute(select(PushSubscription).where(PushSubscription.user_id == current_user.id))
     subs = result.scalars().all()
     return [
         {

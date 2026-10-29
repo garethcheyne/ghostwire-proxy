@@ -156,9 +156,7 @@ async def get_analytics_dashboard(
     return result
 
 
-async def _compute_dashboard(
-    db: AsyncSession, period: str, proxy_host_id: Optional[str]
-) -> AnalyticsDashboard:
+async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: Optional[str]) -> AnalyticsDashboard:
 
     # Calculate time ranges
     now = datetime.now(timezone.utc)
@@ -256,9 +254,7 @@ async def _compute_dashboard(
         trunc_expr = func.date_trunc('hour', TrafficLog.timestamp)
     elif period == "7d":
         time_format = "%Y-%m-%d %H:00"
-        trunc_expr = func.to_timestamp(
-            func.floor(func.extract('epoch', TrafficLog.timestamp) / 21600) * 21600
-        )
+        trunc_expr = func.to_timestamp(func.floor(func.extract('epoch', TrafficLog.timestamp) / 21600) * 21600)
     elif period == "30d":
         time_format = "%Y-%m-%d"
         trunc_expr = func.date_trunc('day', TrafficLog.timestamp)
@@ -293,7 +289,7 @@ async def _compute_dashboard(
             func.count(distinct(TrafficLog.client_ip)).label('unique_visitors'),
             func.coalesce(func.sum(TrafficLog.bytes_sent), 0).label('bytes_sent'),
             func.avg(TrafficLog.response_time).label('avg_rt'),
-            func.sum(case((TrafficLog.status >= 400, 1), else_=0)).label('errors')
+            func.sum(case((TrafficLog.status >= 400, 1), else_=0)).label('errors'),
         )
         .where(and_(*base_filter))
         .group_by(TrafficLog.proxy_host_id)
@@ -305,7 +301,7 @@ async def _compute_dashboard(
         select(
             TrafficLog.request_uri,
             func.count(TrafficLog.id).label('requests'),
-            func.avg(TrafficLog.response_time).label('avg_rt')
+            func.avg(TrafficLog.response_time).label('avg_rt'),
         )
         .where(and_(*base_filter))
         .group_by(TrafficLog.request_uri)
@@ -314,10 +310,7 @@ async def _compute_dashboard(
     )
 
     top_referrers_query = (
-        select(
-            TrafficLog.referer,
-            func.count(TrafficLog.id).label('requests')
-        )
+        select(TrafficLog.referer, func.count(TrafficLog.id).label('requests'))
         .where(and_(*base_filter, TrafficLog.referer.isnot(None), TrafficLog.referer != ''))
         .group_by(TrafficLog.referer)
         .order_by(func.count(TrafficLog.id).desc())
@@ -372,10 +365,7 @@ async def _compute_dashboard(
     )
 
     country_query = (
-        select(
-            TrafficLog.country_code,
-            func.count(TrafficLog.id).label('requests')
-        )
+        select(TrafficLog.country_code, func.count(TrafficLog.id).label('requests'))
         .where(and_(*base_filter, TrafficLog.country_code.isnot(None)))
         .group_by(TrafficLog.country_code)
         .order_by(func.count(TrafficLog.id).desc())
@@ -410,9 +400,17 @@ async def _compute_dashboard(
             return (await s.execute(query)).all()
 
     (
-        ts_rows, method_rows, hosts_rows, pages_rows,
-        referrers_rows, ips_rows, hourly_rows, browser_rows,
-        country_rows, err_host_rows, err_status_rows,
+        ts_rows,
+        method_rows,
+        hosts_rows,
+        pages_rows,
+        referrers_rows,
+        ips_rows,
+        hourly_rows,
+        browser_rows,
+        country_rows,
+        err_host_rows,
+        err_status_rows,
     ) = await asyncio.gather(
         _exec(ts_query),
         _exec(method_query),
@@ -437,14 +435,16 @@ async def _compute_dashboard(
             continue
         if isinstance(bucket_ts, (int, float)):
             bucket_ts = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
-        time_series.append(TimeSeriesPoint(
-            timestamp=bucket_ts.strftime(time_format),
-            requests=row[1] or 0,
-            unique_visitors=row[2] or 0,
-            bytes_sent=row[3] or 0,
-            bytes_received=row[4] or 0,
-            avg_response_time=round(float(row[5]), 2) if row[5] else None,
-        ))
+        time_series.append(
+            TimeSeriesPoint(
+                timestamp=bucket_ts.strftime(time_format),
+                requests=row[1] or 0,
+                unique_visitors=row[2] or 0,
+                bytes_sent=row[3] or 0,
+                bytes_received=row[4] or 0,
+                avg_response_time=round(float(row[5]), 2) if row[5] else None,
+            )
+        )
 
     # Method breakdown
     requests_by_method = {row[0]: row[1] for row in method_rows}
@@ -453,31 +453,26 @@ async def _compute_dashboard(
     top_hosts = []
     for row in hosts_rows:
         host_error_rate = (row[5] / row[1] * 100) if row[1] > 0 else 0
-        top_hosts.append(HostStats(
-            host_id=row[0],
-            host_name=get_host_name(row[0]),
-            requests=row[1],
-            unique_visitors=row[2],
-            bytes_sent=row[3],
-            avg_response_time=round(float(row[4]), 2) if row[4] else None,
-            error_rate=round(host_error_rate, 2)
-        ))
+        top_hosts.append(
+            HostStats(
+                host_id=row[0],
+                host_name=get_host_name(row[0]),
+                requests=row[1],
+                unique_visitors=row[2],
+                bytes_sent=row[3],
+                avg_response_time=round(float(row[4]), 2) if row[4] else None,
+                error_rate=round(host_error_rate, 2),
+            )
+        )
 
     # Top pages
     top_pages = [
-        TopPage(
-            uri=row[0][:100],
-            requests=row[1],
-            avg_response_time=round(float(row[2]), 2) if row[2] else None
-        )
+        TopPage(uri=row[0][:100], requests=row[1], avg_response_time=round(float(row[2]), 2) if row[2] else None)
         for row in pages_rows
     ]
 
     # Top referrers
-    top_referrers = [
-        TopReferrer(referer=row[0][:100], requests=row[1])
-        for row in referrers_rows
-    ]
+    top_referrers = [TopReferrer(referer=row[0][:100], requests=row[1]) for row in referrers_rows]
 
     # Top IPs
     top_ips = [{"ip": row[0], "requests": row[1], "country_code": row[2], "country_name": row[3]} for row in ips_rows]
@@ -486,27 +481,17 @@ async def _compute_dashboard(
     hourly_counts = {h: 0 for h in range(24)}
     for row in hourly_rows:
         hourly_counts[int(row[0])] = row[1]
-    hourly_distribution = [
-        HourlyDistribution(hour=h, requests=c)
-        for h, c in sorted(hourly_counts.items())
-    ]
+    hourly_distribution = [HourlyDistribution(hour=h, requests=c) for h, c in sorted(hourly_counts.items())]
 
     # Browser stats
     total_ua = total_requests or 1
     browser_stats = [
-        BrowserStats(
-            browser=row[0],
-            requests=row[1],
-            percentage=round(row[1] / total_ua * 100, 1)
-        )
+        BrowserStats(browser=row[0], requests=row[1], percentage=round(row[1] / total_ua * 100, 1))
         for row in browser_rows
     ]
 
     # Country stats
-    country_stats = [
-        {"country": row[0], "requests": row[1]}
-        for row in country_rows
-    ]
+    country_stats = [{"country": row[0], "requests": row[1]} for row in country_rows]
 
     # Errors by host
     errors_by_host_raw: dict[str, dict] = {}
@@ -529,10 +514,7 @@ async def _compute_dashboard(
     )[:10]
 
     # Errors by status
-    errors_by_status = [
-        {"status": row[0], "count": row[1]}
-        for row in err_status_rows
-    ]
+    errors_by_status = [{"status": row[0], "count": row[1]} for row in err_status_rows]
 
     return AnalyticsDashboard(
         total_requests=total_requests,
@@ -576,7 +558,11 @@ async def get_realtime_stats(
             _q(select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= five_min_ago)),
             _q(select(func.count(TrafficLog.id)).where(TrafficLog.timestamp >= one_min_ago)),
             _q(select(func.count(distinct(TrafficLog.client_ip))).where(TrafficLog.timestamp >= five_min_ago)),
-            _q(select(func.count(TrafficLog.id)).where(and_(TrafficLog.timestamp >= five_min_ago, TrafficLog.status >= 400))),
+            _q(
+                select(func.count(TrafficLog.id)).where(
+                    and_(TrafficLog.timestamp >= five_min_ago, TrafficLog.status >= 400)
+                )
+            ),
         )
 
         return {
@@ -618,12 +604,14 @@ async def get_auth_errors(
         # --- 403/401 from TrafficLog ---
 
         # Single query: counts for 401 + 403 in one round trip.
-        summary_row = (await db.execute(
-            select(
-                func.count(case((TrafficLog.status == 401, 1))).label("c401"),
-                func.count(case((TrafficLog.status == 403, 1))).label("c403"),
-            ).where(TrafficLog.timestamp >= start_time)
-        )).one()
+        summary_row = (
+            await db.execute(
+                select(
+                    func.count(case((TrafficLog.status == 401, 1))).label("c401"),
+                    func.count(case((TrafficLog.status == 403, 1))).label("c403"),
+                ).where(TrafficLog.timestamp >= start_time)
+            )
+        ).one()
         for_status = {401: summary_row.c401 or 0, 403: summary_row.c403 or 0}
 
         # Recent events — JOIN ProxyHost so we don't N+1 to resolve names.
@@ -639,10 +627,12 @@ async def get_auth_errors(
                 ProxyHost.domain_names,
             )
             .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
-            .where(and_(
-                TrafficLog.timestamp >= start_time,
-                TrafficLog.status.in_([401, 403]),
-            ))
+            .where(
+                and_(
+                    TrafficLog.timestamp >= start_time,
+                    TrafficLog.status.in_([401, 403]),
+                )
+            )
             .order_by(TrafficLog.timestamp.desc())
             .limit(50)
         )
@@ -667,17 +657,18 @@ async def get_auth_errors(
                 func.count(TrafficLog.id).label("count"),
                 func.max(TrafficLog.timestamp).label("last_seen"),
             )
-            .where(and_(
-                TrafficLog.timestamp >= start_time,
-                TrafficLog.status.in_([401, 403]),
-            ))
+            .where(
+                and_(
+                    TrafficLog.timestamp >= start_time,
+                    TrafficLog.status.in_([401, 403]),
+                )
+            )
             .group_by(TrafficLog.client_ip)
             .order_by(func.count(TrafficLog.id).desc())
             .limit(10)
         )
         top_offenders = [
-            {"ip": row[0], "count": row[1], "last_seen": row[2].isoformat()}
-            for row in top_ips_result.all()
+            {"ip": row[0], "count": row[1], "last_seen": row[2].isoformat()} for row in top_ips_result.all()
         ]
 
         # Top hosts receiving 403/401 — JOIN to resolve host name in one query.
@@ -688,10 +679,12 @@ async def get_auth_errors(
                 func.count(TrafficLog.id).label("count"),
             )
             .join(ProxyHost, ProxyHost.id == TrafficLog.proxy_host_id, isouter=True)
-            .where(and_(
-                TrafficLog.timestamp >= start_time,
-                TrafficLog.status.in_([401, 403]),
-            ))
+            .where(
+                and_(
+                    TrafficLog.timestamp >= start_time,
+                    TrafficLog.status.in_([401, 403]),
+                )
+            )
             .group_by(TrafficLog.proxy_host_id)
             .order_by(func.count(TrafficLog.id).desc())
             .limit(10)
@@ -700,20 +693,26 @@ async def get_auth_errors(
         for row in top_hosts_result.all():
             try:
                 names = json.loads(row[1]) if row[1] else []
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 names = []
-            top_hosts.append({
-                "host": (names[0] if names else "Unknown"),
-                "count": row[2],
-            })
+            top_hosts.append(
+                {
+                    "host": (names[0] if names else "Unknown"),
+                    "count": row[2],
+                }
+            )
 
         # --- Failed logins from AuditLog ---
-        failed_logins_count = (await db.execute(
-            select(func.count(AuditLog.id)).where(and_(
-                AuditLog.timestamp >= start_time,
-                AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
-            ))
-        )).scalar() or 0
+        failed_logins_count = (
+            await db.execute(
+                select(func.count(AuditLog.id)).where(
+                    and_(
+                        AuditLog.timestamp >= start_time,
+                        AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
+                    )
+                )
+            )
+        ).scalar() or 0
 
         recent_failed_result = await db.execute(
             select(
@@ -723,10 +722,12 @@ async def get_auth_errors(
                 AuditLog.ip_address,
                 AuditLog.details,
             )
-            .where(and_(
-                AuditLog.timestamp >= start_time,
-                AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
-            ))
+            .where(
+                and_(
+                    AuditLog.timestamp >= start_time,
+                    AuditLog.action.in_(["login_failed", "auth_wall_login_failed"]),
+                )
+            )
             .order_by(AuditLog.timestamp.desc())
             .limit(20)
         )
@@ -760,6 +761,7 @@ async def get_auth_errors(
 # These read the analytics_* rollups rather than traffic_logs, which is the only
 # way to answer questions that reach further back than the retention window —
 # raw rows are pruned nightly, the summaries are not.
+
 
 class TrendPoint(BaseModel):
     date: str
@@ -822,12 +824,23 @@ async def get_trends(
         per_host: dict[str, list] = {}
 
         for r in rows:
-            t = totals.setdefault(r.date, {
-                "date": r.date, "requests": 0, "unique_visitors": 0, "blocked": 0,
-                "threats": 0, "bytes_sent": 0, "bytes_received": 0,
-                "bot_requests": 0, "p95_response_time": None, "p99_response_time": None,
-                "_rt_weighted": 0, "_rt_requests": 0,
-            })
+            t = totals.setdefault(
+                r.date,
+                {
+                    "date": r.date,
+                    "requests": 0,
+                    "unique_visitors": 0,
+                    "blocked": 0,
+                    "threats": 0,
+                    "bytes_sent": 0,
+                    "bytes_received": 0,
+                    "bot_requests": 0,
+                    "p95_response_time": None,
+                    "p99_response_time": None,
+                    "_rt_weighted": 0,
+                    "_rt_requests": 0,
+                },
+            )
             t["requests"] += r.total_requests or 0
             t["blocked"] += r.blocked_requests or 0
             t["threats"] += r.total_threats or 0
@@ -837,27 +850,31 @@ async def get_trends(
             t["bot_requests"] += r.bot_requests or 0
             # Percentiles can't be averaged across hosts, so the fleet figure is
             # the worst host that day — which is the one you'd want to act on.
-            for key, value in (("p95_response_time", r.p95_response_time_ms),
-                               ("p99_response_time", r.p99_response_time_ms)):
+            for key, value in (
+                ("p95_response_time", r.p95_response_time_ms),
+                ("p99_response_time", r.p99_response_time_ms),
+            ):
                 if value is not None:
                     t[key] = value if t[key] is None else max(t[key], value)
             if r.avg_response_time_ms and r.total_requests:
                 t["_rt_weighted"] += r.avg_response_time_ms * r.total_requests
                 t["_rt_requests"] += r.total_requests
 
-            per_host.setdefault(r.proxy_host_id or "unknown", []).append({
-                "date": r.date,
-                "requests": r.total_requests or 0,
-                "unique_visitors": r.unique_ips or 0,
-                "blocked": r.blocked_requests or 0,
-                "threats": r.total_threats or 0,
-                "bytes_sent": r.bytes_sent or 0,
-                "bytes_received": r.bytes_received or 0,
-                "avg_response_time": r.avg_response_time_ms,
-                "p95_response_time": r.p95_response_time_ms,
-                "p99_response_time": r.p99_response_time_ms,
-                "bot_requests": r.bot_requests or 0,
-            })
+            per_host.setdefault(r.proxy_host_id or "unknown", []).append(
+                {
+                    "date": r.date,
+                    "requests": r.total_requests or 0,
+                    "unique_visitors": r.unique_ips or 0,
+                    "blocked": r.blocked_requests or 0,
+                    "threats": r.total_threats or 0,
+                    "bytes_sent": r.bytes_sent or 0,
+                    "bytes_received": r.bytes_received or 0,
+                    "avg_response_time": r.avg_response_time_ms,
+                    "p95_response_time": r.p95_response_time_ms,
+                    "p99_response_time": r.p99_response_time_ms,
+                    "bot_requests": r.bot_requests or 0,
+                }
+            )
 
         totals_list = []
         for date in sorted(totals):
@@ -891,9 +908,7 @@ async def get_trends(
             geo_q = geo_q.where(AnalyticsGeo.proxy_host_id == proxy_host_id)
         geo_rows = (
             await db.execute(
-                geo_q.group_by(AnalyticsGeo.country_code)
-                .order_by(func.sum(AnalyticsGeo.requests).desc())
-                .limit(15)
+                geo_q.group_by(AnalyticsGeo.country_code).order_by(func.sum(AnalyticsGeo.requests).desc()).limit(15)
             )
         ).all()
 
@@ -902,8 +917,7 @@ async def get_trends(
             "totals": totals_list,
             "by_host": by_host,
             "top_countries": [
-                {"country": g.country_code, "requests": int(g.requests or 0),
-                 "blocked": int(g.blocked or 0)}
+                {"country": g.country_code, "requests": int(g.requests or 0), "blocked": int(g.blocked or 0)}
                 for g in geo_rows
             ],
         }

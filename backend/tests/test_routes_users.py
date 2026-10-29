@@ -27,12 +27,16 @@ class TestCreateUser:
 
     @pytest.mark.asyncio
     async def test_create_user(self, client, admin_user, auth_headers):
-        response = await client.post("/api/users/", headers=auth_headers, json={
-            "email": "newuser@test.com",
-            "name": "New User",
-            "password": "securepassword123",
-            "role": "user",
-        })
+        response = await client.post(
+            "/api/users/",
+            headers=auth_headers,
+            json={
+                "email": "newuser@test.com",
+                "name": "New User",
+                "password": "securepassword123",
+                "role": "user",
+            },
+        )
         assert response.status_code in (200, 201)
         data = response.json()
         assert data["email"] == "newuser@test.com"
@@ -40,19 +44,27 @@ class TestCreateUser:
     @pytest.mark.asyncio
     async def test_create_duplicate_email(self, client, admin_user, auth_headers):
         # First create
-        await client.post("/api/users/", headers=auth_headers, json={
-            "email": "dup@test.com",
-            "name": "Dup User",
-            "password": "password123",
-            "role": "user",
-        })
+        await client.post(
+            "/api/users/",
+            headers=auth_headers,
+            json={
+                "email": "dup@test.com",
+                "name": "Dup User",
+                "password": "password123",
+                "role": "user",
+            },
+        )
         # Duplicate
-        response = await client.post("/api/users/", headers=auth_headers, json={
-            "email": "dup@test.com",
-            "name": "Dup User 2",
-            "password": "password123",
-            "role": "user",
-        })
+        response = await client.post(
+            "/api/users/",
+            headers=auth_headers,
+            json={
+                "email": "dup@test.com",
+                "name": "Dup User 2",
+                "password": "password123",
+                "role": "user",
+            },
+        )
         assert response.status_code in (400, 409, 422)
 
 

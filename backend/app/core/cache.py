@@ -6,6 +6,7 @@ aggregate query is fired repeatedly within seconds. Cache misses fall
 back to the underlying computation; cache failures are swallowed so a
 broken Redis never takes down the API.
 """
+
 from __future__ import annotations
 
 import json
@@ -101,9 +102,7 @@ async def cached_json(
     # without callers caring.
     if isinstance(value, list):
         payload = [
-            v.model_dump(mode="json") if hasattr(v, "model_dump")
-            else v.dict() if hasattr(v, "dict")
-            else v
+            v.model_dump(mode="json") if hasattr(v, "model_dump") else v.dict() if hasattr(v, "dict") else v
             for v in value
         ]
     elif hasattr(value, "model_dump"):

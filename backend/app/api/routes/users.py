@@ -39,10 +39,7 @@ async def list_users(
     query = select(User)
 
     if search:
-        query = query.where(
-            (User.email.ilike(f"%{search}%")) |
-            (User.name.ilike(f"%{search}%"))
-        )
+        query = query.where((User.email.ilike(f"%{search}%")) | (User.name.ilike(f"%{search}%")))
 
     query = query.order_by(User.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
@@ -58,9 +55,7 @@ async def create_user(
 ):
     """Create a new user (admin only)"""
     # Check if email already exists
-    result = await db.execute(
-        select(User).where(User.email == user_data.email.lower())
-    )
+    result = await db.execute(select(User).where(User.email == user_data.email.lower()))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -142,9 +137,7 @@ async def update_user(
 
     # Check email uniqueness if changing
     if user_data.email and user_data.email.lower() != user.email:
-        result = await db.execute(
-            select(User).where(User.email == user_data.email.lower())
-        )
+        result = await db.execute(select(User).where(User.email == user_data.email.lower()))
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

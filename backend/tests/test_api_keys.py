@@ -1,4 +1,5 @@
 """Scoped API keys: minting, authentication, scope enforcement, revocation and audit."""
+
 from datetime import datetime, timedelta, timezone
 
 import pyotp
@@ -32,7 +33,9 @@ async def mfa_admin(db_session, admin_user):
 
 
 async def make_key(db_session, user, scopes, **kwargs):
-    row, key = await api_key_service.create_key(db_session, user, kwargs.pop("name", "test"), scopes, kwargs.pop("days", None))
+    row, key = await api_key_service.create_key(
+        db_session, user, kwargs.pop("name", "test"), scopes, kwargs.pop("days", None)
+    )
     for field, value in kwargs.items():
         setattr(row, field, value)
     await db_session.commit()
@@ -44,45 +47,48 @@ def bearer(key: str) -> dict:
 
 
 class TestRequiredScope:
-    @pytest.mark.parametrize("method,path,scope", [
-        ("GET", "/api/proxy-hosts/", "read"),
-        ("GET", "/api/proxy-hosts/abc", "read"),
-        ("POST", "/api/proxy-hosts/", "write:proxy-hosts"),
-        ("PUT", "/api/proxy-hosts/abc", "write:proxy-hosts"),
-        ("POST", "/api/proxy-hosts/abc/enable", "write:proxy-hosts"),
-        ("POST", "/api/proxy-hosts/abc/upstreams", "write:upstreams"),
-        ("PATCH", "/api/proxy-hosts/abc/upstreams/def", "write:upstreams"),
-        ("POST", "/api/proxy-hosts/upstream-preview", "read"),
-        ("POST", "/api/config/preview", "read"),
-        ("POST", "/api/config/reload", "write:nginx"),
-        ("POST", "/api/settings/reload-nginx", "write:nginx"),
-        ("POST", "/api/certificates/letsencrypt", "write:certificates"),
-        ("PUT", "/api/access-lists/x", "write:access"),
-        ("POST", "/api/auth-walls/x/users", "write:access"),
-        ("POST", "/api/waf/rules", "write:security"),
-        ("GET", "/api/traffic/stats", "read"),
-        ("GET", "/api/audit-logs/", "read"),
-        ("PUT", "/api/settings/x", "admin"),
-        ("GET", "/api/settings/", "admin"),
-        ("POST", "/api/dns/providers", "admin"),
-        ("GET", "/api/updates/check/app", "admin"),
-        ("GET", "/api/users/me", "read"),
-        # Never through a key
-        ("GET", "/api/users/", SESSION_ONLY),
-        ("POST", "/api/users/", SESSION_ONLY),
-        ("GET", "/api/api-keys/", SESSION_ONLY),
-        ("POST", "/api/admin-mfa/disable", SESSION_ONLY),
-        ("POST", "/api/updates/app", SESSION_ONLY),
-        ("POST", "/api/updates/rollback/x", SESSION_ONLY),
-        ("PUT", "/api/updates/settings", SESSION_ONLY),
-        ("POST", "/api/containers/auto-update/run", SESSION_ONLY),
-        ("POST", "/api/backups/restore", SESSION_ONLY),
-        ("POST", "/api/backups/upload", SESSION_ONLY),
-        ("GET", "/api/backups/x/download", SESSION_ONLY),
-        ("POST", "/api/system/kill-switch", SESSION_ONLY),
-        # Unlisted = refused
-        ("GET", "/api/something-new", None),
-    ])
+    @pytest.mark.parametrize(
+        "method,path,scope",
+        [
+            ("GET", "/api/proxy-hosts/", "read"),
+            ("GET", "/api/proxy-hosts/abc", "read"),
+            ("POST", "/api/proxy-hosts/", "write:proxy-hosts"),
+            ("PUT", "/api/proxy-hosts/abc", "write:proxy-hosts"),
+            ("POST", "/api/proxy-hosts/abc/enable", "write:proxy-hosts"),
+            ("POST", "/api/proxy-hosts/abc/upstreams", "write:upstreams"),
+            ("PATCH", "/api/proxy-hosts/abc/upstreams/def", "write:upstreams"),
+            ("POST", "/api/proxy-hosts/upstream-preview", "read"),
+            ("POST", "/api/config/preview", "read"),
+            ("POST", "/api/config/reload", "write:nginx"),
+            ("POST", "/api/settings/reload-nginx", "write:nginx"),
+            ("POST", "/api/certificates/letsencrypt", "write:certificates"),
+            ("PUT", "/api/access-lists/x", "write:access"),
+            ("POST", "/api/auth-walls/x/users", "write:access"),
+            ("POST", "/api/waf/rules", "write:security"),
+            ("GET", "/api/traffic/stats", "read"),
+            ("GET", "/api/audit-logs/", "read"),
+            ("PUT", "/api/settings/x", "admin"),
+            ("GET", "/api/settings/", "admin"),
+            ("POST", "/api/dns/providers", "admin"),
+            ("GET", "/api/updates/check/app", "admin"),
+            ("GET", "/api/users/me", "read"),
+            # Never through a key
+            ("GET", "/api/users/", SESSION_ONLY),
+            ("POST", "/api/users/", SESSION_ONLY),
+            ("GET", "/api/api-keys/", SESSION_ONLY),
+            ("POST", "/api/admin-mfa/disable", SESSION_ONLY),
+            ("POST", "/api/updates/app", SESSION_ONLY),
+            ("POST", "/api/updates/rollback/x", SESSION_ONLY),
+            ("PUT", "/api/updates/settings", SESSION_ONLY),
+            ("POST", "/api/containers/auto-update/run", SESSION_ONLY),
+            ("POST", "/api/backups/restore", SESSION_ONLY),
+            ("POST", "/api/backups/upload", SESSION_ONLY),
+            ("GET", "/api/backups/x/download", SESSION_ONLY),
+            ("POST", "/api/system/kill-switch", SESSION_ONLY),
+            # Unlisted = refused
+            ("GET", "/api/something-new", None),
+        ],
+    )
     def test_mapping(self, method, path, scope):
         assert required_scope(method, path) == scope
 
@@ -115,22 +121,30 @@ class TestKeyFormat:
 
 class TestCreateEndpoint:
     async def test_requires_two_factor_enrolment(self, client, auth_headers):
-        r = await client.post("/api/api-keys/", headers=auth_headers,
-                              json={"name": "agent", "scopes": ["read"], "code": "123456"})
+        r = await client.post(
+            "/api/api-keys/", headers=auth_headers, json={"name": "agent", "scopes": ["read"], "code": "123456"}
+        )
         assert r.status_code == 403
         assert "two-factor" in r.json()["detail"].lower()
 
     async def test_wrong_code_rejected(self, client, auth_headers, mfa_admin):
-        r = await client.post("/api/api-keys/", headers=auth_headers,
-                              json={"name": "agent", "scopes": ["read"], "code": "000000"})
+        r = await client.post(
+            "/api/api-keys/", headers=auth_headers, json={"name": "agent", "scopes": ["read"], "code": "000000"}
+        )
         assert r.status_code == 400
 
     async def test_creates_key_shown_once(self, client, auth_headers, mfa_admin, db_session):
         _, secret = mfa_admin
-        r = await client.post("/api/api-keys/", headers=auth_headers, json={
-            "name": "Claude Code", "scopes": ["write:proxy-hosts"], "expires_in_days": 30,
-            "code": pyotp.TOTP(secret).now(),
-        })
+        r = await client.post(
+            "/api/api-keys/",
+            headers=auth_headers,
+            json={
+                "name": "Claude Code",
+                "scopes": ["write:proxy-hosts"],
+                "expires_in_days": 30,
+                "code": pyotp.TOTP(secret).now(),
+            },
+        )
         assert r.status_code == 201, r.text
         body = r.json()
         assert body["key"].startswith(f"gwp_{body['prefix']}_")
@@ -146,15 +160,17 @@ class TestCreateEndpoint:
         assert len(audit) == 1 and body["key"] not in audit[0].details
 
     async def test_regular_user_cannot_create(self, client, user_auth_headers):
-        r = await client.post("/api/api-keys/", headers=user_auth_headers,
-                              json={"name": "x", "scopes": ["read"], "code": "123456"})
+        r = await client.post(
+            "/api/api-keys/", headers=user_auth_headers, json={"name": "x", "scopes": ["read"], "code": "123456"}
+        )
         assert r.status_code == 403
 
     async def test_keys_cannot_manage_keys(self, client, db_session, admin_user):
         _, key = await make_key(db_session, admin_user, ["admin"])
         assert (await client.get("/api/api-keys/", headers=bearer(key))).status_code == 403
-        r = await client.post("/api/api-keys/", headers=bearer(key),
-                              json={"name": "x", "scopes": ["admin"], "code": "123456"})
+        r = await client.post(
+            "/api/api-keys/", headers=bearer(key), json={"name": "x", "scopes": ["admin"], "code": "123456"}
+        )
         assert r.status_code == 403
 
 
@@ -166,16 +182,26 @@ class TestKeyAuthentication:
 
     async def test_read_key_cannot_mutate(self, client, db_session, admin_user):
         _, key = await make_key(db_session, admin_user, ["read"])
-        r = await client.post("/api/proxy-hosts/", headers=bearer(key), json={
-            "domain_names": ["a.example.com"], "forward_host": "10.0.0.1", "forward_port": 80,
-        })
+        r = await client.post(
+            "/api/proxy-hosts/",
+            headers=bearer(key),
+            json={
+                "domain_names": ["a.example.com"],
+                "forward_host": "10.0.0.1",
+                "forward_port": 80,
+            },
+        )
         assert r.status_code == 403
         assert "write:proxy-hosts" in r.json()["detail"]
 
     async def test_session_only_routes_refuse_admin_key(self, client, db_session, admin_user):
         _, key = await make_key(db_session, admin_user, ["admin"])
-        for method, path in [("GET", "/api/users/"), ("POST", "/api/backups/restore"),
-                             ("POST", "/api/updates/app"), ("GET", "/api/admin-mfa/status")]:
+        for method, path in [
+            ("GET", "/api/users/"),
+            ("POST", "/api/backups/restore"),
+            ("POST", "/api/updates/app"),
+            ("GET", "/api/admin-mfa/status"),
+        ]:
             r = await client.request(method, path, headers=bearer(key))
             assert r.status_code == 403, (method, path, r.status_code)
             assert "not available to API keys" in r.json()["detail"]
@@ -195,8 +221,9 @@ class TestKeyAuthentication:
         assert "revoked" in r.json()["detail"]
 
     async def test_expired_key_rejected(self, client, db_session, admin_user):
-        _, key = await make_key(db_session, admin_user, ["read"],
-                                expires_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+        _, key = await make_key(
+            db_session, admin_user, ["read"], expires_at=datetime.now(timezone.utc) - timedelta(minutes=1)
+        )
         r = await client.get("/api/proxy-hosts/", headers=bearer(key))
         assert r.status_code == 401
         assert "expired" in r.json()["detail"]

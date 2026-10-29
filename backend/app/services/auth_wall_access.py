@@ -6,6 +6,7 @@ an allow-list anyone with an account at that provider gets through. An empty
 allow-list keeps that behaviour (so upgrading never locks anyone out) and the
 admin UI warns about it.
 """
+
 from __future__ import annotations
 
 import re
@@ -76,6 +77,5 @@ def open_to_any_account(wall, providers: Optional[Iterable] = None) -> bool:
         return False
     providers = providers if providers is not None else (getattr(wall, "auth_providers", None) or [])
     return any(
-        getattr(p, "enabled", False) and getattr(p, "provider_type", None) in OAUTH_PROVIDER_TYPES
-        for p in providers
+        getattr(p, "enabled", False) and getattr(p, "provider_type", None) in OAUTH_PROVIDER_TYPES for p in providers
     )

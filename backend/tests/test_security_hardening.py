@@ -68,9 +68,12 @@ class TestInternalRoutesNeedToken:
 
 # ── client address ───────────────────────────────────────────────────────
 
+
 class TestTrustedProxies:
     def proxies(self):
-        return TrustedProxies("127.0.0.1,10.9.0.0/16,edge", resolver=lambda name: ["172.30.0.5"] if name == "edge" else [])
+        return TrustedProxies(
+            "127.0.0.1,10.9.0.0/16,edge", resolver=lambda name: ["172.30.0.5"] if name == "edge" else []
+        )
 
     def test_untrusted_peer_headers_ignored(self):
         p = self.proxies()
@@ -113,14 +116,16 @@ class TestMiddleware:
 
     async def test_spoofed_headers_from_outside(self):
         seen = await self._client_seen(
-            "203.0.113.9", {"X-Forwarded-For": "1.1.1.1", "X-Forwarded-Proto": "https"},
+            "203.0.113.9",
+            {"X-Forwarded-For": "1.1.1.1", "X-Forwarded-Proto": "https"},
             TrustedProxies("127.0.0.1"),
         )
         assert seen == {"client": "203.0.113.9", "scheme": "http"}
 
     async def test_headers_from_trusted_proxy(self):
         seen = await self._client_seen(
-            "127.0.0.1", {"X-Forwarded-For": "1.1.1.1, 198.51.100.7", "X-Forwarded-Proto": "https"},
+            "127.0.0.1",
+            {"X-Forwarded-For": "1.1.1.1, 198.51.100.7", "X-Forwarded-Proto": "https"},
             TrustedProxies("127.0.0.1"),
         )
         assert seen == {"client": "198.51.100.7", "scheme": "https"}
@@ -158,6 +163,7 @@ class TestMfaRateLimitNotBypassedBySpoofing:
 
 # ── settings ─────────────────────────────────────────────────────────────
 
+
 class TestSecretSettings:
     async def _store(self, db_session, key, value):
         db_session.add(Setting(key=key, value=value))
@@ -180,36 +186,55 @@ class TestSecretSettings:
 
     async def test_masked_value_written_back_keeps_secret(self, client, db_session, auth_headers):
         await self._store(db_session, "abuseipdb_api_key", "abcdef0123456789secretWXYZ")
-        r = await client.put("/api/settings/", headers=auth_headers,
-                             json={"settings": {"abuseipdb_api_key": "••••WXYZ", "letsencrypt_email": "a@b.co"}})
+        r = await client.put(
+            "/api/settings/",
+            headers=auth_headers,
+            json={"settings": {"abuseipdb_api_key": "••••WXYZ", "letsencrypt_email": "a@b.co"}},
+        )
         assert r.status_code == 200
         r = await client.put("/api/settings/abuseipdb_api_key", headers=auth_headers, json={"value": "••••WXYZ"})
         assert r.status_code == 200
         db_session.expire_all()
-        stored = (await db_session.execute(select(Setting.value).where(Setting.key == "abuseipdb_api_key"))).scalar_one()
+        stored = (
+            await db_session.execute(select(Setting.value).where(Setting.key == "abuseipdb_api_key"))
+        ).scalar_one()
         assert stored == "abcdef0123456789secretWXYZ"
 
     async def test_new_value_replaces_secret(self, client, db_session, auth_headers):
         await self._store(db_session, "abuseipdb_api_key", "old-old-old-old-old")
-        r = await client.put("/api/settings/abuseipdb_api_key", headers=auth_headers, json={"value": "new-key-1234567890"})
+        r = await client.put(
+            "/api/settings/abuseipdb_api_key", headers=auth_headers, json={"value": "new-key-1234567890"}
+        )
         assert r.json()["value"] == "••••7890"
         db_session.expire_all()
-        stored = (await db_session.execute(select(Setting.value).where(Setting.key == "abuseipdb_api_key"))).scalar_one()
+        stored = (
+            await db_session.execute(select(Setting.value).where(Setting.key == "abuseipdb_api_key"))
+        ).scalar_one()
         assert stored == "new-key-1234567890"
 
 
 # ── alert channels ───────────────────────────────────────────────────────
+
 
 async def _public(name):
     return ["93.184.216.34"]
 
 
 class TestOutboundUrl:
-    @pytest.mark.parametrize("url", [
-        "http://127.0.0.1/hook", "http://10.0.0.5/", "http://192.168.1.1:8080/x",
-        "http://169.254.169.254/latest/meta-data/", "http://[::1]/", "http://[fd00::1]/",
-        "http://localhost/", "http://100.64.0.1/", "http://0.0.0.0/",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1/hook",
+            "http://10.0.0.5/",
+            "http://192.168.1.1:8080/x",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/",
+            "http://[fd00::1]/",
+            "http://localhost/",
+            "http://100.64.0.1/",
+            "http://0.0.0.0/",
+        ],
+    )
     async def test_internal_refused(self, url):
         with pytest.raises(OutboundUrlError):
             await validate_outbound_url(url, resolver=_public)
@@ -236,8 +261,11 @@ async def _coro(value):
 
 class TestAlertChannels:
     async def test_non_admin_cannot_create_or_test(self, client, user_auth_headers):
-        r = await client.post("/api/alerts/channels", headers=user_auth_headers,
-                              json={"channel_type": "webhook", "name": "x", "config": json.dumps({"url": "https://example.com"})})
+        r = await client.post(
+            "/api/alerts/channels",
+            headers=user_auth_headers,
+            json={"channel_type": "webhook", "name": "x", "config": json.dumps({"url": "https://example.com"})},
+        )
         assert r.status_code == 403
         r = await client.post("/api/alerts/test", headers=user_auth_headers)
         assert r.status_code == 403
@@ -245,34 +273,63 @@ class TestAlertChannels:
         assert r.status_code == 403
 
     async def test_admin_internal_webhook_refused(self, client, auth_headers):
-        r = await client.post("/api/alerts/channels", headers=auth_headers,
-                              json={"channel_type": "webhook", "name": "x",
-                                    "config": json.dumps({"url": "http://169.254.169.254/latest/"})})
+        r = await client.post(
+            "/api/alerts/channels",
+            headers=auth_headers,
+            json={
+                "channel_type": "webhook",
+                "name": "x",
+                "config": json.dumps({"url": "http://169.254.169.254/latest/"}),
+            },
+        )
         assert r.status_code == 422
 
     async def test_admin_internal_webhook_allowed_with_setting(self, client, db_session, auth_headers):
         db_session.add(Setting(key="alerts_allow_internal_webhooks", value="true"))
         await db_session.commit()
-        r = await client.post("/api/alerts/channels", headers=auth_headers,
-                              json={"channel_type": "webhook", "name": "lan",
-                                    "config": json.dumps({"url": "http://192.168.1.20/hook"})})
+        r = await client.post(
+            "/api/alerts/channels",
+            headers=auth_headers,
+            json={"channel_type": "webhook", "name": "lan", "config": json.dumps({"url": "http://192.168.1.20/hook"})},
+        )
         assert r.status_code == 201
 
 
 # ── auth portal redirects ────────────────────────────────────────────────
 
+
 class TestRedirectTargets:
-    @pytest.mark.parametrize("target", [
-        "/", "/admin", "/a/b?x=1#frag", "https://app.example.test/x", "http://app.example.test:8443/y",
-    ])
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "/",
+            "/admin",
+            "/a/b?x=1#frag",
+            "https://app.example.test/x",
+            "http://app.example.test:8443/y",
+        ],
+    )
     def test_same_site_allowed(self, target):
         assert is_safe_redirect(target, "app.example.test")
 
-    @pytest.mark.parametrize("target", [
-        "javascript:alert(1)", "JaVaScRiPt:alert(1)", "data:text/html,x", "//evil.example/x",
-        "/\\evil.example", "https://evil.example/", "https://app.example.test.evil.example/",
-        "https://user:pw@app.example.test/", " /x", "/x\n", "\t/x", "vbscript:x", "",
-    ])
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "javascript:alert(1)",
+            "JaVaScRiPt:alert(1)",
+            "data:text/html,x",
+            "//evil.example/x",
+            "/\\evil.example",
+            "https://evil.example/",
+            "https://app.example.test.evil.example/",
+            "https://user:pw@app.example.test/",
+            " /x",
+            "/x\n",
+            "\t/x",
+            "vbscript:x",
+            "",
+        ],
+    )
     def test_others_refused(self, target):
         assert not is_safe_redirect(target, "app.example.test")
 
@@ -283,8 +340,14 @@ class TestRedirectTargets:
         wall = AuthWall(name="W", auth_type="oauth")
         db_session.add(wall)
         await db_session.flush()
-        provider = AuthProvider(auth_wall_id=wall.id, name="G", provider_type="google",
-                                client_id="cid", client_secret=encrypt_data("s"), enabled=True)
+        provider = AuthProvider(
+            auth_wall_id=wall.id,
+            name="G",
+            provider_type="google",
+            client_id="cid",
+            client_secret=encrypt_data("s"),
+            enabled=True,
+        )
         db_session.add(provider)
         await db_session.commit()
 
@@ -308,8 +371,11 @@ class TestRedirectTargets:
 
 # ── OAuth allow-list ─────────────────────────────────────────────────────
 
+
 def _wall(emails=None, domains=None, providers=()):
-    return SimpleNamespace(allowed_emails=emails or [], allowed_email_domains=domains or [], auth_providers=list(providers))
+    return SimpleNamespace(
+        allowed_emails=emails or [], allowed_email_domains=domains or [], auth_providers=list(providers)
+    )
 
 
 class TestAllowList:
@@ -354,17 +420,27 @@ class TestAllowList:
 
 class TestAllowListApi:
     async def test_create_update_and_warning_flag(self, client, auth_headers):
-        r = await client.post("/api/auth-walls/", headers=auth_headers, json={
-            "name": "Staff", "auth_type": "oauth",
-            "auth_providers": [{"name": "Google", "provider_type": "google", "client_id": "c", "client_secret": "s"}],
-        })
+        r = await client.post(
+            "/api/auth-walls/",
+            headers=auth_headers,
+            json={
+                "name": "Staff",
+                "auth_type": "oauth",
+                "auth_providers": [
+                    {"name": "Google", "provider_type": "google", "client_id": "c", "client_secret": "s"}
+                ],
+            },
+        )
         assert r.status_code == 201, r.text
         wall = r.json()
         assert wall["oauth_open_to_anyone"] is True
         assert wall["allowed_emails"] == [] and wall["allowed_email_domains"] == []
 
-        r = await client.put(f"/api/auth-walls/{wall['id']}", headers=auth_headers,
-                             json={"allowed_email_domains": ["Example.com", "example.com"], "allowed_emails": ["Boss@Other.org"]})
+        r = await client.put(
+            f"/api/auth-walls/{wall['id']}",
+            headers=auth_headers,
+            json={"allowed_email_domains": ["Example.com", "example.com"], "allowed_emails": ["Boss@Other.org"]},
+        )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["allowed_email_domains"] == ["example.com"]
@@ -372,8 +448,9 @@ class TestAllowListApi:
         assert body["oauth_open_to_anyone"] is False
 
     async def test_invalid_entries_rejected(self, client, auth_headers):
-        r = await client.post("/api/auth-walls/", headers=auth_headers,
-                              json={"name": "X", "allowed_email_domains": ["not a domain"]})
+        r = await client.post(
+            "/api/auth-walls/", headers=auth_headers, json={"name": "X", "allowed_email_domains": ["not a domain"]}
+        )
         assert r.status_code == 422
 
     @pytest.mark.parametrize("name", ['a"b', "a;b", "a{b", "a\nb", "$host"])
@@ -394,8 +471,14 @@ class TestOAuthCallbackEnforcesAllowList:
         wall = AuthWall(name="W", auth_type="oauth", allowed_email_domains=domains, allowed_emails=[])
         db_session.add(wall)
         await db_session.flush()
-        provider = AuthProvider(auth_wall_id=wall.id, name="G", provider_type="google",
-                                client_id="cid", client_secret=encrypt_data("s"), enabled=True)
+        provider = AuthProvider(
+            auth_wall_id=wall.id,
+            name="G",
+            provider_type="google",
+            client_id="cid",
+            client_secret=encrypt_data("s"),
+            enabled=True,
+        )
         db_session.add(provider)
         await db_session.commit()
         return wall, provider
@@ -405,17 +488,27 @@ class TestOAuthCallbackEnforcesAllowList:
         from app.services.auth_providers.base import UserInfo
 
         state = {
-            "auth_wall_id": wall.id, "provider_id": provider.id, "redirect_url": "/home",
+            "auth_wall_id": wall.id,
+            "provider_id": provider.id,
+            "redirect_url": "/home",
             "callback_url": "https://app.example.test/cb",
             "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
         }
-        info = UserInfo(user_id="1", username="u", email=email, provider_type="google",
-                        raw_data={"email_verified": True})
-        with patch("app.api.routes.auth_portal._get_oauth_state", AsyncMock(return_value=state)), \
-             patch("app.api.routes.auth_portal._del_oauth_state", AsyncMock()), \
-             patch("app.services.auth_providers.google.GoogleAuthProvider.handle_callback", AsyncMock(return_value=info)):
-            return await client.get(f"/api/auth-portal/{wall.id}/callback",
-                                    params={"code": "c", "state": "s"}, headers={"Host": "app.example.test"})
+        info = UserInfo(
+            user_id="1", username="u", email=email, provider_type="google", raw_data={"email_verified": True}
+        )
+        with (
+            patch("app.api.routes.auth_portal._get_oauth_state", AsyncMock(return_value=state)),
+            patch("app.api.routes.auth_portal._del_oauth_state", AsyncMock()),
+            patch(
+                "app.services.auth_providers.google.GoogleAuthProvider.handle_callback", AsyncMock(return_value=info)
+            ),
+        ):
+            return await client.get(
+                f"/api/auth-portal/{wall.id}/callback",
+                params={"code": "c", "state": "s"},
+                headers={"Host": "app.example.test"},
+            )
 
     async def test_outsider_refused(self, client, db_session):
         wall, provider = await self._setup(db_session, ["example.com"])
@@ -427,8 +520,10 @@ class TestOAuthCallbackEnforcesAllowList:
 
     async def test_listed_domain_admitted(self, client, db_session):
         wall, provider = await self._setup(db_session, ["example.com"])
-        with patch("app.services.session_service.SessionService.create_session",
-                   AsyncMock(return_value=(SimpleNamespace(id="s"), "sid.sig"))):
+        with patch(
+            "app.services.session_service.SessionService.create_session",
+            AsyncMock(return_value=(SimpleNamespace(id="s"), "sid.sig")),
+        ):
             r = await self._callback(client, wall, provider, "alice@example.com")
         assert r.status_code == 302
         assert r.headers["location"] == "/home"
@@ -436,6 +531,7 @@ class TestOAuthCallbackEnforcesAllowList:
 
 
 # ── backups ──────────────────────────────────────────────────────────────
+
 
 class TestBackupSafety:
     async def test_without_traffic_logs_keeps_the_table(self, tmp_path):
@@ -462,9 +558,12 @@ class TestBackupSafety:
 
         def fake_run(cmd, **kwargs):
             if cmd[0] == "pg_restore":
-                return SimpleNamespace(returncode=1, stdout="",
-                                       stderr="pg_restore: error: could not execute query: ERROR:  relation \"x\" does not exist\n"
-                                              "pg_restore: warning: errors ignored on restore: 1\n")
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="pg_restore: error: could not execute query: ERROR:  relation \"x\" does not exist\n"
+                    "pg_restore: warning: errors ignored on restore: 1\n",
+                )
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         with patch("app.services.backup_service.subprocess.run", fake_run):
@@ -484,9 +583,16 @@ class TestBackupSafety:
         with tarfile.open(archive, "w:gz") as tar:
             tar.add(src / "database", arcname="database")
 
-        backup = Backup(filename="b.tar.gz", file_path=str(archive), status="completed",
-                        includes_database=True, includes_certificates=True,
-                        includes_letsencrypt=False, includes_configs=False, backup_type="manual")
+        backup = Backup(
+            filename="b.tar.gz",
+            file_path=str(archive),
+            status="completed",
+            includes_database=True,
+            includes_certificates=True,
+            includes_letsencrypt=False,
+            includes_configs=False,
+            backup_type="manual",
+        )
         db_session.add(backup)
         await db_session.commit()
 

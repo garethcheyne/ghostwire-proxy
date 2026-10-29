@@ -5,6 +5,7 @@ absolute http(s) URL on the host the request came in on. Anything else
 (another site, a scheme-relative "//evil", "javascript:", backslash tricks,
 control characters) becomes "/".
 """
+
 from __future__ import annotations
 
 import re

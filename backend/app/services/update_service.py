@@ -83,10 +83,7 @@ class UpdateService:
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(
-                timeout=30.0,
-                headers={"User-Agent": "Ghostwire-Proxy-Updater"}
-            )
+            self._http_client = httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "Ghostwire-Proxy-Updater"})
         return self._http_client
 
     async def close(self):
@@ -98,10 +95,7 @@ class UpdateService:
     # VERSION CHECKING
     # =========================================================================
 
-    async def check_for_app_updates(
-        self,
-        db: Optional[AsyncSession] = None
-    ) -> dict:
+    async def check_for_app_updates(self, db: Optional[AsyncSession] = None) -> dict:
         """
         Check for new application versions via GitHub releases.
 
@@ -124,10 +118,7 @@ class UpdateService:
 
         try:
             url = f"{GITHUB_API_URL}/repos/{github_repo}/releases"
-            response = await self.http_client.get(
-                url,
-                headers={"Accept": "application/vnd.github.v3+json"}
-            )
+            response = await self.http_client.get(url, headers={"Accept": "application/vnd.github.v3+json"})
 
             if response.status_code == 200:
                 releases = response.json()
@@ -145,14 +136,16 @@ class UpdateService:
                         if not _is_valid_version(tag):
                             continue
 
-                        result["releases"].append({
-                            "version": tag,
-                            "name": release.get("name") or f"v{tag}",
-                            "published_at": release.get("published_at"),
-                            "changelog": release.get("body"),
-                            "html_url": release.get("html_url"),
-                            "prerelease": is_prerelease,
-                        })
+                        result["releases"].append(
+                            {
+                                "version": tag,
+                                "name": release.get("name") or f"v{tag}",
+                                "published_at": release.get("published_at"),
+                                "changelog": release.get("body"),
+                                "html_url": release.get("html_url"),
+                                "prerelease": is_prerelease,
+                            }
+                        )
                     except ValueError:
                         continue
 
@@ -185,10 +178,7 @@ class UpdateService:
 
         return result
 
-    async def check_for_base_image_updates(
-        self,
-        db: Optional[AsyncSession] = None
-    ) -> list[dict]:
+    async def check_for_base_image_updates(self, db: Optional[AsyncSession] = None) -> list[dict]:
         """
         Check for base image updates using Docker registry API.
 
@@ -210,9 +200,7 @@ class UpdateService:
                 # Get stored digest from database
                 if db:
                     stored = await db.execute(
-                        select(BaseImageVersion).where(
-                            BaseImageVersion.container_name == container
-                        )
+                        select(BaseImageVersion).where(BaseImageVersion.container_name == container)
                     )
                     stored_version = stored.scalar_one_or_none()
                     if stored_version:
@@ -236,9 +224,11 @@ class UpdateService:
                     image_result["latest_digest"] = digest
 
                     # Compare digests
-                    if (image_result["current_digest"] and
-                            image_result["latest_digest"] and
-                            image_result["current_digest"] != image_result["latest_digest"]):
+                    if (
+                        image_result["current_digest"]
+                        and image_result["latest_digest"]
+                        and image_result["current_digest"] != image_result["latest_digest"]
+                    ):
                         image_result["update_available"] = True
 
             except Exception as e:
@@ -249,18 +239,10 @@ class UpdateService:
 
         return results
 
-    async def _get_docker_hub_token(
-        self,
-        namespace: str,
-        name: str
-    ) -> Optional[str]:
+    async def _get_docker_hub_token(self, namespace: str, name: str) -> Optional[str]:
         """Get Docker Hub authentication token for image access."""
         try:
-            url = (
-                f"https://auth.docker.io/token?"
-                f"service=registry.docker.io&"
-                f"scope=repository:{namespace}/{name}:pull"
-            )
+            url = f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{namespace}/{name}:pull"
             response = await self.http_client.get(url)
             if response.status_code == 200:
                 return response.json().get("token")
@@ -268,13 +250,7 @@ class UpdateService:
             logger.debug(f"Failed to get Docker Hub token: {e}")
         return None
 
-    async def _get_image_digest(
-        self,
-        namespace: str,
-        name: str,
-        tag: str,
-        token: str
-    ) -> Optional[str]:
+    async def _get_image_digest(self, namespace: str, name: str, tag: str, token: str) -> Optional[str]:
         """Get image manifest digest from Docker Hub."""
         try:
             url = f"https://registry-1.docker.io/v2/{namespace}/{name}/manifests/{tag}"
@@ -283,7 +259,7 @@ class UpdateService:
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Accept": "application/vnd.docker.distribution.manifest.v2+json",
-                }
+                },
             )
             if response.status_code == 200:
                 return response.headers.get("Docker-Content-Digest")
@@ -314,9 +290,7 @@ class UpdateService:
 
         # Check if an update is already in progress
         in_progress = await db.execute(
-            select(UpdateHistory).where(
-                UpdateHistory.status.in_(["pending", "in_progress"])
-            )
+            select(UpdateHistory).where(UpdateHistory.status.in_(["pending", "in_progress"]))
         )
         if in_progress.scalar_one_or_none():
             raise ValueError("An update is already in progress")
@@ -339,12 +313,17 @@ class UpdateService:
         # Signal the updater sidecar via Redis pub/sub
         try:
             redis = await get_redis()
-            await redis.publish("ghostwire:updates", json.dumps({
-                "action": "start_update",
-                "update_id": update.id,
-                "update_type": "app",
-                "target_version": target_version,
-            }))
+            await redis.publish(
+                "ghostwire:updates",
+                json.dumps(
+                    {
+                        "action": "start_update",
+                        "update_id": update.id,
+                        "update_type": "app",
+                        "target_version": target_version,
+                    }
+                ),
+            )
             logger.info(f"Published app update request: {update.id}")
         except Exception as e:
             logger.error(f"Failed to publish update request: {e}")
@@ -370,9 +349,7 @@ class UpdateService:
 
         # Check if an update is already in progress
         in_progress = await db.execute(
-            select(UpdateHistory).where(
-                UpdateHistory.status.in_(["pending", "in_progress"])
-            )
+            select(UpdateHistory).where(UpdateHistory.status.in_(["pending", "in_progress"]))
         )
         if in_progress.scalar_one_or_none():
             raise ValueError("An update is already in progress")
@@ -398,12 +375,17 @@ class UpdateService:
         # Signal the updater sidecar
         try:
             redis = await get_redis()
-            await redis.publish("ghostwire:updates", json.dumps({
-                "action": "start_update",
-                "update_id": update.id,
-                "update_type": "base_image",
-                "container_name": container_name,
-            }))
+            await redis.publish(
+                "ghostwire:updates",
+                json.dumps(
+                    {
+                        "action": "start_update",
+                        "update_id": update.id,
+                        "update_type": "base_image",
+                        "container_name": container_name,
+                    }
+                ),
+            )
             logger.info(f"Published base image update request: {update.id}")
         except Exception as e:
             logger.error(f"Failed to publish update request: {e}")
@@ -414,11 +396,7 @@ class UpdateService:
 
         return update
 
-    async def get_update_status(
-        self,
-        db: AsyncSession,
-        update_id: str
-    ) -> Optional[UpdateHistory]:
+    async def get_update_status(self, db: AsyncSession, update_id: str) -> Optional[UpdateHistory]:
         """Get current status of an update."""
         # First check Redis for real-time status
         try:
@@ -426,9 +404,7 @@ class UpdateService:
             status_data = await redis.hgetall(f"update:{update_id}")
             if status_data:
                 # Update database with latest status
-                result = await db.execute(
-                    select(UpdateHistory).where(UpdateHistory.id == update_id)
-                )
+                result = await db.execute(select(UpdateHistory).where(UpdateHistory.id == update_id))
                 update = result.scalar_one_or_none()
                 if update:
                     if "status" in status_data:
@@ -447,22 +423,12 @@ class UpdateService:
             logger.debug(f"Could not fetch real-time status: {e}")
 
         # Fallback to database
-        result = await db.execute(
-            select(UpdateHistory).where(UpdateHistory.id == update_id)
-        )
+        result = await db.execute(select(UpdateHistory).where(UpdateHistory.id == update_id))
         return result.scalar_one_or_none()
 
-    async def get_update_history(
-        self,
-        db: AsyncSession,
-        limit: int = 20
-    ) -> list[UpdateHistory]:
+    async def get_update_history(self, db: AsyncSession, limit: int = 20) -> list[UpdateHistory]:
         """Get update history."""
-        result = await db.execute(
-            select(UpdateHistory)
-            .order_by(desc(UpdateHistory.started_at))
-            .limit(limit)
-        )
+        result = await db.execute(select(UpdateHistory).order_by(desc(UpdateHistory.started_at)).limit(limit))
         return list(result.scalars().all())
 
     async def request_rollback(
@@ -475,9 +441,7 @@ class UpdateService:
         Request rollback of a completed update.
         """
         # Get original update
-        result = await db.execute(
-            select(UpdateHistory).where(UpdateHistory.id == update_id)
-        )
+        result = await db.execute(select(UpdateHistory).where(UpdateHistory.id == update_id))
         original = result.scalar_one_or_none()
 
         if not original:
@@ -518,12 +482,17 @@ class UpdateService:
         # Signal rollback
         try:
             redis = await get_redis()
-            await redis.publish("ghostwire:updates", json.dumps({
-                "action": "rollback",
-                "update_id": rollback.id,
-                "original_update_id": update_id,
-                "backup_id": original.backup_id,
-            }))
+            await redis.publish(
+                "ghostwire:updates",
+                json.dumps(
+                    {
+                        "action": "rollback",
+                        "update_id": rollback.id,
+                        "original_update_id": update_id,
+                        "backup_id": original.backup_id,
+                    }
+                ),
+            )
             logger.info(f"Published rollback request: {rollback.id}")
         except Exception as e:
             logger.error(f"Failed to publish rollback request: {e}")
@@ -540,9 +509,7 @@ class UpdateService:
 
     async def get_settings(self, db: AsyncSession) -> UpdateSettings:
         """Get update settings, creating default if not exists."""
-        result = await db.execute(
-            select(UpdateSettings).order_by(UpdateSettings.updated_at.desc()).limit(1)
-        )
+        result = await db.execute(select(UpdateSettings).order_by(UpdateSettings.updated_at.desc()).limit(1))
         settings = result.scalar_one_or_none()
 
         if not settings:
@@ -553,11 +520,7 @@ class UpdateService:
 
         return settings
 
-    async def update_settings(
-        self,
-        db: AsyncSession,
-        **kwargs
-    ) -> UpdateSettings:
+    async def update_settings(self, db: AsyncSession, **kwargs) -> UpdateSettings:
         """Update settings."""
         settings = await self.get_settings(db)
 

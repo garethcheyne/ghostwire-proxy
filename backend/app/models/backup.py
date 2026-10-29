@@ -9,6 +9,7 @@ from app.core.database import Base
 
 class Backup(Base):
     """Stores metadata about backups."""
+
     __tablename__ = "backups"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -40,6 +41,7 @@ class Backup(Base):
 
 class BackupSettings(Base):
     """Stores backup configuration settings."""
+
     __tablename__ = "backup_settings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

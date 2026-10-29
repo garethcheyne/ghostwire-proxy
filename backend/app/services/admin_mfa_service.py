@@ -8,6 +8,7 @@ the two behave identically, rather than a second dialect of the same feature.
 
 Secrets and backup codes are Fernet-encrypted at rest via `core.security`.
 """
+
 import json
 import secrets
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from app.models.setting import Setting
 
 try:
     import pyotp
+
     TOTP_AVAILABLE = True
 except ImportError:  # pragma: no cover - pyotp is a hard requirement in prod
     TOTP_AVAILABLE = False
@@ -46,17 +48,12 @@ def _require_pyotp() -> None:
 
 def generate_backup_codes() -> list[str]:
     """Ten single-use codes, shown once and stored encrypted."""
-    return [
-        secrets.token_hex(BACKUP_CODE_LENGTH // 2).upper()
-        for _ in range(BACKUP_CODE_COUNT)
-    ]
+    return [secrets.token_hex(BACKUP_CODE_LENGTH // 2).upper() for _ in range(BACKUP_CODE_COUNT)]
 
 
 async def is_mfa_required(db: AsyncSession) -> bool:
     """Whether every admin account must have MFA enrolled."""
-    result = await db.execute(
-        select(Setting).where(Setting.key == REQUIRE_MFA_SETTING)
-    )
+    result = await db.execute(select(Setting).where(Setting.key == REQUIRE_MFA_SETTING))
     setting = result.scalar_one_or_none()
     if not setting or setting.value is None:
         return False
@@ -64,18 +61,18 @@ async def is_mfa_required(db: AsyncSession) -> bool:
 
 
 async def set_mfa_required(db: AsyncSession, required: bool) -> None:
-    result = await db.execute(
-        select(Setting).where(Setting.key == REQUIRE_MFA_SETTING)
-    )
+    result = await db.execute(select(Setting).where(Setting.key == REQUIRE_MFA_SETTING))
     setting = result.scalar_one_or_none()
     if setting:
         setting.value = "true" if required else "false"
     else:
-        db.add(Setting(
-            key=REQUIRE_MFA_SETTING,
-            value="true" if required else "false",
-            description="Require all admin portal accounts to enrol in two-factor authentication",
-        ))
+        db.add(
+            Setting(
+                key=REQUIRE_MFA_SETTING,
+                value="true" if required else "false",
+                description="Require all admin portal accounts to enrol in two-factor authentication",
+            )
+        )
     await db.commit()
 
 
@@ -102,7 +99,7 @@ async def begin_enrolment(db: AsyncSession, user: User) -> dict:
 
     user.totp_secret = encrypt_data(secret)
     user.totp_backup_codes = encrypt_data(json.dumps(backup_codes))
-    user.totp_enabled = False   # not enforced until the code is verified
+    user.totp_enabled = False  # not enforced until the code is verified
     user.totp_verified = False
     await db.commit()
 

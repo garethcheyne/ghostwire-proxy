@@ -250,6 +250,7 @@ class TestTrafficLogModel:
     async def test_create_traffic_log(self, db_session):
         # TrafficLog requires proxy_host_id (FK), create a proxy host first
         from app.models.proxy_host import ProxyHost
+
         host = ProxyHost(
             id="ph-traffic-test",
             domain_names=["traffic.test"],

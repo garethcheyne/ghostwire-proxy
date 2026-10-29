@@ -12,13 +12,33 @@ from sqlalchemy import text
 CERTIFICATES = [
     {"id": "17ec7428-4dde-4ccf-aa46-891a2b313d37", "name": "sonarr.err403.com", "domain_names": ["sonarr.err403.com"]},
     {"id": "18ece02c-ff55-4a69-b519-b31fb2d69f9f", "name": "radarr.err403.com", "domain_names": ["radarr.err403.com"]},
-    {"id": "4d3505dd-6e51-48bb-ab28-b54e5dd938ff", "name": "route-x.err403.com", "domain_names": ["route-x.err403.com"]},
+    {
+        "id": "4d3505dd-6e51-48bb-ab28-b54e5dd938ff",
+        "name": "route-x.err403.com",
+        "domain_names": ["route-x.err403.com"],
+    },
     {"id": "7855ad37-4013-48e7-865f-725b90b2d58a", "name": "plex.err403.com", "domain_names": ["plex.err403.com"]},
-    {"id": "7fe76c5b-8155-4de5-ab02-0bbf8527578c", "name": "ghostwire.err403.com", "domain_names": ["ghostwire.err403.com"]},
-    {"id": "95f5bad6-eaf3-4df2-82f8-6346f5f183c2", "name": "overseerr.err403.com", "domain_names": ["overseerr.err403.com"]},
+    {
+        "id": "7fe76c5b-8155-4de5-ab02-0bbf8527578c",
+        "name": "ghostwire.err403.com",
+        "domain_names": ["ghostwire.err403.com"],
+    },
+    {
+        "id": "95f5bad6-eaf3-4df2-82f8-6346f5f183c2",
+        "name": "overseerr.err403.com",
+        "domain_names": ["overseerr.err403.com"],
+    },
     {"id": "b8260878-da62-4b68-a3dd-17ad17664ef2", "name": "docs.err403.com", "domain_names": ["docs.err403.com"]},
-    {"id": "b9baa307-7ac8-49c0-a67b-e536e8c5411c", "name": "dev-cpr.err403.com", "domain_names": ["dev-cpr.err403.com"]},
-    {"id": "bb2c3f89-e3e1-4934-b7dd-35f7a05673ae", "name": "err403.com", "domain_names": ["err403.com", "www.err403.com"]},
+    {
+        "id": "b9baa307-7ac8-49c0-a67b-e536e8c5411c",
+        "name": "dev-cpr.err403.com",
+        "domain_names": ["dev-cpr.err403.com"],
+    },
+    {
+        "id": "bb2c3f89-e3e1-4934-b7dd-35f7a05673ae",
+        "name": "err403.com",
+        "domain_names": ["err403.com", "www.err403.com"],
+    },
     {"id": "cda15eb1-ca72-4f26-b83b-090ab1b63de8", "name": "pass.err403.com", "domain_names": ["pass.err403.com"]},
 ]
 

@@ -11,7 +11,9 @@ from app.models.user import User
 from app.models.firewall import FirewallConnector, FirewallBlocklist
 from app.models.audit_log import AuditLog
 from app.schemas.firewall import (
-    FirewallConnectorCreate, FirewallConnectorUpdate, FirewallConnectorResponse,
+    FirewallConnectorCreate,
+    FirewallConnectorUpdate,
+    FirewallConnectorResponse,
     FirewallBlocklistResponse,
 )
 from app.api.deps import get_current_user, get_current_admin_user
@@ -26,10 +28,9 @@ async def firewall_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Check if any enabled firewall connectors are configured."""
+
     async def _compute():
-        result = await db.execute(
-            select(func.count(FirewallConnector.id)).where(FirewallConnector.enabled == True)
-        )
+        result = await db.execute(select(func.count(FirewallConnector.id)).where(FirewallConnector.enabled == True))
         count = result.scalar() or 0
         return {"has_enabled_connectors": count > 0, "enabled_count": int(count)}
 
@@ -43,8 +44,10 @@ async def list_connectors(
 ):
     async def _compute():
         result = await db.execute(select(FirewallConnector).order_by(FirewallConnector.name))
-        return [FirewallConnectorResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
-                for c in result.scalars().all()]
+        return [
+            FirewallConnectorResponse.model_validate(c, from_attributes=True).model_dump(mode="json")
+            for c in result.scalars().all()
+        ]
 
     return await cached_json("firewalls:list", ttl=30, producer=_compute)
 
@@ -72,13 +75,16 @@ async def create_connector(
     )
     db.add(connector)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="firewall_connector_created",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Created firewall connector: {data.name} ({data.connector_type})",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="firewall_connector_created",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Created firewall connector: {data.name} ({data.connector_type})",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("firewalls:")
     await db.refresh(connector)
@@ -122,13 +128,16 @@ async def update_connector(
     for field, value in update_data.items():
         setattr(connector, field, value)
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="firewall_connector_updated",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Updated firewall connector: {connector.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="firewall_connector_updated",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Updated firewall connector: {connector.name}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("firewalls:")
     await db.refresh(connector)
@@ -147,13 +156,16 @@ async def delete_connector(
     if not connector:
         raise HTTPException(status_code=404, detail="Firewall connector not found")
 
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="firewall_connector_deleted",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Deleted firewall connector: {connector.name}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="firewall_connector_deleted",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Deleted firewall connector: {connector.name}",
+        )
+    )
     await db.delete(connector)
     await db.commit()
     await cache_delete_prefix("firewalls:")
@@ -198,19 +210,22 @@ async def ensure_firewall_rule(
     if not hasattr(instance, 'ensure_firewall_rule'):
         return {
             "success": False,
-            "error": f"Connector type '{connector.connector_type}' does not support automatic rule creation"
+            "error": f"Connector type '{connector.connector_type}' does not support automatic rule creation",
         }
 
     rule_result = await instance.ensure_firewall_rule()
 
     if rule_result.get("success"):
-        db.add(AuditLog(
-            user_id=current_user.id, email=current_user.email,
-            action="firewall_rule_ensured",
-            ip_address=get_client_ip(request),
-            user_agent=request.headers.get("user-agent"),
-            details=f"Ensured firewall rule for {connector.name}: {rule_result.get('message', '')}",
-        ))
+        db.add(
+            AuditLog(
+                user_id=current_user.id,
+                email=current_user.email,
+                action="firewall_rule_ensured",
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+                details=f"Ensured firewall rule for {connector.name}: {rule_result.get('message', '')}",
+            )
+        )
         await db.commit()
     await cache_delete_prefix("firewalls:")
 
@@ -236,11 +251,7 @@ async def test_block(
     # Step 1: Add the test block
     add_result = await instance.add_to_blocklist(test_ip, "Ghostwire test block - will be removed")
     if not add_result:
-        return {
-            "success": False,
-            "step": "add",
-            "error": f"Failed to add {test_ip} to blocklist"
-        }
+        return {"success": False, "step": "add", "error": f"Failed to add {test_ip} to blocklist"}
 
     # Step 2: Remove the test block
     remove_result = await instance.remove_from_blocklist(test_ip)
@@ -248,24 +259,24 @@ async def test_block(
         return {
             "success": False,
             "step": "remove",
-            "error": f"Added {test_ip} but failed to remove it - please remove manually"
+            "error": f"Added {test_ip} but failed to remove it - please remove manually",
         }
 
     # Log the test
-    db.add(AuditLog(
-        user_id=current_user.id, email=current_user.email,
-        action="firewall_test_block",
-        ip_address=get_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-        details=f"Tested block/unblock on {connector.name} with IP {test_ip}",
-    ))
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            email=current_user.email,
+            action="firewall_test_block",
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+            details=f"Tested block/unblock on {connector.name} with IP {test_ip}",
+        )
+    )
     await db.commit()
     await cache_delete_prefix("firewalls:")
 
-    return {
-        "success": True,
-        "message": f"Successfully added and removed {test_ip} from {connector.name}"
-    }
+    return {"success": True, "message": f"Successfully added and removed {test_ip} from {connector.name}"}
 
 
 @router.post("/{connector_id}/sync")
@@ -301,6 +312,7 @@ async def sync_blocklist(
     errors = 0
 
     from datetime import datetime, timezone
+
     for entry in entries:
         success, error_msg = await instance.add_to_blocklist(entry.ip_address, f"Ghostwire threat score block")
         if success:
@@ -334,10 +346,7 @@ async def list_blocklist(
 ):
     # Deduplicate: for each ip_address, keep only the most recent entry
     # Subquery to find the max id (newest) per IP
-    subq = (
-        select(func.max(FirewallBlocklist.id).label("keep_id"))
-        .group_by(FirewallBlocklist.ip_address)
-    )
+    subq = select(func.max(FirewallBlocklist.id).label("keep_id")).group_by(FirewallBlocklist.ip_address)
     if status_filter:
         subq = subq.where(FirewallBlocklist.status == status_filter)
     subq = subq.subquery()

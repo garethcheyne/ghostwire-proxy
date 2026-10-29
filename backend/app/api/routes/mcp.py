@@ -12,6 +12,7 @@ the scope checks and the validate-then-reload logic are; the admin UI already fo
 so the URL is the same one the UI is served on. Stateless: no session is issued, so nothing is
 kept between requests.
 """
+
 import json
 import logging
 from urllib.parse import urlparse
@@ -75,8 +76,10 @@ async def mcp_post(request: Request, db: AsyncSession = Depends(get_db)):
     # Absent means an older client; the spec says assume 2025-03-26 rather than reject.
     version = request.headers.get("mcp-protocol-version")
     if version and version not in SUPPORTED_PROTOCOL_VERSIONS:
-        return _json({"error": f'Unsupported MCP-Protocol-Version "{version}".',
-                      "supported": list(SUPPORTED_PROTOCOL_VERSIONS)}, 400)
+        return _json(
+            {"error": f'Unsupported MCP-Protocol-Version "{version}".', "supported": list(SUPPORTED_PROTOCOL_VERSIONS)},
+            400,
+        )
 
     try:
         message = json.loads(await request.body() or b"null")
@@ -93,10 +96,14 @@ async def mcp_post(request: Request, db: AsyncSession = Depends(get_db)):
     scheme, _, token = authorization.partition(" ")
     token = token.strip()
     if scheme.lower() != "bearer" or not api_key_service.looks_like_key(token):
-        return _json(rpc_error(
-            message.get("id"), RPC.INVALID_REQUEST,
-            "Send an API key: Authorization: Bearer gwp_... Create one under Settings > API keys.",
-        ), 401)
+        return _json(
+            rpc_error(
+                message.get("id"),
+                RPC.INVALID_REQUEST,
+                "Send an API key: Authorization: Bearer gwp_... Create one under Settings > API keys.",
+            ),
+            401,
+        )
 
     client_ip = get_client_ip(request)
     try:
@@ -124,7 +131,8 @@ async def mcp_post(request: Request, db: AsyncSession = Depends(get_db)):
         logger.info(
             "mcp.tool tool=%s key=%s user=%s error=%s",
             params.get("name") if isinstance(params, dict) else None,
-            principal.prefix, principal.user.email,
+            principal.prefix,
+            principal.user.email,
             bool((response.get("result") or {}).get("isError")) or "error" in response,
         )
 
