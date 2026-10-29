@@ -23,11 +23,21 @@ os.environ.setdefault("BCRYPT_ROUNDS", "4")  # Fast rounds for tests
 os.environ.setdefault("BETTER_AUTH_SECRET", "test-better-auth-secret")
 os.environ.setdefault("INTERNAL_AUTH_TOKEN", "test-internal-token")
 
+
+def _default_test_database_url() -> str:
+    """The ambient server and credentials, but always the throwaway ghostwire_proxy_test database.
+
+    (No password lives in this file: inside the API container DATABASE_URL already
+    has the server's credentials; only the database name is swapped.)
+    """
+    from urllib.parse import urlsplit, urlunsplit
+
+    ambient = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ghostwire@ghostwire-proxy-postgres:5432/x")
+    return urlunsplit(urlsplit(ambient)._replace(path="/ghostwire_proxy_test", query=""))
+
+
 # Test database URL — a dedicated throwaway database, never the ambient one.
-TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://ghostwire:GhostwireProxy2024Secure@ghostwire-proxy-postgres:5432/ghostwire_proxy_test",
-)
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL") or _default_test_database_url()
 
 # Hard stop rather than a silent fallback: the cost of getting this wrong is the
 # entire database.
@@ -65,6 +75,14 @@ TestSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Each test starts with a fresh rate-limit allowance (the limiter is in-memory, per process)."""
+    from app.core.rate_limiter import limiter
+
+    limiter.reset()
 
 
 @pytest.fixture(autouse=True)

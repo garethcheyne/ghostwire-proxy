@@ -151,7 +151,7 @@ async def disable_mfa(
         await _audit(db, request, current_user, "mfa_disable_failed", "Invalid password")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password")
 
-    if not await admin_mfa_service.verify_code(db, current_user, disable_request.code):
+    if not await admin_mfa_service.verify_code(db, current_user, disable_request.code, purpose="disable"):
         await _audit(db, request, current_user, "mfa_disable_failed", "Invalid code")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code")
 

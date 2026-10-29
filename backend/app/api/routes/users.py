@@ -2,7 +2,7 @@ import secrets
 import string
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin_user, get_current_user
@@ -147,6 +147,22 @@ async def update_user(
 
     # Update fields
     update_data = user_data.model_dump(exclude_unset=True)
+
+    # Never leave the instance without an active admin (e.g. the only admin demoting
+    # or disabling themselves): nobody could manage it afterwards.
+    loses_admin = (update_data.get('role', user.role) != 'admin') or (
+        update_data.get('is_active', user.is_active) is False
+    )
+    if user.role == 'admin' and user.is_active and loses_admin:
+        active_admins = await db.scalar(
+            select(func.count()).select_from(User).where(User.role == 'admin', User.is_active == True)
+        )
+        if (active_admins or 0) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This is the only active admin. Make another user an admin first.",
+            )
+
     new_password = update_data.pop('password', None)
     if new_password:
         await set_password(db, user, new_password)

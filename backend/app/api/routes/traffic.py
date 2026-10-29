@@ -585,7 +585,8 @@ async def get_enrichment_status(
 
 @router.post("/enrichment/backfill")
 async def trigger_enrichment_backfill(
-    current_user: User = Depends(get_current_user),
+    # Spends the ip-api / AbuseIPDB allowance and writes to the database: admins only.
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Manually trigger one batch of IP enrichment backfill."""

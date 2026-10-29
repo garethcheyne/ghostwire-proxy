@@ -203,7 +203,9 @@ async def update_channel(
 async def delete_channel(
     channel_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    # Admin-only like create and update: a channel with no owner is global, and the
+    # ownership check below would let anyone delete it.
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(AlertChannel).where(AlertChannel.id == channel_id))

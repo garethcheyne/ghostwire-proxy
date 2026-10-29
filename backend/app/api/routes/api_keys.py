@@ -90,7 +90,7 @@ async def create_api_key(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Turn on two-factor authentication for your account (Settings) before creating API keys.",
         )
-    if not await admin_mfa_service.verify_code(db, current_user, payload.code):
+    if not await admin_mfa_service.verify_code(db, current_user, payload.code, purpose="api-key"):
         _audit(db, request, current_user, "api_key_create_failed", "Invalid two-factor code")
         await db.commit()
         # 400, not 401: the admin UI treats any 401 as "session expired" and signs out.

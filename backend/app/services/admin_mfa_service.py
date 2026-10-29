@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_data, encrypt_data
 from app.models.setting import Setting
 from app.models.user import User
+from app.services.totp_replay import claim_totp_code
 
 logger = logging.getLogger(__name__)
 
@@ -135,8 +136,12 @@ async def confirm_enrolment(db: AsyncSession, user: User, code: str) -> bool:
     return True
 
 
-async def verify_code(db: AsyncSession, user: User, code: str) -> bool:
-    """Verify a login code: either a 6-digit TOTP or an 8-char backup code."""
+async def verify_code(db: AsyncSession, user: User, code: str, purpose: str = "login") -> bool:
+    """Verify a login code: either a 6-digit TOTP or an 8-char backup code.
+
+    A TOTP code is accepted once per purpose (sign-in, creating an API key, turning
+    MFA off), so one seen or captured can't be replayed for the same action.
+    """
     _require_pyotp()
 
     if not is_enrolled(user):
@@ -149,7 +154,7 @@ async def verify_code(db: AsyncSession, user: User, code: str) -> bool:
     try:
         totp = pyotp.TOTP(decrypt_data(user.totp_secret))
         if totp.verify(code, valid_window=1):
-            return True
+            return await claim_totp_code(f"admin-{purpose}", user.id, code)
     except Exception:
         # An undecryptable secret (ENCRYPTION_KEY changed) must not look like a wrong code only.
         logger.warning("Could not check the TOTP code for admin %s", user.id, exc_info=True)

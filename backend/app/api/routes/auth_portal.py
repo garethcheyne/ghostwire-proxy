@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.core.redis import get_redis
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
@@ -137,6 +138,7 @@ async def get_auth_wall_config(
 
 
 @router.post("/{auth_wall_id}/login/local", response_model=LocalLoginResponse)
+@limiter.limit(RATE_LIMITS["auth_portal"])
 async def local_login(
     auth_wall_id: str,
     login_data: LocalLoginRequest,
@@ -265,6 +267,7 @@ async def local_login(
 
 
 @router.post("/{auth_wall_id}/login/totp", response_model=LocalLoginResponse)
+@limiter.limit(RATE_LIMITS["auth_portal"])
 async def totp_login(
     auth_wall_id: str,
     totp_data: TotpLoginRequest,

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_data, encrypt_data, verify_password
 from app.models.auth_wall import AuthWall, LocalAuthUser
 from app.services.auth_providers.base import AuthProviderBase, UserInfo
+from app.services.totp_replay import claim_totp_code
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +79,11 @@ class LocalAuthProvider(AuthProviderBase):
             await self._record_failed_attempt(user)
             return None
 
-        # Password correct - reset failed attempts
-        await self._reset_failed_attempts(user)
+        # Password correct. With TOTP on, the failure count is only cleared once the
+        # code is right too: otherwise "right password, then a few code guesses" could
+        # be repeated forever, each correct password wiping the guesses out.
+        if not self.requires_totp(user):
+            await self._reset_failed_attempts(user)
 
         return UserInfo(
             user_id=user.id,
@@ -138,19 +142,30 @@ class LocalAuthProvider(AuthProviderBase):
         if not user.totp_enabled or not user.totp_secret:
             return False
 
+        # Wrong codes count towards the same lockout as wrong passwords.
+        if user.is_locked():
+            return False
+
+        code = (code or "").strip().replace(" ", "")
+        if not code:
+            return False
+
         # Try TOTP first
+        totp_ok = False
         try:
-            secret = decrypt_data(user.totp_secret)
-            totp = pyotp.TOTP(secret)
-            if totp.verify(code, valid_window=1):
-                return True
+            totp_ok = pyotp.TOTP(decrypt_data(user.totp_secret)).verify(code, valid_window=1)
         except Exception:
             logger.warning("Could not check the TOTP code for auth wall user %s", user.id, exc_info=True)
+        if totp_ok and await claim_totp_code("wall", user.id, code):
+            await self._reset_failed_attempts(user)
+            return True
 
         # Try backup code
-        if len(code) == self.BACKUP_CODE_LENGTH:
-            return await self._verify_backup_code(user, code)
+        if len(code) == self.BACKUP_CODE_LENGTH and await self._verify_backup_code(user, code):
+            await self._reset_failed_attempts(user)
+            return True
 
+        await self._record_failed_attempt(user)
         return False
 
     async def _verify_backup_code(self, user: LocalAuthUser, code: str) -> bool:

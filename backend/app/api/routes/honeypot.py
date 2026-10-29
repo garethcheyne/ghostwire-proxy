@@ -212,8 +212,11 @@ async def get_ip_enrichment(
 ):
     """Look up full intelligence on an IP address.
 
-    Returns cached data if available. Pass ?force=true to re-fetch.
+    Returns cached data if available. Pass ?force=true to re-fetch (admins only:
+    a fresh lookup spends the AbuseIPDB allowance).
     """
+    if force and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can force a fresh lookup")
     # Get optional AbuseIPDB key from settings
     from app.models.setting import Setting
     from app.services.enrichment_service import enrich_ip
