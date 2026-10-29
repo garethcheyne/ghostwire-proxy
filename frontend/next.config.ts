@@ -2,17 +2,24 @@ import type { NextConfig } from 'next'
 import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 
-// Generate a stable build ID from VERSION file or git SHA.
-// This ensures server action IDs are consistent within a deployment
-// and stale clients get proper "needs reload" handling.
-function getBuildId(): string {
-  // Check /app/VERSION (Docker build) then ./VERSION (local)
+// The release: VERSION at the repository root, dated like 2026.10.29.1945 (the Docker build writes
+// BUILD_VERSION to /app/VERSION). The sidebar and /api/health show it; scripts/upgrade.sh moves a
+// server to a new one.
+function readVersion(): string {
   for (const path of ['/app/VERSION', './VERSION', '../VERSION']) {
     try {
       const version = readFileSync(path, 'utf8').trim()
-      if (version && version !== 'unknown') return version.replace(/[^a-zA-Z0-9._-]/g, '-')
+      if (version && version !== 'unknown') return version
     } catch {}
   }
+  return 'dev'
+}
+
+// A stable build ID from the release (or the git SHA), so server action IDs are consistent within
+// a deployment and stale clients get proper "needs reload" handling.
+function getBuildId(): string {
+  const version = readVersion()
+  if (version !== 'dev') return version.replace(/[^a-zA-Z0-9._-]/g, '-')
   try {
     return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
   } catch {}
@@ -22,6 +29,9 @@ function getBuildId(): string {
 const nextConfig: NextConfig = {
   output: 'standalone',
   generateBuildId: () => getBuildId(),
+  env: {
+    APP_VERSION: readVersion(),
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   // Dev-server only (ignored by `next build`): allow `pnpm dev` to be reached

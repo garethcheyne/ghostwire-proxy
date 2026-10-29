@@ -21,14 +21,14 @@ set -Eeuo pipefail
 
 app_settings() {
   APP_NAME="Ghostwire Proxy"
-  TRACK=release # move only when VERSION on main changes (Auto Tag cuts a release then)
+  TRACK=release # move only when VERSION on main changes (CI cuts a release then)
   BACKUP_DIR=data/backups
   DB_SERVICE=ghostwire-proxy-postgres
   DB_USER=$(env_value POSTGRES_USER ghostwire)
   DB_NAME=$(env_value POSTGRES_DB ghostwire_proxy)
   DB_PASSWORD=$(env_value POSTGRES_PASSWORD)
   REQUIRED_ENV="POSTGRES_PASSWORD"
-  HEALTH_URLS="http://localhost:8089/health http://localhost:88/api/auth/get-session"
+  HEALTH_URLS="http://localhost:8089/health http://localhost:88/api/health"
   APP_URL="http://localhost:88"
 }
 
@@ -221,7 +221,7 @@ built_services() {
       }
       service = ""
     }
-    END                     { flush() }'
+    END                     { flush() }' || true
 }
 
 docker_requirements() {
@@ -231,6 +231,7 @@ docker_requirements() {
   docker compose version > /dev/null 2>&1 || fail "Docker Compose v2 isn't available (docker compose)."
   docker info > /dev/null 2>&1 || fail "Can't talk to Docker (is it running? does this user need sudo?)."
   git rev-parse --git-dir > /dev/null 2>&1 || fail "$PROJECT_DIR isn't a git checkout."
+  docker compose config -q > /dev/null 2>&1 || fail "docker-compose.yml doesn't parse: run docker compose config to see why."
 }
 
 check_env() {
@@ -517,6 +518,8 @@ main() {
   APP_NAME=$(basename "$PROJECT_DIR")
   CURRENT_COMMIT="" CURRENT_LABEL="" TARGET_LABEL="" CHANGED=false UP_TO_DATE=false
   app_settings
+  # A URL built from other .env values (https://${APP_DOMAIN}) can't be shown as it is.
+  case "$APP_URL" in *'$'*) APP_URL="" ;; esac
 
   case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$PROJECT_DIR/$BACKUP_DIR" ;; esac
   mkdir -p "$BACKUP_DIR"
