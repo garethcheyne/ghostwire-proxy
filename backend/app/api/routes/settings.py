@@ -1,6 +1,8 @@
+import asyncio
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +13,7 @@ from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.setting import Setting
 from app.models.user import User
+from app.schemas.access_list import _check_redirect_url
 from app.schemas.setting import SettingResponse, SettingsBulkUpdate, SettingUpdate
 
 router = APIRouter()
@@ -123,29 +126,33 @@ async def get_default_site(
     return {"behavior": behavior, "redirect_url": redirect_url}
 
 
+class DefaultSiteUpdate(BaseModel):
+    behavior: str
+    redirect_url: str = ""
+
+    @field_validator("behavior")
+    @classmethod
+    def validate_behavior(cls, v: str) -> str:
+        valid = ("congratulations", "redirect", "404", "444")
+        if v not in valid:
+            raise ValueError(f"Behavior must be one of: {', '.join(valid)}")
+        return v
+
+    # Written into the default server block as `return 301 <url>;`.
+    @field_validator("redirect_url")
+    @classmethod
+    def validate_redirect_url(cls, v: str) -> str:
+        return _check_redirect_url(v) or ""
+
+
 @router.put("/default-site")
 async def update_default_site(
+    data: DefaultSiteUpdate,
     request: Request,
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update default site behavior and regenerate nginx config"""
-    from pydantic import BaseModel, field_validator
-
-    class DefaultSiteUpdate(BaseModel):
-        behavior: str
-        redirect_url: str = ""
-
-        @field_validator("behavior")
-        @classmethod
-        def validate_behavior(cls, v: str) -> str:
-            valid = ("congratulations", "redirect", "404", "444")
-            if v not in valid:
-                raise ValueError(f"Behavior must be one of: {', '.join(valid)}")
-            return v
-
-    body = await request.json()
-    data = DefaultSiteUpdate(**body)
 
     # Validate redirect URL is provided when behavior is redirect
     if data.behavior == "redirect" and not data.redirect_url:
@@ -183,29 +190,31 @@ async def update_default_site(
     from app.core.config import settings as app_settings
     from app.services.openresty_service import (
         backup_configs,
+        config_apply_lock,
         generate_default_site_config,
         reload_nginx,
         restore_configs,
         test_nginx_config,
     )
 
-    # Backup current configs before writing the new default
-    backup_configs()
+    async with config_apply_lock:
+        # Backup current configs before writing the new default
+        await asyncio.to_thread(backup_configs)
 
-    config = await generate_default_site_config(db)
-    await write_text(os.path.join(app_settings.nginx_config_path, "_default.conf"), config)
+        config = await generate_default_site_config(db)
+        await write_text(os.path.join(app_settings.nginx_config_path, "_default.conf"), config)
 
-    # Test before reloading — roll back if invalid
-    test_ok, test_msg = test_nginx_config()
-    if not test_ok:
-        restore_configs()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Default site config is invalid — rolled back. Error: {test_msg}",
-        )
+        # Test before reloading — roll back if invalid
+        test_ok, test_msg = await asyncio.to_thread(test_nginx_config)
+        if not test_ok:
+            await asyncio.to_thread(restore_configs)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Default site config is invalid — rolled back. Error: {test_msg}",
+            )
 
-    # Reload nginx to apply
-    success, message = reload_nginx()
+        # Reload nginx to apply
+        success, message = await asyncio.to_thread(reload_nginx)
     if not success:
         return {"message": "Default site saved but nginx reload failed", "detail": message, "behavior": data.behavior}
 
@@ -238,6 +247,17 @@ async def get_setting(
     return setting_out(setting)
 
 
+def _check_config_setting(key: str, value) -> None:
+    """Settings the nginx config is generated from get the same checks as their own routes."""
+    if key == "default_site_redirect_url" and value:
+        try:
+            _check_redirect_url(str(value))
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    if key == "default_site_behavior" and value not in (None, "congratulations", "redirect", "404", "444"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown default site behavior")
+
+
 @router.put("/{key}", response_model=SettingResponse)
 async def update_setting(
     key: str,
@@ -247,6 +267,7 @@ async def update_setting(
     db: AsyncSession = Depends(get_db),
 ):
     """Update setting (admin only)"""
+    _check_config_setting(key, setting_data.value)
     result = await db.execute(select(Setting).where(Setting.key == key))
     setting = result.scalar_one_or_none()
 
@@ -288,6 +309,8 @@ async def bulk_update_settings(
     updated_settings = []
 
     for key, value in settings_data.settings.items():
+        _check_config_setting(key, value)
+    for key, value in settings_data.settings.items():
         if is_secret_key(key) and is_masked(value):
             continue
         result = await db.execute(select(Setting).where(Setting.key == key))
@@ -328,14 +351,14 @@ async def reload_nginx_endpoint(
     from app.services.openresty_service import reload_nginx, test_nginx_config
 
     # Test config first so we don't reload a broken config
-    test_ok, test_msg = test_nginx_config()
+    test_ok, test_msg = await asyncio.to_thread(test_nginx_config)
     if not test_ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Nginx config test failed — not reloading. Error: {test_msg}",
         )
 
-    success, message = reload_nginx()
+    success, message = await asyncio.to_thread(reload_nginx)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

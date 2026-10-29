@@ -1,11 +1,20 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+
+from app.schemas.proxy_host import _check_domain_names
 
 
 class CertificateBase(BaseModel):
     name: str
     domain_names: list[str]
+
+    # The names go to certbot as arguments and into /etc/letsencrypt/live/<name>/
+    # paths, so they get the same check as a proxy host's server_name.
+    @field_validator("domain_names")
+    @classmethod
+    def validate_domain_names(cls, v: list[str]) -> list[str]:
+        return _check_domain_names(v)
 
 
 class CertificateCreate(CertificateBase):
@@ -40,5 +49,4 @@ class CertificateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

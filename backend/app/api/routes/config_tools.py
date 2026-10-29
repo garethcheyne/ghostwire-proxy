@@ -8,6 +8,7 @@ POST /api/config/reload   regenerate every host's config from the database, `ngi
 GET  /api/audit-logs      recent changes, newest first. (scope: read)
 """
 
+import asyncio
 import difflib
 import logging
 import os
@@ -230,7 +231,7 @@ async def test_config(
     """Run `nginx -t` against the configuration nginx has now."""
     from app.services.openresty_service import test_nginx_config
 
-    ok, output = test_nginx_config()
+    ok, output = await asyncio.to_thread(test_nginx_config)
     return {"ok": ok, "output": output}
 
 

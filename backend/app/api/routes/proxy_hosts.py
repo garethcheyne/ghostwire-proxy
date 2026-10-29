@@ -38,6 +38,7 @@ from app.schemas.proxy_host import (
 from app.services.load_balancing import check_lb_rules
 from app.services.openresty_service import (
     backup_configs,
+    config_apply_lock,
     generate_all_configs,
     generate_upstream_block,
     generate_upstream_connection_map,
@@ -112,7 +113,14 @@ async def validate_and_apply(
     are not committed until `nginx -t` has passed and nginx has reloaded. If any
     step fails, both the database and the on-disk config are rolled back, so the
     UI never shows a change as saved that nginx isn't actually running.
+
+    Only one apply runs at a time (config_apply_lock).
     """
+    async with config_apply_lock:
+        return await _validate_and_apply(db, remove_config_ids)
+
+
+async def _validate_and_apply(db: AsyncSession, remove_config_ids: list[str] | None) -> tuple[bool, str]:
     try:
         await db.flush()
     except Exception as e:
@@ -120,7 +128,7 @@ async def validate_and_apply(
         return False, f"Could not save changes: {e}"
 
     # 1. Back up the current working configs so a bad config can be undone
-    backup_configs()
+    await asyncio.to_thread(backup_configs)
 
     # 2. Generate the candidate config from the flushed (uncommitted) state
     try:
@@ -128,22 +136,22 @@ async def validate_and_apply(
         for host_id in remove_config_ids or []:
             await remove_config(host_id)
     except Exception as e:
-        restore_configs()
+        await asyncio.to_thread(restore_configs)
         await db.rollback()
         return False, f"Error generating nginx config — nothing was saved. Detail: {e}"
 
     # 3. Validate it. test_nginx_config returns nginx's own output, which names
     #    the offending file, line and directive — pass it straight through.
-    test_ok, test_msg = test_nginx_config()
+    test_ok, test_msg = await asyncio.to_thread(test_nginx_config)
     if not test_ok:
-        restore_configs()
+        await asyncio.to_thread(restore_configs)
         await db.rollback()
         return False, (f"Config validation failed — nothing was saved and nginx is unchanged.\n\n{test_msg}")
 
     # 4. Config is valid — reload nginx
-    reload_ok, reload_msg = reload_nginx()
+    reload_ok, reload_msg = await asyncio.to_thread(reload_nginx)
     if not reload_ok:
-        restore_configs()
+        await asyncio.to_thread(restore_configs)
         await db.rollback()
         return False, f"Config is valid but nginx reload failed — nothing was saved. {reload_msg}"
 

@@ -225,7 +225,12 @@ async def renew_and_deploy_certificate(cert_id: str) -> tuple[bool, str]:
     a scheduler loop that doesn't already have one.
     """
     from app.core.database import async_session_maker
-    from app.services.openresty_service import generate_all_configs, reload_nginx, write_certificate_files
+    from app.services.openresty_service import (
+        config_apply_lock,
+        generate_all_configs,
+        reload_nginx,
+        write_certificate_files,
+    )
 
     async with async_session_maker() as db:
         success, message = await renew_certificate(db, cert_id)
@@ -234,9 +239,10 @@ async def renew_and_deploy_certificate(cert_id: str) -> tuple[bool, str]:
             result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
             cert = result.scalar_one_or_none()
             if cert and cert.certificate:
-                await write_certificate_files(cert)
-                await generate_all_configs(db)
-                reload_nginx()
+                async with config_apply_lock:
+                    await write_certificate_files(cert)
+                    await generate_all_configs(db)
+                    await asyncio.to_thread(reload_nginx)
 
         return success, message
 

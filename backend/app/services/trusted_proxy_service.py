@@ -140,6 +140,9 @@ async def get_ranges(db: AsyncSession) -> dict[str, list[str]]:
         if setting and setting.value:
             stored = json.loads(setting.value)
             for provider, values in stored.items():
+                # Only the providers a host can choose: the name is written into the config.
+                if provider not in FALLBACK_RANGES:
+                    continue
                 cleaned = _clean(values)
                 if cleaned:
                     ranges[provider] = cleaned

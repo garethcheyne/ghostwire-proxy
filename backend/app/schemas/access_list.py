@@ -2,7 +2,7 @@ import ipaddress
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class ProxyHostRef(BaseModel):
@@ -11,8 +11,7 @@ class ProxyHostRef(BaseModel):
     id: str
     domain_names: list[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AccessListEntryCreate(BaseModel):
@@ -50,8 +49,7 @@ class AccessListEntryResponse(BaseModel):
     description: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 BLOCKED_BEHAVIORS = ('403', 'congratulations', 'redirect', '404', '444')
@@ -70,8 +68,12 @@ def _check_redirect_url(v: str | None) -> str | None:
     v = v.strip()
     if not v:
         return None
-    if not re.fullmatch(r"https?://[^\s\"';{}]+", v):
-        raise ValueError('Redirect URL must be a full http:// or https:// URL without spaces, quotes, ; or braces')
+    # `$` would make nginx expand a variable (a request header could pick the target),
+    # and `\` escapes the next character.
+    if not re.fullmatch(r"https?://[^\s\"'`;{}$\\\x00-\x1f\x7f]+", v):
+        raise ValueError(
+            'Redirect URL must be a full http:// or https:// URL without spaces, quotes, ;, $, \\ or braces'
+        )
     return v
 
 
@@ -157,5 +159,4 @@ class AccessListResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

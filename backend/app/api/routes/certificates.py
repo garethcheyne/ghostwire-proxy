@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +18,12 @@ from app.services.certificate_service import (
     request_letsencrypt_certificate,
     validate_certificate_pem,
 )
-from app.services.openresty_service import generate_all_configs, reload_nginx, write_certificate_files
+from app.services.openresty_service import (
+    config_apply_lock,
+    generate_all_configs,
+    reload_nginx,
+    write_certificate_files,
+)
 
 router = APIRouter()
 
@@ -108,13 +115,14 @@ async def process_letsencrypt_request(cert_id: str):
             result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
             cert = result.scalar_one_or_none()
             if cert and cert.certificate:
-                await write_certificate_files(cert)
+                async with config_apply_lock:
+                    await write_certificate_files(cert)
 
-                # Regenerate nginx configs to use the new cert
-                await generate_all_configs(db)
+                    # Regenerate nginx configs to use the new cert
+                    await generate_all_configs(db)
 
-                # Reload nginx
-                reload_nginx()
+                    # Reload nginx
+                    await asyncio.to_thread(reload_nginx)
 
 
 @router.post("/letsencrypt", response_model=CertificateResponse, status_code=status.HTTP_201_CREATED)

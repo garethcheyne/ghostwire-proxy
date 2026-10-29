@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.services.load_balancing import (
     HEALTH_CHECK_TYPES,
@@ -14,6 +14,133 @@ from app.services.load_balancing import (
 def _check_port(v: int | None) -> int | None:
     if v is not None and not 1 <= v <= 65535:
         raise ValueError('Port must be between 1 and 65535')
+    return v
+
+
+# ── Values written into nginx config ─────────────────────────────────────────
+# Each of these lands in a generated server block as a bare token (or inside
+# double quotes), so a `;`, `{`, `}`, quote, `#` or newline in it would end the
+# directive and let the rest of the value add directives of its own, Lua
+# included. `nginx -t` only checks syntax, so it would not catch that. Every
+# value is held to the shape its directive takes. (advanced_config and
+# server_advanced_config are raw nginx on purpose and are not checked here.)
+
+_LOCATION_PATH_RE = re.compile(r'^[^\s;{}#"\'`\x00-\x1f\x7f]{1,255}$')
+_SIZE_RE = re.compile(r'^\d{1,10}[kKmMgG]?$')
+_BUFFERS_RE = re.compile(r'^\d{1,6} +\d{1,10}[kKmMgG]?$')
+_CACHE_VALID_RE = re.compile(r'^((\d{3}|any) +)*\d{1,6}(ms|[smhdwMy])?$')
+_CACHE_BYPASS_RE = re.compile(r'^\$[A-Za-z0-9_]+( +\$[A-Za-z0-9_]+)*$')
+_HEADER_NAME_RE = re.compile(r'^[A-Za-z0-9-]{1,64}$')
+# proxy_set_header values are emitted bare: one token, nginx variables allowed.
+_BARE_HEADER_VALUE_RE = re.compile(r'^[^\s;{}#"\'`\\\x00-\x1f\x7f]{1,512}$')
+# add_header values are emitted inside double quotes.
+_QUOTED_HEADER_VALUE_RE = re.compile(r'^[^"\\\x00-\x1f\x7f]{0,1024}$')
+_ERROR_CODE_RE = re.compile(r'^[3-5]\d\d$')
+_ERROR_PAGE_RE = re.compile(r"^(/[A-Za-z0-9._~/%-]*|https?://[^\s;{}#\"'`$\\\x00-\x1f\x7f]+|@[A-Za-z0-9_]+)$")
+CDN_PROVIDERS = ('none', 'cloudflare', 'imperva', 'generic')
+
+
+def _check_location_path(v: str | None) -> str | None:
+    if v is None:
+        return v
+    if not _LOCATION_PATH_RE.match(v) or v.endswith('\\'):
+        raise ValueError("Location path can't contain spaces, quotes, ';', '{', '}' or '#'")
+    return v
+
+
+def _check_location_path_for_type(path: str | None, match_type: str | None) -> None:
+    if path is not None and match_type in ('prefix', 'exact') and not path.startswith('/'):
+        raise ValueError("A prefix or exact location path must start with '/'")
+
+
+def _check_match_type(v: str | None) -> str | None:
+    if v is not None and v not in ('prefix', 'exact', 'regex', 'regex_case_insensitive'):
+        raise ValueError('Match type must be prefix, exact, regex, or regex_case_insensitive')
+    return v
+
+
+def _check_size(v: str | None, what: str) -> str | None:
+    if v is None:
+        return v
+    v = v.strip()
+    if not _SIZE_RE.match(v):
+        raise ValueError(f'{what} must be a number with an optional k, m or g suffix (e.g. 100m)')
+    return v
+
+
+def _check_buffers(v: str | None) -> str | None:
+    if v is None:
+        return v
+    v = v.strip()
+    if not _BUFFERS_RE.match(v):
+        raise ValueError('Proxy buffers must be "<count> <size>", e.g. "8 4k"')
+    return v
+
+
+def _check_cache_valid(v: str | None) -> str | None:
+    if v is None or not v.strip():
+        return None
+    v = v.strip()
+    if not _CACHE_VALID_RE.match(v):
+        raise ValueError('Cache valid must be status codes (or "any") then a time, e.g. "200 302 10m"')
+    return v
+
+
+def _check_cache_bypass(v: str | None) -> str | None:
+    if v is None or not v.strip():
+        return None
+    v = v.strip()
+    if not _CACHE_BYPASS_RE.match(v):
+        raise ValueError('Cache bypass must be nginx variables, e.g. "$http_cache_control $cookie_nocache"')
+    return v
+
+
+def _check_header_names(names) -> None:
+    for name in names:
+        if not _HEADER_NAME_RE.match(name):
+            raise ValueError(f'Invalid header name: {name!r} (letters, digits and dashes only)')
+
+
+def _check_custom_headers(v: dict[str, str] | None) -> dict[str, str] | None:
+    if v is None:
+        return v
+    _check_header_names(v)
+    for name, value in v.items():
+        if not _QUOTED_HEADER_VALUE_RE.match(value):
+            raise ValueError(f"Header {name}: the value can't contain double quotes, backslashes or line breaks")
+    return v
+
+
+def _check_proxy_headers(v: dict[str, str] | None) -> dict[str, str] | None:
+    if v is None:
+        return v
+    _check_header_names(v)
+    for name, value in v.items():
+        if not _BARE_HEADER_VALUE_RE.match(value):
+            raise ValueError(f"Header {name}: the value must be one word (nginx variables allowed), no quotes or ';'")
+    return v
+
+
+def _check_hide_headers(v: list[str] | None) -> list[str] | None:
+    if v is not None:
+        _check_header_names(v)
+    return v
+
+
+def _check_error_pages(v: dict[str, str] | None) -> dict[str, str] | None:
+    if v is None:
+        return v
+    for code, page in v.items():
+        if not _ERROR_CODE_RE.match(str(code)):
+            raise ValueError(f'Error page status must be a 3xx-5xx code, got {code!r}')
+        if not _ERROR_PAGE_RE.match(page):
+            raise ValueError(f'Error page for {code} must be a /path, an http(s) URL or a @named location')
+    return v
+
+
+def _check_cdn_provider(v: str | None) -> str | None:
+    if v is not None and v not in CDN_PROVIDERS:
+        raise ValueError(f'CDN provider must be one of: {", ".join(CDN_PROVIDERS)}')
     return v
 
 
@@ -114,8 +241,7 @@ class UpstreamServerResponse(BaseModel):
     auto_down: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoadBalancingSettings(BaseModel):
@@ -218,8 +344,7 @@ class UpstreamServerEventResponse(BaseModel):
     auto_down: bool = False
     created_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -279,9 +404,47 @@ class ProxyLocationBase(BaseModel):
     @field_validator('match_type')
     @classmethod
     def match_type_valid(cls, v: str) -> str:
-        if v not in ('prefix', 'exact', 'regex', 'regex_case_insensitive'):
-            raise ValueError('Match type must be prefix, exact, regex, or regex_case_insensitive')
-        return v
+        return _check_match_type(v)
+
+    @field_validator('path')
+    @classmethod
+    def path_valid(cls, v: str) -> str:
+        return _check_location_path(v)
+
+    @field_validator('forward_host')
+    @classmethod
+    def forward_host_valid(cls, v: str) -> str:
+        return normalize_upstream_host(v)
+
+    @field_validator('cache_valid')
+    @classmethod
+    def cache_valid_ok(cls, v: str | None) -> str | None:
+        return _check_cache_valid(v)
+
+    @field_validator('cache_bypass')
+    @classmethod
+    def cache_bypass_ok(cls, v: str | None) -> str | None:
+        return _check_cache_bypass(v)
+
+    @field_validator('custom_headers')
+    @classmethod
+    def custom_headers_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_custom_headers(v)
+
+    @field_validator('proxy_headers')
+    @classmethod
+    def proxy_headers_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_proxy_headers(v)
+
+    @field_validator('hide_headers')
+    @classmethod
+    def hide_headers_ok(cls, v: list[str] | None) -> list[str] | None:
+        return _check_hide_headers(v)
+
+    @model_validator(mode='after')
+    def path_fits_match_type(self):
+        _check_location_path_for_type(self.path, self.match_type)
+        return self
 
 
 class ProxyLocationCreate(ProxyLocationBase):
@@ -318,6 +481,62 @@ class ProxyLocationUpdate(BaseModel):
 
     advanced_config: str | None = None
     enabled: bool | None = None
+
+    # The same checks as create: an update reaches the config just the same.
+    @field_validator('forward_port')
+    @classmethod
+    def port_range(cls, v: int | None) -> int | None:
+        return _check_port(v)
+
+    @field_validator('forward_scheme')
+    @classmethod
+    def scheme_valid(cls, v: str | None) -> str | None:
+        return _check_scheme(v)
+
+    @field_validator('match_type')
+    @classmethod
+    def match_type_valid(cls, v: str | None) -> str | None:
+        return _check_match_type(v)
+
+    @field_validator('path')
+    @classmethod
+    def path_valid(cls, v: str | None) -> str | None:
+        return _check_location_path(v)
+
+    @field_validator('forward_host')
+    @classmethod
+    def forward_host_valid(cls, v: str | None) -> str | None:
+        return None if v is None else normalize_upstream_host(v)
+
+    @field_validator('cache_valid')
+    @classmethod
+    def cache_valid_ok(cls, v: str | None) -> str | None:
+        return _check_cache_valid(v)
+
+    @field_validator('cache_bypass')
+    @classmethod
+    def cache_bypass_ok(cls, v: str | None) -> str | None:
+        return _check_cache_bypass(v)
+
+    @field_validator('custom_headers')
+    @classmethod
+    def custom_headers_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_custom_headers(v)
+
+    @field_validator('proxy_headers')
+    @classmethod
+    def proxy_headers_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_proxy_headers(v)
+
+    @field_validator('hide_headers')
+    @classmethod
+    def hide_headers_ok(cls, v: list[str] | None) -> list[str] | None:
+        return _check_hide_headers(v)
+
+    @model_validator(mode='after')
+    def path_fits_match_type(self):
+        _check_location_path_for_type(self.path, self.match_type)
+        return self
 
 
 class ProxyLocationResponse(BaseModel):
@@ -356,8 +575,7 @@ class ProxyLocationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LocationReorderItem(BaseModel):
@@ -450,6 +668,41 @@ class ProxyHostBase(LoadBalancingSettings):
     @classmethod
     def scheme_valid(cls, v: str) -> str:
         return _check_scheme(v)
+
+    @field_validator('client_max_body_size')
+    @classmethod
+    def body_size_ok(cls, v: str) -> str:
+        return _check_size(v, 'Client max body size')
+
+    @field_validator('proxy_buffer_size')
+    @classmethod
+    def buffer_size_ok(cls, v: str) -> str:
+        return _check_size(v, 'Proxy buffer size')
+
+    @field_validator('proxy_buffers')
+    @classmethod
+    def buffers_ok(cls, v: str) -> str:
+        return _check_buffers(v)
+
+    @field_validator('cache_valid')
+    @classmethod
+    def cache_valid_ok(cls, v: str | None) -> str | None:
+        return _check_cache_valid(v)
+
+    @field_validator('cache_bypass')
+    @classmethod
+    def cache_bypass_ok(cls, v: str | None) -> str | None:
+        return _check_cache_bypass(v)
+
+    @field_validator('custom_error_pages')
+    @classmethod
+    def error_pages_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_error_pages(v)
+
+    @field_validator('cdn_provider')
+    @classmethod
+    def cdn_provider_ok(cls, v: str) -> str:
+        return _check_cdn_provider(v)
 
 
 _DOMAIN_RE = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$')
@@ -559,6 +812,41 @@ class ProxyHostUpdate(BaseModel):
     def scheme_valid(cls, v: str | None) -> str | None:
         return _check_scheme(v)
 
+    @field_validator('client_max_body_size')
+    @classmethod
+    def body_size_ok(cls, v: str | None) -> str | None:
+        return _check_size(v, 'Client max body size')
+
+    @field_validator('proxy_buffer_size')
+    @classmethod
+    def buffer_size_ok(cls, v: str | None) -> str | None:
+        return _check_size(v, 'Proxy buffer size')
+
+    @field_validator('proxy_buffers')
+    @classmethod
+    def buffers_ok(cls, v: str | None) -> str | None:
+        return _check_buffers(v)
+
+    @field_validator('cache_valid')
+    @classmethod
+    def cache_valid_ok(cls, v: str | None) -> str | None:
+        return _check_cache_valid(v)
+
+    @field_validator('cache_bypass')
+    @classmethod
+    def cache_bypass_ok(cls, v: str | None) -> str | None:
+        return _check_cache_bypass(v)
+
+    @field_validator('custom_error_pages')
+    @classmethod
+    def error_pages_ok(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _check_error_pages(v)
+
+    @field_validator('cdn_provider')
+    @classmethod
+    def cdn_provider_ok(cls, v: str | None) -> str | None:
+        return _check_cdn_provider(v)
+
     @field_validator('lb_method')
     @classmethod
     def method_valid(cls, v: str | None) -> str | None:
@@ -651,5 +939,4 @@ class ProxyHostResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
