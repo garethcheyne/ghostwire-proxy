@@ -258,23 +258,20 @@ On first launch, you'll be guided through initial setup to create your admin acc
 
 ### Automatic (recommended)
 
-Run the included upgrade script from your project directory:
+Every Ghostwire app has the same `scripts/upgrade.sh`, with the same options and steps. Run it on the
+server, from the install folder:
 
 ```bash
-./scripts/upgrade.sh            # upgrade to latest tagged release
-./scripts/upgrade.sh v2026.04.05.1200  # upgrade to a specific version
-./scripts/upgrade.sh --rollback # back to the images from before the last upgrade
+scripts/upgrade.sh             # upgrade to the latest release (asks first)
+scripts/upgrade.sh --check     # say what an upgrade would do; changes nothing
+scripts/upgrade.sh --rollback  # go back to what ran before the last upgrade
+scripts/upgrade.sh --yes       # don't ask (cron); add a tag or commit to go to that version
 ```
 
-The script will:
-1. **Back up** your database (`data/backups/pre-upgrade-*.sql`)
-2. **Keep** the running images as `:previous` for `--rollback`
-3. **Pull** the new version via git
-4. **Build** new container images
-5. **Restart** services — database migrations run automatically on startup
-6. **Health check** — verifies the API and admin sign-in are responding
-
-If the health check fails, run `./scripts/upgrade.sh --rollback`.
+It checks the server and `.env`, shows what changes, backs up the database and `.env`, keeps the running
+images for `--rollback`, updates the code, rebuilds and restarts (the API first; it runs the migrations), then checks that every container is healthy, the API and admin sign-in answer, and the migrations are applied.
+Backups, a log of each run and what `--rollback` needs are kept in `data/backups/`. A rollback doesn't undo
+database migrations (they only add); the backup is there if you need it.
 
 ### Manual
 
@@ -334,8 +331,7 @@ Ghostwire Proxy uses **Alembic** for database migrations. On every container sta
 
 ### Rollback
 
-`./scripts/upgrade.sh --rollback` puts back the images from before the last upgrade (the script keeps
-them from the upgrade that introduced it onwards). Migrations stay applied; they are additive, and an
+`scripts/upgrade.sh --rollback` puts back the images and code from before the last upgrade. Migrations stay applied; they are additive, and an
 older version starts on a newer database with a warning. By hand:
 
 ```bash
@@ -346,7 +342,7 @@ git checkout v2026.03.25.1500
 docker compose up -d --build ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx
 
 # 3. If the database needs restoring (only if a migration changed schema):
-cat backup.sql | docker exec -i ghostwire-proxy-postgres psql -U ghostwire ghostwire_proxy
+docker compose exec -T ghostwire-proxy-postgres pg_restore -U ghostwire -d ghostwire_proxy --clean --if-exists < data/backups/upgrade-<date>.dump
 ```
 
 ---

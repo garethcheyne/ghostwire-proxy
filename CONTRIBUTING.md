@@ -132,11 +132,13 @@ The updater sidecar handles updates triggered from the System page. It:
 - Restarts containers in order
 - Rolls back automatically on failure
 
-### Manual
+### From the server
 ```bash
-./scripts/upgrade.sh           # Upgrade to latest tag
-./scripts/upgrade.sh v1.2.0    # Upgrade to specific version
+scripts/upgrade.sh                    # upgrade to the latest release
+scripts/upgrade.sh v2026.10.01.1000   # go to a specific version
+scripts/upgrade.sh --rollback         # back to what ran before
 ```
+See "Upgrading" in the README.
 
 ---
 

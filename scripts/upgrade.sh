@@ -1,351 +1,617 @@
-#!/bin/bash
-set -euo pipefail
-
-# ─────────────────────────────────────────────
-# Ghostwire Proxy - Manual Upgrade Script
+#!/usr/bin/env bash
+# Ghostwire Proxy: upgrade this install to a new version.
 #
-# Usage:
-#   ./scripts/upgrade.sh              # upgrade to latest
-#   ./scripts/upgrade.sh v1.2.0       # upgrade to specific version
-#   ./scripts/upgrade.sh --force      # rebuild current version (if containers are stale)
-#   ./scripts/upgrade.sh --rollback   # go back to the images that ran before the last upgrade
-# ─────────────────────────────────────────────
+#   scripts/upgrade.sh               upgrade to the latest release (asks first)
+#   scripts/upgrade.sh <version>     go to that tag, branch or commit instead (v2026.10.01.1000)
+#   scripts/upgrade.sh --check       say what an upgrade would do; change nothing
+#   scripts/upgrade.sh --yes         don't ask (for cron and installers)
+#   scripts/upgrade.sh --force       rebuild and restart even when already up to date
+#   scripts/upgrade.sh --rollback    go back to what ran before the last upgrade
+#
+# Every Ghostwire app has this script at scripts/upgrade.sh, with the same options and steps:
+#   1 Pre-flight  2 Plan  3 Back up  4 Update code  5 Build  6 Deploy  7 Health check  8 Done
+# Backups (database and .env), a log of each run and the record --rollback uses go in data/backups/.
+# The "This app" part below is what differs between apps; the "Common" part is the same in all.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_DIR="$PROJECT_DIR/data/backups"
-COMPOSE="docker compose"
-FORCE=false
-ROLLBACK=false
-TARGET_VERSION=""
-# Services built from this repo; their running images are kept as :previous for --rollback.
-BUILT_SERVICES="ghostwire-proxy-api ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater"
+set -Eeuo pipefail
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --force|-f) FORCE=true ;;
-        --rollback) ROLLBACK=true ;;
-        *) TARGET_VERSION="$1" ;;
-    esac
-    shift
-done
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#  This app
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-log()   { echo -e "${CYAN}[upgrade]${NC} $*"; }
-ok()    { echo -e "${GREEN}[  ok  ]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[ warn ]${NC} $*"; }
-err()   { echo -e "${RED}[error ]${NC} $*" >&2; }
-
-CURRENT_VERSION=$(cat "$PROJECT_DIR/VERSION" 2>/dev/null || echo "unknown")
-
-# The image a service's container runs (compose names it <project>-<service>).
-service_image() {
-    local container
-    container=$($COMPOSE ps -q "$1" 2>/dev/null | head -n1)
-    [ -n "$container" ] && docker inspect --format '{{.Config.Image}}' "$container" 2>/dev/null
+app_settings() {
+  APP_NAME="Ghostwire Proxy"
+  TRACK=release # move only when VERSION on main changes (Auto Tag cuts a release then)
+  BACKUP_DIR=data/backups
+  DB_SERVICE=ghostwire-proxy-postgres
+  DB_USER=$(env_value POSTGRES_USER ghostwire)
+  DB_NAME=$(env_value POSTGRES_DB ghostwire_proxy)
+  DB_PASSWORD=$(env_value POSTGRES_PASSWORD)
+  REQUIRED_ENV="POSTGRES_PASSWORD"
+  HEALTH_URLS="http://localhost:8089/health http://localhost:88/api/auth/get-session"
+  APP_URL="http://localhost:88"
 }
-
-# Waits for the API, then checks admin sign-in (Better Auth in the UI, reading the database).
-check_health() {
-    local api_ok=false ui_ok=false
-    for i in $(seq 1 30); do
-        if curl -sf http://localhost:8089/health >/dev/null 2>&1; then api_ok=true; break; fi
-        sleep 2
-    done
-    for i in $(seq 1 30); do
-        if curl -sf http://localhost:88/api/auth/get-session >/dev/null 2>&1; then ui_ok=true; break; fi
-        sleep 2
-    done
-    [ "$api_ok" = true ] || err "API health check failed (http://localhost:8089/health)"
-    [ "$ui_ok" = true ] || err "Admin sign-in check failed (http://localhost:88/api/auth/get-session)"
-    [ "$api_ok" = true ] && [ "$ui_ok" = true ]
-}
-
-# ─────────────────────────────────────────────
-# Rollback: the images kept by the last upgrade
-# ─────────────────────────────────────────────
-if [ "$ROLLBACK" = true ]; then
-    cd "$PROJECT_DIR"
-    log "Rolling back to the images from before the last upgrade..."
-    ROLLED=""
-    for svc in $BUILT_SERVICES; do
-        image=$(service_image "$svc" || true)
-        [ -z "$image" ] && continue
-        image="${image%%:*}"
-        if docker image inspect "$image:previous" >/dev/null 2>&1; then
-            docker tag "$image:previous" "$image:latest"
-            ROLLED="$ROLLED $svc"
-        else
-            warn "No previous image for $svc; leaving it as it is."
-        fi
-    done
-    [ -z "$ROLLED" ] && { err "Nothing to roll back to (no :previous images)."; exit 1; }
-    # shellcheck disable=SC2086
-    $COMPOSE up -d --no-build --force-recreate $ROLLED
-    if check_health; then
-        ok "Rolled back:$ROLLED"
-        warn "The code in $PROJECT_DIR is still the newer version; the next upgrade rebuilds it."
-        warn "Database migrations are not undone (they are additive, so the older version runs on them)."
-    else
-        err "Rolled back, but the services aren't healthy. Check: $COMPOSE logs --tail 50"
-        exit 1
-    fi
-    exit 0
-fi
-
-# ─────────────────────────────────────────────
-# 1. Determine target version
-# ─────────────────────────────────────────────
-cd "$PROJECT_DIR"
-
-log "Current version: v$CURRENT_VERSION"
-
-# Ensure we're on the main branch (may be detached HEAD from old tag-based upgrades)
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [ "$CURRENT_BRANCH" != "main" ]; then
-    warn "Not on main branch (currently: ${CURRENT_BRANCH:-detached HEAD}). Switching..."
-    git checkout main --quiet 2>/dev/null || {
-        err "Failed to checkout main branch"
-        exit 1
-    }
-fi
-
-if ! git fetch origin main 2>&1 | tail -5; then
-    err "git fetch failed — check network or credentials"
-    exit 1
-fi
-
-USE_CURRENT_BRANCH=false
-if [ -z "$TARGET_VERSION" ]; then
-    # Check the VERSION file on the remote main branch to determine latest release
-    REMOTE_VERSION=$(git show origin/main:VERSION 2>/dev/null | tr -d '[:space:]')
-    if [ -z "$REMOTE_VERSION" ]; then
-        warn "Could not read VERSION from remote; using current branch"
-        USE_CURRENT_BRANCH=true
-    elif [ "$REMOTE_VERSION" = "$CURRENT_VERSION" ] && [ "$FORCE" = false ]; then
-        ok "Already on version v$CURRENT_VERSION. Nothing to do."
-        echo "  Use --force to rebuild containers without changing version."
-        exit 0
-    elif [ "$REMOTE_VERSION" = "$CURRENT_VERSION" ] && [ "$FORCE" = true ]; then
-        TARGET_VERSION="v$CURRENT_VERSION"
-    else
-        TARGET_VERSION="v$REMOTE_VERSION"
-    fi
-fi
-
-if [ "$USE_CURRENT_BRANCH" = false ]; then
-    # Normalize tag format
-    [[ "$TARGET_VERSION" != v* ]] && TARGET_VERSION="v$TARGET_VERSION"
-    TARGET_SEMVER="${TARGET_VERSION#v}"
-
-    if [ "$TARGET_SEMVER" = "$CURRENT_VERSION" ] && [ "$FORCE" = true ]; then
-        log "Force-rebuilding version $TARGET_VERSION..."
-    else
-        log "Upgrading to: $TARGET_VERSION (current: v$CURRENT_VERSION)"
-    fi
-else
-    TARGET_SEMVER="$CURRENT_VERSION"
-    if [ "$FORCE" = true ]; then
-        log "Force-rebuilding current branch at v$CURRENT_VERSION..."
-    else
-        log "Building current branch at v$CURRENT_VERSION..."
-    fi
-fi
-echo ""
-
-# ─────────────────────────────────────────────
-# 2. Pre-flight checks
-# ─────────────────────────────────────────────
-log "Running pre-flight checks..."
-
-# Check all containers are running
-RUNNING=$($COMPOSE ps --format '{{.Name}} {{.Status}}' 2>/dev/null | grep -c "Up" || true)
-if [ "$RUNNING" -lt 4 ]; then
-    warn "Not all containers are running ($RUNNING up). Continuing anyway..."
-fi
-
-# Check docker compose is available
-if ! command -v docker &>/dev/null; then
-    err "Docker is not installed."
-    exit 1
-fi
-
-# Check git status
-if [ -n "$(git status --porcelain)" ]; then
-    warn "Working directory has uncommitted changes. They will be stashed."
-fi
-
-ok "Pre-flight checks passed"
-
-# ─────────────────────────────────────────────
-# 3. Create backup
-# ─────────────────────────────────────────────
-log "Creating pre-upgrade backup..."
-
-mkdir -p "$BACKUP_DIR"
-BACKUP_FILE="$BACKUP_DIR/pre-upgrade-${CURRENT_VERSION}-$(date +%Y%m%d-%H%M%S).sql"
-
-# Read .env safely without shell-expanding values (passwords may contain $ characters)
-if [ -f "$PROJECT_DIR/.env" ]; then
-    while IFS='=' read -r key value; do
-        # Skip comments and blank lines
-        [[ -z "$key" || "$key" =~ ^# ]] && continue
-        # Strip quotes from value
-        value="${value%\"}"
-        value="${value#\"}"
-        value="${value%\'}"
-        value="${value#\'}"
-        export "$key=$value"
-    done < "$PROJECT_DIR/.env"
-fi
 
 # Admin sign-in (Better Auth) needs a secret. docker-compose.yml falls back to NEXTAUTH_SECRET, then
-# JWT_SECRET (so existing installs keep their sessions); only if none is set, create one.
-if [ -f "$PROJECT_DIR/.env" ] && [ -z "${BETTER_AUTH_SECRET:-}" ] && [ -z "${NEXTAUTH_SECRET:-}" ] && [ -z "${JWT_SECRET:-}" ]; then
-    NEW_SECRET=$(openssl rand -base64 48 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c 48)
-    [ -z "$NEW_SECRET" ] && NEW_SECRET=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
-    printf '\n# Signs admin session cookies (added by upgrade.sh on %s)\nBETTER_AUTH_SECRET=%s\n' \
-        "$(date +%F)" "$NEW_SECRET" >> "$PROJECT_DIR/.env"
-    export BETTER_AUTH_SECRET="$NEW_SECRET"
-    ok "Added BETTER_AUTH_SECRET to .env (admin sign-in)"
-fi
+# JWT_SECRET, so existing installs keep their sessions; only when none is set, make one.
+app_preflight() {
+  local secret
+  if [ -n "$(env_value BETTER_AUTH_SECRET)" ] || [ -n "$(env_value NEXTAUTH_SECRET)" ] || [ -n "$(env_value JWT_SECRET)" ]; then
+    return 0
+  fi
+  if [ "$CHECK" = true ]; then
+    info "Would add BETTER_AUTH_SECRET to .env (admin sign-in needs one)."
+    return 0
+  fi
+  secret=$(openssl rand -base64 48 2> /dev/null | tr -dc 'A-Za-z0-9' | head -c 48) || true
+  [ -n "$secret" ] || secret=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
+  printf '\n# Signs admin session cookies (added by upgrade.sh on %s)\nBETTER_AUTH_SECRET=%s\n' "$(date +%F)" "$secret" >> .env
+  ok "Added BETTER_AUTH_SECRET to .env (admin sign-in)."
+}
 
-PG_USER="${POSTGRES_USER:-ghostwire}"
-PG_DB="${POSTGRES_DB:-ghostwire_proxy}"
-PG_PASS="${POSTGRES_PASSWORD:-}"
+# The API first (it runs the migrations), then the rest: a UI that starts before the API is up
+# answers stale browsers with "Failed to find Server Action".
+app_deploy() {
+  docker compose up -d ghostwire-proxy-api
+  if wait_for_url http://localhost:8089/health 60; then
+    ok "The API is up."
+  else
+    warn "The API isn't answering after 60s; starting the rest anyway."
+  fi
+  docker compose up -d --remove-orphans
+}
 
-if [ -z "$PG_PASS" ]; then
-    warn "POSTGRES_PASSWORD not found in .env — cannot create automated backup"
-fi
+app_verify() { check_alembic_migrations ghostwire-proxy-api; }
 
-log "Backing up database ($PG_DB as $PG_USER)..."
-if docker exec -e PGPASSWORD="$PG_PASS" ghostwire-proxy-postgres pg_dump -U "$PG_USER" "$PG_DB" > "$BACKUP_FILE" 2>&1; then
-    BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-    ok "Database backed up to: $BACKUP_FILE ($BACKUP_SIZE)"
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#  Common: the same in every Ghostwire app's scripts/upgrade.sh. Change it in all of them together.
+#  A hook the app section above doesn't define uses the default here.
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -t 1 ]; then
+  B=$'\033[1m' G=$'\033[32m' Y=$'\033[33m' R=$'\033[31m' N=$'\033[0m'
 else
-    err "Database backup failed:"
-    cat "$BACKUP_FILE" 2>/dev/null  # show the error
-    rm -f "$BACKUP_FILE"
-    echo ""
-    read -p "Continue upgrade WITHOUT backup? [y/N] " CONTINUE
-    if [ "$CONTINUE" != "y" ] && [ "$CONTINUE" != "Y" ]; then
-        err "Upgrade aborted."
-        exit 1
+  B="" G="" Y="" R="" N=""
+fi
+
+# ── Output ──────────────────────────────────────────────────────────────────────────────────────
+step() { printf '\n%s[%s/%s] %s%s\n' "$B" "$1" "$STEPS" "$2" "$N"; }
+info() { printf '  %s\n' "$*"; }
+ok()   { printf '  %s✓%s %s\n' "$G" "$N" "$*"; }
+warn() { printf '  %s!%s %s\n' "$Y" "$N" "$*"; }
+fail() { printf '\n  %s✗ %s%s\n' "$R" "$*" "$N" >&2; exit 1; }
+
+# ask "question" → yes or no. --yes answers yes; with no terminal to ask on, the answer is no.
+# ask --always "question" asks even with --yes (for "carry on without a backup?").
+ask() {
+  local always=false answer=""
+  [ "$1" = --always ] && { always=true; shift; }
+  if [ "$YES" = true ] && [ "$always" = false ]; then return 0; fi
+  if [ ! -t 0 ]; then
+    warn "No terminal to ask on, so the answer is no."
+    [ "$always" = false ] && info "Run with --yes to go ahead without asking."
+    return 1
+  fi
+  read -r -p "  $1 [y/N] " answer || answer=""
+  [[ "$answer" =~ ^[Yy] ]]
+}
+
+# ── Settings and state ──────────────────────────────────────────────────────────────────────────
+# env_value KEY [default]: one value from .env, without running the file (values may hold $ or #).
+env_value() {
+  local value=""
+  if [ -f "$PROJECT_DIR/.env" ]; then
+    value=$(grep -E "^[[:space:]]*(export[[:space:]]+)?$1=" "$PROJECT_DIR/.env" | tail -n1 | cut -d= -f2- \
+      | sed -e 's/[[:space:]]*$//' -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/') || true
+  fi
+  printf '%s' "${value:-${2:-}}"
+}
+
+# What the last upgrade replaced, for --rollback.
+save_state() {
+  {
+    echo "PREV_DATE='$(date '+%Y-%m-%d %H:%M')'"
+    echo "PREV_COMMIT='${CURRENT_COMMIT:-}'"
+    echo "PREV_LABEL='$CURRENT_LABEL'"
+    echo "PREV_SNAPSHOT='${SNAPSHOT:-}'"
+    echo "PREV_BACKUP='${BACKUP_FILE:-}'"
+    printf '%s\n' "${STATE_EXTRA:-}"
+  } > "$STATE_FILE"
+}
+
+load_state() {
+  [ -f "$STATE_FILE" ] || fail "There's no earlier upgrade to go back to ($STATE_FILE is missing)."
+  # shellcheck disable=SC1090
+  . "$STATE_FILE"
+}
+
+notify() {
+  local token chat
+  [ "$(env_value TELEGRAM_NOTIFICATIONS_ENABLED)" = true ] || return 0
+  token=$(env_value TELEGRAM_BOT_TOKEN)
+  chat=$(env_value TELEGRAM_CHAT_ID)
+  [ -n "$token" ] && [ -n "$chat" ] || return 0
+  curl -s -m 10 "https://api.telegram.org/bot$token/sendMessage" \
+    --data-urlencode "chat_id=$chat" --data-urlencode "text=$APP_NAME on $(hostname): $1" \
+    > /dev/null 2>&1 || true
+}
+
+# ── Versions (git) ──────────────────────────────────────────────────────────────────────────────
+version_file() { git show "$1:VERSION" 2>/dev/null | tr -d '[:space:]' || true; }
+
+version_at() {
+  local version short
+  version=$(version_file "$1")
+  short=$(git rev-parse --short "$1")
+  if [ -n "$version" ]; then echo "v$version ($short)"; else echo "$short"; fi
+}
+
+plan_git() {
+  local count
+  git fetch --quiet --tags origin "$BRANCH" || fail "git fetch failed (network or credentials?)"
+  CURRENT_COMMIT=$(git rev-parse HEAD)
+  if [ -n "$REF" ]; then
+    TARGET_COMMIT=$(git rev-parse --verify --quiet "$REF^{commit}" \
+      || git rev-parse --verify --quiet "origin/$REF^{commit}") \
+      || fail "There's no version called $REF (give a tag, branch or commit)."
+  else
+    TARGET_COMMIT=$(git rev-parse "origin/$BRANCH")
+    # TRACK=release: only move when the VERSION file on $BRANCH changes (a release was cut).
+    if [ "$TRACK" = release ] && [ "$(version_file "$TARGET_COMMIT")" = "$(version_file "$CURRENT_COMMIT")" ]; then
+      TARGET_COMMIT=$CURRENT_COMMIT
     fi
+  fi
+
+  CURRENT_LABEL=$(version_at "$CURRENT_COMMIT")
+  TARGET_LABEL=$(version_at "$TARGET_COMMIT")
+  BUILD_VERSION=$(version_file "$TARGET_COMMIT")
+  BUILD_VERSION=${BUILD_VERSION:-$(git rev-parse --short "$TARGET_COMMIT")}
+
+  if [ "$CURRENT_COMMIT" = "$TARGET_COMMIT" ]; then
+    UP_TO_DATE=true
+  elif git merge-base --is-ancestor "$TARGET_COMMIT" "$CURRENT_COMMIT"; then
+    UP_TO_DATE=false
+    warn "This goes back $(git rev-list --count "$TARGET_COMMIT..$CURRENT_COMMIT") commit(s)."
+  else
+    UP_TO_DATE=false
+    count=$(git rev-list --count "$CURRENT_COMMIT..$TARGET_COMMIT")
+    info "$count new commit(s):"
+    git log --oneline --no-decorate -15 "$CURRENT_COMMIT..$TARGET_COMMIT" | sed 's/^/    /'
+    [ "$count" -gt 15 ] && info "    …"
+  fi
+  return 0
+}
+
+update_code() {
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    git stash push --quiet -m "upgrade.sh $STAMP"
+    warn "Local changes to tracked files were stashed (git stash list)."
+  fi
+  if [ -n "$REF" ]; then
+    git checkout --quiet --detach "$TARGET_COMMIT"
+  else
+    git checkout --quiet "$BRANCH" 2>/dev/null || git checkout --quiet -b "$BRANCH" "origin/$BRANCH"
+    git merge --quiet --ff-only "$TARGET_COMMIT" \
+      || fail "$BRANCH has commits that aren't on origin/$BRANCH; sort that out by hand. Nothing is restarted."
+  fi
+  ok "Code is at $(version_at HEAD)."
+}
+
+# ── Docker ──────────────────────────────────────────────────────────────────────────────────────
+service_container() { docker compose ps -a -q "$1" 2>/dev/null | head -n1; }
+
+# "service image" for every service built from this repo (an image named after the project when
+# the compose file doesn't name one).
+built_services() {
+  docker compose config 2>/dev/null | awk '
+    /^name:/                { project = $2 }
+    /^[^ ]/                 { in_services = ($0 == "services:"); next }
+    !in_services            { next }
+    /^  [^ ]/               { flush(); service = $1; sub(/:$/, "", service); image = ""; built = 0; next }
+    /^    build:/           { built = 1 }
+    /^    image:/           { image = $2 }
+    function flush() {
+      if (service != "" && built) {
+        if (image == "") image = project "-" service
+        if (image !~ /:[^\/]+$/) image = image ":latest"
+        print service, image
+      }
+      service = ""
+    }
+    END                     { flush() }'
+}
+
+docker_requirements() {
+  command -v git > /dev/null || fail "git isn't installed."
+  command -v curl > /dev/null || fail "curl isn't installed."
+  command -v docker > /dev/null || fail "Docker isn't installed."
+  docker compose version > /dev/null 2>&1 || fail "Docker Compose v2 isn't available (docker compose)."
+  docker info > /dev/null 2>&1 || fail "Can't talk to Docker (is it running? does this user need sudo?)."
+  git rev-parse --git-dir > /dev/null 2>&1 || fail "$PROJECT_DIR isn't a git checkout."
+}
+
+check_env() {
+  local key missing=""
+  [ -z "$REQUIRED_ENV" ] && return 0
+  [ -f "$PROJECT_DIR/.env" ] || fail ".env is missing; copy .env.example to .env and fill it in first."
+  for key in $REQUIRED_ENV; do
+    [ -n "$(env_value "$key")" ] || missing="$missing $key"
+  done
+  [ -z "$missing" ] || fail "Set these in .env first:$missing"
+  ok ".env has$(printf ' %s' $REQUIRED_ENV)."
+}
+
+# check_auth_secret [NAME]: sign-in needs a long random secret.
+check_auth_secret() {
+  local name=${1:-BETTER_AUTH_SECRET} secret
+  secret=$(env_value "$name")
+  [ ${#secret} -ge 32 ] || fail "$name in .env is missing or shorter than 32 characters (make one: openssl rand -base64 48)."
+}
+
+check_disk() {
+  local free_kb
+  free_kb=$(df -Pk "$PROJECT_DIR" 2>/dev/null | awk 'NR == 2 { print $4 }')
+  if [ -n "$free_kb" ] && [ "$free_kb" -lt $((MIN_FREE_GB * 1024 * 1024)) ]; then
+    warn "Only $((free_kb / 1024 / 1024)) GB free; a build needs about ${MIN_FREE_GB} GB (docker system prune can free some)."
+  else
+    ok "Disk space is fine."
+  fi
+}
+
+backup_database() {
+  local container
+  [ -n "$DB_SERVICE" ] || { info "No database to back up."; return 0; }
+  container=$(app_service_container "$DB_SERVICE")
+  if [ -z "$container" ] || [ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null)" != true ]; then
+    info "The database isn't running (a first install?), so there's nothing to back up."
+    return 0
+  fi
+  BACKUP_FILE="$BACKUP_DIR/upgrade-$STAMP.dump"
+  if docker exec -e PGPASSWORD="${DB_PASSWORD:-}" "$container" \
+      pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc > "$BACKUP_FILE.tmp" 2> "$BACKUP_FILE.err"; then
+    mv "$BACKUP_FILE.tmp" "$BACKUP_FILE"
+    rm -f "$BACKUP_FILE.err"
+    ok "Database: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+  else
+    warn "The database backup failed:"
+    sed 's/^/    /' "$BACKUP_FILE.err"
+    rm -f "$BACKUP_FILE.tmp" "$BACKUP_FILE.err"
     BACKUP_FILE=""
-fi
+    ask --always "Carry on WITHOUT a backup?" || fail "Stopped. Nothing has changed."
+  fi
+}
 
-# ─────────────────────────────────────────────
-# 4. Pull new version
-# ─────────────────────────────────────────────
-if [ "$USE_CURRENT_BRANCH" = false ]; then
-    log "Pulling version $TARGET_VERSION..."
+# Tags each running image as <image>:previous, for --rollback.
+snapshot_images() {
+  local service image container id kept=""
+  SNAPSHOT=""
+  while read -r service image; do
+    [ -n "$service" ] || continue
+    container=$(app_service_container "$service")
+    [ -n "$container" ] || continue
+    id=$(docker inspect -f '{{.Image}}' "$container" 2>/dev/null) || continue
+    docker tag "$id" "${image%:*}:previous"
+    SNAPSHOT="$SNAPSHOT $service=$image"
+    kept="$kept $service"
+  done < <(built_services)
+  if [ -n "$kept" ]; then ok "Images kept for --rollback:$kept"; else info "Nothing running yet, so no images to keep."; fi
+}
 
-    git stash --quiet 2>/dev/null || true
-    git pull --ff-only --quiet
+build_images() {
+  local out
+  out=$(mktemp)
+  export BUILD_VERSION
+  info "Building $BUILD_VERSION (a few minutes)..."
+  if docker compose build > "$out" 2>&1; then
+    [ -n "${LOG:-}" ] && cat "$out" >> "$LOG.build"
+    rm -f "$out"
+    ok "Built."
+  else
+    tail -n 40 "$out" | sed 's/^/    /'
+    [ -n "${LOG:-}" ] && cat "$out" >> "$LOG.build"
+    rm -f "$out"
+    fail "The build failed. Nothing was restarted; the old version is still running."
+  fi
+}
 
-    ok "Pulled latest (VERSION: $TARGET_SEMVER)"
-else
-    log "Using current branch commit"
-fi
-
-# ─────────────────────────────────────────────
-# 5. Build new images
-# ─────────────────────────────────────────────
-log "Keeping the current images for rollback (./scripts/upgrade.sh --rollback)..."
-for svc in $BUILT_SERVICES; do
-    image=$(service_image "$svc" || true)
-    [ -z "$image" ] && continue
-    image_id=$($COMPOSE images -q "$svc" 2>/dev/null | head -n1)
-    [ -n "$image_id" ] && docker tag "$image_id" "${image%%:*}:previous" 2>/dev/null || true
-done
-
-log "Building new container images..."
-
-# Export BUILD_VERSION so docker compose passes it as a build arg to the UI Dockerfile.
-# This ensures each deployment gets a unique Next.js build ID, preventing stale
-# server action errors when clients load cached JS from a previous build.
-export BUILD_VERSION="$TARGET_SEMVER"
-
-$COMPOSE build --parallel 2>&1 | tail -5
-
-ok "Images built (BUILD_VERSION=$BUILD_VERSION)"
-
-# ─────────────────────────────────────────────
-# 6. Apply database migrations & restart services
-# ─────────────────────────────────────────────
-# Alembic migrations run automatically on container start via entrypoint.sh.
-# Services are restarted in dependency order to avoid "Failed to find Server Action"
-# errors caused by the UI starting before the API is healthy (stale client requests
-# hit the new server before it has registered its action IDs).
-log "Restarting services in dependency order..."
-
-# Phase 1: Backend API (runs migrations on start)
-log "  Phase 1: Restarting API..."
-$COMPOSE up -d --build ghostwire-proxy-api
-
-# Wait for API to become healthy before restarting frontend
-API_HEALTHY=false
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:8089/health >/dev/null 2>&1; then
-        API_HEALTHY=true
-        break
+rollback_images() {
+  local pair service image services=""
+  [ -n "${PREV_SNAPSHOT:-}" ] || fail "The last upgrade kept no images to go back to."
+  for pair in $PREV_SNAPSHOT; do
+    service=${pair%%=*}
+    image=${pair#*=}
+    if docker image inspect "${image%:*}:previous" > /dev/null 2>&1; then
+      docker tag "${image%:*}:previous" "$image"
+      services="$services $service"
+    else
+      warn "No kept image for $service; it stays as it is."
     fi
-    sleep 2
-done
+  done
+  [ -n "$services" ] || fail "None of the kept images are left."
+  if [ -n "${PREV_COMMIT:-}" ]; then
+    if [ "$(git rev-parse "$BRANCH")" = "$PREV_COMMIT" ]; then
+      git checkout --quiet "$BRANCH"
+    else
+      git checkout --quiet --detach "$PREV_COMMIT"
+    fi
+    ok "Code is back at $(version_at HEAD)."
+  fi
+  # shellcheck disable=SC2086
+  docker compose up -d --no-build --force-recreate $services
+}
 
-if [ "$API_HEALTHY" = true ]; then
-    ok "  API is healthy"
-else
-    warn "  API health check timed out (60s) — continuing with UI restart"
-fi
+# Waits until every container is running (and healthy, where it has a healthcheck).
+wait_for_containers() {
+  local deadline=$((SECONDS + HEALTH_TIMEOUT)) pending id name state health code
+  info "Waiting for the containers (up to ${HEALTH_TIMEOUT}s)..."
+  while :; do
+    pending=""
+    for id in $(docker compose ps -a -q 2> /dev/null); do
+      read -r name state health code < <(docker inspect -f \
+        '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.State.ExitCode}}' \
+        "$id" 2>/dev/null) || continue
+      name=${name#/}
+      case "$state/$health" in
+        running/healthy | running/none) ;;
+        exited/*) [ "$code" = 0 ] || pending="$pending $name(exited $code)" ;;
+        running/*) pending="$pending $name($health)" ;;
+        *) pending="$pending $name($state)" ;;
+      esac
+    done
+    if [ -z "$pending" ]; then
+      ok "Every container is up and healthy."
+      return 0
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      warn "Not healthy after ${HEALTH_TIMEOUT}s:$pending"
+      UNHEALTHY=$pending
+      return 1
+    fi
+    sleep 5
+  done
+}
 
-# Phase 2: Frontend UI (depends on API) + nginx + updater
-log "  Phase 2: Restarting UI, nginx, updater..."
-$COMPOSE up -d --build ghostwire-proxy-ui ghostwire-proxy-nginx ghostwire-proxy-updater
+# wait_for_url URL [seconds]
+wait_for_url() {
+  local deadline=$((SECONDS + ${2:-60}))
+  until curl -fsS -o /dev/null -m 10 "$1" 2> /dev/null; do
+    [ "$SECONDS" -ge "$deadline" ] && return 1
+    sleep 3
+  done
+}
 
-ok "Services restarted"
+check_urls() {
+  local url failed=""
+  for url in $HEALTH_URLS; do
+    if wait_for_url "$url" 60; then ok "Answering: $url"; else failed="$failed $url"; fi
+  done
+  [ -z "$failed" ] || { warn "Not answering:$failed"; return 1; }
+}
 
-# ─────────────────────────────────────────────
-# 7. Health check
-# ─────────────────────────────────────────────
-log "Waiting for services to become healthy..."
+# check_prisma_migrations: every folder in prisma/migrations is applied.
+check_prisma_migrations() {
+  local dir="$PROJECT_DIR/prisma/migrations" container applied migration missing="" total=0
+  [ -d "$dir" ] || return 0
+  container=$(app_service_container "$DB_SERVICE")
+  applied=$(docker exec "$container" psql -U "$DB_USER" -d "$DB_NAME" -tAc \
+    "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL" 2>/dev/null) \
+    || { warn "Couldn't read the migration table."; return 1; }
+  for migration in "$dir"/*/; do
+    migration=$(basename "$migration")
+    total=$((total + 1))
+    grep -qx "$migration" <<< "$applied" || missing="$missing $migration"
+  done
+  [ -z "$missing" ] || { warn "Database migrations not applied:$missing"; return 1; }
+  ok "All $total database migrations are applied."
+}
 
-if check_health; then
-    ok "All services healthy (API and admin sign-in)"
-else
-    err "Health check failed!"
+# check_alembic_migrations SERVICE: the database is at the newest Alembic revision.
+check_alembic_migrations() {
+  local container current heads
+  container=$(app_service_container "$1")
+  current=$(docker exec "$container" alembic current 2> /dev/null | awk '/^[0-9a-f]/ { print $1 }' | sort) || true
+  heads=$(docker exec "$container" alembic heads 2> /dev/null | awk '/^[0-9a-f]/ { print $1 }' | sort) || true
+  if [ -z "$heads" ]; then warn "Couldn't ask Alembic for the database revision."; return 1; fi
+  [ "$current" = "$heads" ] || { warn "The database is at ${current:-nothing}, the code expects $heads."; return 1; }
+  ok "The database is at the newest revision ($heads)."
+}
+
+compose_logs() {
+  local name
+  if [ -n "${UNHEALTHY:-}" ]; then
+    for name in $UNHEALTHY; do
+      name=${name%%(*}
+      info "Last lines from $name:"
+      docker logs --tail 25 "$name" 2>&1 | sed 's/^/    /' || true
+    done
+  else
+    docker compose logs --tail 25 2>&1 | sed 's/^/    /' || true
+  fi
+}
+
+# ── Default hooks ───────────────────────────────────────────────────────────────────────────────
+declare -F app_requirements  > /dev/null || app_requirements()  { docker_requirements; }
+declare -F app_preflight     > /dev/null || app_preflight()     { :; }
+declare -F app_is_running    > /dev/null || app_is_running()    { [ -n "$(docker compose ps -q --status running 2>/dev/null)" ]; }
+declare -F app_service_container > /dev/null || app_service_container() { service_container "$1"; }
+declare -F app_plan          > /dev/null || app_plan()          { plan_git; }
+declare -F app_backup        > /dev/null || app_backup()        { backup_database; }
+declare -F app_snapshot      > /dev/null || app_snapshot()      { snapshot_images; }
+declare -F app_update        > /dev/null || app_update()        { update_code; }
+declare -F app_build         > /dev/null || app_build()         { build_images; }
+declare -F app_deploy        > /dev/null || app_deploy()        { docker compose up -d --remove-orphans; }
+declare -F app_health        > /dev/null || app_health()        { wait_for_containers && check_urls; }
+declare -F app_verify        > /dev/null || app_verify()        { :; }
+declare -F app_logs          > /dev/null || app_logs()          { compose_logs; }
+declare -F app_rollback      > /dev/null || app_rollback()      { rollback_images; }
+declare -F app_restore_hint  > /dev/null || app_restore_hint()  {
+  echo "docker compose exec -T $DB_SERVICE pg_restore -U $DB_USER -d $DB_NAME --clean --if-exists < $1"
+}
+declare -F app_cleanup       > /dev/null || app_cleanup()       { :; }
+
+# ── Run ─────────────────────────────────────────────────────────────────────────────────────────
+usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
+
+on_error() { printf '\n  %s✗ Stopped at line %s: %s%s\n' "$R" "$1" "$2" "$N" >&2; }
+
+on_exit() {
+  local code=$?
+  app_cleanup || true
+  if [ "$code" -ne 0 ] && [ "${CHANGED:-false}" = true ]; then
     echo ""
-    warn "See why:      $COMPOSE logs --tail 50 ghostwire-proxy-api ghostwire-proxy-ui"
-    warn "To rollback:  ./scripts/upgrade.sh --rollback"
-    if [ -n "${BACKUP_FILE:-}" ]; then
-        warn "  Restore DB: cat $BACKUP_FILE | docker exec -i ghostwire-proxy-postgres psql -U ghostwire ghostwire_proxy"
+    info "To go back to $CURRENT_LABEL:  scripts/upgrade.sh --rollback"
+    [ -n "${BACKUP_FILE:-}" ] && info "Database backup:  $BACKUP_FILE"
+    notify "upgrade to ${TARGET_LABEL:-?} FAILED (still on or partly on $CURRENT_LABEL). Log: ${LOG:-none}"
+  fi
+  [ -n "${LOG:-}" ] && [ "$code" -ne 0 ] && info "Log: $LOG"
+  return 0
+}
+
+summary_line() { printf '  %-12s %s\n' "$1" "$2"; }
+
+rollback_flow() {
+  STEPS=3
+  step 1 "Pre-flight"
+  app_requirements
+  load_state
+  info "Goes back to $PREV_LABEL, what ran before the upgrade on $PREV_DATE."
+  warn "The database isn't rolled back. Migrations only add, so the older version runs on it."
+  [ -n "${PREV_BACKUP:-}" ] && info "To restore the database as it was too: $(app_restore_hint "$PREV_BACKUP")"
+  ask "Roll $APP_NAME back to $PREV_LABEL?" || fail "Stopped. Nothing has changed."
+
+  step 2 "Roll back"
+  app_rollback
+
+  step 3 "Health check"
+  if app_health; then
+    ok "Rolled back to $PREV_LABEL."
+    notify "rolled back to $PREV_LABEL"
+  else
+    app_logs
+    notify "rolled back to $PREV_LABEL but it isn't healthy"
+    fail "Rolled back, but it isn't healthy (see above)."
+  fi
+}
+
+main() {
+  REF="" CHECK=false YES=false FORCE=false ROLLBACK=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --check) CHECK=true ;;
+      -y | --yes) YES=true ;;
+      -f | --force) FORCE=true ;;
+      --rollback) ROLLBACK=true ;;
+      -h | --help) usage; exit 0 ;;
+      -*) fail "Unknown option $1 (see --help)." ;;
+      *) [ -z "$REF" ] || fail "Give one version only."; REF=$1 ;;
+    esac
+    shift
+  done
+
+  cd "$PROJECT_DIR"
+  BRANCH=main TRACK=branch BACKUP_DIR=backups KEEP_BACKUPS=10 MIN_FREE_GB=3 HEALTH_TIMEOUT=180
+  DB_SERVICE="" DB_USER="" DB_NAME="" DB_PASSWORD="" REQUIRED_ENV="" HEALTH_URLS="" APP_URL=""
+  APP_NAME=$(basename "$PROJECT_DIR")
+  CURRENT_COMMIT="" CURRENT_LABEL="" TARGET_LABEL="" CHANGED=false UP_TO_DATE=false
+  app_settings
+
+  case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$PROJECT_DIR/$BACKUP_DIR" ;; esac
+  mkdir -p "$BACKUP_DIR"
+  STATE_FILE="$BACKUP_DIR/last-upgrade"
+  STAMP=$(date +%Y%m%d-%H%M%S)
+  LOG=""
+  if [ "$CHECK" = false ]; then
+    LOG="$BACKUP_DIR/upgrade-$STAMP.log"
+    exec > >(tee -a "$LOG") 2>&1
+  fi
+  trap on_exit EXIT
+  trap 'on_error $LINENO "$BASH_COMMAND"' ERR
+
+  printf '%s%s upgrade%s  %s, %s\n' "$B" "$APP_NAME" "$N" "$(hostname)" "$(date '+%Y-%m-%d %H:%M')"
+
+  if [ "$ROLLBACK" = true ]; then
+    rollback_flow
+    return 0
+  fi
+
+  STEPS=8
+  step 1 "Pre-flight"
+  app_requirements
+  check_disk
+  check_env
+  app_preflight
+
+  step 2 "Plan"
+  app_plan
+  if [ "$UP_TO_DATE" = true ] && [ "$FORCE" = false ] && app_is_running; then
+    ok "Already up to date: $CURRENT_LABEL. (--force rebuilds and restarts anyway.)"
+    return 0
+  fi
+  if [ "$UP_TO_DATE" = true ]; then
+    info "Rebuild and restart $CURRENT_LABEL."
+  else
+    info "$CURRENT_LABEL → $TARGET_LABEL"
+  fi
+  if [ "$CHECK" = true ]; then
+    ok "That's what an upgrade would do (--check changes nothing)."
+    return 0
+  fi
+  ask "Go ahead?" || fail "Stopped. Nothing has changed."
+
+  step 3 "Back up"
+  BACKUP_FILE=""
+  app_backup
+  if [ -f "$PROJECT_DIR/.env" ]; then
+    (umask 077; cp "$PROJECT_DIR/.env" "$BACKUP_DIR/upgrade-$STAMP.env")
+    ok "Settings: $BACKUP_DIR/upgrade-$STAMP.env"
+  fi
+  app_snapshot
+  save_state
+  # Keep the newest $KEEP_BACKUPS of each kind.
+  for kind in dump tar.gz env log log.build; do
+    # shellcheck disable=SC2012
+    ls -1t "$BACKUP_DIR"/upgrade-*."$kind" 2> /dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f || true
+  done
+
+  step 4 "Update code"
+  CHANGED=true
+  app_update
+
+  step 5 "Build"
+  app_build
+
+  step 6 "Deploy"
+  notify "upgrading $CURRENT_LABEL → $TARGET_LABEL"
+  app_deploy
+
+  step 7 "Health check"
+  if ! { app_health && app_verify; }; then
+    app_logs
+    echo ""
+    warn "$APP_NAME isn't healthy on $TARGET_LABEL."
+    if [ -t 0 ] && ask --always "Roll back to $CURRENT_LABEL now?"; then
+      load_state
+      app_rollback
+      if app_health; then
+        CHANGED=false
+        notify "upgrade to $TARGET_LABEL failed its health check; rolled back to $CURRENT_LABEL"
+        fail "The upgrade failed its health check, so it was rolled back to $CURRENT_LABEL."
+      fi
     fi
-    exit 1
-fi
+    fail "The upgrade to $TARGET_LABEL failed its health check."
+  fi
 
-# ─────────────────────────────────────────────
-# 8. Purge old backups
-# ─────────────────────────────────────────────
-if [ -x "$SCRIPT_DIR/purge-backups.sh" ]; then
-    log "Purging old backups (keeping last 5, removing >30 days)..."
-    "$SCRIPT_DIR/purge-backups.sh" --run --days 30 --keep 5 || true
-fi
+  step 8 "Done"
+  CHANGED=false
+  summary_line "Version" "$CURRENT_LABEL → $TARGET_LABEL"
+  [ -n "$BACKUP_FILE" ] && summary_line "Backup" "$BACKUP_FILE"
+  summary_line "Log" "$LOG"
+  [ -n "$APP_URL" ] && summary_line "Open" "$APP_URL"
+  summary_line "Roll back" "scripts/upgrade.sh --rollback"
+  notify "upgraded $CURRENT_LABEL → $TARGET_LABEL"
+}
 
-# ─────────────────────────────────────────────
-# Done
-# ─────────────────────────────────────────────
-echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  Upgrade complete: v$CURRENT_VERSION → $TARGET_VERSION  ${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
-echo ""
-echo "  Dashboard: http://localhost:88"
-echo "  API:       http://localhost:8089"
-echo ""
+main "$@"
