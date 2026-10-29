@@ -26,6 +26,7 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 | Auth | Admin: Better Auth in the UI (`frontend/src/lib/auth.ts`), API reads its session (`backend/app/core/auth_session.py`); admin 2FA stays in the API (`admin_mfa_service`), asked for by the `auth-admin-mfa` plugin. Auth walls: JWT, TOTP |
 
 ### Ports
+- OpenResty stub_status for the Collector: 8090 (internal only, never published)
 - Proxy HTTP: 80
 - Proxy HTTPS: 443
 - Admin UI: 88 (internal 3000)
@@ -33,6 +34,18 @@ Ghostwire Proxy is a Nginx Proxy Manager alternative - a reverse proxy managemen
 
 ### Domain
 - Production: proxy.ghostwire.err403.com
+
+## System monitoring (Ghostwire Analytics)
+- Spec: `../docs/analytics-reporting.md`. Off by default; settings in the `settings` table
+  (`analytics_*`), edited only through `GET/PUT /api/settings/analytics` (admin; the generic
+  `/api/settings/{key}` routes refuse those keys). The ingest key is Fernet-encrypted and write-only.
+- `backend/app/core/ghostwire_telemetry.py`, `updater/updater/ghostwire_telemetry.py`,
+  `otel/collector.yaml` and `frontend/src/components/analytics/*` are verbatim copies of shared
+  suite files: change them in ghostwire-suite, then copy. `otel/nginx.yaml` is Proxy-only.
+- The getter is `app.services.ghostwire_analytics.get_config()` (memory, refreshed on save and every
+  60 s); the UI's is `src/lib/analytics-config.ts` (reads `/api/internal/analytics-config`).
+- New background loops: `heartbeat(job="name")` each pass and `async with job("name"):` around the
+  work. Never instrument `/api/internal/*` (OpenResty calls it per proxied request).
 
 ## Database Safety Rules
 - **NEVER perform destructive database operations** (DROP TABLE, DELETE without WHERE, TRUNCATE, etc.)

@@ -102,6 +102,17 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 - System health monitoring
 - DNS provider management (Cloudflare integration)
 
+### System Monitoring (Ghostwire Analytics)
+- Optional, off by default: **Settings → Ghostwire Analytics** (admin only) sends the stack's own
+  health to a [Ghostwire Analytics](https://github.com/garethcheyne/ghostwire-analytics) site over
+  OpenTelemetry, with no restart: the API's and admin UI's requests, latency and errors, traces
+  with their database, Redis and outside calls, the background jobs and the updater (with
+  heartbeats), every container's CPU, memory, network and restarts, the host, and OpenResty's own
+  connection and request counters
+- It watches the Proxy, not the traffic it carries: nothing is added to proxied requests, and the
+  per-host request numbers stay in **Traffic & Analytics** above
+- How it works and what it sends: [System monitoring](#system-monitoring-ghostwire-analytics) below
+
 ### API Keys & AI Agents (MCP)
 - Scoped API keys (`gwp_…`) for scripts and AI agents; only a hash is stored and the key is shown once
 - Creating a key needs the admin's two-factor code; keys can expire and be revoked at any time
@@ -273,6 +284,12 @@ images for `--rollback`, updates the code, rebuilds and restarts (the API first;
 Backups, a log of each run and what `--rollback` needs are kept in `data/backups/`. A rollback doesn't undo
 database migrations (they only add); the backup is there if you need it.
 
+**Install folder not called `ghostwire-proxy`?** `docker-compose.yml` names its compose project
+`ghostwire-proxy` (the system monitoring Collector picks this stack's containers out by it). Before then
+the project took the folder's name, so an install in a folder with another name has to stop the old
+project once before upgrading: `docker compose -p <folder name> down` (volumes and data are kept), then
+upgrade as usual.
+
 ### Manual
 
 ```bash
@@ -378,6 +395,35 @@ docker compose exec -T ghostwire-proxy-postgres pg_restore -U ghostwire -d ghost
               │  PostgreSQL     │
               └─────────────────┘
 ```
+
+---
+
+## System monitoring (Ghostwire Analytics)
+
+Every Ghostwire app reports to Ghostwire Analytics the same way; the spec is
+`ghostwire-suite/docs/analytics-reporting.md`. Here:
+
+| Piece | Where | Service name in Analytics |
+|---|---|---|
+| API (FastAPI, SQLAlchemy, Redis, httpx) | `backend/app/core/ghostwire_telemetry.py`, set up in `app/main.py` | `api` (background loops as jobs: `ghostwire.job.*` with `job` = `traffic-rollup`, `upstream-health-checks`, `scheduled-backup`, …) |
+| Admin UI (Next.js) | `frontend/src/instrumentation.ts`, `src/components/analytics/` (registry copy) | `ui` |
+| Updater | `updater/updater/ghostwire_telemetry.py`, through the API's relay | `updater` |
+| Containers, host, OpenResty | `ghostwire-proxy-otel` (OpenTelemetry Collector): `otel/collector.yaml` (the suite's, copied verbatim) plus `otel/nginx.yaml` (OpenResty's `stub_status` on the unpublished port 8090) | each container by name, `host`, `ghostwire-proxy-nginx`, `otel-collector` |
+
+- **Settings**: Settings → Ghostwire Analytics: the Analytics URL (https, or http on localhost), the
+  site's website ID, its `gwe_` ingest key (encrypted with `ENCRYPTION_KEY`, never shown again),
+  trace sampling (default 100 %), and optionally visitor analytics and session recording for the
+  admin UI through its `/gw/` relay. Changes apply within a minute.
+- **Off** (the default): nothing is recorded or sent. The Collector still runs and logs
+  `Exporting failed. Dropping data.` every 30 seconds, because the relay answers 404; that's expected.
+- **The relay**: `POST /internal/otlp/v1/{metrics,traces}` on the API, for the Collector and the
+  updater. Only from private addresses, so only from the stack's Docker network; it isn't under
+  `/api`, so neither the admin UI nor OpenResty forwards to it. It adds the URL and key from
+  Settings.
+- **Left out on purpose**: `/api/internal/*` (OpenResty's traffic logs, auth-wall checks and rule
+  loads, one or more per proxied request), `/health` and `/api/heartbeat`. Monitoring volume never
+  grows with proxied traffic, and nothing is added to that path.
+- On Docker Desktop the `host` metrics are Docker's Linux VM, not Windows or macOS.
 
 ---
 
