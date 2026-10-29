@@ -21,7 +21,11 @@ export function registerToastSetter(fn: SetToasts) {
 export function toast(message: string, type: 'success' | 'error' | 'info' = 'success') {
   if (!_setToasts) return
   const id = Date.now() + Math.random()
-  _setToasts(prev => [...prev, { id, message, type }])
+  // The same message already on screen (one failed request per panel when the API is down)
+  // is shown once.
+  _setToasts(prev =>
+    prev.some(t => t.message === message && t.type === type) ? prev : [...prev, { id, message, type }]
+  )
   setTimeout(() => _setToasts?.(prev => prev.filter(t => t.id !== id)), 4000)
 }
 
