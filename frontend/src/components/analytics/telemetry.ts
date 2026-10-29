@@ -1,9 +1,11 @@
 import {
   context,
   diag,
+  isSpanContextValid,
   metrics,
   propagation,
   ROOT_CONTEXT,
+  SpanKind,
   SpanStatusCode,
   trace,
   type Attributes,
@@ -11,7 +13,6 @@ import {
   type Counter,
   type Histogram,
   type Link,
-  type SpanKind,
 } from "@opentelemetry/api"
 import { createRequire } from "node:module"
 import { hostname } from "node:os"
@@ -58,6 +59,11 @@ export interface GhostwireTelemetryOptions {
   environment?: string
   /** Request paths that are neither traced nor counted (prefix match). Defaults to IGNORED_PATHS. */
   ignorePaths?: string[]
+  /**
+   * Request paths that are counted (http.server.request.duration, with the route) but not traced
+   * (prefix match), e.g. a poll endpoint that answers every few seconds. Default none.
+   */
+  untracedPaths?: string[]
   /** How often metrics are sent, in ms. Default 30 s. */
   metricIntervalMs?: number
   /**
@@ -96,10 +102,33 @@ type HttpModule = typeof import("@opentelemetry/instrumentation-http")
  * Turbopack bundle the CommonJS build instead, whose plain require("forwarded-parse") it can. Plain
  * Node (an ES module, so no require) loads the CommonJS build from node_modules.
  */
+/* eslint @typescript-eslint/no-require-imports: "off" -- the require() below is on purpose (see above). A rule
+   setting rather than a disable comment, so apps that don't enable the rule get no unused-directive warning. */
 function loadHttpInstrumentation(): HttpModule {
   return typeof require === "function"
     ? require("@opentelemetry/instrumentation-http")
     : createRequire(import.meta.url)("@opentelemetry/instrumentation-http")
+}
+
+/**
+ * Asks for Node's http and https again, so the HTTP instrumentation patches them now: it patches a
+ * module the next time it's asked for, and Next.js loaded both before register() ran. Through
+ * process.getBuiltinModule, which bundlers leave alone. (webpack compiles a createRequire() with a
+ * run-time argument to nothing, so the patch used to wait for the first export, and by then a server
+ * whose request handler something else had wrapped, as Sentry does, was never measured.)
+ */
+function loadHttpModulesAgain() {
+  try {
+    const getBuiltin = (process as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule
+    if (typeof getBuiltin === "function") {
+      getBuiltin("node:http")
+      getBuiltin("node:https")
+    } else {
+      const load = createRequire(`${process.cwd()}/`)
+      load("node:http")
+      load("node:https")
+    }
+  } catch {}
 }
 
 async function loadSdk(withHttp: boolean) {
@@ -339,19 +368,25 @@ class SwitchableMetricExporter implements PushMetricExporter {
  * is one, otherwise keeps that share of traces by trace ID. Records nothing while monitoring is off.
  * Metrics aren't sampled; they count every request. Spans outside the sample are still recorded
  * (never exported) so NextRouteProcessor can give every request's metric its route.
+ *
+ * Counted but not traced: requests to untracedPaths, and a CLIENT span with no parent (a query or
+ * call made outside any request or job, such as a poll every few seconds), which would otherwise be
+ * a one-span trace each time.
  */
 class GhostwireSampler implements Sampler {
   private readonly byRatio = new Map<number, Sampler>()
   private readonly live: LiveConfig
   private readonly sdk: Sdk
   private readonly ignorePaths: string[]
+  private readonly untracedPaths: string[]
   private readonly notSampled: SamplingResult
   private readonly recordOnly: SamplingResult
 
-  constructor(live: LiveConfig, sdk: Sdk, ignorePaths: string[]) {
+  constructor(live: LiveConfig, sdk: Sdk, ignorePaths: string[], untracedPaths: string[]) {
     this.live = live
     this.sdk = sdk
     this.ignorePaths = ignorePaths
+    this.untracedPaths = untracedPaths
     this.notSampled = { decision: sdk.sdkTrace.SamplingDecision.NOT_RECORD }
     this.recordOnly = { decision: sdk.sdkTrace.SamplingDecision.RECORD }
   }
@@ -359,7 +394,11 @@ class GhostwireSampler implements Sampler {
   shouldSample(ctx: Context, traceId: string, name: string, kind: SpanKind, attributes: Attributes, links: Link[]) {
     const config = this.live.peek()
     if (!targetOf(config)) return this.notSampled
-    if (this.ignored(attributes)) return this.notSampled // Next.js's own request spans for ignored paths
+    if (matches(attributes, this.ignorePaths)) return this.notSampled // Next.js's own request spans for ignored paths
+    const parent = trace.getSpanContext(ctx)
+    if (!parent || !isSpanContextValid(parent)) {
+      if (kind === SpanKind.CLIENT || matches(attributes, this.untracedPaths)) return this.recordOnly
+    }
     const sample = Number(config?.traceSample)
     const ratio = Number.isFinite(sample) ? Math.min(100, Math.max(0, sample)) / 100 : 1
     let sampler = this.byRatio.get(ratio)
@@ -372,14 +411,57 @@ class GhostwireSampler implements Sampler {
     return result.decision === this.sdk.sdkTrace.SamplingDecision.NOT_RECORD ? this.recordOnly : result
   }
 
-  private ignored(attributes: Attributes) {
-    const path = attributes["url.path"] ?? attributes["http.target"]
-    return typeof path === "string" && this.ignorePaths.some((prefix) => path.startsWith(prefix))
-  }
-
   toString() {
     return "GhostwireSampler"
   }
+}
+
+/** Whether a request span's path starts with one of the prefixes. */
+function matches(attributes: Attributes, prefixes: string[]) {
+  if (prefixes.length === 0) return false
+  const path = attributes["url.path"] ?? attributes["http.target"]
+  return typeof path === "string" && prefixes.some((prefix) => path.startsWith(prefix))
+}
+
+/** Attributes that can hold a URL's query string; url.query is the query alone, so it's dropped. */
+const URL_ATTRIBUTES = ["url.full", "url.original", "http.url", "http.target"]
+const QUERY_ATTRIBUTES = ["url.query"]
+
+function withoutQuery(value: string) {
+  return value.split("?", 1)[0].split("#", 1)[0]
+}
+
+/**
+ * Keeps query strings, which can carry tokens (a connector's ?token=, a signed link), out of every
+ * span: the HTTP, undici and Next.js spans record them (url.query, and inside url.full, http.target,
+ * http.url and the name of a request Next.js couldn't route). Cleaned when a span starts and again
+ * when it ends, before the exporter sees it.
+ */
+class StripQueryProcessor implements SpanProcessor {
+  onStart(span: Span): void {
+    stripQuery(span)
+  }
+
+  onEnd(span: ReadableSpan): void {
+    stripQuery(span)
+  }
+
+  async forceFlush(): Promise<void> {}
+
+  async shutdown(): Promise<void> {}
+}
+
+function stripQuery(span: ReadableSpan) {
+  try {
+    // An ended span's fields are plain properties, and this is the object the exporter gets next.
+    const attributes = span.attributes as Record<string, unknown>
+    for (const name of QUERY_ATTRIBUTES) delete attributes[name]
+    for (const name of URL_ATTRIBUTES) {
+      const value = attributes[name]
+      if (typeof value === "string" && /[?#]/.test(value)) attributes[name] = withoutQuery(value)
+    }
+    if (span.name.includes("?")) (span as { name: string }).name = withoutQuery(span.name)
+  } catch {}
 }
 
 type RpcMetadata = { type: unknown; route?: string; span: { spanContext(): { spanId: string } } }
@@ -474,8 +556,9 @@ async function start(getConfig: GetGhostwireConfig, options: GhostwireTelemetryO
   const ignorePaths = options.ignorePaths ?? IGNORED_PATHS
   const tracerProvider = new sdk.sdkTrace.TracerProvider({
     resource,
-    sampler: new GhostwireSampler(live, sdk, ignorePaths),
+    sampler: new GhostwireSampler(live, sdk, ignorePaths, options.untracedPaths ?? []),
     spanProcessors: [
+      new StripQueryProcessor(), // first, so nothing after it sees a query string
       new NextRouteProcessor(sdk),
       new sdk.sdkTrace.BatchSpanProcessor({
         exporter: new SwitchableSpanExporter(live, sdk),
@@ -516,16 +599,7 @@ async function start(getConfig: GetGhostwireConfig, options: GhostwireTelemetryO
     meterProvider,
     instrumentations: [...instrumentations, ...(options.instrumentations ?? [])],
   })
-  if (sdk.http) {
-    // Next.js loads node:http before register() runs, and the instrumentation patches a module on
-    // the next require() of it (Turbopack loads built-ins with import(), which it can't see). Ask for
-    // them once more so the server's requests are traced and measured.
-    try {
-      const load = createRequire(`${process.cwd()}/`)
-      load("node:http")
-      load("node:https")
-    } catch {}
-  }
+  if (sdk.http) loadHttpModulesAgain()
 
   return {
     active: true,

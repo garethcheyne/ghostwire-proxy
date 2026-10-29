@@ -7,7 +7,7 @@ export { GhostwireTracker } from "./tracker"
 // it's used: "@/components/analytics/telemetry" (instrumentation.ts, workers) and
 // "@/components/analytics/otlp-relay" (src/app/internal/otlp/v1/[signal]/route.ts).
 export { createGhostwireRelay } from "./relay"
-export { reportServerError, testGhostwireConnection } from "./report"
+export { analyticsUrlProblem, ANALYTICS_HTTP_URL_MESSAGE, isHttpAllowedHost, reportServerError, testGhostwireConnection } from "./report"
 export type {
   AnalyticsSettingsChange,
   AnalyticsSettingsValue,

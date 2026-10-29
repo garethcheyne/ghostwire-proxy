@@ -131,8 +131,17 @@ service:
       processors: [memory_limiter, resource/host, resource, resource_detection, cumulative_to_delta, batch]
       exporters: [otlp_http]
   telemetry:
+    # While monitoring is off the relay answers 404 and each batch is dropped with an error, every
+    # 30 s. So each message is logged at most once per 10 minutes (as the apps' own exporters do), and
+    # without Go stack traces. A real failure while monitoring is on still shows, as often as that.
     logs:
       level: warn
+      disable_stacktrace: true
+      sampling:
+        enabled: true
+        tick: 10m
+        initial: 1
+        thereafter: 0
     # The Collector's own health (accepted, refused and failed points, queue size, memory) through
     # the same relay, as service "otel-collector".
     resource:

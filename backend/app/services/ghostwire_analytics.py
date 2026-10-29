@@ -11,6 +11,7 @@ background loop (so a change made by another worker, or a restored backup, appli
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 import threading
@@ -40,7 +41,6 @@ REFRESH_SECONDS = 60
 DEFAULT_TRACE_SAMPLE = 100
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 class AnalyticsSettingsError(ValueError):
@@ -158,8 +158,44 @@ async def refresh(db: AsyncSession | None = None) -> dict | None:
 # --- Saving ---------------------------------------------------------------------------------------
 
 
+# Plain http is fine for an Analytics on the same machine or network (these are internal tools): the
+# same rule, and wording, in every Ghostwire app and the registry's testGhostwireConnection.
+HTTP_URL_MESSAGE = (
+    "The Analytics URL must use https://. Plain http:// is allowed only for a private address: localhost, "
+    "a private IP address, or a name without dots or ending in .internal (such as analytics or host.docker.internal)."
+)
+_HTTP_NETWORKS = [
+    ipaddress.ip_network(n)
+    for n in (
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "::1/128",
+        "fc00::/7",
+        "fe80::/10",
+    )
+]
+
+
+def http_allowed(host: str) -> bool:
+    """Whether plain http is allowed to this host: localhost, a loopback, private or link-local IP, or a
+    name without dots (a Docker service such as analytics) or under .internal (host.docker.internal)."""
+    host = (host or "").lower().rstrip(".")
+    if not host:
+        return False
+    try:
+        address = ipaddress.ip_address(host.split("%")[0])
+    except ValueError:
+        return host == "localhost" or host.endswith((".localhost", ".internal")) or "." not in host
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return any(address in network for network in _HTTP_NETWORKS if network.version == address.version)
+
+
 def check_url(url: str) -> str:
-    """https, or http only on this machine (localhost). Returns the URL without a trailing slash."""
+    """https, or http for a private host (http_allowed). Returns the URL without a trailing slash."""
     url = (url or "").strip()
     try:
         parts = urlsplit(url)
@@ -168,8 +204,8 @@ def check_url(url: str) -> str:
         raise AnalyticsSettingsError("The Analytics URL isn't a valid address.") from None
     if parts.scheme not in ("http", "https") or not host:
         raise AnalyticsSettingsError("The Analytics URL isn't a valid address.")
-    if parts.scheme != "https" and host.lower() not in _LOCAL_HOSTS:
-        raise AnalyticsSettingsError("The Analytics URL must use https://.")
+    if parts.scheme != "https" and not http_allowed(host):
+        raise AnalyticsSettingsError(HTTP_URL_MESSAGE)
     return url.rstrip("/")
 
 

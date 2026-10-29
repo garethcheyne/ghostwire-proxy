@@ -53,7 +53,7 @@ from opentelemetry.sdk.metrics.export import (
     PeriodicExportingMetricReader,
 )
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.sdk.trace.sampling import Decision, ParentBased, Sampler, SamplingResult, TraceIdRatioBased
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -301,10 +301,74 @@ class SwitchableMetricExporter(MetricExporter):
         self._slot.close()
 
 
+# Attributes that can hold a URL's query string, which can carry tokens (an MCP connector's ?token=,
+# a signed link): kept without it. url.query is the query alone, so it is dropped.
+_URL_ATTRIBUTES = ("url.full", "url.original", "http.url", "http.target")
+_QUERY_ONLY_ATTRIBUTES = ("url.query",)
+
+
+def _without_query(value: str) -> str:
+    return value.split("?", 1)[0].split("#", 1)[0]
+
+
+def _clean_attributes(attributes: Any) -> dict[str, Any] | None:
+    """The attributes with every query string removed, or None when there was none to remove."""
+    if not attributes:
+        return None
+    changed = False
+    cleaned = dict(attributes)
+    for name in _QUERY_ONLY_ATTRIBUTES:
+        if name in cleaned:
+            del cleaned[name]
+            changed = True
+    for name in _URL_ATTRIBUTES:
+        value = cleaned.get(name)
+        if isinstance(value, str) and ("?" in value or "#" in value):
+            cleaned[name] = _without_query(value)
+            changed = True
+    return cleaned if changed else None
+
+
+class StripQueryProcessor(SpanProcessor):
+    """Keeps query strings out of every span this module produces: the HTTP instrumentations record
+    them (url.query, and inside url.full, http.target and http.url) unredacted. Cleaned when the span
+    starts, and once more when it ends for anything set in between."""
+
+    def on_start(self, span: Any, parent_context: Any = None) -> None:
+        with contextlib.suppress(Exception):
+            cleaned = _clean_attributes(span.attributes)
+            if cleaned is not None:
+                for name in _QUERY_ONLY_ATTRIBUTES:
+                    if name in span.attributes:
+                        span.set_attribute(name, "")  # a started span can't lose an attribute; on_end drops it
+                span.set_attributes({k: v for k, v in cleaned.items() if k in _URL_ATTRIBUTES})
+            if "?" in span.name:
+                span.update_name(_without_query(span.name))
+
+    def on_end(self, span: ReadableSpan) -> None:
+        with contextlib.suppress(Exception):
+            cleaned = _clean_attributes(span.attributes)
+            if cleaned is not None:
+                # An ended span's attributes are read-only; this is the object the exporter gets next.
+                span._attributes = cleaned
+            if "?" in span.name:
+                span._name = _without_query(span.name)
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return True
+
+
 class GhostwireSampler(Sampler):
     """The trace sampling % from Settings as it is now: follows the parent's decision when there is one,
     otherwise keeps that share of traces by trace ID. Records nothing while monitoring is off. Metrics
-    aren't sampled; they count every request."""
+    aren't sampled; they count every request.
+
+    A CLIENT span with no parent (a database, Redis or HTTP call made outside any request or job(),
+    such as a worker's idle BRPOP or polling query every few seconds) isn't traced: it would be a
+    one-span trace each time and bury the real ones. Its duration metrics are still recorded."""
 
     def __init__(self, live: _LiveConfig):
         self._live = live
@@ -313,6 +377,8 @@ class GhostwireSampler(Sampler):
     def should_sample(self, parent_context, trace_id, name, kind=None, attributes=None, links=None, trace_state=None):
         config = self._live.peek()
         if _target(config) is None:
+            return SamplingResult(Decision.DROP)
+        if kind is SpanKind.CLIENT and not trace.get_current_span(parent_context).get_span_context().is_valid:
             return SamplingResult(Decision.DROP)
         ratio = _sample_ratio(config)
         sampler = self._by_ratio.get(ratio)
@@ -440,6 +506,7 @@ def _setup(
     resource = Resource.create(attributes)
 
     tracer_provider = TracerProvider(resource=resource, sampler=GhostwireSampler(live))
+    tracer_provider.add_span_processor(StripQueryProcessor())  # first: before anything sees the span
     tracer_provider.add_span_processor(
         BatchSpanProcessor(
             SwitchableSpanExporter(live),

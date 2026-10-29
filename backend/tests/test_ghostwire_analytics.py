@@ -14,6 +14,29 @@ URL = "https://analytics.example.com"
 SITE = "0b6c3b0e-6a3c-4e0c-9a59-6a8f1f5e2d11"
 KEY = "gwe_test_ingest_key_1234567890"
 
+URL_RULE_CASES = [
+    ("https://analytics.example.com", True),
+    ("https://203.0.113.9", True),
+    ("http://localhost:8770", True),
+    ("http://127.0.0.1:8770", True),
+    ("http://[::1]:8770", True),
+    ("http://10.1.2.3", True),
+    ("http://172.20.0.5:3000", True),
+    ("http://192.168.1.10", True),
+    ("http://169.254.10.1", True),
+    ("http://[fd12:3456::1]", True),
+    ("http://[fe80::1]", True),
+    ("http://analytics:3000", True),  # a Docker service name
+    ("http://host.docker.internal:8770", True),
+    ("http://analytics.example.com", False),
+    ("http://8.8.8.8", False),
+    ("http://172.32.0.1", False),
+    ("http://100.64.0.1", False),
+    ("http://[2001:db8::1]", False),
+    ("http://analytics.local.example.com", False),
+]
+
+
 VALID = {
     "enabled": True,
     "url": URL,
@@ -121,6 +144,11 @@ class TestSettingsApi:
         response = await client.put("/api/settings/analytics", headers=auth_headers, json=local)
         assert response.status_code == 200
         assert response.json()["url"] == "http://localhost:3000"
+
+        docker = VALID | {"url": "http://analytics:3000"}
+        response = await client.put("/api/settings/analytics", headers=auth_headers, json=docker)
+        assert response.status_code == 200
+        assert response.json()["url"] == "http://analytics:3000"
 
         off = {"enabled": False, "url": "", "websiteId": "", "traceSample": 100, "browser": False, "replay": False}
         assert (await client.put("/api/settings/analytics", headers=auth_headers, json=off)).status_code == 200
@@ -356,3 +384,14 @@ class TestRelay:
             "/api/internal/otlp/v1/metrics", content=b"x", headers={"content-type": "application/x-protobuf"}
         )
         assert response.status_code in (401, 404, 405)
+
+
+@pytest.mark.parametrize(("url", "allowed"), URL_RULE_CASES)
+def test_plain_http_only_for_private_hosts(url, allowed):
+    """The same rule, and message, as Secure, Load and the registry's testGhostwireConnection."""
+    if allowed:
+        assert ghostwire_analytics.check_url(url) == url
+    else:
+        with pytest.raises(ghostwire_analytics.AnalyticsSettingsError) as raised:
+            ghostwire_analytics.check_url(url)
+        assert str(raised.value) == ghostwire_analytics.HTTP_URL_MESSAGE
