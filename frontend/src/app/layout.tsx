@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import '@/styles/globals.css'
 import { Providers } from './providers'
+import { GhostwireTracker } from '@/components/analytics'
+import { getAnalyticsConfig } from '@/lib/analytics-config'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -53,6 +55,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Ghostwire" />
+        {/* Ghostwire Analytics visitor tags, while visitor analytics is on in Settings. */}
+        <GhostwireTracker getConfig={getAnalyticsConfig} />
       </head>
       <body className={inter.className}>
         <Providers>{children}</Providers>

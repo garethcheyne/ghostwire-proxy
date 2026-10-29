@@ -27,6 +27,7 @@ import api from '@/lib/api'
 import { Switch } from '@/components/ui/switch'
 import { MfaCard } from '@/components/settings/mfa-card'
 import { SmtpCard } from '@/components/settings/smtp-card'
+import { AnalyticsCard } from '@/components/settings/analytics-card'
 import { PageHeader } from '@/components/page-header'
 import { Settings as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -618,6 +619,8 @@ export default function SettingsPage() {
       <MfaCard />
 
       <SmtpCard />
+
+      <AnalyticsCard />
 
       {/* IP Intelligence — AbuseIPDB */}
       <div className="rounded-xl border border-border bg-card p-6">
