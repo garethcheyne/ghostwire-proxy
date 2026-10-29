@@ -162,8 +162,6 @@ export default function NotificationsPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  usePageData(() => { fetchAll() })
-
   const fetchAll = async () => {
     setIsLoading(true)
     try {
@@ -183,6 +181,8 @@ export default function NotificationsPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchAll() })
 
   // --- Subscription toggles ---
 

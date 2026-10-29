@@ -76,11 +76,6 @@ export default function RateLimitsPage() {
   const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
-  usePageData(() => {
-    fetchRules()
-    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  })
-
   useEffect(() => {
     if (!hostDropdownOpen) return
     const handleClick = (e: MouseEvent) => {
@@ -101,6 +96,11 @@ export default function RateLimitsPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => {
+    fetchRules()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
+  })
 
   const resetForm = () => {
     setFormName('')

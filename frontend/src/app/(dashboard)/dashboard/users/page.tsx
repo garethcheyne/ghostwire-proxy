@@ -54,8 +54,6 @@ export default function UsersPage() {
   const [formRole, setFormRole] = useState<'admin' | 'user' | 'viewer'>('user')
   const confirm = useConfirm()
 
-  usePageData(() => { fetchUsers() })
-
   const fetchUsers = async () => {
     try {
       const response = await api.get('/api/users')
@@ -66,6 +64,8 @@ export default function UsersPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchUsers() })
 
   const resetForm = () => {
     setFormName('')

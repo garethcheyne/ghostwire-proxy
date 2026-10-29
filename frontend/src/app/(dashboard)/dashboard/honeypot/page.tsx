@@ -178,11 +178,6 @@ export default function HoneypotPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  usePageData(() => {
-    fetchData()
-    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [activeTab])
-
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -202,6 +197,11 @@ export default function HoneypotPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => {
+    fetchData()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
+  }, [activeTab])
 
   const installDefaults = async () => {
     setInstallingDefaults(true)

@@ -114,8 +114,6 @@ export default function WafPage() {
   const [hostDropdownOpen, setHostDropdownOpen] = useState(false)
   const confirm = useConfirm()
 
-  usePageData(() => { fetchData() }, [filterCategory])
-
   useEffect(() => {
     api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
   }, [])
@@ -152,6 +150,8 @@ export default function WafPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchData() }, [filterCategory])
 
   const resetForm = () => {
     setFormName('')

@@ -37,10 +37,6 @@ export function HeaderActions() {
   const [showKillSwitchDialog, setShowKillSwitchDialog] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
 
-  useEffect(() => {
-    fetchKillSwitchStatus()
-  }, [])
-
   const fetchKillSwitchStatus = async () => {
     try {
       const response = await api.get('/api/system/kill-switch')
@@ -51,6 +47,10 @@ export function HeaderActions() {
       // Ignore errors - endpoint may not exist yet
     }
   }
+
+  useEffect(() => {
+    fetchKillSwitchStatus()
+  }, [])
 
   const toggleKillSwitch = async () => {
     if (!killSwitchActive && killSwitchMode === 'redirect' && !killSwitchRedirectUrl.trim()) return

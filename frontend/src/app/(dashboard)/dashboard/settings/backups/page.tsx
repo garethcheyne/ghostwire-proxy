@@ -93,8 +93,6 @@ export default function BackupsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const confirm = useConfirm()
 
-  usePageData(() => { fetchBackups(); fetchSettings() })
-
   const fetchBackups = async () => {
     try {
       const response = await api.get('/api/backups')
@@ -115,6 +113,8 @@ export default function BackupsPage() {
       console.error('Failed to fetch settings:', err)
     }
   }
+
+  usePageData(() => { fetchBackups(); fetchSettings() })
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'

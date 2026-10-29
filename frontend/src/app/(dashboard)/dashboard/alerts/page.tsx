@@ -83,8 +83,6 @@ export default function AlertsPage() {
     return () => clearTimeout(timer)
   }, [notification])
 
-  usePageData(() => { fetchChannels() })
-
   const fetchChannels = async () => {
     setIsLoading(true)
     try {
@@ -96,6 +94,8 @@ export default function AlertsPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchChannels() })
 
   const resetChannelForm = () => {
     setFormName('')

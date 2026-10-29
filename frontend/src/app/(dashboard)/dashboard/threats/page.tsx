@@ -106,8 +106,6 @@ export default function ThreatsPage() {
   // Actor row selection
   const [actorRowSelection, setActorRowSelection] = useState<RowSelectionState>({})
 
-  usePageData(() => { fetchData() }, [activeTab])
-
   // Fetch firewall connector status once
   useEffect(() => {
     api.get('/api/firewalls/status')
@@ -145,6 +143,8 @@ export default function ThreatsPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchData() }, [activeTab])
 
   // ── Actions ──────────────────────────────────────────────────
 

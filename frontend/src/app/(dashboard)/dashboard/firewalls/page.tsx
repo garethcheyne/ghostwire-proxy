@@ -107,8 +107,6 @@ export default function FirewallsPage() {
   const [formAddressList, setFormAddressList] = useState('Ghostwire Block')
   const [formEnabled, setFormEnabled] = useState(true)
 
-  usePageData(() => { fetchData() }, [activeTab])
-
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -125,6 +123,8 @@ export default function FirewallsPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchData() }, [activeTab])
 
   const resetForm = () => {
     setFormName('')

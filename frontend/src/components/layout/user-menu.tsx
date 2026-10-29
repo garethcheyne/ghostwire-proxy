@@ -19,10 +19,6 @@ import { signOutAndRedirect } from '@/lib/session'
 export function UserMenu() {
   const [user, setUser] = useState<{ name: string; email: string } | null>(null)
 
-  useEffect(() => {
-    fetchUser()
-  }, [])
-
   const fetchUser = async () => {
     try {
       const response = await api.get('/api/users/me')
@@ -31,6 +27,10 @@ export function UserMenu() {
       // Ignore errors
     }
   }
+
+  useEffect(() => {
+    fetchUser()
+  }, [])
 
   const handleLogout = async () => {
     // Ends the Better Auth session (audit-logged by the auth server) and clears the client.

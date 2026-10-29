@@ -110,11 +110,6 @@ export default function GeoIPPage() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const confirm = useConfirm()
 
-  usePageData(() => {
-    fetchData()
-    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  })
-
   useEffect(() => {
     if (!hostDropdownOpen) return
     const handleClick = (e: MouseEvent) => {
@@ -141,6 +136,11 @@ export default function GeoIPPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => {
+    fetchData()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
+  })
 
   const resetForm = () => {
     setFormName('')

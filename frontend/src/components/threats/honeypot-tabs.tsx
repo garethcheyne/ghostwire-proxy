@@ -109,11 +109,6 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
     response_code: '200', auto_block: true, enabled: true, hostId: ''
   })
 
-  useEffect(() => {
-    fetchData()
-    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [activeSubTab]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -133,6 +128,11 @@ export function HoneypotTabs({ activeSubTab, onInvestigateIp }: HoneypotTabsProp
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchData()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
+  }, [activeSubTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const installDefaults = async () => {
     setInstallingDefaults(true)

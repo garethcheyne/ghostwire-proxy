@@ -35,8 +35,9 @@ export default function DashboardPage() {
   const wafQuery = useWafStats()
   const authErrorsQuery = useAuthErrors('24h')
 
-  const hosts = hostsQuery.data?.items ?? []
-  const certificates = certsQuery.data?.items ?? []
+  // Memoised so a pending query doesn't hand useMemo below a new [] on every render.
+  const hosts = useMemo(() => hostsQuery.data?.items ?? [], [hostsQuery.data])
+  const certificates = useMemo(() => certsQuery.data?.items ?? [], [certsQuery.data])
   const trafficStats = trafficQuery.data ?? null
   const threatStats = wafQuery.data ?? null
   const authErrors = authErrorsQuery.data ?? null

@@ -19,5 +19,7 @@ export async function signOutAndRedirect(): Promise<void> {
     // Already signed out, or the server is unreachable; either way leave the dashboard.
   }
   clearLegacySession()
+  // A full page load on purpose: it drops every client-side cache of the old session.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = '/auth/login'
 }

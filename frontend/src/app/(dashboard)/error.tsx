@@ -17,7 +17,6 @@ export default function DashboardError({
   reset: () => void
 }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error('Dashboard page error:', error)
   }, [error])
 

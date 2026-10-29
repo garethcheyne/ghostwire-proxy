@@ -239,11 +239,6 @@ export default function RulesPage() {
   // DATA FETCHING
   // ─────────────────────────────────────────────────────────────
 
-  usePageData(() => {
-    fetchData()
-    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
-  }, [activeTab, wafFilterCategory])
-
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -271,6 +266,11 @@ export default function RulesPage() {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => {
+    fetchData()
+    api.get('/api/proxy-hosts').then(res => setHosts(res.data)).catch(() => {})
+  }, [activeTab, wafFilterCategory])
 
   // Close dropdowns on outside click
   useEffect(() => {

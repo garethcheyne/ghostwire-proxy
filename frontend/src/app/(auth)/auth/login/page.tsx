@@ -44,10 +44,6 @@ function LoginForm() {
   const [name, setName] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  useEffect(() => {
-    checkSetup()
-  }, [])
-
   const checkSetup = async () => {
     try {
       const response = await api.get('/api/setup/check')
@@ -59,6 +55,10 @@ function LoginForm() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    checkSetup()
+  }, [])
 
   const finishSignIn = () => {
     clearLegacySession()

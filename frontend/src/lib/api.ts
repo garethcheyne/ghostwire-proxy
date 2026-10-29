@@ -25,6 +25,8 @@ api.interceptors.response.use(
         redirectingToLogin = true
         clearLegacySession()
         const next = window.location.pathname + window.location.search
+        // A full page load on purpose: it drops every client-side cache of the old session.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
       }
       return Promise.reject(error)

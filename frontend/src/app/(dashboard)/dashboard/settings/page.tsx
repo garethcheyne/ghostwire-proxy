@@ -73,8 +73,6 @@ export default function SettingsPage() {
   const [abuseIpDbAutoReport, setAbuseIpDbAutoReport] = useState(false)
   const [isSavingAutoReport, setIsSavingAutoReport] = useState(false)
 
-  usePageData(() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey(); fetchAbuseIpDbAutoReport() })
-
   const fetchSettings = async () => {
     try {
       const response = await api.get('/api/settings')
@@ -202,6 +200,8 @@ export default function SettingsPage() {
       setAbuseIpDbAutoReport(false)
     }
   }
+
+  usePageData(() => { fetchSettings(); fetchDefaultSite(); fetchTrustedIps(); fetchAbuseIpDbKey(); fetchAbuseIpDbAutoReport() })
 
   const toggleAbuseIpDbAutoReport = async (enabled: boolean) => {
     setIsSavingAutoReport(true)

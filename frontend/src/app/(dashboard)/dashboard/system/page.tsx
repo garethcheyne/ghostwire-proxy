@@ -116,10 +116,6 @@ export default function SystemMonitorPage() {
   const [period, setPeriod] = useState<'1h' | '6h' | '24h' | '7d'>('24h')
   const [error, setError] = useState<string | null>(null)
 
-  usePageData(() => {
-    fetchAllData()
-  })
-
   const fetchStatus = useCallback(async () => {
     try {
       const response = await api.get('/api/system/status')
@@ -166,6 +162,10 @@ export default function SystemMonitorPage() {
     await Promise.all([fetchStatus(), fetchMetrics(), fetchThroughput()])
     setIsRefreshing(false)
   }
+
+  usePageData(() => {
+    fetchAllData()
+  })
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'

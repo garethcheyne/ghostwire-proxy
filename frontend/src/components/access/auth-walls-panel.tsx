@@ -168,8 +168,6 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
   const [selectedUser, setSelectedUser] = useState<LocalAuthUser | null>(null)
   const confirm = useConfirm()
 
-  usePageData(() => { fetchAuthWalls() })
-
   const fetchAuthWalls = async () => {
     try {
       const response = await api.get('/api/auth-walls')
@@ -180,6 +178,8 @@ export function AuthWallsPanel({ embedded = false }: { embedded?: boolean }) {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchAuthWalls() })
 
   const fetchSessions = async (wallId: string) => {
     setLoadingSessions(true)

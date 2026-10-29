@@ -81,7 +81,17 @@ export default function DnsPage() {
   const [recordTtl, setRecordTtl] = useState(3600)
   const [recordProxied, setRecordProxied] = useState(true)
 
-  usePageData(() => { fetchProviders() })
+  const fetchRecords = async (zoneId: string) => {
+    setIsLoadingRecords(true)
+    try {
+      const response = await api.get(`/api/dns/zones/${zoneId}/records`)
+      setRecords(response.data)
+    } catch (error) {
+      console.error('Failed to fetch records:', error)
+    } finally {
+      setIsLoadingRecords(false)
+    }
+  }
 
   const fetchProviders = async () => {
     try {
@@ -101,17 +111,7 @@ export default function DnsPage() {
     }
   }
 
-  const fetchRecords = async (zoneId: string) => {
-    setIsLoadingRecords(true)
-    try {
-      const response = await api.get(`/api/dns/zones/${zoneId}/records`)
-      setRecords(response.data)
-    } catch (error) {
-      console.error('Failed to fetch records:', error)
-    } finally {
-      setIsLoadingRecords(false)
-    }
-  }
+  usePageData(() => { fetchProviders() })
 
   const handleSelectZone = (zone: DnsZone) => {
     setSelectedZone(zone)

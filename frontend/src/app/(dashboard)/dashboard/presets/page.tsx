@@ -89,8 +89,6 @@ export default function PresetsPage() {
   const [results, setResults] = useState<Record<string, ApplyResult>>({})
   const [filter, setFilter] = useState<string | null>(null)
 
-  usePageData(() => { fetchPresets() })
-
   const fetchPresets = async () => {
     try {
       const { data } = await api.get('/api/presets')
@@ -101,6 +99,8 @@ export default function PresetsPage() {
       setLoading(false)
     }
   }
+
+  usePageData(() => { fetchPresets() })
 
   const toggleExpand = async (presetId: string) => {
     if (expandedPreset === presetId) {

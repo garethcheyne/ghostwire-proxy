@@ -83,29 +83,6 @@ export function UpdatesTab() {
   const [activeUpdate, setActiveUpdate] = useState<UpdateHistoryItem | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadAll()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Poll active update progress
-  useEffect(() => {
-    if (!activeUpdate || ['completed', 'failed'].includes(activeUpdate.status)) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get(`/api/updates/status/${activeUpdate.id}`)
-        setActiveUpdate(res.data)
-        if (['completed', 'failed'].includes(res.data.status)) {
-          loadHistory()
-        }
-      } catch {}
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [activeUpdate])
-
-  const loadAll = async () => {
-    await Promise.all([loadSettings(), loadHistory()])
-  }
-
   const loadSettings = async () => {
     try {
       const res = await api.get('/api/updates/settings')
@@ -124,6 +101,29 @@ export function UpdatesTab() {
       if (inProgress) setActiveUpdate(inProgress)
     } catch {}
   }
+
+  const loadAll = async () => {
+    await Promise.all([loadSettings(), loadHistory()])
+  }
+
+  useEffect(() => {
+    loadAll()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll active update progress
+  useEffect(() => {
+    if (!activeUpdate || ['completed', 'failed'].includes(activeUpdate.status)) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get(`/api/updates/status/${activeUpdate.id}`)
+        setActiveUpdate(res.data)
+        if (['completed', 'failed'].includes(res.data.status)) {
+          loadHistory()
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [activeUpdate])
 
   const checkNow = async () => {
     setIsChecking(true)

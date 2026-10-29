@@ -61,8 +61,6 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
   const [formRedirectUrl, setFormRedirectUrl] = useState('')
   const confirm = useConfirm()
 
-  usePageData(() => { fetchAccessLists() })
-
   const fetchAccessLists = async () => {
     try {
       const response = await api.get('/api/access-lists')
@@ -73,6 +71,8 @@ export function AccessListsPanel({ embedded = false }: { embedded?: boolean }) {
       setIsLoading(false)
     }
   }
+
+  usePageData(() => { fetchAccessLists() })
 
   const resetForm = () => {
     setFormName('')
