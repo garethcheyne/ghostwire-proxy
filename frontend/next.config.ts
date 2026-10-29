@@ -48,28 +48,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: [
     'gray-matter', 'unified', 'remark-parse', 'remark-gfm', 'remark-rehype', 'rehype-raw', 'rehype-stringify',
-    // Monitoring (src/components/analytics/telemetry.ts) loads from node_modules, not the bundle:
-    // instrumentation-http's ESM build require()s its dependencies relative to its own file, which a
-    // bundled copy can't find in the standalone output (the app wouldn't start). Kept together so
-    // the SDK has one copy of each.
-    '@opentelemetry/context-async-hooks',
-    '@opentelemetry/core',
-    '@opentelemetry/exporter-metrics-otlp-proto',
-    '@opentelemetry/exporter-trace-otlp-proto',
-    '@opentelemetry/instrumentation',
-    '@opentelemetry/instrumentation-http',
-    '@opentelemetry/instrumentation-pg',
-    '@opentelemetry/instrumentation-undici',
-    '@opentelemetry/resources',
-    '@opentelemetry/sdk-metrics',
-    '@opentelemetry/sdk-trace',
-    '@opentelemetry/semantic-conventions',
   ],
-  // ...and instrumentation-http's ESM build loads forwarded-parse with a require() the file tracer
-  // can't see, so it's a direct dependency (at instrumentation-http's exact version) copied in here.
-  outputFileTracingIncludes: {
-    '/*': ['./node_modules/forwarded-parse/**/*'],
-  },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',

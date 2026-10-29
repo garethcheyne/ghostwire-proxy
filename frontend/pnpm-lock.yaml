@@ -44,9 +44,6 @@ importers:
       '@opentelemetry/sdk-trace':
         specifier: 3.0.0
         version: 3.0.0(@opentelemetry/api@1.10.0)
-      '@opentelemetry/semantic-conventions':
-        specifier: 1.44.0
-        version: 1.44.0
       '@tanstack/react-query':
         specifier: ^5.105.0
         version: 5.105.0(@types/react@19.3.0)(react@19.3.1)
@@ -77,9 +74,6 @@ importers:
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
-      forwarded-parse:
-        specifier: 2.1.2
-        version: 2.1.2
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3

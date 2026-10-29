@@ -2,8 +2,7 @@
 # CI runs: ruff check . && ruff format --check .
 target-version = "py310"  # the oldest Python any of this code runs on (minion hosts, the analytics client); 3.15 code is fine with it
 line-length = 120
-# ghostwire_telemetry.py is copied verbatim from ghostwire-suite/telemetry/python; it's checked there.
-extend-exclude = ["**/alembic/versions", "reference", "**/node_modules", "**/.next", "**/ghostwire_telemetry.py"]
+extend-exclude = ["**/alembic/versions", "reference", "**/node_modules", "**/.next"]
 
 [lint]
 select = [

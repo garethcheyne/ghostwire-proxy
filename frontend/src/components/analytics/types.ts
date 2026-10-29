@@ -1,3 +1,13 @@
+export interface AnalyticsTestResult {
+  ok: boolean
+  message: string
+}
+
+// What an app's Settings hold for Ghostwire Analytics, and what the shared pieces need. The spec is
+// ghostwire-suite/docs/analytics-reporting.md. (Below the first statement because shadcn add drops
+// a file's leading comments, JSDoc included.)
+
+/** The live configuration, while reporting is switched on. Server-side only (it carries the error key). */
 export interface GhostwireConfig {
   /** The Analytics instance, e.g. https://analytics.example.com. */
   url: string
@@ -41,9 +51,4 @@ export interface AnalyticsSettingsChange {
   browser: boolean
   replay: boolean
   ingestKey?: string
-}
-
-export interface AnalyticsTestResult {
-  ok: boolean
-  message: string
 }

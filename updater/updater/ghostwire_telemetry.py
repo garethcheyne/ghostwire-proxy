@@ -21,6 +21,7 @@ background threads with short timeouts, and a slow or dead Analytics never slows
     ghostwire_telemetry.heartbeat()                    # once per worker loop
 """
 
+import contextlib
 import functools
 import inspect
 import ipaddress
@@ -60,11 +61,9 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 try:  # opentelemetry-instrumentation; present whenever the instrumentation packages are
     from opentelemetry.instrumentation.utils import suppress_instrumentation
 except ImportError:  # pragma: no cover
-    import contextlib
-
     suppress_instrumentation = contextlib.nullcontext  # type: ignore[assignment]
 
-__all__ = ["setup", "shutdown", "force_flush", "job", "heartbeat", "make_otlp_relay_router", "IGNORED_PATHS"]
+__all__ = ["IGNORED_PATHS", "force_flush", "heartbeat", "job", "make_otlp_relay_router", "setup", "shutdown"]
 
 log = logging.getLogger("ghostwire.telemetry")
 
@@ -129,9 +128,11 @@ class _LiveConfig:
                     value.close()
                 if not self._warned_async:
                     self._warned_async = True
-                    log.warning("ghostwire_telemetry: get_config must be a plain function, not async; monitoring stays off")
+                    log.warning(
+                        "ghostwire_telemetry: get_config must be a plain function, not async; monitoring stays off"
+                    )
                 value = None
-        except Exception:  # noqa: BLE001 - a broken getter means "off", never an error in the app
+        except Exception:  # a broken getter means "off", never an error in the app
             value = None
         self._value = value
         self._read_at = time.monotonic()
@@ -187,24 +188,36 @@ class _ExporterSlot:
                 self._exporter = self._build(*target)
                 self._id = target
                 if old is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         old.shutdown()
-                    except Exception:  # noqa: BLE001
-                        pass
             return self._exporter
 
     def close(self) -> None:
         with self._lock:
             old, self._exporter, self._id = self._exporter, None, None
         if old is not None:
-            try:
+            with contextlib.suppress(Exception):
                 old.shutdown()
-            except Exception:  # noqa: BLE001
-                pass
 
 
 def _headers(key: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"}
+
+
+def _off_is_quiet(response: Any, *args: Any, **kwargs: Any) -> Any:
+    """A 404 is the app's relay saying monitoring is off: the batch is dropped, which is what off means,
+    so the exporter sees it as sent and logs nothing."""
+    if response.status_code == 404:
+        response.status_code = 200
+    return response
+
+
+def _session() -> Any:
+    import requests  # a dependency of the OTLP exporter
+
+    session = requests.Session()
+    session.hooks["response"].append(_off_is_quiet)
+    return session
 
 
 class SwitchableSpanExporter(SpanExporter):
@@ -213,7 +226,9 @@ class SwitchableSpanExporter(SpanExporter):
     def __init__(self, live: _LiveConfig):
         self._live = live
         self._slot = _ExporterSlot(
-            lambda url, key: OTLPSpanExporter(endpoint=f"{url}/v1/traces", headers=_headers(key), timeout=EXPORT_TIMEOUT_S)
+            lambda url, key: OTLPSpanExporter(
+                endpoint=f"{url}/v1/traces", headers=_headers(key), timeout=EXPORT_TIMEOUT_S, session=_session()
+            )
         )
         self._warn = _Warner("traces")
 
@@ -223,7 +238,7 @@ class SwitchableSpanExporter(SpanExporter):
             if target is None:
                 return SpanExportResult.SUCCESS  # off: dropped on purpose
             result = self._slot.get(target).export(spans)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             self._warn(error)
             return SpanExportResult.FAILURE
         if result is not SpanExportResult.SUCCESS:
@@ -261,6 +276,7 @@ class SwitchableMetricExporter(MetricExporter):
                 headers=_headers(key),
                 timeout=EXPORT_TIMEOUT_S,
                 preferred_temporality=_DELTA,
+                session=_session(),
             )
         )
         self._warn = _Warner("metrics")
@@ -271,7 +287,7 @@ class SwitchableMetricExporter(MetricExporter):
             if target is None:
                 return MetricExportResult.SUCCESS
             result = self._slot.get(target).export(metrics_data, timeout_millis=timeout_millis)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             self._warn(error)
             return MetricExportResult.FAILURE
         if result is not MetricExportResult.SUCCESS:
@@ -330,7 +346,7 @@ def _instrument(label: str, module: str, cls: str, **kwargs: Any) -> None:
             return  # the library isn't installed (or is a version it doesn't support): nothing to instrument
         instrumentor.instrument(**kwargs)
         _state.setdefault("instrumented", []).append(label)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         log.warning("ghostwire_telemetry: couldn't instrument %s (%s)", label, error)
 
 
@@ -384,19 +400,32 @@ def setup(
                 instrument_asyncpg=instrument_asyncpg,
                 ignored_paths=ignored_paths,
             )
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             log.warning("ghostwire_telemetry: monitoring didn't start (%s); the app runs without it", error)
             return False
 
 
-def _setup(get_config, *, service_name, service_namespace, service_version, app, sqlalchemy_engine,
-           environment, metric_interval_s, instrument_asyncpg, ignored_paths) -> bool:
+def _setup(
+    get_config,
+    *,
+    service_name,
+    service_namespace,
+    service_version,
+    app,
+    sqlalchemy_engine,
+    environment,
+    metric_interval_s,
+    instrument_asyncpg,
+    ignored_paths,
+) -> bool:
     # Stable HTTP and database semantic conventions (http.server.request.duration in seconds), the
     # same names the Node.js apps send. Must be set before the first instrumentor runs.
     os.environ.setdefault("OTEL_SEMCONV_STABILITY_OPT_IN", "http,database")
 
     live = _LiveConfig(get_config)
-    environment = environment or os.environ.get("DEPLOYMENT_ENVIRONMENT") or os.environ.get("ENVIRONMENT") or "production"
+    environment = (
+        environment or os.environ.get("DEPLOYMENT_ENVIRONMENT") or os.environ.get("ENVIRONMENT") or "production"
+    )
     version = service_version or os.environ.get("APP_VERSION")
     attributes = {
         "service.name": service_name,
@@ -439,17 +468,28 @@ def _setup(get_config, *, service_name, service_namespace, service_version, app,
     engines = _engines(sqlalchemy_engine)
     if engines:
         # The instrumentation declares sqlalchemy<2.1, but works with 2.1 (it uses engine events).
-        _instrument("sqlalchemy", "opentelemetry.instrumentation.sqlalchemy", "SQLAlchemyInstrumentor",
-                    engines=engines, skip_dep_check=True, enable_commenter=False, **providers)
+        _instrument(
+            "sqlalchemy",
+            "opentelemetry.instrumentation.sqlalchemy",
+            "SQLAlchemyInstrumentor",
+            engines=engines,
+            skip_dep_check=True,
+            enable_commenter=False,
+            **providers,
+        )
     if instrument_asyncpg if instrument_asyncpg is not None else not engines:
         _instrument("asyncpg", "opentelemetry.instrumentation.asyncpg", "AsyncPGInstrumentor", **providers)
     _instrument("redis", "opentelemetry.instrumentation.redis", "RedisInstrumentor", **providers)
     _instrument("httpx", "opentelemetry.instrumentation.httpx", "HTTPXClientInstrumentor", **providers)
     _instrument("requests", "opentelemetry.instrumentation.requests", "RequestsInstrumentor", **providers)
-    _instrument("aiohttp-client", "opentelemetry.instrumentation.aiohttp_client", "AioHttpClientInstrumentor", **providers)
+    _instrument(
+        "aiohttp-client", "opentelemetry.instrumentation.aiohttp_client", "AioHttpClientInstrumentor", **providers
+    )
     # elasticsearch-py 8.13+ traces itself through the global tracer provider; the contrib
     # instrumentation (stopped at 0.64b0) only matters for older clients, if it is installed.
-    _instrument("elasticsearch", "opentelemetry.instrumentation.elasticsearch", "ElasticsearchInstrumentor", **providers)
+    _instrument(
+        "elasticsearch", "opentelemetry.instrumentation.elasticsearch", "ElasticsearchInstrumentor", **providers
+    )
     if app is not None:
         _instrument_fastapi(app, ignored_paths)
     log.info("ghostwire_telemetry: ready (%s)", ", ".join(_state.get("instrumented", [])) or "no libraries")
@@ -462,7 +502,9 @@ def _instrument_fastapi(app: Any, ignored_paths: Iterable[str] | None) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     except ImportError:
-        log.warning("ghostwire_telemetry: opentelemetry-instrumentation-fastapi isn't installed; requests aren't traced")
+        log.warning(
+            "ghostwire_telemetry: opentelemetry-instrumentation-fastapi isn't installed; requests aren't traced"
+        )
         return
     try:
         FastAPIInstrumentor.instrument_app(
@@ -472,7 +514,7 @@ def _instrument_fastapi(app: Any, ignored_paths: Iterable[str] | None) -> None:
             excluded_urls=",".join(ignored_paths if ignored_paths is not None else IGNORED_PATHS),
         )
         _state.setdefault("instrumented", []).append("fastapi")
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         log.warning("ghostwire_telemetry: couldn't instrument the FastAPI app (%s)", error)
 
 
@@ -481,10 +523,8 @@ def force_flush(timeout_s: float = 15) -> None:
     for name in ("tracer_provider", "meter_provider"):
         provider = _state.get(name)
         if provider is not None:
-            try:
+            with contextlib.suppress(Exception):
                 provider.force_flush(int(timeout_s * 1000))
-            except Exception:  # noqa: BLE001
-                pass
 
 
 def shutdown() -> None:
@@ -492,10 +532,8 @@ def shutdown() -> None:
     for name in ("tracer_provider", "meter_provider"):
         provider = _state.get(name)
         if provider is not None:
-            try:
+            with contextlib.suppress(Exception):
                 provider.shutdown()
-            except Exception:  # noqa: BLE001
-                pass
 
 
 # --- Worker helpers -------------------------------------------------------------------------------
@@ -511,7 +549,9 @@ def _instrument_for(name: str) -> Any:
         meter = metrics.get_meter("ghostwire")
         if name == "duration":
             found = meter.create_histogram(
-                "ghostwire.job.duration", unit="s", description="How long each job run took",
+                "ghostwire.job.duration",
+                unit="s",
+                description="How long each job run took",
                 explicit_bucket_boundaries_advisory=_JOB_BUCKETS,
             )
         elif name == "runs":
@@ -522,7 +562,7 @@ def _instrument_for(name: str) -> Any:
     return found
 
 
-class job:  # noqa: N801 - reads as a function: `with job("x"):` / `@job("x")`
+class job:  # reads as a function: `with job("x"):` / `@job("x")`
     """One run of a background job: a span named after it, plus `ghostwire.job.duration` (seconds) and
     `ghostwire.job.runs`, both with attributes `job` and `outcome` (ok or error). An exception is
     recorded on the span and re-raised unchanged. Works as a context manager (sync or async) and as a
@@ -545,25 +585,21 @@ class job:  # noqa: N801 - reads as a function: `with job("x"):` / `@job("x")`
                 set_status_on_exception=True,
             )
             return self._span_cm.__enter__()
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._span_cm = None
             return trace.INVALID_SPAN
 
     def __exit__(self, exc_type, exc, tb) -> bool:
         outcome = "ok" if exc_type is None else "error"
-        try:
+        with contextlib.suppress(Exception):
             labels = {"job": self.name, "outcome": outcome}
             _instrument_for("duration").record(time.perf_counter() - self._started, labels)
             _instrument_for("runs").add(1, labels)
             if exc_type is None and self._span_cm is not None:
                 trace.get_current_span().set_status(Status(StatusCode.OK))
-        except Exception:  # noqa: BLE001
-            pass
         if self._span_cm is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._span_cm.__exit__(exc_type, exc, tb)
-            except Exception:  # noqa: BLE001
-                pass
         return False  # never swallow the job's exception
 
     async def __aenter__(self) -> trace.Span:
@@ -594,10 +630,8 @@ class job:  # noqa: N801 - reads as a function: `with job("x"):` / `@job("x")`
 def heartbeat(**attributes: Any) -> None:
     """Counts one loop of a worker (`ghostwire.heartbeat`). Call it every loop, busy or idle: Analytics
     shows a service whose heartbeat stops as down. Never raises."""
-    try:
+    with contextlib.suppress(Exception):
         _instrument_for("heartbeat").add(1, attributes or None)
-    except Exception:  # noqa: BLE001
-        pass
 
 
 # --- OTLP relay for the stack's Collector ---------------------------------------------------------
@@ -668,7 +702,7 @@ def make_otlp_relay_router(get_config: GetConfig, *, timeout_s: float = 10, max_
     def read_config() -> Any:
         try:
             return get_config()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     @router.post("/internal/otlp/v1/{signal}", include_in_schema=False)

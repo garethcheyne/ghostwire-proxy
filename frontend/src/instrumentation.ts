@@ -4,14 +4,14 @@
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
-  // Monitoring is optional: if it can't load, the admin UI starts the same without it.
-  try {
-    const { registerGhostwireTelemetry } = await import('@/components/analytics/telemetry')
-    const { getAnalyticsConfig } = await import('@/lib/analytics-config')
-    registerGhostwireTelemetry(getAnalyticsConfig, { serviceName: 'ui', serviceNamespace: 'ghostwire-proxy' })
-  } catch (error) {
-    console.error('monitoring.start_failed: monitoring did not start; the app runs without it', error)
-  }
+  const { registerGhostwireTelemetry } = await import('@/components/analytics/telemetry')
+  const { getAnalyticsConfig } = await import('@/lib/analytics-config')
+  // Never rejects: if monitoring can't load, the admin UI starts the same without it.
+  const { active } = await registerGhostwireTelemetry(getAnalyticsConfig, {
+    serviceName: 'ui',
+    serviceNamespace: 'ghostwire-proxy',
+  })
+  if (!active) console.error('monitoring.start_failed: monitoring did not start; the app runs without it')
 }
 
 /** Server errors Next.js caught, to Ghostwire Analytics' Errors while monitoring is on. */
