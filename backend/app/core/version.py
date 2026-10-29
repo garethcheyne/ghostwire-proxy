@@ -14,7 +14,7 @@ def get_app_version() -> str:
         try:
             if candidate.exists():
                 return candidate.read_text().strip()
-        except Exception:
+        except Exception:  # noqa: S112  an unreadable candidate just means: try the next one
             continue
     return os.environ.get("APP_VERSION", "0.0.0")
 

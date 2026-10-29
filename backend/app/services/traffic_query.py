@@ -463,20 +463,20 @@ async def aggregate(
         where.append(f"bucket < {p.add(re_)}")
         cols = select_dims(True) + _measure_cols_rollup()
         parts.append(
-            f"SELECT {', '.join(cols)} FROM traffic_rollup_hourly WHERE {' AND '.join(where)}"
+            f"SELECT {', '.join(cols)} FROM traffic_rollup_hourly WHERE {' AND '.join(where)}"  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
             + (f" GROUP BY {group_idx}" if group_names else "")
         )
     raw_dims = select_dims(False)
     raw_dim_names = (["bucket"] if stride is not None else []) + dims
     inner = (
-        f"SELECT {', '.join(raw_dims + ['timestamp', 'is_bot', FAILOVER_SQL + ' AS failover', 'bytes_sent', 'bytes_received', 'response_time', WB_SQL + ' AS wb'])} "
+        f"SELECT {', '.join([*raw_dims, 'timestamp', 'is_bot', FAILOVER_SQL + ' AS failover', 'bytes_sent', 'bytes_received', 'response_time', WB_SQL + ' AS wb'])} "  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
         f"FROM traffic_logs WHERE {raw_where(f, p, plan.raw)}"
     )
     raw_cols = raw_dim_names + _measure_cols_raw()
-    parts.append(f"SELECT {', '.join(raw_cols)} FROM ({inner}) r" + (f" GROUP BY {group_idx}" if group_names else ""))
+    parts.append(f"SELECT {', '.join(raw_cols)} FROM ({inner}) r" + (f" GROUP BY {group_idx}" if group_names else ""))  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
     union = " UNION ALL ".join(f"({q})" for q in parts)
     outer_cols = group_names + _OUTER_MEASURES
-    sql = f"SELECT {', '.join(outer_cols)} FROM ({union}) u"
+    sql = f"SELECT {', '.join(outer_cols)} FROM ({union}) u"  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
     if group_names:
         sql += f" GROUP BY {', '.join(group_names)}"
     if order == "bucket" and stride is not None:
@@ -527,15 +527,15 @@ async def method_counts(
             where.append(f"bucket >= {p.add(rs)}")
         where.append(f"bucket < {p.add(re_)}")
         parts.append(
-            "SELECT request_method AS value, sum(requests) AS requests FROM traffic_rollup_method_hourly "
+            "SELECT request_method AS value, sum(requests) AS requests FROM traffic_rollup_method_hourly "  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
             f"WHERE {' AND '.join(where)} GROUP BY 1"
         )
     parts.append(
-        "SELECT request_method AS value, count(*) AS requests FROM traffic_logs "
+        "SELECT request_method AS value, count(*) AS requests FROM traffic_logs "  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
         f"WHERE {raw_where(f, p, plan.raw)} GROUP BY 1"
     )
     sql = (
-        "SELECT value, sum(requests)::bigint AS requests FROM ("
+        "SELECT value, sum(requests)::bigint AS requests FROM ("  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
         + " UNION ALL ".join(f"({q})" for q in parts)
         + f") u GROUP BY value ORDER BY requests DESC LIMIT {int(limit)}"
     )
@@ -572,7 +572,7 @@ async def top_raw(db: AsyncSession, f: TrafficFilters, dimension: str, *, limit:
         f"{label or 'NULL'} AS label",
     ]
     sql = (
-        f"SELECT {', '.join(cols)} FROM traffic_logs WHERE {where} GROUP BY 1 ORDER BY requests DESC LIMIT {int(limit)}"
+        f"SELECT {', '.join(cols)} FROM traffic_logs WHERE {where} GROUP BY 1 ORDER BY requests DESC LIMIT {int(limit)}"  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
     )
     await _raw_timeout(db)
     rows = (await db.execute(text(sql), dict(p))).mappings().all()
@@ -600,7 +600,7 @@ async def failover_pairs(db: AsyncSession, f: TrafficFilters, *, limit: int = 20
     p = _Params()
     where = raw_where(f, p)
     sql = (
-        "SELECT trim(a.addr) AS from_node, "
+        "SELECT trim(a.addr) AS from_node, "  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
         f"{UPSTREAM_SQL} AS to_node, count(*) AS requests "
         "FROM traffic_logs, LATERAL unnest(string_to_array(upstream_addr, ',')) WITH ORDINALITY AS a(addr, n) "
         f"WHERE {where} AND {FAILOVER_SQL} "
@@ -621,7 +621,7 @@ async def count_matching(db: AsyncSession, f: TrafficFilters, *, watermark: date
         rows = await aggregate(db, f, (), watermark=watermark)
         return (rows[0]["requests"] if rows else 0), False
     p = _Params()
-    sql = f"SELECT count(*) FROM (SELECT 1 FROM traffic_logs WHERE {raw_where(f, p)} LIMIT {COUNT_CAP + 1}) s"
+    sql = f"SELECT count(*) FROM (SELECT 1 FROM traffic_logs WHERE {raw_where(f, p)} LIMIT {COUNT_CAP + 1}) s"  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
     await _raw_timeout(db)
     n = int((await db.execute(text(sql), dict(p))).scalar() or 0)
     return min(n, COUNT_CAP), n > COUNT_CAP
@@ -658,7 +658,7 @@ async def list_logs(db: AsyncSession, f: TrafficFilters, *, skip: int, limit: in
     p = _Params()
     cols = ", ".join(LIST_COLUMNS)
     sql = (
-        f"WITH page AS (SELECT {cols} FROM traffic_logs WHERE {raw_where(f, p)} "
+        f"WITH page AS (SELECT {cols} FROM traffic_logs WHERE {raw_where(f, p)} "  # noqa: S608  values are bound parameters; only whitelisted column/dimension SQL is interpolated
         f"ORDER BY timestamp DESC, id DESC LIMIT {int(limit)} OFFSET {int(skip)}) "
         "SELECT page.*, e.city AS city, (h.domain_names ->> 0) AS host_name "
         "FROM page LEFT JOIN ip_enrichments e ON e.ip_address = page.client_ip "
@@ -705,7 +705,7 @@ def merge(rows: Iterable[dict]) -> dict:
     for r in rows:
         for k in ("requests", "bot_requests", "failovers", "bytes_sent", "bytes_received", "rt_count", "rt_sum"):
             out[k] += r[k]
-        out["hist"] = [a + b for a, b in zip(out["hist"], r["hist"])]
+        out["hist"] = [a + b for a, b in zip(out["hist"], r["hist"], strict=False)]
         if r["last_seen"] and (out["last_seen"] is None or r["last_seen"] > out["last_seen"]):
             out["last_seen"] = r["last_seen"]
     return out
@@ -721,7 +721,7 @@ def latency_summary(m: dict) -> dict:
 
 
 def auto_stride(start: datetime | None, end: datetime | None, now: datetime | None = None) -> timedelta:
-    """A chart bucket size giving roughly 24–120 points; whole hours from 2 days up,
+    """A chart bucket size giving roughly 24-120 points; whole hours from 2 days up,
     so longer windows can come from the hourly rollup."""
     now = now or datetime.now(UTC)
     span = (end or now) - (start or (now - timedelta(days=30)))

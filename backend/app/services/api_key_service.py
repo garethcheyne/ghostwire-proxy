@@ -43,7 +43,7 @@ PREFIX_LENGTH = 10
 SECRET_LENGTH = 40
 _PREFIX_ALPHABET = string.ascii_lowercase + string.digits
 _SECRET_ALPHABET = string.ascii_letters + string.digits
-_KEY_RE = re.compile(r"^gwp_([a-z0-9]{%d})_([A-Za-z0-9]{%d})$" % (PREFIX_LENGTH, SECRET_LENGTH))
+_KEY_RE = re.compile(rf"^gwp_([a-z0-9]{{{PREFIX_LENGTH}}})_([A-Za-z0-9]{{{SECRET_LENGTH}}})$")
 
 # Last-used is written at most this often per key, not on every request.
 LAST_USED_WRITE_INTERVAL = timedelta(seconds=60)

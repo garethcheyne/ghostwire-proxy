@@ -148,7 +148,7 @@ class TestUpstreamBlock:
         )
 
     @pytest.mark.parametrize(
-        "method,directive",
+        ("method", "directive"),
         [
             ("ip_hash", "    ip_hash;"),
             ("hash_uri", "    hash $request_uri consistent;"),
@@ -299,7 +299,7 @@ class TestFieldValidation:
 
     @pytest.mark.parametrize("value", ["", "10.0.0.5:80", "http://x", "a b", "x;y", "x}", "a/b"])
     def test_bad_hosts(self, value):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"Host is required|not a valid"):
             normalize_upstream_host(value)
 
     def test_format_address(self):
@@ -307,7 +307,7 @@ class TestFieldValidation:
         assert format_server_address("10.0.0.1", 80) == "10.0.0.1:80"
 
     @pytest.mark.parametrize(
-        "field,value", [("weight", 0), ("weight", 101), ("max_conns", 0), ("port", 70000), ("fail_timeout", 0)]
+        ("field", "value"), [("weight", 0), ("weight", 101), ("max_conns", 0), ("port", 70000), ("fail_timeout", 0)]
     )
     def test_server_ranges(self, field, value):
         with pytest.raises(ValidationError):
@@ -319,7 +319,7 @@ class TestFieldValidation:
 
     @pytest.mark.parametrize("path", ["healthz", "//evil.example/", "/a b", "/x#y", "http://evil/"])
     def test_bad_paths(self, path):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Health check path"):
             validate_health_check_path(path)
 
     def test_update_rejects_bad_method(self):
@@ -559,7 +559,7 @@ class TestHealth:
     async def test_per_server_status_and_host_aggregate(self, db_session):
         host = await _make_host(db_session, [8050, 8051])
 
-        async def fake_probe(scheme, host, port, check_type, path, timeout):
+        async def fake_probe(scheme, host, port, check_type, path, timeout):  # noqa: ASYNC109  mirrors probe_server
             return (True, None, 7) if port == 8050 else (False, "connection refused", None)
 
         with (
@@ -628,7 +628,7 @@ class TestHealth:
             return real_client(transport=transport, **kw)
 
         with patch.object(health_service.httpx, "AsyncClient", side_effect=client_factory):
-            ok, error, latency = await health_service.probe_server("http", "10.0.0.5", 8050, "http", "/healthz?x=1", 2)
+            ok, error, _latency = await health_service.probe_server("http", "10.0.0.5", 8050, "http", "/healthz?x=1", 2)
         assert ok is True and error is None
         assert seen == ["http://10.0.0.5:8050/healthz?x=1"]
 
@@ -644,7 +644,7 @@ class TestHealth:
         assert ok is False and error == "HTTP 503"
 
     async def test_probe_server_tcp_refused(self):
-        ok, error, latency = await health_service.probe_server("http", "127.0.0.1", 1, "tcp", "/", 1)
+        ok, _error, latency = await health_service.probe_server("http", "127.0.0.1", 1, "tcp", "/", 1)
         assert ok is False and latency is None
 
 

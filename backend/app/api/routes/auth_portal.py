@@ -132,7 +132,7 @@ async def get_auth_wall_config(
         session_timeout=auth_wall.session_timeout,
         providers=providers,
         has_local_users=any(u.is_active for u in auth_wall.local_users),
-        has_ldap=any(l.enabled for l in auth_wall.ldap_configs),
+        has_ldap=any(c.enabled for c in auth_wall.ldap_configs),
     )
 
 
@@ -222,7 +222,7 @@ async def local_login(
 
     # Create full session
     session_service = SessionService(db)
-    session, cookie_value = await session_service.create_session(
+    _session, cookie_value = await session_service.create_session(
         auth_wall_id=auth_wall_id,
         user_type="local",
         user_id=user.id,
@@ -317,7 +317,7 @@ async def totp_login(
 
     # Create full session
     session_service = SessionService(db)
-    session, cookie_value = await session_service.create_session(
+    _session, cookie_value = await session_service.create_session(
         auth_wall_id=auth_wall_id,
         user_type="local",
         user_id=user.id,
@@ -508,7 +508,7 @@ async def oauth_callback(
 
     # Create session
     session_service = SessionService(db)
-    session, cookie_value = await session_service.create_session(
+    _session, cookie_value = await session_service.create_session(
         auth_wall_id=auth_wall_id,
         user_type=provider.provider_type,
         user_id=user_info.user_id,

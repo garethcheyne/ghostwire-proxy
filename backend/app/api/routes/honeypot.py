@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -483,7 +484,6 @@ async def install_default_traps(
 
 # ── Helper ─────────────────────────────────────────────────────
 
-import httpx
 
 NGINX_RELOAD_URL = "http://ghostwire-proxy-nginx/reload-rules"
 

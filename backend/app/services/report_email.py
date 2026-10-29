@@ -80,14 +80,14 @@ def _table(headers: list[str], rows: list[list[str]], aligns: list[str] | None =
         f"<th style='text-align:{a};padding:6px 10px;font:600 12px sans-serif;"
         f"color:{MUTED};text-transform:uppercase;letter-spacing:.04em;"
         f"border-bottom:1px solid {LINE}'>{h}</th>"
-        for h, a in zip(headers, aligns)
+        for h, a in zip(headers, aligns, strict=False)
     )
     body = "".join(
         "<tr>"
         + "".join(
             f"<td style='text-align:{a};padding:6px 10px;font:14px sans-serif;"
             f"color:{INK};border-bottom:1px solid #f1f5f9'>{c}</td>"
-            for c, a in zip(row, aligns)
+            for c, a in zip(row, aligns, strict=False)
         )
         + "</tr>"
         for row in rows

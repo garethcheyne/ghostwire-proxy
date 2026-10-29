@@ -1,5 +1,7 @@
 """GeoIP configuration and rules API routes."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,7 +205,7 @@ async def lookup_ip(
         import geoip2.database
 
         db_path = os.environ.get("GEOIP_DB_PATH", "/data/geoip/GeoLite2-Country.mmdb")
-        if not os.path.exists(db_path):
+        if not await asyncio.to_thread(os.path.exists, db_path):
             return {"ip": ip, "error": "GeoIP database not available"}
 
         reader = geoip2.database.Reader(db_path)

@@ -175,7 +175,7 @@ def migrate_table(sqlite_conn, pg_conn, table_name: str, batch_size: int = 1000)
     pg_column_types = get_postgres_column_types(pg_conn, table_name)
 
     # Count rows in SQLite
-    cursor = sqlite_conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+    cursor = sqlite_conn.execute(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608  table name from a fixed list in this module
     sqlite_count = cursor.fetchone()[0]
 
     if sqlite_count == 0:
@@ -194,10 +194,10 @@ def migrate_table(sqlite_conn, pg_conn, table_name: str, batch_size: int = 1000)
     # Build INSERT statement
     columns_str = ", ".join(columns_list)
     placeholders = ", ".join(["%s"] * len(columns_list))
-    insert_sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+    insert_sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"  # noqa: S608  table name from a fixed list in this module
 
     # Fetch all rows from SQLite
-    cursor = sqlite_conn.execute(f"SELECT {columns_str} FROM {table_name}")
+    cursor = sqlite_conn.execute(f"SELECT {columns_str} FROM {table_name}")  # noqa: S608  table name from a fixed list in this module
 
     # Insert in batches
     rows_migrated = 0
@@ -232,7 +232,7 @@ def migrate_table(sqlite_conn, pg_conn, table_name: str, batch_size: int = 1000)
             print(f"    Error inserting final batch: {e}")
 
     # Verify count
-    pg_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+    pg_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608  table name from a fixed list in this module
     pg_count = pg_cursor.fetchone()[0]
 
     if pg_count != sqlite_count:

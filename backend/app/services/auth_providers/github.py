@@ -15,7 +15,7 @@ class GitHubAuthProvider(AuthProviderBase):
 
     # GitHub OAuth endpoints
     AUTHORIZATION_URL = "https://github.com/login/oauth/authorize"
-    TOKEN_URL = "https://github.com/login/oauth/access_token"
+    TOKEN_URL = "https://github.com/login/oauth/access_token"  # noqa: S105  the provider's public token endpoint URL
     USERINFO_URL = "https://api.github.com/user"
     EMAILS_URL = "https://api.github.com/user/emails"
     DEFAULT_SCOPES = "read:user user:email"
@@ -161,6 +161,4 @@ class GitHubAuthProvider(AuthProviderBase):
         Requires a verified email.
         """
         # Require email
-        if not user_info.email:
-            return False
-        return True
+        return bool(user_info.email)

@@ -267,7 +267,7 @@ class SystemMonitorService:
                         if "." in started_str:
                             started_str = started_str.split(".")[0] + "Z"
                         started_at = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-                except Exception:
+                except Exception:  # noqa: S110  an unparseable start time just shows as unknown
                     pass
 
             return {
@@ -349,10 +349,10 @@ class SystemMonitorService:
                 table_counts = {}
                 for table in ["traffic_logs", "proxy_hosts", "certificates", "users"]:
                     try:
-                        count_result = await session.execute(text(f"SELECT count(*) FROM {table}"))
+                        count_result = await session.execute(text(f"SELECT count(*) FROM {table}"))  # noqa: S608  table name from a fixed list in this module
                         table_counts[table] = count_result.scalar() or 0
                     except Exception:
-                        pass
+                        logger.debug("Could not count rows in %s", table, exc_info=True)
 
                 return {
                     "size_bytes": db_size,

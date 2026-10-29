@@ -44,7 +44,7 @@ async def _batch_delete(session: AsyncSession, table_name: str, timestamp_col: s
         # Use a subquery to limit the delete to BATCH_SIZE rows
         result = await session.execute(
             text(
-                f"DELETE FROM {table_name} WHERE id IN ("
+                f"DELETE FROM {table_name} WHERE id IN ("  # noqa: S608  table name from a fixed list in this module
                 f"  SELECT id FROM {table_name} WHERE {timestamp_col} < :cutoff LIMIT :batch_size"
                 f")"
             ),
@@ -137,7 +137,7 @@ async def get_table_sizes() -> dict:
         tables = ["traffic_logs", "threat_events", "audit_logs", "system_metrics", "container_metrics"]
         for table in tables:
             try:
-                result = await session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = await session.execute(text(f"SELECT COUNT(*) FROM {table}"))  # noqa: S608  table name from a fixed list in this module
                 count = result.scalar() or 0
 
                 # PostgreSQL table size

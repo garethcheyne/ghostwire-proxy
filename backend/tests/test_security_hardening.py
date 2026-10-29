@@ -42,13 +42,13 @@ INTERNAL_ROUTES = [
 
 
 class TestInternalRoutesNeedToken:
-    @pytest.mark.parametrize("method,path,body", INTERNAL_ROUTES)
+    @pytest.mark.parametrize(("method", "path", "body"), INTERNAL_ROUTES)
     async def test_no_token_refused(self, client, method, path, body):
         kwargs = {"json": body} if body is not None else {}
         r = await getattr(client, method)(path, **kwargs)
         assert r.status_code == 401, (path, r.status_code)
 
-    @pytest.mark.parametrize("method,path,body", INTERNAL_ROUTES)
+    @pytest.mark.parametrize(("method", "path", "body"), INTERNAL_ROUTES)
     async def test_wrong_token_refused(self, client, method, path, body):
         kwargs = {"json": body} if body is not None else {}
         r = await getattr(client, method)(path, headers={"X-Internal-Auth": "nope"}, **kwargs)
@@ -411,9 +411,9 @@ class TestAllowList:
         assert normalize_email(" A@B.CO ") == "a@b.co"
         assert normalize_domain("@Example.COM") == "example.com"
         assert clean_list(["a@b.co", "A@b.co", " "], normalize_email) == ["a@b.co"]
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Not a domain name"):
             normalize_domain("exa mple.com")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Not an email address"):
             normalize_email("not-an-email")
 
 
@@ -542,7 +542,8 @@ class TestBackupSafety:
         def fake_run(cmd, **kwargs):
             calls.append(cmd)
             dump = cmd[cmd.index("-f") + 1]
-            open(dump, "wb").write(b"PGDMP")
+            with open(dump, "wb") as f:
+                f.write(b"PGDMP")
             return SimpleNamespace(returncode=0, stderr="", stdout="")
 
         with patch("app.services.backup_service.subprocess.run", fake_run):
@@ -566,9 +567,11 @@ class TestBackupSafety:
                 )
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        with patch("app.services.backup_service.subprocess.run", fake_run):
-            with pytest.raises(RuntimeError, match="statements failed"):
-                await BackupService()._restore_database(str(tmp_path))
+        with (
+            patch("app.services.backup_service.subprocess.run", fake_run),
+            pytest.raises(RuntimeError, match="statements failed"),
+        ):
+            await BackupService()._restore_database(str(tmp_path))
 
     async def test_failed_database_restore_is_not_reported_as_success(self, tmp_path, db_session):
         import tarfile
@@ -598,7 +601,9 @@ class TestBackupSafety:
 
         service = BackupService()
         service._restore_certificates = MagicMock()
-        with patch.object(service, "_restore_database", AsyncMock(side_effect=RuntimeError("boom"))):
-            with pytest.raises(RuntimeError, match="nothing else was restored"):
-                await service.restore_backup(db_session, backup.id)
+        with (
+            patch.object(service, "_restore_database", AsyncMock(side_effect=RuntimeError("boom"))),
+            pytest.raises(RuntimeError, match="nothing else was restored"),
+        ):
+            await service.restore_backup(db_session, backup.id)
         service._restore_certificates.assert_not_called()

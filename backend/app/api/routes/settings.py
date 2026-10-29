@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin_user, get_current_user
 from app.core.database import get_db
+from app.core.files import write_text
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.setting import Setting
@@ -39,7 +40,7 @@ DEFAULT_SETTINGS = {
 
 # Secret values are write-only: every reader (admins included) gets a mask,
 # and a masked value sent back unchanged leaves the stored secret alone.
-SECRET_MASK = "\u2022\u2022\u2022\u2022"
+SECRET_MASK = "\u2022\u2022\u2022\u2022"  # noqa: S105  not a secret: the mask shown in place of one
 _SECRET_KEY_RE = re.compile(r"(password|secret|token|api_key|private_key|apikey)$")
 
 
@@ -192,9 +193,7 @@ async def update_default_site(
     backup_configs()
 
     config = await generate_default_site_config(db)
-    config_path = os.path.join(app_settings.nginx_config_path, "_default.conf")
-    with open(config_path, "w") as f:
-        f.write(config)
+    await write_text(os.path.join(app_settings.nginx_config_path, "_default.conf"), config)
 
     # Test before reloading — roll back if invalid
     test_ok, test_msg = test_nginx_config()

@@ -67,7 +67,7 @@ class TestBackupService:
     async def test_update_settings(self, db_session):
         svc = BackupService()
         # First get/create settings
-        settings = await svc.get_settings(db_session)
+        await svc.get_settings(db_session)
 
         updated = await svc.update_settings(
             db=db_session,

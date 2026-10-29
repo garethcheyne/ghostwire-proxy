@@ -141,9 +141,9 @@ class UpdaterService:
         self,
         update_id: str,
         status: str,
-        progress: int = None,
-        message: str = None,
-        error: str = None,
+        progress: int | None = None,
+        message: str | None = None,
+        error: str | None = None,
     ):
         """Update status in Redis for API to read."""
         status_data = {
@@ -282,7 +282,7 @@ class UpdaterService:
         """Run pre-flight checks before update."""
         try:
             # Check all containers are running
-            for name, container_name in CONTAINERS.items():
+            for _name, container_name in CONTAINERS.items():
                 try:
                     container = self.docker_client.containers.get(container_name)
                     if container.status != "running":
@@ -340,16 +340,20 @@ class UpdaterService:
         os.chdir(COMPOSE_PROJECT_DIR)
 
         # Fetch tags
-        result = subprocess.run(["git", "fetch", "--tags", "--force"], capture_output=True, text=True, timeout=120)
+        result = await asyncio.to_thread(
+            subprocess.run, ["git", "fetch", "--tags", "--force"], capture_output=True, text=True, timeout=120
+        )
         if result.returncode != 0:
             raise Exception(f"Git fetch failed: {result.stderr}")
 
         # Stash any local changes
-        subprocess.run(["git", "stash"], capture_output=True, text=True)
+        await asyncio.to_thread(subprocess.run, ["git", "stash"], capture_output=True, text=True, timeout=60)
 
         # Checkout version tag
         tag_name = f"v{version}" if not version.startswith("v") else version
-        result = subprocess.run(["git", "checkout", tag_name], capture_output=True, text=True, timeout=60)
+        result = await asyncio.to_thread(
+            subprocess.run, ["git", "checkout", tag_name], capture_output=True, text=True, timeout=60
+        )
         if result.returncode != 0:
             raise Exception(f"Git checkout failed: {result.stderr}")
 
@@ -360,8 +364,12 @@ class UpdaterService:
         os.chdir(COMPOSE_PROJECT_DIR)
 
         # Build without cache to ensure fresh images
-        result = subprocess.run(
-            ["docker-compose", "build", "--no-cache", "--parallel"], capture_output=True, text=True, timeout=600
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["docker-compose", "build", "--no-cache", "--parallel"],
+            capture_output=True,
+            text=True,
+            timeout=600,
         )
         if result.returncode != 0:
             raise Exception(f"Docker build failed: {result.stderr}")
@@ -402,7 +410,8 @@ class UpdaterService:
                     service_name = container_name.replace("ghostwire-proxy-", "ghostwire-proxy-")
 
                     os.chdir(COMPOSE_PROJECT_DIR)
-                    result = subprocess.run(
+                    result = await asyncio.to_thread(
+                        subprocess.run,
                         ["docker-compose", "up", "-d", "--force-recreate", service_name],
                         capture_output=True,
                         text=True,
@@ -504,7 +513,8 @@ class UpdaterService:
             os.chdir(COMPOSE_PROJECT_DIR)
             service_name = SERVICES[container_name]
 
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["docker-compose", "build", "--pull", "--no-cache", service_name],
                 capture_output=True,
                 text=True,
@@ -517,7 +527,8 @@ class UpdaterService:
             await self.update_status(update_id, "in_progress", 70, "Restarting container with new image...")
 
             # Recreate just this container
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["docker-compose", "up", "-d", "--force-recreate", service_name],
                 capture_output=True,
                 text=True,

@@ -56,7 +56,7 @@ async def _resolve(host: str) -> list[str]:
     try:
         infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=5)
     except TimeoutError, OSError:
-        raise OutboundUrlError(f"Could not resolve {host}")
+        raise OutboundUrlError(f"Could not resolve {host}") from None
     return list({info[4][0] for info in infos})
 
 
@@ -69,13 +69,13 @@ async def validate_outbound_url(url: str, allow_internal: bool = False, resolver
         addresses = [host] if ipaddress.ip_address(host) else []
     except ValueError:
         if host.lower() in ("localhost",) or host.lower().endswith(".localhost"):
-            raise OutboundUrlError("Internal addresses are not allowed")
+            raise OutboundUrlError("Internal addresses are not allowed") from None
         addresses = await (resolver or _resolve)(host)
     for addr in addresses:
         try:
             ip = ipaddress.ip_address(addr.split("%", 1)[0])
         except ValueError:
-            raise OutboundUrlError(f"Unexpected address for {host}")
+            raise OutboundUrlError(f"Unexpected address for {host}") from None
         if _is_internal(ip):
             raise OutboundUrlError("Internal addresses (private, loopback, link-local, metadata) are not allowed")
 

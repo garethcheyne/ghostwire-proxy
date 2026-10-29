@@ -283,7 +283,7 @@ class UpdateService:
         try:
             semver.VersionInfo.parse(target_version)
         except ValueError:
-            raise ValueError(f"Invalid version format: {target_version}")
+            raise ValueError(f"Invalid version format: {target_version}") from None
 
         # Check if an update is already in progress
         in_progress = await db.execute(
@@ -327,7 +327,7 @@ class UpdateService:
             update.status = "failed"
             update.error_message = f"Failed to contact updater service: {e}"
             await db.commit()
-            raise ValueError("Failed to contact updater service")
+            raise ValueError("Failed to contact updater service") from e
 
         return update
 
@@ -389,7 +389,7 @@ class UpdateService:
             update.status = "failed"
             update.error_message = f"Failed to contact updater service: {e}"
             await db.commit()
-            raise ValueError("Failed to contact updater service")
+            raise ValueError("Failed to contact updater service") from e
 
         return update
 
@@ -496,7 +496,7 @@ class UpdateService:
             rollback.status = "failed"
             rollback.error_message = f"Failed to contact updater service: {e}"
             await db.commit()
-            raise ValueError("Failed to contact updater service")
+            raise ValueError("Failed to contact updater service") from e
 
         return rollback
 

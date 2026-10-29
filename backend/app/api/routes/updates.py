@@ -1,6 +1,7 @@
 """Update management API endpoints."""
 
 import json
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +13,8 @@ from app.core.database import get_db
 from app.core.redis import get_redis
 from app.models.user import User
 from app.services.update_service import update_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -175,9 +178,9 @@ async def start_app_update(
         )
         return UpdateStatusResponse.model_validate(update)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/base-image", response_model=UpdateStatusResponse)
@@ -202,9 +205,9 @@ async def start_base_image_update(
         )
         return UpdateStatusResponse.model_validate(update)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/status/{update_id}", response_model=UpdateStatusResponse)
@@ -261,9 +264,9 @@ async def rollback_update(
         )
         return UpdateStatusResponse.model_validate(rollback)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/settings", response_model=UpdateSettingsResponse)
@@ -362,7 +365,7 @@ async def check_now(
         update_settings = await update_service.get_settings(db)
         await redis.expire("ghostwire:update_check", update_settings.check_interval_hours * 7200)
     except Exception:
-        pass
+        logger.warning("Could not cache the update check result in Redis", exc_info=True)
 
     # Update last_check
     update_settings = await update_service.get_settings(db)

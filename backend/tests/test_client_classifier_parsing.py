@@ -29,7 +29,7 @@ GOOGLEBOT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.
 
 class TestBrowser:
     @pytest.mark.parametrize(
-        "ua,expected",
+        ("ua", "expected"),
         [
             (EDGE_WIN, "Edge"),  # must beat both chrome and safari
             (CHROME_WIN, "Chrome"),  # must beat safari
@@ -52,7 +52,7 @@ class TestBrowser:
 
 class TestOperatingSystem:
     @pytest.mark.parametrize(
-        "ua,expected",
+        ("ua", "expected"),
         [
             (CHROME_WIN, "Windows 10/11"),
             (SAFARI_IPHONE, "iOS"),
@@ -77,7 +77,7 @@ class TestOperatingSystem:
 
 class TestDeviceType:
     @pytest.mark.parametrize(
-        "ua,expected",
+        ("ua", "expected"),
         [
             (CHROME_WIN, "Desktop"),
             (FIREFOX_LINUX, "Desktop"),

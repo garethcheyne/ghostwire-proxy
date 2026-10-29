@@ -67,7 +67,7 @@ async def get_single_container_security(
     try:
         container = scanner.client.containers.get(container_name)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Container not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Container not found") from None
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, scanner.scan_one, container, include_packages)
@@ -188,7 +188,7 @@ async def write_auto_update_policy(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Not a valid cron expression: {payload['cron']}",
-            )
+            ) from None
         await _set_setting(db, "container_auto_update_cron", str(payload["cron"]))
 
     if "enabled" in payload:

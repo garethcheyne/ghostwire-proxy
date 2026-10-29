@@ -3,6 +3,8 @@ Certificate management service.
 Handles Let's Encrypt certificate requests and renewals.
 """
 
+import asyncio
+import logging
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -13,6 +15,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import encrypt_data
 from app.models.certificate import Certificate
+
+logger = logging.getLogger(__name__)
+
+LETSENCRYPT_LIVE = "/etc/letsencrypt/live"
+
+
+def _read_live_files(domain: str) -> tuple[str, str] | None:
+    """Read certbot's fullchain.pem and privkey.pem for a domain (blocking); None if missing."""
+    cert_path = f"{LETSENCRYPT_LIVE}/{domain}/fullchain.pem"
+    key_path = f"{LETSENCRYPT_LIVE}/{domain}/privkey.pem"
+    if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        return None
+    with open(cert_path) as f:
+        certificate_content = f.read()
+    with open(key_path) as f:
+        key_content = f.read()
+    return certificate_content, key_content
 
 
 def _parse_certificate_expiry(certificate_pem: str) -> datetime:
@@ -72,8 +91,9 @@ async def request_letsencrypt_certificate(
         if settings.letsencrypt_staging:
             cmd.append("--staging")
 
-        # Run certbot
-        result = subprocess.run(
+        # certbot can take minutes: run it in a thread so the API keeps answering.
+        result = await asyncio.to_thread(
+            subprocess.run,
             cmd,
             capture_output=True,
             text=True,
@@ -87,21 +107,13 @@ async def request_letsencrypt_certificate(
             return False, result.stderr
 
         # Read generated certificate
-        domain = domains[0]
-        cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
-        key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
-
-        if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        files = await asyncio.to_thread(_read_live_files, domains[0])
+        if files is None:
             cert.status = "error"
             cert.error_message = "Certificate files not found after certbot"
             await db.commit()
             return False, "Certificate files not found"
-
-        with open(cert_path) as f:
-            certificate_content = f.read()
-
-        with open(key_path) as f:
-            key_content = f.read()
+        certificate_content, key_content = files
 
         # Update certificate record
         cert.certificate = certificate_content
@@ -150,7 +162,7 @@ async def renew_certificate(
 
     # Never issued (the first request failed): certbot has nothing to renew and would only say
     # "No certificate found", hiding the real cause. Request it instead.
-    if not os.path.exists(f"/etc/letsencrypt/renewal/{domain}.conf"):
+    if not await asyncio.to_thread(os.path.exists, f"/etc/letsencrypt/renewal/{domain}.conf"):
         return await request_letsencrypt_certificate(db, cert_id)
 
     try:
@@ -166,7 +178,7 @@ async def renew_certificate(
         if settings.letsencrypt_staging:
             cmd.append("--staging")
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
 
         if result.returncode != 0:
             cert.status = "error"
@@ -175,14 +187,10 @@ async def renew_certificate(
             return False, result.stderr
 
         # Re-read certificate
-        cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
-        key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
-
-        with open(cert_path) as f:
-            certificate_content = f.read()
-
-        with open(key_path) as f:
-            key_content = f.read()
+        files = await asyncio.to_thread(_read_live_files, domain)
+        if files is None:
+            raise FileNotFoundError(f"Certificate files for {domain} not found after renewal")
+        certificate_content, key_content = files
 
         # Update certificate record
         cert.certificate = certificate_content
@@ -248,7 +256,7 @@ async def check_expiring_certificates(
 
     result = await db.execute(
         select(Certificate).where(
-            (Certificate.expires_at != None)
+            Certificate.expires_at.is_not(None)
             & (Certificate.expires_at <= expiry_threshold)
             & (Certificate.auto_renew == True)
             & (Certificate.is_letsencrypt == True)
@@ -272,7 +280,8 @@ async def check_expiring_certificates(
                         db=db,
                     )
         except Exception:
-            pass  # Don't fail certificate check if notifications fail
+            # Don't fail the certificate check if notifications fail, but say so.
+            logger.warning("Certificate expiry notification failed", exc_info=True)
 
     return expiring_certs
 

@@ -275,7 +275,7 @@ class TestHealthLoop:
         health_service._previous_status.clear()
 
     async def _cycle(self, db_session, up_ports):
-        async def fake_probe(scheme, host, port, check_type, path, timeout):
+        async def fake_probe(scheme, host, port, check_type, path, timeout):  # noqa: ASYNC109  mirrors probe_server
             return (True, None, 5) if port in up_ports else (False, "connection refused", None)
 
         dispatch = AsyncMock(return_value={"sent": 1, "errors": 0})

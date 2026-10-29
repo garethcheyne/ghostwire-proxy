@@ -105,7 +105,7 @@ async def create_api_key(
             payload.expires_in_days,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     _audit(
         db,

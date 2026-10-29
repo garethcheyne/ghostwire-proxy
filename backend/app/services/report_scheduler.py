@@ -49,9 +49,8 @@ def is_due(schedule: ReportSchedule, now: datetime | None = None) -> bool:
         # send_day is 0=Monday..6=Sunday; default Monday.
         if now.weekday() != (schedule.send_day if schedule.send_day is not None else 0):
             return False
-    elif schedule.frequency == "monthly":
-        if now.day != (schedule.send_day if schedule.send_day is not None else 1):
-            return False
+    elif schedule.frequency == "monthly" and now.day != (schedule.send_day if schedule.send_day is not None else 1):
+        return False
 
     last = schedule.last_sent_at
     if last is None:

@@ -14,6 +14,7 @@ from app.core.security import (
     hash_sensitive_data,
     verify_password,
 )
+from cryptography.fernet import InvalidToken
 
 
 class TestPasswordHashing:
@@ -118,7 +119,7 @@ class TestEncryption:
         assert enc1 != enc2  # Fernet uses random IV
 
     def test_decrypt_wrong_data(self):
-        with pytest.raises(Exception):
+        with pytest.raises(InvalidToken):
             decrypt_data("not-valid-encrypted-data")
 
     def test_encrypt_empty_string(self):

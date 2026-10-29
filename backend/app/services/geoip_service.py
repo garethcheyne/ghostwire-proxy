@@ -4,6 +4,7 @@ Downloads the free DB-IP Country Lite database (updated monthly).
 The database is compatible with MaxMindDB format used by lua-resty-maxminddb.
 """
 
+import asyncio
 import gzip
 import logging
 import shutil
@@ -48,13 +49,24 @@ def get_db_info() -> dict:
     }
 
 
+def _install_database(gz_content: bytes) -> None:
+    """Decompress a downloaded .mmdb.gz, check it, and move it into place (blocking)."""
+    GEOIP_DIR.mkdir(parents=True, exist_ok=True)
+    content = gzip.decompress(gz_content)
+    # MMDB files contain the metadata marker near the end
+    if b"\xab\xcd\xefMaxMind.com" not in content:
+        raise ValueError("Downloaded file is not a valid MaxMindDB database")
+    with open(TEMP_PATH, "wb") as f:
+        f.write(content)
+    # Atomic replace
+    shutil.move(str(TEMP_PATH), str(DB_PATH))
+
+
 async def update_database() -> dict:
     """Download and install the latest GeoIP database.
 
     Returns a dict with status information about the update.
     """
-    GEOIP_DIR.mkdir(parents=True, exist_ok=True)
-
     url = _get_download_url()
     logger.info(f"Downloading GeoIP database from {url}")
 
@@ -63,20 +75,8 @@ async def update_database() -> dict:
             response = await client.get(url)
             response.raise_for_status()
 
-            # Decompress gzip and write to temp file
-            with open(TEMP_PATH, "wb") as f:
-                f.write(gzip.decompress(response.content))
-
-            # Verify the file is a valid MMDB (starts with specific metadata)
-            with open(TEMP_PATH, "rb") as f:
-                # MMDB files contain the metadata marker near the end
-                content = f.read()
-                if b"\xab\xcd\xefMaxMind.com" not in content:
-                    TEMP_PATH.unlink(missing_ok=True)
-                    raise ValueError("Downloaded file is not a valid MaxMindDB database")
-
-            # Atomic replace
-            shutil.move(str(TEMP_PATH), str(DB_PATH))
+            # Decompressing ~10 MB and writing it is blocking work: off the event loop.
+            await asyncio.to_thread(_install_database, response.content)
 
             info = get_db_info()
             logger.info(f"GeoIP database updated successfully ({info['size_bytes']} bytes)")

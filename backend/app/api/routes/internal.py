@@ -8,11 +8,21 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.utils import generate_secure_token
+from app.models.auth_wall import AuthWall
+from app.models.proxy_host import ProxyHost
+from app.models.traffic_log import TrafficLog
+from app.schemas.auth_wall_session import (
+    AuthWallConfigProvider,
+    AuthWallConfigResponse,
+    SessionValidateResponse,
+)
+from app.services.session_service import SessionService
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +59,6 @@ def verify_internal_auth(request: Request) -> None:
             detail="Invalid internal auth token",
         )
 
-
-from sqlalchemy import select
-
-from app.models.auth_wall import AuthWall
-from app.models.proxy_host import ProxyHost
-from app.models.traffic_log import TrafficLog
-from app.schemas.auth_wall_session import (
-    AuthWallConfigProvider,
-    AuthWallConfigResponse,
-    SessionValidateResponse,
-)
-from app.services.session_service import SessionService
 
 # Every route here is for co-located services (the proxy's Lua, the updater, the
 # admin UI's server side) and requires the internal token.
@@ -346,9 +344,8 @@ async def get_blocked_ips(
     blocked = []
     for actor in actors:
         # Skip expired temp blocks
-        if actor.current_status == "temp_blocked" and actor.temp_block_until:
-            if actor.temp_block_until < now:
-                continue
+        if actor.current_status == "temp_blocked" and actor.temp_block_until and actor.temp_block_until < now:
+            continue
         blocked.append(
             {
                 "ip": actor.ip_address,
@@ -617,7 +614,7 @@ async def get_auth_wall_config(
         session_timeout=auth_wall.session_timeout,
         providers=providers,
         has_local_users=any(u.is_active for u in auth_wall.local_users),
-        has_ldap=any(l.enabled for l in auth_wall.ldap_configs),
+        has_ldap=any(c.enabled for c in auth_wall.ldap_configs),
     )
 
 

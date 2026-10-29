@@ -127,7 +127,7 @@ async def build_host_report(
         "nodes",
     ]
     report: dict = {}
-    for name, value in zip(names, results):
+    for name, value in zip(names, results, strict=False):
         if isinstance(value, Exception):
             # One failing section shouldn't blank the whole report.
             logger.error("Host report section %r failed for %s: %s", name, host.id, value)

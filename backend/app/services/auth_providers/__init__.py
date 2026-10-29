@@ -3,11 +3,9 @@ Auth Providers Module
 Modular authentication providers for Auth Wall.
 """
 
-from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.auth_wall import AuthProvider, AuthWall, LdapConfig, LocalAuthUser
+from app.models.auth_wall import AuthProvider, AuthWall
 from app.services.auth_providers.base import AuthProviderBase, UserInfo
 from app.services.auth_providers.github import GitHubAuthProvider
 from app.services.auth_providers.google import GoogleAuthProvider

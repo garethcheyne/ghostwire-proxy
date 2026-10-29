@@ -22,7 +22,7 @@ class TestCloudflareClient:
         with patch("httpx.AsyncClient") as mock_http:
             mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(return_value=mock_resp)))
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
-            success, msg = await client.verify_token()
+            success, _msg = await client.verify_token()
 
         assert success is True
 
@@ -36,7 +36,7 @@ class TestCloudflareClient:
         with patch("httpx.AsyncClient") as mock_http:
             mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(return_value=mock_resp)))
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
-            success, msg = await client.verify_token()
+            success, _msg = await client.verify_token()
 
         assert success is False
 
@@ -91,6 +91,6 @@ class TestCloudflareClient:
                 return_value=MagicMock(delete=AsyncMock(return_value=mock_resp))
             )
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
-            success, msg = await client.delete_dns_record("zone-1", "record-1")
+            success, _msg = await client.delete_dns_record("zone-1", "record-1")
 
         assert success is True

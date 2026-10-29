@@ -42,7 +42,7 @@ class KnownIpBase(BaseModel):
             # so the same address can't be stored twice under two spellings.
             return str(ipaddress.ip_address(v))
         except ValueError:
-            raise ValueError(f"'{v}' is not a valid IP address")
+            raise ValueError(f"'{v}' is not a valid IP address") from None
 
     @field_validator("label")
     @classmethod
@@ -288,7 +288,7 @@ async def get_ip_report(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"'{ip_address}' is not a valid IP address",
-        )
+        ) from None
 
     since = datetime.now(UTC) - timedelta(days=days)
     base = and_(TrafficLog.client_ip == ip, TrafficLog.timestamp >= since)

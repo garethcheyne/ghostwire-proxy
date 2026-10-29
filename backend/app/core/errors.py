@@ -12,8 +12,8 @@ class ErrorMessages:
     UNAUTHORIZED = "Authentication required"
     FORBIDDEN = "You do not have permission to access this resource"
     ACCOUNT_DISABLED = "Account is disabled"
-    TOKEN_EXPIRED = "Token has expired"
-    TOKEN_INVALID = "Invalid token"
+    TOKEN_EXPIRED = "Token has expired"  # noqa: S105  an error code name, not a secret
+    TOKEN_INVALID = "Invalid token"  # noqa: S105  an error code name, not a secret
 
     # Resources
     NOT_FOUND = "{resource} not found"

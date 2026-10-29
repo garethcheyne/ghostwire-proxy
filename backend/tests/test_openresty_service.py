@@ -305,7 +305,7 @@ class TestNginxOperations:
         mock_result.stdout = "test is successful"
 
         with patch("subprocess.run", return_value=mock_result), patch("os.path.exists", return_value=False):
-            success, output = test_nginx_config()
+            success, _output = test_nginx_config()
 
         assert success is True
 
@@ -315,7 +315,7 @@ class TestNginxOperations:
         mock_result.stderr = "syntax error"
 
         with patch("subprocess.run", return_value=mock_result), patch("os.path.exists", return_value=False):
-            success, output = test_nginx_config()
+            success, _output = test_nginx_config()
 
         assert success is False
 
@@ -327,7 +327,7 @@ class TestNginxOperations:
             patch("app.services.openresty_service.os.path.exists", return_value=True),
             patch("app.services.openresty_service.socket.socket", return_value=mock_sock),
         ):
-            success, output = reload_nginx()
+            success, _output = reload_nginx()
 
         assert success is True
         mock_sock.connect.assert_called_once_with("/var/run/docker.sock")

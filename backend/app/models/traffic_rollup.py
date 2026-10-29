@@ -1,7 +1,7 @@
 """Hourly summaries of traffic_logs, kept up to date by traffic_rollup_service.
 
 The Traffic page and /api/traffic/stats aggregate over these instead of scanning
-millions of raw rows: a 30-day window is ~720 buckets × hosts × backends × status
+millions of raw rows: a 30-day window is ~720 buckets x hosts x backends x status
 codes, not every request. Raw rows still answer anything finer (path, client IP,
 user agent, …) and the not-yet-rolled-up tail; traffic_query stitches the two.
 

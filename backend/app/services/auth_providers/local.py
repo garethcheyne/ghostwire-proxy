@@ -3,6 +3,7 @@ Local authentication provider with TOTP support.
 """
 
 import json
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_data, encrypt_data, verify_password
 from app.models.auth_wall import AuthWall, LocalAuthUser
 from app.services.auth_providers.base import AuthProviderBase, UserInfo
+
+logger = logging.getLogger(__name__)
 
 # TOTP support
 try:
@@ -142,7 +145,7 @@ class LocalAuthProvider(AuthProviderBase):
             if totp.verify(code, valid_window=1):
                 return True
         except Exception:
-            pass
+            logger.warning("Could not check the TOTP code for auth wall user %s", user.id, exc_info=True)
 
         # Try backup code
         if len(code) == self.BACKUP_CODE_LENGTH:
@@ -254,7 +257,7 @@ class LocalAuthProvider(AuthProviderBase):
                 await self.db.commit()
                 return True
         except Exception:
-            pass
+            logger.warning("Could not enable TOTP for auth wall user", exc_info=True)
 
         return False
 

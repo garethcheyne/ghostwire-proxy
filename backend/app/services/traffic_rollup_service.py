@@ -60,7 +60,7 @@ FROM (
     WHERE timestamp >= :start AND timestamp < :end
 ) r
 GROUP BY 1, 2, 3, 4
-"""
+"""  # noqa: S608  fixed SQL constants, no input
 
 _INSERT_METHODS = """
 INSERT INTO traffic_rollup_method_hourly (bucket, proxy_host_id, request_method, requests)

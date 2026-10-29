@@ -85,6 +85,7 @@ class TestSendToChannel:
         with patch("app.services.alert_service._send_webhook", return_value=True) as mock_webhook:
             result = await _send_to_channel(db_session, channel, "Title", "Message")
         assert result is True
+        mock_webhook.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_send_to_email_channel_without_recipients_fails(self, db_session):

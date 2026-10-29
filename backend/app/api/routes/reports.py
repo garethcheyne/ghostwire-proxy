@@ -132,10 +132,10 @@ async def send_host_report_now(
     try:
         await email_service.send_email(db, to=recipients, subject=subject, text_body=text, html_body=html)
     except email_service.EmailNotConfigured as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         logger.error("Sending host report failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not send email: {e}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not send email: {e}") from e
 
     return {"sent": True, "recipients": recipients, "subject": subject}
 
@@ -255,8 +255,8 @@ async def put_smtp(
 @router.post("/smtp/test")
 async def test_smtp(
     payload: dict,
-    current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
+    db: AsyncSession = Depends(get_db),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
 ):
     to = (payload.get("to") or "").strip()
     if not to:
@@ -265,8 +265,8 @@ async def test_smtp(
     try:
         await email_service.send_test_email(db, to)
     except email_service.EmailNotConfigured as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not send test email: {e}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not send test email: {e}") from e
 
     return {"sent": True, "to": to}

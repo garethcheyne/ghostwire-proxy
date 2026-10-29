@@ -45,7 +45,7 @@ async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) 
     try:
         config = json.loads(config_json)
     except TypeError, ValueError:
-        raise HTTPException(status_code=422, detail="Channel config must be valid JSON")
+        raise HTTPException(status_code=422, detail="Channel config must be valid JSON") from None
     if not isinstance(config, dict):
         raise HTTPException(status_code=422, detail="Channel config must be a JSON object")
     allow_internal = await internal_targets_allowed(db)
@@ -54,7 +54,7 @@ async def _check_channel_urls(db: AsyncSession, channel_type: str, config_json) 
             try:
                 await validate_outbound_url(str(config[key]), allow_internal=allow_internal)
             except OutboundUrlError as e:
-                raise HTTPException(status_code=422, detail=f"{key}: {e}")
+                raise HTTPException(status_code=422, detail=f"{key}: {e}") from e
 
 
 # ── VAPID Key ─────────────────────────────────────────────────
@@ -128,7 +128,7 @@ async def list_channels(
 ):
     result = await db.execute(
         select(AlertChannel)
-        .where((AlertChannel.user_id == current_user.id) | (AlertChannel.user_id == None))
+        .where((AlertChannel.user_id == current_user.id) | AlertChannel.user_id.is_(None))
         .order_by(AlertChannel.name)
     )
     return result.scalars().all()

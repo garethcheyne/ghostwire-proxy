@@ -297,9 +297,9 @@ class TestUniFiConnector:
 
         assert result["success"] is True
         findings = result["findings"]
-        ipv6_list_finding = [f for f in findings if f["item"] == "IPv6 Address List"][0]
+        ipv6_list_finding = next(f for f in findings if f["item"] == "IPv6 Address List")
         assert ipv6_list_finding["status"] == "missing"
-        ipv6_policy_finding = [f for f in findings if f["item"] == "IPv6 Drop Policy"][0]
+        ipv6_policy_finding = next(f for f in findings if f["item"] == "IPv6 Drop Policy")
         assert ipv6_policy_finding["status"] == "missing"
 
     @pytest.mark.asyncio

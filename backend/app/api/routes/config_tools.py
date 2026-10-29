@@ -9,6 +9,7 @@ GET  /api/audit-logs      recent changes, newest first. (scope: read)
 """
 
 import difflib
+import logging
 import os
 from types import SimpleNamespace
 from typing import Any
@@ -22,6 +23,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_admin_user, get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.files import read_text
 from app.core.utils import get_client_ip
 from app.models.access_list import AccessList
 from app.models.audit_log import AuditLog
@@ -30,6 +32,8 @@ from app.models.certificate import Certificate
 from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer
 from app.models.user import User
 from app.schemas.proxy_host import ProxyHostCreate, ProxyHostUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 audit_router = APIRouter()
@@ -116,7 +120,7 @@ async def preview_config(
                 servers = [_server_ns(v) for v in current.values()]
             locations = list(existing.locations)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_validation_detail(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_validation_detail(e)) from e
 
     # Related rows the generator reads, loaded for the (possibly changed) ids.
     access_list = None
@@ -167,7 +171,8 @@ async def preview_config(
 
         set_trusted_proxy_ranges(await get_ranges(db))
     except Exception:
-        pass
+        # The preview still renders, with the ranges this process already has.
+        logger.warning("Could not load trusted proxy ranges for the config preview", exc_info=True)
 
     warnings: list[str] = []
     try:
@@ -181,7 +186,9 @@ async def preview_config(
     try:
         rendered = generate_server_block(host, cert)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Could not render config: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Could not render config: {e}"
+        ) from e
     finally:
         # Nothing here may be saved.
         await db.rollback()
@@ -193,10 +200,7 @@ async def preview_config(
 
     current_text = None
     if existing is not None:
-        path = os.path.join(settings.nginx_config_path, f"{payload.host_id}.conf")
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8", newline="") as f:
-                current_text = f.read()
+        current_text = await read_text(os.path.join(settings.nginx_config_path, f"{payload.host_id}.conf"))
 
     diff = "".join(
         difflib.unified_diff(
@@ -221,7 +225,7 @@ async def preview_config(
 @router.post("/test")
 async def test_config(
     request: Request,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_admin_user),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
 ):
     """Run `nginx -t` against the configuration nginx has now."""
     from app.services.openresty_service import test_nginx_config

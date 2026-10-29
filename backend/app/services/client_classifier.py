@@ -140,9 +140,7 @@ def is_streaming_response(
         return True
     if upgrade_header and "websocket" in upgrade_header.lower():
         return True
-    if content_type and "text/event-stream" in content_type.lower():
-        return True
-    return False
+    return bool(content_type and "text/event-stream" in content_type.lower())
 
 
 # Ordered longest-marker-first, because the short names are substrings of the

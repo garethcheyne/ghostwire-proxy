@@ -33,7 +33,7 @@ from app.services import admin_mfa_service
 router = APIRouter()
 
 
-async def _audit(db: AsyncSession, request: Request, user: User, action: str, details: str = None):
+async def _audit(db: AsyncSession, request: Request, user: User, action: str, details: str | None = None):
     db.add(
         AuditLog(
             user_id=user.id,
@@ -85,7 +85,7 @@ async def setup_mfa(
     try:
         result = await admin_mfa_service.begin_enrolment(db, current_user)
     except admin_mfa_service.MfaNotAvailable as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
     await _audit(db, request, current_user, "mfa_setup_started")
 
@@ -109,7 +109,7 @@ async def verify_mfa(
     try:
         ok = await admin_mfa_service.confirm_enrolment(db, current_user, verify_request.code)
     except admin_mfa_service.MfaNotAvailable as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
     if not ok:
         await _audit(db, request, current_user, "mfa_setup_failed", "Invalid code during enrolment")

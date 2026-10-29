@@ -182,7 +182,7 @@ class TestRenewCertificate:
         db_session.add(cert)
         await db_session.commit()
 
-        success, msg = await renew_certificate(db_session, "test-renew-1")
+        success, _msg = await renew_certificate(db_session, "test-renew-1")
         assert success is False
 
     @pytest.mark.asyncio
@@ -303,10 +303,10 @@ class TestValidateCertificatePem:
     """Tests for certificate PEM validation."""
 
     def test_invalid_certificate_pem(self):
-        is_valid, error, expiry = validate_certificate_pem("not-a-cert", "not-a-key")
+        is_valid, error, _expiry = validate_certificate_pem("not-a-cert", "not-a-key")
         assert is_valid is False
         assert error is not None
 
     def test_empty_pem(self):
-        is_valid, error, expiry = validate_certificate_pem("", "")
+        is_valid, _error, _expiry = validate_certificate_pem("", "")
         assert is_valid is False

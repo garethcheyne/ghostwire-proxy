@@ -101,7 +101,7 @@ class ContainerSecurityScanner:
 
     def _detect_package_manager(self, container) -> str | None:
         checks = " ; ".join(f"command -v {pm} >/dev/null 2>&1 && echo {pm}" for pm in _PACKAGE_MANAGERS)
-        code, output = self._exec(container, checks)
+        _code, output = self._exec(container, checks)
         for line in (output or "").split():
             if line in _PACKAGE_MANAGERS:
                 return line
@@ -248,7 +248,7 @@ class ContainerSecurityScanner:
         }
 
         if manager == "apt-get":
-            code, out = self._exec(
+            _code, out = self._exec(
                 container,
                 "cat /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null; "
                 "command -v unattended-upgrade >/dev/null 2>&1 && echo HAS_UNATTENDED",
@@ -276,7 +276,7 @@ class ContainerSecurityScanner:
             # that actually runs `apk upgrade`. Match on that specifically —
             # merely *having* a crontab proves nothing, since plenty of images
             # schedule unrelated jobs (this proxy's own nginx runs logrotate).
-            code, out = self._exec(
+            _code, out = self._exec(
                 container,
                 "grep -rlE 'apk[[:space:]]+(-[^[:space:]]+[[:space:]]+)*upgrade' "
                 "/etc/crontabs /etc/periodic /var/spool/cron 2>/dev/null",
@@ -526,7 +526,7 @@ class ContainerSecurityScanner:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         scans = []
-        for container, result in zip(containers, results):
+        for container, result in zip(containers, results, strict=False):
             if isinstance(result, Exception):
                 logger.warning("Scan of %s failed: %s", container.name, result)
                 scans.append(

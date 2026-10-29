@@ -7,7 +7,7 @@ from app.services.backup_service import _check_plain_sql_dump
 
 class TestAdminOnly:
     @pytest.mark.parametrize(
-        "method,path",
+        ("method", "path"),
         [
             ("get", "/api/backups/"),
             ("post", "/api/backups/restore"),
@@ -43,7 +43,7 @@ class TestPlainSqlDump:
     def test_shell_escape_refused(self, tmp_path):
         p = tmp_path / "d.sql"
         p.write_text("SET x = 1;\n\\! touch /tmp/pwned\n")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="meta-command"):
             _check_plain_sql_dump(str(p))
 
     def test_pg_dump_output_allowed(self, tmp_path):

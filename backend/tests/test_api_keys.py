@@ -47,7 +47,7 @@ def bearer(key: str) -> dict:
 
 class TestRequiredScope:
     @pytest.mark.parametrize(
-        "method,path,scope",
+        ("method", "path", "scope"),
         [
             ("GET", "/api/proxy-hosts/", "read"),
             ("GET", "/api/proxy-hosts/abc", "read"),
@@ -99,7 +99,7 @@ class TestRequiredScope:
         assert api_key_service.normalize_scopes(["write:upstreams"]) == ["read", "write:upstreams"]
 
     def test_unknown_scope_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unknown scope"):
             api_key_service.normalize_scopes(["write:everything"])
 
 
@@ -226,7 +226,7 @@ class TestKeyAuthentication:
         assert "expired" in r.json()["detail"]
 
     async def test_wrong_secret_rejected(self, client, db_session, admin_user):
-        row, key = await make_key(db_session, admin_user, ["read"])
+        row, _key = await make_key(db_session, admin_user, ["read"])
         forged = f"gwp_{row.prefix}_" + "A" * 40
         assert (await client.get("/api/proxy-hosts/", headers=bearer(forged))).status_code == 401
 

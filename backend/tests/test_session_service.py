@@ -51,7 +51,7 @@ class TestSessionService:
         await db_session.commit()
 
         svc = SessionService(db_session)
-        session, cookie = await svc.create_session(
+        session, _cookie = await svc.create_session(
             auth_wall_id="wall-2",
             user_type="local",
             user_id="user-2",

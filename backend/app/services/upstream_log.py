@@ -18,6 +18,7 @@ available at all the address is the upstream's name instead of host:port.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import re
 import time
@@ -82,7 +83,7 @@ def _int(value: str) -> int | None:
 
 def _ms(value: str) -> int | None:
     try:
-        return int(round(float(value) * 1000))
+        return round(float(value) * 1000)
     except TypeError, ValueError:
         return None
 
@@ -140,7 +141,7 @@ async def _resolve(hostname: str) -> set[str]:
     try:
         infos = await asyncio.wait_for(asyncio.get_running_loop().getaddrinfo(hostname, None), 2.0)
         ips = {str(ipaddress.ip_address(info[4][0])) for info in infos}
-    except Exception:
+    except Exception:  # noqa: S110  an unresolvable name matches no IPs, and is cached like any answer
         pass
     _dns_cache[hostname] = (now + _DNS_TTL, ips)
     return ips
@@ -157,10 +158,8 @@ async def match_upstream_server(final_addr: str | None, servers: Iterable) -> st
     host, port = split_host_port(final_addr)
     if port is None:
         return None  # e.g. the upstream's name when no server was available
-    try:
+    with contextlib.suppress(ValueError):
         host = str(ipaddress.ip_address(host))
-    except ValueError:
-        pass
     candidates = [s for s in servers if s.port == port]
     for s in candidates:
         if str(s.host).lower() == host:

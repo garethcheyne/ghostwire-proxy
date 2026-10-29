@@ -31,7 +31,7 @@ class AccessListEntryCreate(BaseModel):
                 # Try as CIDR network
                 ipaddress.ip_network(v, strict=False)
             except ValueError:
-                raise ValueError('Invalid IP address or CIDR notation')
+                raise ValueError('Invalid IP address or CIDR notation') from None
         return v
 
     @field_validator('action')

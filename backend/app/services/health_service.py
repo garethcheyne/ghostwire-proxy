@@ -26,6 +26,7 @@ for that cycle, and so are their recoveries when the host recovers.
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -84,7 +85,7 @@ async def probe_upstream(host: ProxyHost) -> tuple[bool, str | None]:
             follow_redirects=False,
             # Internal upstreams routinely use self-signed certs; this probe is
             # about reachability, not certificate validation.
-            verify=False,
+            verify=False,  # noqa: S501  reachability probe; internal upstreams use self-signed certs
         ) as client:
             await client.get(url)
         # Any HTTP response means the upstream is listening and answering. A 401
@@ -105,7 +106,7 @@ async def probe_server(
     port: int,
     check_type: str = "http",
     path: str = "/",
-    timeout: float = CHECK_TIMEOUT,
+    timeout: float = CHECK_TIMEOUT,  # noqa: ASYNC109  per-server setting handed to wait_for and httpx
 ) -> tuple[bool, str | None, int | None]:
     """Probe one upstream server. Returns (is_up, error, latency_ms).
 
@@ -118,10 +119,8 @@ async def probe_server(
         if check_type == "tcp":
             _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
             writer.close()
-            try:
+            with contextlib.suppress(Exception):
                 await writer.wait_closed()
-            except Exception:
-                pass
             return True, None, int((time.monotonic() - started) * 1000)
 
         raw_path, _, query = (path or "/").partition("?")
@@ -130,14 +129,16 @@ async def probe_server(
         if query:
             parts["query"] = query.encode()
         url = httpx.URL(**parts)
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            follow_redirects=False,
-            verify=False,  # internal upstreams routinely use self-signed certs
-            trust_env=False,  # never route a probe through an env-configured proxy
-        ) as client:
-            async with client.stream("GET", url, headers={"User-Agent": "Ghostwire-HealthCheck"}) as response:
-                code = response.status_code
+        async with (
+            httpx.AsyncClient(
+                timeout=timeout,
+                follow_redirects=False,
+                verify=False,  # noqa: S501  internal upstreams routinely use self-signed certs; this is a reachability probe
+                trust_env=False,  # never route a probe through an env-configured proxy
+            ) as client,
+            client.stream("GET", url, headers={"User-Agent": "Ghostwire-HealthCheck"}) as response,
+        ):
+            code = response.status_code
         latency = int((time.monotonic() - started) * 1000)
         if code >= 500:
             return False, f"HTTP {code}", latency
@@ -224,7 +225,7 @@ async def _check_servers(
     now = datetime.now(UTC)
     answering = 0
     first_error = None
-    for server, (ok, error, latency) in zip(servers, results):
+    for server, (ok, error, latency) in zip(servers, results, strict=False):
         _previous_status[server.id] = server.last_status or "unknown"
         _apply_server_result(server, ok, error, latency, now)
         # A server in maintenance doesn't take traffic, so it can't keep the host up.
@@ -261,7 +262,7 @@ async def check_upstream_servers_now(db: AsyncSession, host: ProxyHost) -> list[
     results = await asyncio.gather(*(one(s) for s in servers))
     now = datetime.now(UTC)
     out = []
-    for server, (ok, error, latency) in zip(servers, results):
+    for server, (ok, error, latency) in zip(servers, results, strict=False):
         _apply_server_result(server, ok, error, latency, now, debounce=False)
         out.append(
             {

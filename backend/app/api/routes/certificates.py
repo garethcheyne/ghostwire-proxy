@@ -101,7 +101,7 @@ async def process_letsencrypt_request(cert_id: str):
     from app.core.database import async_session_maker
 
     async with async_session_maker() as db:
-        success, message = await request_letsencrypt_certificate(db, cert_id)
+        success, _message = await request_letsencrypt_certificate(db, cert_id)
 
         if success:
             # Write certificate files to disk for nginx

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.files import remove_file, write_text
 from app.core.security import decrypt_data
 from app.models.access_list import AccessList
 from app.models.certificate import Certificate
@@ -357,14 +358,8 @@ def _generate_location_directive(location: ProxyLocation) -> str:
     path = location.path
     match_type = location.match_type
 
-    if match_type == "exact":
-        return f"= {path}"
-    elif match_type == "regex":
-        return f"~ {path}"
-    elif match_type == "regex_case_insensitive":
-        return f"~* {path}"
-    else:  # prefix (default)
-        return path
+    modifier = {"exact": "= ", "regex": "~ ", "regex_case_insensitive": "~* "}.get(match_type, "")  # prefix: none
+    return f"{modifier}{path}"
 
 
 def _generate_access_phase(host: ProxyHost, indent: str = "        ") -> list[str]:
@@ -691,7 +686,7 @@ def _generate_server_block_content(
 
     # Custom locations (sorted by priority desc, then by specificity)
     locations = sorted(
-        [loc for loc in (host.locations or []) if loc.enabled], key=lambda l: (-l.priority, -len(l.path))
+        [loc for loc in (host.locations or []) if loc.enabled], key=lambda loc: (-loc.priority, -len(loc.path))
     )
 
     for location in locations:
@@ -733,10 +728,7 @@ def generate_server_block(host: ProxyHost, cert: Certificate | None = None) -> s
 
     # Determine backend target: the upstream group when the host has enabled
     # upstream servers, otherwise the single forward host exactly as before.
-    if uses_upstream_group(host):
-        backend = upstream_name(host)
-    else:
-        backend = f"{host.forward_host}:{host.forward_port}"
+    backend = upstream_name(host) if uses_upstream_group(host) else f"{host.forward_host}:{host.forward_port}"
 
     # HTTP server block
     config_lines.append("server {")
@@ -804,11 +796,8 @@ async def write_certificate_files(cert: Certificate) -> None:
     key_path = os.path.join(settings.certificates_path, f"{cert.id}.key")
 
     # Write certificate
-    with open(cert_path, "w") as f:
-        f.write(cert.certificate)
-        if cert.certificate_chain:
-            f.write("\n")
-            f.write(cert.certificate_chain)
+    chain = f"\n{cert.certificate_chain}" if cert.certificate_chain else ""
+    await write_text(cert_path, cert.certificate + chain)
 
     # Write key (decrypt first)
     try:
@@ -816,11 +805,8 @@ async def write_certificate_files(cert: Certificate) -> None:
     except Exception:
         key_content = cert.certificate_key  # Already decrypted or plain
 
-    with open(key_path, "w") as f:
-        f.write(key_content)
-
-    # Set permissions
-    os.chmod(key_path, 0o600)
+    # Owner-only from the moment it is created.
+    await write_text(key_path, key_content, private=True)
 
 
 def ensure_default_certificate() -> None:
@@ -990,8 +976,7 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
     # Generate default site config
     default_conf = await generate_default_site_config(db)
     default_path = os.path.join(settings.nginx_config_path, "_default.conf")
-    with open(default_path, "w") as f:
-        f.write(default_conf)
+    await write_text(default_path, default_conf)
     generated_files.append(default_path)
 
     for host in hosts:
@@ -1010,8 +995,7 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
 
         # Write config file
         config_path = os.path.join(settings.nginx_config_path, f"{host.id}.conf")
-        with open(config_path, "w") as f:
-            f.write(config)
+        await write_text(config_path, config)
 
         generated_files.append(config_path)
 
@@ -1020,11 +1004,7 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
 
 async def remove_config(host_id: str) -> bool:
     """Remove proxy host configuration file"""
-    config_path = os.path.join(settings.nginx_config_path, f"{host_id}.conf")
-    if os.path.exists(config_path):
-        os.remove(config_path)
-        return True
-    return False
+    return await remove_file(os.path.join(settings.nginx_config_path, f"{host_id}.conf"))
 
 
 logger = logging.getLogger(__name__)
@@ -1144,7 +1124,7 @@ def test_nginx_config() -> tuple[bool, str]:
         # Fallback: local nginx -t (works when running outside Docker)
         try:
             result = subprocess.run(
-                ["nginx", "-t"],
+                ["nginx", "-t"],  # noqa: S607  nginx from PATH, only when running outside Docker
                 capture_output=True,
                 text=True,
                 timeout=15,

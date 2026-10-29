@@ -176,8 +176,8 @@ async def delete_connector(
 @router.post("/{connector_id}/test")
 async def test_connector(
     connector_id: str,
-    current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
+    db: AsyncSession = Depends(get_db),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
 ):
     result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
     connector = result.scalar_one_or_none()
@@ -238,8 +238,8 @@ async def ensure_firewall_rule(
 async def test_block(
     connector_id: str,
     request: Request,
-    current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
+    db: AsyncSession = Depends(get_db),  # noqa: PT028  a FastAPI route named test_*, not a pytest test
 ):
     """Test adding and removing a block - uses a safe test IP (192.0.2.1 from TEST-NET-1)."""
     result = await db.execute(select(FirewallConnector).where(FirewallConnector.id == connector_id))
@@ -305,7 +305,7 @@ async def sync_blocklist(
     bl_result = await db.execute(
         select(FirewallBlocklist).where(
             FirewallBlocklist.status == "pending",
-            (FirewallBlocklist.connector_id == connector_id) | (FirewallBlocklist.connector_id == None),
+            (FirewallBlocklist.connector_id == connector_id) | FirewallBlocklist.connector_id.is_(None),
         )
     )
     entries = bl_result.scalars().all()

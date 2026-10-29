@@ -5,6 +5,7 @@ import asyncio
 import os
 
 from app.core.database import AsyncSessionLocal
+from app.core.security import encrypt_data
 from app.models.certificate import Certificate
 from sqlalchemy import select
 
@@ -22,14 +23,16 @@ async def restore_certs():
             crt_path = os.path.join(CERTS_PATH, f"{cert.id}.crt")
             key_path = os.path.join(CERTS_PATH, f"{cert.id}.key")
 
-            if os.path.exists(crt_path) and os.path.exists(key_path):
-                with open(crt_path) as f:
+            # A one-off CLI script: blocking reads are fine here.
+            if os.path.exists(crt_path) and os.path.exists(key_path):  # noqa: ASYNC240
+                with open(crt_path) as f:  # noqa: ASYNC230
                     cert_content = f.read()
-                with open(key_path) as f:
+                with open(key_path) as f:  # noqa: ASYNC230
                     key_content = f.read()
 
                 cert.certificate = cert_content
-                cert.certificate_key = key_content
+                # The app keeps private keys encrypted at rest (and decrypts them to write nginx's files).
+                cert.certificate_key = encrypt_data(key_content)
                 print(f"  Restored: {cert.name}")
             else:
                 print(f"  Missing files for: {cert.name}")

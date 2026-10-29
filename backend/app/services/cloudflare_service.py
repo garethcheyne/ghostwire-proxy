@@ -66,7 +66,7 @@ class CloudflareClient:
                 return False, str(e)
 
     async def list_dns_records(
-        self, zone_id: str, record_type: str = None, name: str = None
+        self, zone_id: str, record_type: str | None = None, name: str | None = None
     ) -> tuple[bool, list | str]:
         """List DNS records for a zone"""
         async with httpx.AsyncClient() as client:

@@ -2,7 +2,7 @@
 """Restore proxy hosts and certificates from nginx config files."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.core.database import AsyncSessionLocal
 from app.models import Certificate, ProxyHost
@@ -189,7 +189,7 @@ PROXY_HOSTS = [
 async def restore_data():
     """Restore certificates and proxy hosts to database."""
     async with AsyncSessionLocal() as session:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Insert certificates
         print("Restoring certificates...")

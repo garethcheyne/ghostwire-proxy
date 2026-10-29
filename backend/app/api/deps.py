@@ -30,7 +30,7 @@ async def _api_key_user(request: Request, db: AsyncSession, token: str) -> User:
         scope = api_key_service.check_request_scope(principal, request.method, request.url.path)
     except api_key_service.ApiKeyError as e:
         headers = {"WWW-Authenticate": "Bearer"} if e.status_code == 401 else None
-        raise HTTPException(status_code=e.status_code, detail=e.detail, headers=headers)
+        raise HTTPException(status_code=e.status_code, detail=e.detail, headers=headers) from e
 
     request.state.api_key = principal
     # Changes are audited; reads and dry-run previews (scope "read") are not.

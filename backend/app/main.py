@@ -2,14 +2,18 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from app.api import router as api_router
+from app.core.client_ip import TrustedProxyMiddleware
 from app.core.config import settings
 from app.core.database import engine
 from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
@@ -977,54 +981,30 @@ async def lifespan(app: FastAPI):
     container_update_task.cancel()
     traffic_rollup_task.cancel()
     for _task in (report_task, backup_watchdog_task, container_update_task, traffic_rollup_task):
-        try:
+        with suppress(asyncio.CancelledError):
             await _task
-        except asyncio.CancelledError:
-            pass
-    try:
+    with suppress(asyncio.CancelledError):
         await trusted_proxy_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await health_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await metrics_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await backup_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await geoip_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await update_check_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await enrichment_backfill_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await abuseipdb_blacklist_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await abuseipdb_report_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await retention_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await certificate_renewal_task
-    except asyncio.CancelledError:
-        pass
 
     # Shutdown
     logger.info("Shutting down Ghostwire Proxy API...")
@@ -1058,9 +1038,6 @@ app.add_middleware(
 
 
 # Security headers middleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -1083,7 +1060,6 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Outermost: decide the real client address and scheme before anything else
 # (rate limits, audit logs, redirects) looks at them. Only trusted proxies'
 # X-Forwarded-* headers count (TRUSTED_PROXIES, see app/core/client_ip.py).
-from app.core.client_ip import TrustedProxyMiddleware  # noqa: E402
 
 app.add_middleware(TrustedProxyMiddleware)
 

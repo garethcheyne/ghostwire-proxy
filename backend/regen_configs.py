@@ -16,7 +16,7 @@ async def main():
             print(f"  - {f}")
 
         print("\nReloading nginx...")
-        success, msg = reload_nginx()
+        _success, msg = reload_nginx()
         print(f"Result: {msg}")
 
 

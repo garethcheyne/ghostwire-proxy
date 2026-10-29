@@ -196,7 +196,7 @@ async def sync_zones(
     except Exception:
         raise HTTPException(
             status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
-        )
+        ) from None
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -257,7 +257,7 @@ async def list_records(
     except Exception:
         raise HTTPException(
             status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
-        )
+        ) from None
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -306,7 +306,7 @@ async def create_record(
     except Exception:
         raise HTTPException(
             status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
-        )
+        ) from None
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -365,7 +365,7 @@ async def update_record(
     except Exception:
         raise HTTPException(
             status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
-        )
+        ) from None
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)
@@ -438,7 +438,7 @@ async def delete_record(
     except Exception:
         raise HTTPException(
             status_code=500, detail='Failed to decrypt provider API key (encryption key may have changed)'
-        )
+        ) from None
 
     if provider.provider_type == "cloudflare":
         client = CloudflareClient(api_key)

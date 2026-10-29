@@ -1,8 +1,9 @@
 """System monitoring API endpoints."""
 
+import asyncio
 import os
 import socket
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
@@ -376,29 +377,20 @@ async def toggle_kill_switch(
     if request.active:
         # ACTIVATE kill switch
         # 1. Write kill switch config for the selected mode
+        # 2. Disable all other configs by renaming them; 3. mark the kill switch as active
         config = _generate_kill_switch_config(request.mode, request.redirect_url)
-        with open(kill_switch_conf_path, "w") as f:
-            f.write(config)
-
-        # 2. Disable all other configs by renaming them
-        for filename in os.listdir(settings.nginx_config_path):
-            if filename.endswith(".conf") and filename != "_kill_switch.conf":
-                filepath = os.path.join(settings.nginx_config_path, filename)
-                os.rename(filepath, filepath + ".disabled")
-
-        # 3. Mark kill switch as active
-        with open(backup_marker, "w") as f:
-            f.write(datetime.utcnow().isoformat())
+        activated_at = datetime.now(UTC).isoformat()
+        await asyncio.to_thread(_activate_kill_switch_files, kill_switch_conf_path, config, backup_marker, activated_at)
 
         # 4. Save state to database
         await _save_setting(db, "kill_switch_active", "true")
         await _save_setting(db, "kill_switch_mode", request.mode)
         await _save_setting(db, "kill_switch_redirect_url", request.redirect_url or "")
-        await _save_setting(db, "kill_switch_activated_at", datetime.utcnow().isoformat())
+        await _save_setting(db, "kill_switch_activated_at", activated_at)
         await _save_setting(db, "kill_switch_activated_by", current_user.email)
 
         # 5. Reload nginx via Docker socket
-        _reload_nginx_via_docker()
+        await asyncio.to_thread(_reload_nginx_via_docker)
 
         await db.commit()
 
@@ -406,31 +398,20 @@ async def toggle_kill_switch(
             active=True,
             mode=request.mode,
             redirect_url=request.redirect_url,
-            activated_at=datetime.utcnow().isoformat(),
+            activated_at=activated_at,
             activated_by=current_user.email,
         )
 
     else:
         # DEACTIVATE kill switch
-        # 1. Remove kill switch config
-        if os.path.exists(kill_switch_conf_path):
-            os.remove(kill_switch_conf_path)
-
-        # 2. Restore all disabled configs
-        for filename in os.listdir(settings.nginx_config_path):
-            if filename.endswith(".conf.disabled"):
-                filepath = os.path.join(settings.nginx_config_path, filename)
-                os.rename(filepath, filepath[:-9])  # Remove .disabled suffix
-
-        # 3. Remove kill switch marker
-        if os.path.exists(backup_marker):
-            os.remove(backup_marker)
+        # 1. Remove kill switch config, 2. restore all disabled configs, 3. remove the marker
+        await asyncio.to_thread(_deactivate_kill_switch_files, kill_switch_conf_path, backup_marker)
 
         # 4. Update database
         await _save_setting(db, "kill_switch_active", "false")
 
         # 5. Reload nginx via Docker socket
-        _reload_nginx_via_docker()
+        await asyncio.to_thread(_reload_nginx_via_docker)
 
         await db.commit()
 
@@ -439,6 +420,30 @@ async def toggle_kill_switch(
             activated_at=None,
             activated_by=None,
         )
+
+
+def _activate_kill_switch_files(conf_path: str, config: str, marker_path: str, activated_at: str) -> None:
+    """Write the kill switch config and park every other config as .disabled (blocking)."""
+    with open(conf_path, "w") as f:
+        f.write(config)
+    for filename in os.listdir(settings.nginx_config_path):
+        if filename.endswith(".conf") and filename != "_kill_switch.conf":
+            filepath = os.path.join(settings.nginx_config_path, filename)
+            os.rename(filepath, filepath + ".disabled")
+    with open(marker_path, "w") as f:
+        f.write(activated_at)
+
+
+def _deactivate_kill_switch_files(conf_path: str, marker_path: str) -> None:
+    """Remove the kill switch config and bring the parked configs back (blocking)."""
+    if os.path.exists(conf_path):
+        os.remove(conf_path)
+    for filename in os.listdir(settings.nginx_config_path):
+        if filename.endswith(".conf.disabled"):
+            filepath = os.path.join(settings.nginx_config_path, filename)
+            os.rename(filepath, filepath[: -len(".disabled")])
+    if os.path.exists(marker_path):
+        os.remove(marker_path)
 
 
 def _reload_nginx_via_docker():
@@ -458,7 +463,7 @@ def _reload_nginx_via_docker():
         sock.recv(4096)
         sock.close()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reload nginx: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Failed to reload nginx: {e!s}") from e
 
 
 async def _save_setting(db: AsyncSession, key: str, value: str) -> None:

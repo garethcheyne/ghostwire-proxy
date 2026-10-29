@@ -73,7 +73,7 @@ class TestCheckIpBlocked:
 
     @pytest.mark.asyncio
     async def test_unblocked_ip(self, db_session):
-        blocked, reason = await check_ip_blocked(db_session, "192.0.2.100")
+        blocked, _reason = await check_ip_blocked(db_session, "192.0.2.100")
         assert blocked is False
 
     @pytest.mark.asyncio
@@ -88,7 +88,7 @@ class TestCheckIpBlocked:
         db_session.add(actor)
         await db_session.commit()
 
-        blocked, reason = await check_ip_blocked(db_session, "192.0.2.200")
+        blocked, _reason = await check_ip_blocked(db_session, "192.0.2.200")
         assert blocked is True
 
     @pytest.mark.asyncio
@@ -103,5 +103,5 @@ class TestCheckIpBlocked:
         db_session.add(actor)
         await db_session.commit()
 
-        blocked, reason = await check_ip_blocked(db_session, "192.0.2.201")
+        blocked, _reason = await check_ip_blocked(db_session, "192.0.2.201")
         assert blocked is False

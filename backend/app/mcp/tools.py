@@ -12,6 +12,7 @@ renders the proposed config and a diff against what nginx runs now without savin
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from typing import Any
@@ -329,10 +330,8 @@ def build_tools(principal: ApiKeyPrincipal, api: ProxyApi) -> list[McpTool]:
             )
         down = [r for r in report if r["health_status"] == "down"]
         system = None
-        try:
+        with contextlib.suppress(ToolError):
             system = await api.call("GET", "/api/system/status")
-        except ToolError:
-            pass
         return _result(
             {"hosts": report, "hosts_down": len(down), "system": system}, f"{len(report)} host(s), {len(down)} down."
         )
@@ -398,7 +397,7 @@ def build_tools(principal: ApiKeyPrincipal, api: ProxyApi) -> list[McpTool]:
         host = await api.find_host(args["host"])
         server = _server_payload(args)
         if args.get("dry_run"):
-            servers = _server_list(host) + [server]
+            servers = [*_server_list(host), server]
             return _result(await api.preview(host["id"], {"upstream_servers": servers}), "Dry run: nothing was saved.")
         created = await api.call("POST", f"/api/proxy-hosts/{host['id']}/upstreams", json_body=server)
         ignored = [k for k in server if k not in created]

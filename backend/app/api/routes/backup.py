@@ -1,5 +1,6 @@
 """Backup API endpoints."""
 
+import asyncio
 import json
 import os
 import tarfile
@@ -23,9 +24,36 @@ from app.schemas.backup import (
     RestoreRequest,
     RestoreResponse,
 )
-from app.services.backup_service import BACKUP_PATH, backup_service
+from app.services.backup_service import BACKUP_PATH, backup_service, remove_if_exists
 
 router = APIRouter()
+
+
+class _UnsafeArchiveError(Exception):
+    """An uploaded archive has absolute or parent-relative member names."""
+
+
+def _save_and_inspect_upload(file_path: str, content: bytes) -> dict | None:
+    """Write an uploaded backup to disk and read its metadata.json (blocking).
+
+    Raises _UnsafeArchiveError (after deleting the file) on path traversal, and
+    tarfile.TarError if it isn't a tar.gz.
+    """
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    with tarfile.open(file_path, "r:gz") as tar:
+        for member in tar.getmembers():
+            if member.name.startswith("/") or ".." in member.name:
+                os.remove(file_path)
+                raise _UnsafeArchiveError(member.name)
+        try:
+            meta_file = tar.extractfile(tar.getmember("metadata.json"))
+            if meta_file:
+                return json.loads(meta_file.read().decode("utf-8"))
+        except KeyError, json.JSONDecodeError:
+            pass
+    return None
 
 
 @router.get("/", response_model=BackupListResponse)
@@ -76,7 +104,7 @@ async def create_backup(
         return BackupResponse.model_validate(backup)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/upload", response_model=BackupResponse)
@@ -105,26 +133,10 @@ async def upload_backup(
     file_path = os.path.join(BACKUP_PATH, safe_filename)
 
     try:
-        with open(file_path, "wb") as f:
-            f.write(content)
-
-        # Validate it's a valid tar.gz with metadata
-        metadata = None
-        with tarfile.open(file_path, "r:gz") as tar:
-            # Security: check for path traversal
-            for member in tar.getmembers():
-                if member.name.startswith('/') or '..' in member.name:
-                    os.remove(file_path)
-                    raise HTTPException(status_code=400, detail="Invalid archive: path traversal detected")
-
-            # Look for metadata.json
-            try:
-                meta_member = tar.getmember("metadata.json")
-                meta_file = tar.extractfile(meta_member)
-                if meta_file:
-                    metadata = json.loads(meta_file.read().decode('utf-8'))
-            except KeyError, json.JSONDecodeError:
-                pass
+        try:
+            metadata = await asyncio.to_thread(_save_and_inspect_upload, file_path, content)
+        except _UnsafeArchiveError:
+            raise HTTPException(status_code=400, detail="Invalid archive: path traversal detected") from None
 
         # Create backup record
         includes = metadata.get("includes", {}) if metadata else {}
@@ -154,13 +166,11 @@ async def upload_backup(
     except HTTPException:
         raise
     except tarfile.TarError:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=400, detail="Invalid or corrupted tar.gz archive")
+        await asyncio.to_thread(remove_if_exists, file_path)
+        raise HTTPException(status_code=400, detail="Invalid or corrupted tar.gz archive") from None
     except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        await asyncio.to_thread(remove_if_exists, file_path)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{backup_id}", response_model=BackupResponse)
@@ -191,7 +201,7 @@ async def download_backup(
     if backup.status != "completed":
         raise HTTPException(status_code=400, detail="Backup is not complete")
 
-    if not os.path.exists(backup.file_path):
+    if not await asyncio.to_thread(os.path.exists, backup.file_path):
         raise HTTPException(status_code=404, detail="Backup file not found")
 
     return FileResponse(
@@ -249,9 +259,9 @@ async def restore_backup(
         return RestoreResponse(**result)
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/settings/current", response_model=BackupSettingsResponse)

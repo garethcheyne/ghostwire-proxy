@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ from app.api.deps import get_current_admin_user, get_current_user
 from app.core.cache import cache_delete_prefix, cached_json
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.files import read_text
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer, UpstreamServerEvent
@@ -270,12 +272,11 @@ async def get_proxy_host_config(
 
     # Built from the stored id, never the raw path parameter
     path = os.path.join(settings.nginx_config_path, f"{row.id}.conf")
-    if not os.path.isfile(path):
+    content = await read_text(path)
+    if content is None:
         return {"exists": False, "enabled": row.enabled, "path": path, "content": None, "modified_at": None}
 
-    with open(path, encoding="utf-8", newline="") as f:
-        content = f.read()
-    modified_at = datetime.fromtimestamp(os.path.getmtime(path), tz=UTC)
+    modified_at = datetime.fromtimestamp(await asyncio.to_thread(os.path.getmtime, path), tz=UTC)
     return {"exists": True, "enabled": row.enabled, "path": path, "content": content, "modified_at": modified_at}
 
 

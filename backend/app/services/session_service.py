@@ -306,7 +306,7 @@ def get_cookie_header(
     cookie_value: str,
     session_timeout: int,
     secure: bool = True,
-    domain: str = None,
+    domain: str | None = None,
 ) -> str:
     """
     Generate Set-Cookie header value for session cookie.

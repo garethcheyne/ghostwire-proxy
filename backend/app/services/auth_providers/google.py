@@ -15,7 +15,7 @@ class GoogleAuthProvider(AuthProviderBase):
 
     # Google OAuth endpoints
     AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-    TOKEN_URL = "https://oauth2.googleapis.com/token"
+    TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105  the provider's public token endpoint URL
     USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
     DEFAULT_SCOPES = "openid email profile"
 
@@ -66,8 +66,6 @@ class GoogleAuthProvider(AuthProviderBase):
             "prompt": "select_account",  # Always show account selector
         }
 
-        query_string = "&".join(f"{k}={httpx.QueryParams({k: v})}" for k, v in params.items())
-        # Use proper URL encoding
         from urllib.parse import urlencode
 
         return f"{auth_url}?{urlencode(params)}"
@@ -138,6 +136,4 @@ class GoogleAuthProvider(AuthProviderBase):
         """
         # Ensure email is verified
         raw_data = user_info.raw_data or {}
-        if not raw_data.get("email_verified", False):
-            return False
-        return True
+        return bool(raw_data.get("email_verified", False))

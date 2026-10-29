@@ -65,9 +65,7 @@ class AuthWallSession(Base):
         """Check if session is currently valid."""
         if self.revoked:
             return False
-        if datetime.now(UTC) > self.expires_at:
-            return False
-        return True
+        return datetime.now(UTC) <= self.expires_at
 
     def to_cache_dict(self) -> dict:
         """Convert to dictionary for Lua cache storage."""

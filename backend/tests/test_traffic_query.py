@@ -19,7 +19,6 @@ NOW = datetime.now(UTC).replace(microsecond=0)
 async def _fresh_cache():
     # Route responses are cached by query string; every test has its own data.
     await cache_delete_prefix("traffic:")
-    yield
 
 
 def _log(
@@ -139,7 +138,7 @@ class TestFilters:
 
     def test_percentile_from_histogram(self):
         hist = [0] * tq.HIST_LEN
-        hist[6] = 100  # 50–100 ms
+        hist[6] = 100  # 50-100 ms
         assert 50 <= tq.percentile(hist, 0.5) <= 100
         assert tq.percentile([0] * tq.HIST_LEN, 0.5) is None
 

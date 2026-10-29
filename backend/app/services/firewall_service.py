@@ -49,7 +49,7 @@ class RouterOSConnector(BaseFirewallConnector):
 
     async def test_connection(self) -> dict:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.get(
                     f"{self._get_base_url()}/system/identity",
                     auth=self._get_auth(),
@@ -64,7 +64,7 @@ class RouterOSConnector(BaseFirewallConnector):
     async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         list_name = self.connector.address_list_name or "ghostwire-blocked"
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.put(
                     f"{self._get_base_url()}/ip/firewall/address-list",
                     auth=self._get_auth(),
@@ -85,7 +85,7 @@ class RouterOSConnector(BaseFirewallConnector):
     async def remove_from_blocklist(self, ip: str) -> bool:
         list_name = self.connector.address_list_name or "ghostwire-blocked"
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 # Find the entry
                 resp = await client.get(
                     f"{self._get_base_url()}/ip/firewall/address-list",
@@ -110,7 +110,7 @@ class RouterOSConnector(BaseFirewallConnector):
     async def get_blocklist(self) -> list[str]:
         list_name = self.connector.address_list_name or "ghostwire-blocked"
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.get(
                     f"{self._get_base_url()}/ip/firewall/address-list",
                     auth=self._get_auth(),
@@ -200,7 +200,7 @@ class UniFiConnector(BaseFirewallConnector):
     async def test_connection(self) -> dict:
         findings: list[dict] = []
         try:
-            async with httpx.AsyncClient(verify=False, timeout=15) as client:
+            async with httpx.AsyncClient(verify=False, timeout=15) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 # 1. Basic connectivity
                 resp = await client.get(
                     f"{self._get_base_url()}/proxy/network/integration/v1/sites",
@@ -242,7 +242,7 @@ class UniFiConnector(BaseFirewallConnector):
                     for lst in resp.json().get("data", []):
                         existing_lists[lst.get("name", "")] = lst.get("type", "")
 
-                for label, name, expected_type in [
+                for label, name, _expected_type in [
                     ("IPv4 Address List", self._get_list_name_ipv4(), "IPV4_ADDRESSES"),
                     ("IPv6 Address List", self._get_list_name_ipv6(), "IPV6_ADDRESSES"),
                 ]:
@@ -470,7 +470,7 @@ class UniFiConnector(BaseFirewallConnector):
     async def ensure_firewall_rule(self) -> dict:
         """Public method to ensure both IPv4 and IPv6 firewall policies exist."""
         try:
-            async with httpx.AsyncClient(verify=False, timeout=20) as client:
+            async with httpx.AsyncClient(verify=False, timeout=20) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 site_uuid = await self._get_site_uuid(client)
                 if not site_uuid:
                     return {"success": False, "error": "Could not get site UUID"}
@@ -511,7 +511,7 @@ class UniFiConnector(BaseFirewallConnector):
         ip_version = "IPV6" if is_v6 else "IPV4"
 
         try:
-            async with httpx.AsyncClient(verify=False, timeout=20) as client:
+            async with httpx.AsyncClient(verify=False, timeout=20) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 site_uuid = await self._get_site_uuid(client)
                 if not site_uuid:
                     logger.error("UniFi: could not get site UUID")
@@ -576,7 +576,7 @@ class UniFiConnector(BaseFirewallConnector):
         placeholder = "2001:db8::1" if is_v6 else "192.0.2.1"
 
         try:
-            async with httpx.AsyncClient(verify=False, timeout=15) as client:
+            async with httpx.AsyncClient(verify=False, timeout=15) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 site_uuid = await self._get_site_uuid(client)
                 if not site_uuid:
                     return False
@@ -626,7 +626,7 @@ class UniFiConnector(BaseFirewallConnector):
         all_ips: list[str] = []
         placeholders = {"192.0.2.1", "2001:db8::1"}
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 site_uuid = await self._get_site_uuid(client)
                 if not site_uuid:
                     return []
@@ -668,7 +668,7 @@ class PfSenseConnector(BaseFirewallConnector):
 
     async def test_connection(self) -> dict:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.get(
                     f"{self._get_base_url()}/system/version",
                     headers=self._get_headers(),
@@ -681,7 +681,7 @@ class PfSenseConnector(BaseFirewallConnector):
 
     async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.post(
                     f"{self._get_base_url()}/firewall/alias/entry",
                     headers=self._get_headers(),
@@ -700,7 +700,7 @@ class PfSenseConnector(BaseFirewallConnector):
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.delete(
                     f"{self._get_base_url()}/firewall/alias/entry",
                     headers=self._get_headers(),
@@ -732,7 +732,7 @@ class OPNsenseConnector(BaseFirewallConnector):
 
     async def test_connection(self) -> dict:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 resp = await client.get(
                     f"{self._get_base_url()}/core/firmware/status",
                     auth=self._get_auth(),
@@ -745,7 +745,7 @@ class OPNsenseConnector(BaseFirewallConnector):
 
     async def add_to_blocklist(self, ip: str, comment: str = "") -> tuple[bool, str]:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 alias_name = self.connector.address_list_name or "ghostwire_blocked"
                 resp = await client.post(
                     f"{self._get_base_url()}/firewall/alias_util/add/{alias_name}",
@@ -761,7 +761,7 @@ class OPNsenseConnector(BaseFirewallConnector):
 
     async def remove_from_blocklist(self, ip: str) -> bool:
         try:
-            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:  # noqa: S501  LAN firewalls ship self-signed certs; there is no per-connector CA setting yet
                 alias_name = self.connector.address_list_name or "ghostwire_blocked"
                 resp = await client.post(
                     f"{self._get_base_url()}/firewall/alias_util/delete/{alias_name}",

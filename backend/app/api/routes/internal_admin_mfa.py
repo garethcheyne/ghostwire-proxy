@@ -65,7 +65,7 @@ async def begin_enrolment(body: UserRequest, db: AsyncSession = Depends(get_db))
     try:
         result = await admin_mfa_service.begin_enrolment(db, user)
     except admin_mfa_service.MfaNotAvailable as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
     return {
         "secret": result["secret"],
         "provisioning_uri": result["provisioning_uri"],
@@ -81,5 +81,5 @@ async def confirm_enrolment(body: CodeRequest, db: AsyncSession = Depends(get_db
     try:
         ok = await admin_mfa_service.confirm_enrolment(db, user, body.code)
     except admin_mfa_service.MfaNotAvailable as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
     return {"ok": ok}

@@ -10,6 +10,7 @@ Secrets and backup codes are Fernet-encrypted at rest via `core.security`.
 """
 
 import json
+import logging
 import secrets
 from datetime import UTC, datetime
 
@@ -19,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import decrypt_data, encrypt_data
 from app.models.setting import Setting
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 try:
     import pyotp
@@ -148,7 +151,8 @@ async def verify_code(db: AsyncSession, user: User, code: str) -> bool:
         if totp.verify(code, valid_window=1):
             return True
     except Exception:
-        pass
+        # An undecryptable secret (ENCRYPTION_KEY changed) must not look like a wrong code only.
+        logger.warning("Could not check the TOTP code for admin %s", user.id, exc_info=True)
 
     if len(code) == BACKUP_CODE_LENGTH:
         return await _consume_backup_code(db, user, code)

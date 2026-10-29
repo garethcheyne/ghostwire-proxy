@@ -105,7 +105,7 @@ view_filters = traffic_filters("24h")
 
 def _cache_key(name: str, request: Request) -> str:
     items = sorted(request.query_params.multi_items())
-    digest = hashlib.sha1(json.dumps(items).encode()).hexdigest()[:20]
+    digest = hashlib.sha1(json.dumps(items).encode(), usedforsecurity=False).hexdigest()[:20]
     return f"traffic:{name}:{digest}"
 
 

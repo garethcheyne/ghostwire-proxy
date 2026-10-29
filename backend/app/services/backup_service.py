@@ -9,6 +9,8 @@ Backups include:
 - Optionally: Traffic logs (large)
 """
 
+import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -59,15 +61,49 @@ def _check_plain_sql_dump(path: str) -> None:
                 raise ValueError(f"Refusing to restore: the SQL dump contains a psql meta-command at line {lineno}")
 
 
+def _write_json(path: str, data: dict) -> None:
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _nonempty_file(path: str) -> bool:
+    return os.path.exists(path) and os.path.getsize(path) > 0
+
+
+def remove_if_exists(path: str) -> None:
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(path)
+
+
+def _extract_archive(archive_path: str, temp_dir: str) -> dict | None:
+    """Extract a backup archive into temp_dir (blocking); returns its metadata.json, if any."""
+    with tarfile.open(archive_path, "r:gz") as tar:
+        # Protect against path traversal (CVE-2007-4559)
+        abs_temp = os.path.realpath(temp_dir)
+        for member in tar.getmembers():
+            abs_member = os.path.realpath(os.path.join(temp_dir, member.name))
+            if not abs_member.startswith(abs_temp + os.sep) and abs_member != abs_temp:
+                raise ValueError(f"Path traversal detected in backup archive: {member.name}")
+        # The "data" filter refuses links that point outside temp_dir, device
+        # files and absolute paths, and drops setuid bits. The name check above
+        # alone misses a symlink member followed by a member written through it.
+        # Relative links inside the archive (Let's Encrypt live/ -> archive/) pass.
+        tar.extractall(temp_dir, filter="data")
+
+    metadata_path = os.path.join(temp_dir, "metadata.json")
+    if not os.path.exists(metadata_path):
+        return None
+    with open(metadata_path) as f:
+        return json.load(f)
+
+
 class BackupService:
     """Service for managing backups."""
 
     def __init__(self):
         # Ensure backup directory exists (may fail in CI/test environments)
-        try:
+        with contextlib.suppress(PermissionError):
             os.makedirs(BACKUP_PATH, exist_ok=True)
-        except PermissionError:
-            pass
 
     async def create_backup(
         self,
@@ -130,33 +166,24 @@ class BackupService:
                 }
 
                 metadata_path = os.path.join(temp_dir, "metadata.json")
-                with open(metadata_path, "w") as f:
-                    json.dump(metadata, f, indent=2)
+                await asyncio.to_thread(_write_json, metadata_path, metadata)
 
                 # Backup database
                 if include_database:
                     await self._backup_database(temp_dir, include_traffic_logs)
 
-                # Backup certificates
-                if include_certificates:
-                    self._backup_certificates(temp_dir)
-
-                # Backup Let's Encrypt data
-                if include_letsencrypt:
-                    self._backup_letsencrypt(temp_dir)
-
-                # Backup nginx configs
-                if include_configs:
-                    self._backup_configs(temp_dir)
-
-                # Create tar.gz archive
-                with tarfile.open(file_path, "w:gz") as tar:
-                    for item in os.listdir(temp_dir):
-                        item_path = os.path.join(temp_dir, item)
-                        tar.add(item_path, arcname=item)
+                # Copying files and compressing them can take a while: off the event loop.
+                await asyncio.to_thread(
+                    self._collect_files_and_archive,
+                    temp_dir,
+                    file_path,
+                    include_certificates,
+                    include_letsencrypt,
+                    include_configs,
+                )
 
             # Update backup record with file size
-            file_size = os.path.getsize(file_path)
+            file_size = await asyncio.to_thread(os.path.getsize, file_path)
             backup.file_size = file_size
             backup.status = "completed"
             backup.completed_at = datetime.now(UTC)
@@ -173,6 +200,25 @@ class BackupService:
             backup.error_message = str(e)
             await db.commit()
             raise
+
+    def _collect_files_and_archive(
+        self,
+        temp_dir: str,
+        file_path: str,
+        include_certificates: bool,
+        include_letsencrypt: bool,
+        include_configs: bool,
+    ) -> None:
+        """Copy the selected files into temp_dir and write it all to the tar.gz (blocking)."""
+        if include_certificates:
+            self._backup_certificates(temp_dir)
+        if include_letsencrypt:
+            self._backup_letsencrypt(temp_dir)
+        if include_configs:
+            self._backup_configs(temp_dir)
+        with tarfile.open(file_path, "w:gz") as tar:
+            for item in os.listdir(temp_dir):
+                tar.add(os.path.join(temp_dir, item), arcname=item)
 
     async def _backup_database(self, temp_dir: str, include_traffic_logs: bool):
         """Backup PostgreSQL database."""
@@ -204,7 +250,7 @@ class BackupService:
         if "@" in db_url:
             # postgresql://user:pass@host:port/db
             parts = db_url.split("://")[1]
-            creds, host_part = parts.split("@")
+            creds, _host_part = parts.split("@")
             if ":" in creds:
                 user, password = creds.split(":", 1)
                 env["PGPASSWORD"] = password
@@ -233,13 +279,17 @@ class BackupService:
                 "-Fc",
                 "-f",
                 dump_file,
-            ] + exclude_tables
+                *exclude_tables,
+            ]
 
-            result = subprocess.run(
+            # pg_dump runs in a thread so the API keeps answering while it works.
+            result = await asyncio.to_thread(
+                subprocess.run,
                 cmd,
                 env=env,
                 capture_output=True,
                 text=True,
+                timeout=3600,
             )
 
             if result.returncode != 0:
@@ -248,12 +298,12 @@ class BackupService:
                 raise RuntimeError(f"Database backup failed: {error_msg}")
 
             # Verify dump file was actually created and has content
-            if not os.path.exists(dump_file) or os.path.getsize(dump_file) == 0:
+            if not await asyncio.to_thread(_nonempty_file, dump_file):
                 raise RuntimeError("Database backup produced empty or missing dump file")
 
         except FileNotFoundError as e:
             logger.error(f"pg_dump not found - ensure postgresql-client is installed: {e}")
-            raise RuntimeError(f"pg_dump not available: {e}")
+            raise RuntimeError(f"pg_dump not available: {e}") from e
         except Exception as e:
             logger.error(f"Database backup error: {e}")
             raise
@@ -336,7 +386,7 @@ class BackupService:
         if backup.status != "completed":
             raise ValueError(f"Cannot restore incomplete backup: {backup.status}")
 
-        if not os.path.exists(backup.file_path):
+        if not await asyncio.to_thread(os.path.exists, backup.file_path):
             raise ValueError(f"Backup file not found: {backup.file_path}")
 
         restored_items = []
@@ -358,25 +408,8 @@ class BackupService:
         try:
             # Extract backup to temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
-                with tarfile.open(backup.file_path, "r:gz") as tar:
-                    # Protect against path traversal (CVE-2007-4559)
-                    for member in tar.getmembers():
-                        member_path = os.path.join(temp_dir, member.name)
-                        abs_temp = os.path.realpath(temp_dir)
-                        abs_member = os.path.realpath(member_path)
-                        if not abs_member.startswith(abs_temp + os.sep) and abs_member != abs_temp:
-                            raise ValueError(f"Path traversal detected in backup archive: {member.name}")
-                    # The "data" filter refuses links that point outside temp_dir, device
-                    # files and absolute paths, and drops setuid bits. The name check above
-                    # alone misses a symlink member followed by a member written through it.
-                    # Relative links inside the archive (Let's Encrypt live/ -> archive/) pass.
-                    tar.extractall(temp_dir, filter="data")
-
-                # Read metadata
-                metadata_path = os.path.join(temp_dir, "metadata.json")
-                if os.path.exists(metadata_path):
-                    with open(metadata_path) as f:
-                        metadata = json.load(f)
+                metadata = await asyncio.to_thread(_extract_archive, backup.file_path, temp_dir)
+                if metadata is not None:
                     logger.info(f"Restoring backup from {metadata.get('created_at')}")
 
                 # Restore database. A failure stops the restore here: carrying
@@ -393,7 +426,7 @@ class BackupService:
                 # Restore certificates
                 if restore_certificates and backup.includes_certificates:
                     try:
-                        self._restore_certificates(temp_dir)
+                        await asyncio.to_thread(self._restore_certificates, temp_dir)
                         restored_items.append("certificates")
                     except Exception as e:
                         warnings.append(f"Certificates restore failed: {e}")
@@ -402,7 +435,7 @@ class BackupService:
                 # Restore Let's Encrypt
                 if restore_letsencrypt and backup.includes_letsencrypt:
                     try:
-                        self._restore_letsencrypt(temp_dir)
+                        await asyncio.to_thread(self._restore_letsencrypt, temp_dir)
                         restored_items.append("letsencrypt")
                     except Exception as e:
                         warnings.append(f"Let's Encrypt restore failed: {e}")
@@ -411,7 +444,7 @@ class BackupService:
                 # Restore configs
                 if restore_configs and backup.includes_configs:
                     try:
-                        self._restore_configs(temp_dir)
+                        await asyncio.to_thread(self._restore_configs, temp_dir)
                         restored_items.append("configs")
                     except Exception as e:
                         warnings.append(f"Configs restore failed: {e}")
@@ -439,11 +472,11 @@ class BackupService:
         # Support both custom format (.dump) and legacy plain SQL (.sql)
         dump_file = os.path.join(db_dir, "ghostwire_proxy.dump")
         use_pg_restore = True
-        if not os.path.exists(dump_file):
+        if not await asyncio.to_thread(os.path.exists, dump_file):
             dump_file = os.path.join(db_dir, "ghostwire_proxy.sql")
             use_pg_restore = False
 
-        if not os.path.exists(dump_file):
+        if not await asyncio.to_thread(os.path.exists, dump_file):
             raise FileNotFoundError("Database dump not found in backup")
 
         db_url = settings.database_url
@@ -453,7 +486,7 @@ class BackupService:
         env = os.environ.copy()
         if "@" in db_url:
             parts = db_url.split("://")[1]
-            creds, host_part = parts.split("@")
+            creds, _host_part = parts.split("@")
             if ":" in creds:
                 user, password = creds.split(":", 1)
                 env["PGPASSWORD"] = password
@@ -479,9 +512,16 @@ class BackupService:
             "-d",
             "postgres",
             "-c",
-            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{dbname}' AND pid <> pg_backend_pid();",  # noqa: S608  dbname comes from DATABASE_URL (deployment config)
         ]
-        subprocess.run(term_cmd, env=env, capture_output=True, text=True, timeout=60)
+        await asyncio.to_thread(
+            subprocess.run,
+            term_cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         logger.info("Terminated active database connections for restore")
 
         # Restore database
@@ -506,7 +546,7 @@ class BackupService:
             # Legacy plain SQL fallback. psql runs backslash meta-commands from the file
             # (`\! cmd` is a shell), so an uploaded archive could run commands in this
             # container; refuse any meta-command a pg_dump script wouldn't contain.
-            _check_plain_sql_dump(dump_file)
+            await asyncio.to_thread(_check_plain_sql_dump, dump_file)
             cmd = [
                 "psql",
                 "-X",  # ignore any psqlrc
@@ -525,7 +565,8 @@ class BackupService:
             ]
 
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 cmd,
                 env=env,
                 capture_output=True,
@@ -533,11 +574,11 @@ class BackupService:
                 timeout=3600,
             )
         except subprocess.TimeoutExpired:
-            raise RuntimeError("Database restore timed out after an hour")
+            raise RuntimeError("Database restore timed out after an hour") from None
 
         # pg_restore exits non-zero when any statement failed ("errors ignored on
         # restore: N"); psql with ON_ERROR_STOP=0 exits 0, so look for ERROR lines too.
-        error_lines = [l for l in (result.stderr or "").splitlines() if "ERROR:" in l]
+        error_lines = [line for line in (result.stderr or "").splitlines() if "ERROR:" in line]
         if result.returncode != 0 or error_lines:
             first = (
                 error_lines[0] if error_lines else (result.stderr or "").strip()[:300]
@@ -642,8 +683,7 @@ class BackupService:
             return False
 
         # Delete file if exists
-        if os.path.exists(backup.file_path):
-            os.remove(backup.file_path)
+        await asyncio.to_thread(remove_if_exists, backup.file_path)
 
         # Delete record
         await db.execute(delete(Backup).where(Backup.id == backup_id))
