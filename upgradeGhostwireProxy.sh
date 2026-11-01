@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Ghostwire Proxy: upgrade this install to a new version.
 #
-#   scripts/upgrade.sh               upgrade to the latest release (asks first)
-#   scripts/upgrade.sh <version>     go to that tag, branch or commit instead (v2026.10.01.1000)
-#   scripts/upgrade.sh --check       say what an upgrade would do; change nothing
-#   scripts/upgrade.sh --yes         don't ask (for cron and installers)
-#   scripts/upgrade.sh --force       rebuild and restart even when already up to date
-#   scripts/upgrade.sh --rollback    go back to what ran before the last upgrade
-#   scripts/upgrade.sh --rotate-db-password   change only the database password (and .env)
+#   ./upgradeGhostwireProxy.sh               upgrade to the latest release (asks first)
+#   ./upgradeGhostwireProxy.sh <version>     go to that tag, branch or commit instead (v2026.10.01.1000)
+#   ./upgradeGhostwireProxy.sh --check       say what an upgrade would do; change nothing
+#   ./upgradeGhostwireProxy.sh --yes         don't ask (for cron and installers)
+#   ./upgradeGhostwireProxy.sh --force       rebuild and restart even when already up to date
+#   ./upgradeGhostwireProxy.sh --rollback    go back to what ran before the last upgrade
+#   ./upgradeGhostwireProxy.sh --rotate-db-password   change only the database password (and .env)
 #
-# Every Ghostwire app has this script at scripts/upgrade.sh, with the same options and steps:
+# Every Ghostwire app has one of these at its root, with the same options and steps:
 #   1 Pre-flight  2 Plan  3 Back up  4 Update code  5 Build  6 Deploy  7 Health check  8 Done
+# scripts/upgrade.sh only forwards here, for servers and cron jobs that still call that path.
 # Backups (database and .env), a log of each run and the record --rollback uses go in data/backups/.
 # The "This app" part below is what differs between apps; the "Common" part is the same in all.
 
@@ -49,7 +50,7 @@ app_preflight() {
   fi
   secret=$(openssl rand -base64 48 2> /dev/null | tr -dc 'A-Za-z0-9' | head -c 48) || true
   [ -n "$secret" ] || secret=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
-  printf '\n# Signs admin session cookies (added by upgrade.sh on %s)\nBETTER_AUTH_SECRET=%s\n' "$(date +%F)" "$secret" >> .env
+  printf '\n# Signs admin session cookies (added by upgradeGhostwireProxy.sh on %s)\nBETTER_AUTH_SECRET=%s\n' "$(date +%F)" "$secret" >> .env
   ok "Added BETTER_AUTH_SECRET to .env (admin sign-in)."
 }
 
@@ -68,12 +69,13 @@ app_deploy() {
 app_verify() { check_alembic_migrations ghostwire-proxy-api; }
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════
-#  Common: the same in every Ghostwire app's scripts/upgrade.sh. Change it in all of them together.
+#  Common: the same in every Ghostwire app's upgradeGhostwire<App>.sh. Change it in all of them together.
 #  A hook the app section above doesn't define uses the default here.
 # ═══════════════════════════════════════════════════════════════════════════════════════════════
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The script sits at the top of the install it upgrades.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 if [ -t 1 ]; then
   B=$'\033[1m' G=$'\033[32m' Y=$'\033[33m' R=$'\033[31m' N=$'\033[0m'
@@ -191,7 +193,7 @@ plan_git() {
 
 update_code() {
   if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-    git stash push --quiet -m "upgrade.sh $STAMP"
+    git stash push --quiet -m "$SCRIPT_NAME $STAMP"
     warn "Local changes to tracked files were stashed (git stash list)."
   fi
   if [ -n "$REF" ]; then
@@ -241,7 +243,7 @@ docker_requirements() {
 check_env() {
   local key missing=""
   [ -z "$REQUIRED_ENV" ] && return 0
-  [ -f "$PROJECT_DIR/.env" ] || fail ".env is missing; copy .env.example to .env and fill it in first."
+  [ -f "$PROJECT_DIR/.env" ] || fail ".env is missing: a new server is set up with ./${SCRIPT_NAME/upgrade/install}."
   for key in $REQUIRED_ENV; do
     [ -n "$(env_value "$key")" ] || missing="$missing $key"
   done
@@ -335,7 +337,7 @@ check_db_password() {
     warn "The database password is a default or a published one, so this run changes it."
     ROTATE_DB=true
   elif [ ${#DB_PASSWORD} -lt 16 ]; then
-    warn "The database password is shorter than 16 characters (scripts/upgrade.sh --rotate-db-password changes it)."
+    warn "The database password is shorter than 16 characters (./$SCRIPT_NAME --rotate-db-password changes it)."
   else
     ok "The database password isn't a default or a published one."
   fi
@@ -639,7 +641,7 @@ on_exit() {
   app_cleanup || true
   if [ "$code" -ne 0 ] && [ "${CHANGED:-false}" = true ]; then
     echo ""
-    info "To go back to $CURRENT_LABEL:  scripts/upgrade.sh --rollback"
+    info "To go back to $CURRENT_LABEL:  ./$SCRIPT_NAME --rollback"
     [ -n "${BACKUP_FILE:-}" ] && info "Database backup:  $BACKUP_FILE"
     notify "upgrade to ${TARGET_LABEL:-?} FAILED (still on or partly on $CURRENT_LABEL). Log: ${LOG:-none}"
   fi
@@ -805,7 +807,7 @@ main() {
   [ "$ROTATED_DB" = true ] && summary_line "Database" "new password, in .env (the old .env: $ENV_BACKUP)"
   summary_line "Log" "$LOG"
   [ -n "$APP_URL" ] && summary_line "Open" "$APP_URL"
-  summary_line "Roll back" "scripts/upgrade.sh --rollback"
+  summary_line "Roll back" "./$SCRIPT_NAME --rollback"
   notify "upgraded $CURRENT_LABEL → $TARGET_LABEL"
 }
 
