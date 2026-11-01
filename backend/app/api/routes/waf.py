@@ -568,6 +568,14 @@ async def bulk_firewall_ban(
         raise HTTPException(status_code=400, detail="No IPs provided")
     if len(ips) > 500:
         raise HTTPException(status_code=400, detail="Maximum 500 IPs per request")
+    from app.services.firewall_service import is_bannable
+
+    refused = [ip for ip in ips if not is_bannable(ip)]
+    if refused:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only public addresses can be firewall banned; refused: {', '.join(refused[:10])}",
+        )
 
     conn_result = await db.execute(select(FirewallConnector).where(FirewallConnector.enabled == True))
     connectors = conn_result.scalars().all()
@@ -676,6 +684,8 @@ async def bulk_unblock_actors(
     if not ips or not isinstance(ips, list):
         raise HTTPException(status_code=400, detail="ips list is required")
 
+    from app.services.firewall_service import remove_everywhere
+
     unblocked = 0
     for ip in ips:
         result = await db.execute(select(ThreatActor).where(ThreatActor.ip_address == ip))
@@ -686,6 +696,7 @@ async def bulk_unblock_actors(
             actor.perm_blocked_at = None
             actor.firewall_banned_at = None
             actor.updated_at = datetime.now(UTC)
+            await remove_everywhere(db, ip)
             unblocked += 1
 
     db.add(
@@ -788,6 +799,13 @@ async def firewall_ban_threat_actor(
     db: AsyncSession = Depends(get_db),
 ):
     """Escalate an IP to firewall_banned and push to all enabled firewall connectors."""
+    from app.services.firewall_service import is_bannable
+
+    if not is_bannable(ip):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{ip} is not a public address (LAN, loopback or the gateway); it cannot be firewall banned",
+        )
     # Check that at least one enabled connector exists
     conn_result = await db.execute(select(FirewallConnector).where(FirewallConnector.enabled == True))
     connectors = conn_result.scalars().all()
@@ -895,6 +913,11 @@ async def unblock_threat_actor(
     actor.firewall_banned_at = None
     actor.updated_at = datetime.now(UTC)
 
+    # Unblocking used to leave the IP on every firewall it had been pushed to.
+    from app.services.firewall_service import remove_everywhere
+
+    removed = await remove_everywhere(db, ip)
+
     db.add(
         AuditLog(
             user_id=current_user.id,
@@ -902,12 +925,12 @@ async def unblock_threat_actor(
             action="threat_actor_unblocked",
             ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
-            details=f"Unblocked IP: {ip}",
+            details=f"Unblocked IP: {ip}" + (f" (removed from {removed} firewall(s))" if removed else ""),
         )
     )
     await db.commit()
     await _notify_nginx_reload()
-    return {"status": "unblocked", "ip": ip}
+    return {"status": "unblocked", "ip": ip, "firewalls_removed": removed}
 
 
 # ── Threat Thresholds ──────────────────────────────────────────

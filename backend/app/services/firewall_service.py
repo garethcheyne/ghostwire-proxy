@@ -14,6 +14,56 @@ from app.models.firewall import FirewallBlocklist, FirewallConnector
 logger = logging.getLogger(__name__)
 
 
+def is_bannable(ip: str) -> bool:
+    """Whether ``ip`` may go on a firewall blocklist: only publicly routable addresses.
+
+    LAN clients reaching the proxy through NAT loopback all arrive as the gateway
+    (192.168.0.1 here), so the gateway collects threat events from your own scans
+    and tools. Pushing it, or any private/loopback address, to the firewall would
+    cut the LAN off.
+    """
+    try:
+        return ipaddress.ip_address(ip.strip()).is_global
+    except ValueError:
+        return False
+
+
+async def remove_everywhere(db: AsyncSession, ip: str) -> int:
+    """Take ``ip`` off every enabled firewall it was pushed to; returns how many it left."""
+    rows = (
+        await db.execute(
+            select(FirewallBlocklist, FirewallConnector)
+            .join(FirewallConnector, FirewallConnector.id == FirewallBlocklist.connector_id)
+            .where(
+                FirewallBlocklist.ip_address == ip,
+                FirewallBlocklist.status == "pushed",
+                FirewallConnector.enabled == True,  # noqa: E712
+            )
+        )
+    ).all()
+    removed = 0
+    for entry, connector in rows:
+        try:
+            ok = await get_connector(connector).remove_from_blocklist(ip)
+        except Exception as e:
+            ok = False
+            entry.error_message = f"{connector.name}: {e}"[:500]
+        if ok:
+            entry.status = "removed"
+            entry.error_message = None
+            removed += 1
+        elif not entry.error_message:
+            entry.error_message = f"Removing from {connector.name} failed"
+    # Pending entries for the IP must not be pushed later.
+    for entry in (
+        await db.execute(
+            select(FirewallBlocklist).where(FirewallBlocklist.ip_address == ip, FirewallBlocklist.status == "pending")
+        )
+    ).scalars():
+        entry.status = "removed"
+    return removed
+
+
 class BaseFirewallConnector:
     """Base class for firewall connectors."""
 
@@ -817,6 +867,10 @@ async def sync_blocklist(db: AsyncSession, connector_id: str | None = None) -> d
     now = datetime.now(UTC)
 
     for entry in pending:
+        if not is_bannable(entry.ip_address):
+            entry.status = "skipped"
+            entry.error_message = "Not a public address; never pushed to a firewall"
+            continue
         for connector in connectors:
             try:
                 fw = get_connector(connector)

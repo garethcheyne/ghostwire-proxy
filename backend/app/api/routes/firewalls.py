@@ -13,6 +13,7 @@ from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
 from app.models.firewall import FirewallBlocklist, FirewallConnector
 from app.models.user import User
+from app.models.waf import ThreatActor
 from app.schemas.firewall import (
     FirewallBlocklistResponse,
     FirewallConnectorCreate,
@@ -20,6 +21,7 @@ from app.schemas.firewall import (
     FirewallConnectorUpdate,
 )
 from app.services.firewall_service import get_connector as get_firewall_connector
+from app.services.firewall_service import is_bannable
 
 router = APIRouter()
 
@@ -301,27 +303,71 @@ async def sync_blocklist(
         rule_result = await instance.ensure_firewall_rule()
         rule_status = "created" if rule_result.get("success") else f"failed: {rule_result.get('error', 'unknown')}"
 
-    # Get pending blocklist entries for this connector (or unassigned)
+    from datetime import datetime
+
+    # Pending entries for this connector (or unassigned)...
     bl_result = await db.execute(
         select(FirewallBlocklist).where(
             FirewallBlocklist.status == "pending",
             (FirewallBlocklist.connector_id == connector_id) | FirewallBlocklist.connector_id.is_(None),
         )
     )
-    entries = bl_result.scalars().all()
+    entries = list(bl_result.scalars().all())
+
+    # ...plus every IP already blocked here in Ghostwire that this firewall doesn't
+    # have yet. Without this, a firewall connected after IPs were blocked (or a
+    # second firewall) started empty and Sync pushed nothing.
+    have = {e.ip_address for e in entries} | set(
+        (
+            await db.execute(
+                select(FirewallBlocklist.ip_address).where(
+                    FirewallBlocklist.connector_id == connector_id,
+                    FirewallBlocklist.status == "pushed",
+                )
+            )
+        ).scalars()
+    )
+    actors = (
+        await db.execute(
+            select(ThreatActor).where(ThreatActor.current_status.in_(["perm_blocked", "firewall_banned"]))
+        )
+    ).scalars().all()
+    actor_by_ip = {a.ip_address: a for a in actors}
+    for actor in actors:
+        if actor.ip_address not in have:
+            entry = FirewallBlocklist(
+                threat_actor_id=actor.id,
+                ip_address=actor.ip_address,
+                connector_id=connector_id,
+                status="pending",
+            )
+            db.add(entry)
+            entries.append(entry)
+            have.add(actor.ip_address)
 
     pushed = 0
     errors = 0
-
-    from datetime import datetime
+    skipped = 0
+    now = datetime.now(UTC)
 
     for entry in entries:
+        if not is_bannable(entry.ip_address):
+            entry.status = "skipped"
+            entry.error_message = "Not a public address; never pushed to a firewall"
+            skipped += 1
+            continue
         success, error_msg = await instance.add_to_blocklist(entry.ip_address, "Ghostwire threat score block")
         if success:
             entry.status = "pushed"
-            entry.pushed_at = datetime.now(UTC)
+            entry.pushed_at = now
             entry.connector_id = connector_id
+            entry.error_message = None
             pushed += 1
+            actor = actor_by_ip.get(entry.ip_address)
+            if actor and actor.current_status != "firewall_banned":
+                actor.current_status = "firewall_banned"
+                actor.firewall_banned_at = now
+                actor.updated_at = now
         else:
             entry.error_message = error_msg or "Push failed (unknown error)"
             errors += 1
@@ -333,6 +379,7 @@ async def sync_blocklist(
     return {
         "pushed": pushed,
         "errors": errors,
+        "skipped": skipped,
         "total": len(entries),
         "firewall_rule": rule_status,
     }

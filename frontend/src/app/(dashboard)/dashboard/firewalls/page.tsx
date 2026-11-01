@@ -254,9 +254,11 @@ export default function FirewallsPage() {
   const handleSync = async (connector: FirewallConnector) => {
     setSyncingId(connector.id)
     try {
-      await api.post(`/api/firewalls/${connector.id}/sync`)
+      const res = await api.post(`/api/firewalls/${connector.id}/sync`)
       fetchData()
-      toastSuccess('Blocklist synced')
+      const { pushed = 0, errors = 0, skipped = 0 } = res.data ?? {}
+      const extra = [errors && `${errors} failed`, skipped && `${skipped} LAN address(es) skipped`].filter(Boolean)
+      toastSuccess(`Blocklist synced: ${pushed} pushed${extra.length ? ` (${extra.join(', ')})` : ''}`)
     } catch (error) {
       console.error('Failed to sync:', error)
       toastError('Failed to sync blocklist')

@@ -354,7 +354,9 @@ async def apply_response(
                 FirewallBlocklist.status.in_(["pending", "pushed"]),
             )
         )
-        if not existing.scalars().first():
+        from app.services.firewall_service import is_bannable
+
+        if not existing.scalars().first() and is_bannable(actor.ip_address):
             blocklist_entry = FirewallBlocklist(
                 threat_actor_id=actor.id,
                 ip_address=actor.ip_address,
