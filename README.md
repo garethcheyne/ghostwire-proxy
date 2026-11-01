@@ -229,26 +229,44 @@ It is a standalone subproject within the [Ghostwire](https://github.com/garethch
 ## Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose
+- A Linux server with Docker (Compose v2), git, curl and openssl, and ports 80, 443, 88 and 8089 free
 - A domain pointed to your server (for SSL)
 
 ### 1. Clone
 
 ```bash
-git clone https://github.com/garethcheyne/ghostwire-proxy.git
-cd ghostwire-proxy
+git clone https://github.com/garethcheyne/ghostwire-proxy.git /opt/ghostwire-proxy
+cd /opt/ghostwire-proxy
 ```
 
-### 2. Configure
+### 2. Install
+
+```bash
+sudo ./installGhostwireProxy.sh
+```
+
+It checks the server and the ports, asks where the admin panel will be opened and for the first
+admin, makes `.env` from `.env.example` with random secrets (readable only by its owner), builds and
+starts everything (the API first, which migrates the database), waits until it is healthy, and makes
+the admin account through the API's first-run setup, so the panel is never open without one. A
+random admin password is shown once, at the end, and nowhere else; the log of the run goes in
+`data/backups/`. `--check` says what it would do without changing anything, `--settings-only` writes
+`.env` and stops so you can edit it first, and a run that stops part way carries on when you run it
+again. For automated installs give the answers as `GW_*` variables and add `--yes` (they're listed at
+the top of [`installGhostwireProxy.sh`](installGhostwireProxy.sh)). It installs once: on a server that
+already runs it, it points you at the upgrade.
+
+Or in one go (it clones into `/opt/ghostwire-proxy`, or `GW_DIR`, then runs the same installer):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/garethcheyne/ghostwire-proxy/main/installGhostwireProxy.sh | sudo bash
+```
+
+### 3. By hand instead
 
 ```bash
 cp .env.example .env
 # Edit .env with your settings (database password, domain, secrets)
-```
-
-### 3. Run
-
-```bash
 docker compose up -d
 ```
 
@@ -261,7 +279,7 @@ docker compose up -d
 | **Proxy HTTP** | Port `80` |
 | **Proxy HTTPS** | Port `443` |
 
-On first launch, you'll be guided through initial setup to create your admin account.
+The installer makes the admin account. Started by hand, the first visit to the admin UI asks for one.
 
 ---
 
@@ -269,15 +287,18 @@ On first launch, you'll be guided through initial setup to create your admin acc
 
 ### Automatic (recommended)
 
-Every Ghostwire app has the same `scripts/upgrade.sh`, with the same options and steps. Run it on the
+Every Ghostwire app has an upgrade script at its root with the same options and steps. Run it on the
 server, from the install folder:
 
 ```bash
-scripts/upgrade.sh             # upgrade to the latest release (asks first)
-scripts/upgrade.sh --check     # say what an upgrade would do; changes nothing
-scripts/upgrade.sh --rollback  # go back to what ran before the last upgrade
-scripts/upgrade.sh --yes       # don't ask (cron); add a tag or commit to go to that version
+./upgradeGhostwireProxy.sh             # upgrade to the latest release (asks first)
+./upgradeGhostwireProxy.sh --check     # say what an upgrade would do; changes nothing
+./upgradeGhostwireProxy.sh --rollback  # go back to what ran before the last upgrade
+./upgradeGhostwireProxy.sh --yes       # don't ask (cron); add a tag or commit to go to that version
 ```
+
+`scripts/upgrade.sh` still works: it forwards to `upgradeGhostwireProxy.sh`, for servers and cron jobs
+that call the old path.
 
 It checks the server and `.env`, shows what changes, backs up the database and `.env`, keeps the running
 images for `--rollback`, updates the code, rebuilds and restarts (the API first; it runs the migrations), then checks that every container is healthy, the API and admin sign-in answer, and the migrations are applied.
@@ -348,7 +369,7 @@ Ghostwire Proxy uses **Alembic** for database migrations. On every container sta
 
 ### Rollback
 
-`scripts/upgrade.sh --rollback` puts back the images and code from before the last upgrade. Migrations stay applied; they are additive, and an
+`./upgradeGhostwireProxy.sh --rollback` puts back the images and code from before the last upgrade. Migrations stay applied; they are additive, and an
 older version starts on a newer database with a warning. By hand:
 
 ```bash

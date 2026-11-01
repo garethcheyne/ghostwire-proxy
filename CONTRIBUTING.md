@@ -107,9 +107,9 @@ The updater sidecar handles updates triggered from the System page. It:
 
 ### From the server
 ```bash
-scripts/upgrade.sh                    # upgrade to the latest release
-scripts/upgrade.sh v2026.10.01.1000   # go to a specific version
-scripts/upgrade.sh --rollback         # back to what ran before
+./upgradeGhostwireProxy.sh                    # upgrade to the latest release
+./upgradeGhostwireProxy.sh v2026.10.01.1000   # go to a specific version
+./upgradeGhostwireProxy.sh --rollback         # back to what ran before
 ```
 See "Upgrading" in the README.
 
