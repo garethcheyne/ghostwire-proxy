@@ -3,7 +3,7 @@ import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 
 // The release: VERSION at the repository root, dated like 2026.10.29.1945 (the Docker build writes
-// BUILD_VERSION to /app/VERSION). The sidebar and /api/health show it; scripts/upgrade.sh moves a
+// BUILD_VERSION to /app/VERSION). The sidebar and /api/health show it; upgradeGhostwireProxy.sh moves a
 // server to a new one.
 function readVersion(): string {
   for (const path of ['/app/VERSION', './VERSION', '../VERSION']) {

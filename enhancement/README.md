@@ -125,7 +125,7 @@ missing.
 - **10 — Deploys don't gate on CI.** Both `backend/.dockerignore` and
   `frontend/.dockerignore` now exclude host artefacts, so `COPY . .` can no longer ship
   `.env.local` / `.next` / `node_modules` / `.git`.
-  Still open: `scripts/upgrade.sh` neither runs nor waits on CI, still builds from the
+  Still open: `upgradeGhostwireProxy.sh` neither runs nor waits on CI, still builds from the
   working tree rather than `git archive HEAD`, refuses nothing on a dirty tree, stamps no
   commit SHA into the image, and does not verify the deployed UI by its baked
   `routes-manifest.json` rewrite target.

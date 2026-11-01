@@ -3,7 +3,7 @@ import { pool } from '@/lib/auth'
 const startedAt = Date.now()
 
 /**
- * Readiness for uptime monitors and scripts/upgrade.sh: 200 when the database answers, 503 when it
+ * Readiness for uptime monitors and upgradeGhostwireProxy.sh: 200 when the database answers, 503 when it
  * doesn't. (/api/heartbeat only says the process is up; the container healthcheck uses that.)
  */
 export async function GET() {

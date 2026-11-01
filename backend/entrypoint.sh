@@ -82,7 +82,7 @@ if [ $ALEMBIC_EXIT -eq 0 ]; then
     echo "Database migrations complete."
 else
     # Don't start on a half-migrated database: admin sign-in, for one, depends on the migrations.
-    # The container restarts and retries; scripts/upgrade.sh reports it and how to roll back.
+    # The container restarts and retries; upgradeGhostwireProxy.sh reports it and how to roll back.
     echo "ERROR: Alembic migration failed (exit $ALEMBIC_EXIT). Not starting the API."
     exit 1
 fi
