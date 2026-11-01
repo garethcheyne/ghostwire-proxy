@@ -9,6 +9,7 @@ broken Redis never takes down the API.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -20,6 +21,12 @@ from app.core.redis import get_redis
 logger = logging.getLogger(__name__)
 
 _CACHE_PREFIX = "ghostwire:cache:"
+
+# One computation per key at a time. Without this, every request that missed the
+# cache while a slow producer ran started the same heavy queries again (one
+# dashboard reload during a 40 s compute meant two full sets on the database).
+# The API runs as a single uvicorn process, so an in-process lock is enough.
+_inflight: dict[str, asyncio.Lock] = {}
 
 
 def _default(obj: Any) -> Any:
@@ -97,6 +104,20 @@ async def cached_json(
     hit = await cache_get(key)
     if hit is not None:
         return hit
+    lock = _inflight.setdefault(key, asyncio.Lock())
+    try:
+        async with lock:
+            # Whoever held the lock may have just filled it.
+            hit = await cache_get(key)
+            if hit is not None:
+                return hit
+            return await _produce(key, ttl, producer)
+    finally:
+        if not lock.locked() and _inflight.get(key) is lock:
+            del _inflight[key]
+
+
+async def _produce(key: str, ttl: int, producer: Callable[[], Awaitable[Any]]) -> Any:
     value = await producer()
     # Normalise pydantic models / lists of models so subsequent reads come
     # back as plain dicts and producers can return ORM-backed Pydantic objects

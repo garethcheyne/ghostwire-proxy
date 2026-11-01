@@ -15,6 +15,29 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
       - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    # Tuned for the 2G / 2 CPU limit below; the stock settings (128MB
+    # shared_buffers, 4MB work_mem, spinning-disk planner costs) sent every
+    # traffic_logs aggregate to disk. Override any of these in .env.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+      - -c
+      - random_page_cost=${PG_RANDOM_PAGE_COST:-1.1}
+      # JIT compilation costs more than it saves on these short aggregates.
+      - -c
+      - jit=off
+      - -c
+      - idle_in_transaction_session_timeout=${PG_IDLE_TX_TIMEOUT:-5min}
+    # Parallel query workers share memory through /dev/shm; Docker's 64MB
+    # default is too small once work_mem is raised.
+    shm_size: 256mb
     labels:
       # Watchtower runs with WATCHTOWER_LABEL_ENABLE=true, so it only touches
       # containers that opt in. Only postgres and redis are worth opting in:

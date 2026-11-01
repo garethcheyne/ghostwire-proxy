@@ -147,6 +147,10 @@ class BackupService:
         db.add(backup)
         await db.commit()
         await db.refresh(backup)
+        # The refresh opened a new transaction; end it so the connection isn't
+        # idle in a transaction through pg_dump and compression, which take
+        # minutes and would be cut off by idle_in_transaction_session_timeout.
+        await db.commit()
 
         try:
             # Create temporary directory for backup contents

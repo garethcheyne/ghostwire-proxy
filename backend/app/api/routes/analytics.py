@@ -1,10 +1,12 @@
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import String, and_, case, cast, distinct, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -14,6 +16,9 @@ from app.models.analytics import AnalyticsDaily, AnalyticsGeo
 from app.models.proxy_host import ProxyHost
 from app.models.traffic_log import TrafficLog
 from app.models.user import User
+from app.services import traffic_query as tq
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -150,376 +155,318 @@ async def get_analytics_dashboard(
         return await _compute_dashboard(db, period, proxy_host_id)
 
     # Longer periods change slowly — scale TTL accordingly
-    ttl_map = {"24h": 60, "7d": 120, "30d": 300, "90d": 600}
+    ttl_map = {"24h": 60, "7d": 300, "30d": 900, "90d": 1800}
     result = await cached_json(cache_key, ttl=ttl_map.get(period, 60), producer=_compute)
     return result
 
 
+# The dashboard used to fire 13 aggregates over raw traffic_logs at once, each with
+# parallel workers: a 30-day view read the whole table 13 times concurrently and
+# pinned Postgres. Now everything the hourly rollup keeps (counts, status, bytes,
+# latency, hosts, methods, time series) comes from it via traffic_query, and the
+# fields it drops (visitors, pages, referrers, IPs, browsers, countries) from two
+# raw scans. At most two raw scans run at once across all dashboard requests.
+_RAW_SCANS = asyncio.Semaphore(2)
+# Long windows read up to the whole retention period of raw rows.
+_RAW_TIMEOUT_MS = {"24h": 30_000, "7d": 60_000, "30d": 120_000, "90d": 120_000}
+
+_PERIODS = {
+    # period: (window, chart bucket, chart label format)
+    "24h": (timedelta(hours=24), timedelta(hours=1), "%Y-%m-%d %H:00"),
+    "7d": (timedelta(days=7), timedelta(hours=6), "%Y-%m-%d %H:00"),
+    "30d": (timedelta(days=30), timedelta(days=1), "%Y-%m-%d"),
+    # Weekly buckets start on Monday (tq.ORIGIN is a Monday), like date_trunc('week').
+    "90d": (timedelta(days=90), timedelta(days=7), "%Y-%m-%d"),
+}
+
+_BROWSER_SQL = """CASE
+    WHEN user_agent IS NULL THEN 'Unknown'
+    WHEN user_agent ILIKE '%edg%' THEN 'Edge'
+    WHEN user_agent ILIKE '%chrome%' THEN 'Chrome'
+    WHEN user_agent ILIKE '%firefox%' THEN 'Firefox'
+    WHEN user_agent ILIKE '%safari%' THEN 'Safari'
+    WHEN user_agent ILIKE '%opera%' OR user_agent ILIKE '%opr%' THEN 'Opera'
+    WHEN user_agent ILIKE '%bot%' OR user_agent ILIKE '%crawl%' OR user_agent ILIKE '%spider%' THEN 'Bot'
+    WHEN user_agent ILIKE '%curl%' THEN 'curl'
+    WHEN user_agent ILIKE '%python%' THEN 'Python'
+    ELSE 'Other' END"""
+
+# Distinct visitors overall (this period and the previous one), per chart bucket
+# and per host, in one pass. Deduplicating first keeps the DISTINCT counts small.
+_VISITORS_SQL = """
+SELECT CASE WHEN GROUPING(bucket) = 0 THEN 'bucket' WHEN GROUPING(host) = 0 THEN 'host' ELSE 'total' END AS kind,
+       cur, bucket, host, count(DISTINCT client_ip) AS visitors
+FROM (
+    SELECT DISTINCT
+        timestamp >= :start AS cur,
+        CASE WHEN timestamp >= :start
+             THEN date_bin(CAST(:stride AS interval), timestamp, CAST(:origin AS timestamptz)) END AS bucket,
+        CASE WHEN timestamp >= :start THEN proxy_host_id END AS host,
+        client_ip
+    FROM traffic_logs
+    WHERE timestamp >= :prev_start {host_filter}
+) d
+GROUP BY GROUPING SETS ((cur), (bucket), (host))
+"""
+
+# Top 10 of each raw-only dimension in one pass.
+_KIND_SQL = (
+    "CASE WHEN GROUPING(request_uri) = 0 THEN 'page' WHEN GROUPING(referer) = 0 THEN 'referer' "
+    "WHEN GROUPING(client_ip) = 0 THEN 'ip' WHEN GROUPING(country_code) = 0 THEN 'country' ELSE 'browser' END"
+)
+_VALUE_SQL = "CAST(COALESCE(request_uri, referer, client_ip, country_code, browser) AS text)"
+_TOP_SQL = f"""
+SELECT kind, value, requests, avg_rt, ip_cc, ip_cn FROM (
+    SELECT {_KIND_SQL} AS kind,
+           {_VALUE_SQL} AS value,
+           count(*) AS requests,
+           avg(response_time) AS avg_rt,
+           max(ip_cc) AS ip_cc,
+           max(ip_cn) AS ip_cn,
+           row_number() OVER (
+               PARTITION BY {_KIND_SQL}
+               ORDER BY {_VALUE_SQL} IS NULL, count(*) DESC
+           ) AS rn
+    FROM (
+        SELECT CAST(request_uri AS text) AS request_uri,
+               CAST(NULLIF(referer, '') AS text) AS referer,
+               CAST(client_ip AS text) AS client_ip,
+               CAST(country_code AS text) AS country_code,
+               {_BROWSER_SQL} AS browser,
+               response_time,
+               country_code AS ip_cc,
+               country_name AS ip_cn
+        FROM traffic_logs
+        WHERE timestamp >= :start {{host_filter}}
+    ) r
+    GROUP BY GROUPING SETS ((request_uri), (referer), (client_ip), (country_code), (browser))
+) x
+WHERE rn <= 10 AND value IS NOT NULL
+"""  # noqa: S608  only fixed SQL is interpolated; values are bound parameters
+
+
+async def _raw_scan(sql: str, params: dict, timeout_ms: int) -> list | None:
+    """Rows of a raw-table scan, or None if it ran out of time.
+
+    The rollup-backed half of the dashboard is still worth showing then, so a slow
+    scan blanks only the lists it feeds instead of failing the whole page.
+    """
+    async with _RAW_SCANS, AsyncSessionLocal() as s:
+        await s.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
+        try:
+            return (await s.execute(text(sql), params)).mappings().all()
+        except DBAPIError as e:
+            if "statement timeout" not in str(e):
+                raise
+            logger.warning("Analytics dashboard: raw scan timed out after %d ms", timeout_ms)
+            return None
+
+
+def _avg_rt(m: dict) -> float | None:
+    return round(m["rt_sum"] / m["rt_count"], 2) if m["rt_count"] else None
+
+
 async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: str | None) -> AnalyticsDashboard:
-
-    # Calculate time ranges
     now = datetime.now(UTC)
+    window, stride, time_format = _PERIODS[period]
+    # On a whole hour, so the rollup covers the whole window but the newest
+    # (not yet summarised) hour; a partial first hour is read from raw rows, and
+    # one busy hour there (an attack, a scan) made every rollup query slow.
+    start_time = tq.floor_hour(now - window)
+    prev_start_time = start_time - window
+    host_ids = [proxy_host_id] if proxy_host_id else []
+    f = tq.TrafficFilters(start=start_time, host_ids=host_ids)
+    prev_f = tq.TrafficFilters(start=prev_start_time, end=start_time, host_ids=host_ids)
 
-    period_map = {
-        "24h": timedelta(hours=24),
-        "7d": timedelta(days=7),
-        "30d": timedelta(days=30),
-        "90d": timedelta(days=90),
+    host_filter = "AND proxy_host_id = :host" if proxy_host_id else ""
+    # Retention keeps only so much raw traffic. When the previous period starts
+    # before the oldest row there is nothing to compare against, and scanning
+    # back to it would read the whole table for no result.
+    async with AsyncSessionLocal() as s:
+        oldest = (await s.execute(select(func.min(TrafficLog.timestamp)))).scalar()
+    compare = oldest is not None and oldest <= prev_start_time
+    raw_params: dict = {
+        "start": start_time,
+        "prev_start": prev_start_time if compare else start_time,
+        "stride": stride,
+        "origin": tq.ORIGIN,
     }
-
-    period_delta = period_map[period]
-    start_time = now - period_delta
-    prev_start_time = start_time - period_delta
-
-    # Base filter
-    base_filter = [TrafficLog.timestamp >= start_time]
-    prev_filter = [TrafficLog.timestamp >= prev_start_time, TrafficLog.timestamp < start_time]
-
+    raw_timeout = _RAW_TIMEOUT_MS[period]
     if proxy_host_id:
-        base_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
-        prev_filter.append(TrafficLog.proxy_host_id == proxy_host_id)
+        raw_params["host"] = proxy_host_id
 
-    # === Phase 1: Overview + Prev period + Hosts (needed by later queries) ===
-
-    overview_query = select(
-        func.count(TrafficLog.id),
-        func.count(distinct(TrafficLog.client_ip)),
-        func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-        func.coalesce(func.sum(TrafficLog.bytes_received), 0),
-        func.avg(TrafficLog.response_time),
-        func.sum(case((TrafficLog.status >= 400, 1), else_=0)),
-        func.sum(case((and_(TrafficLog.status >= 200, TrafficLog.status < 300), 1), else_=0)),
-        func.sum(case((and_(TrafficLog.status >= 300, TrafficLog.status < 400), 1), else_=0)),
-        func.sum(case((and_(TrafficLog.status >= 400, TrafficLog.status < 500), 1), else_=0)),
-        func.sum(case((TrafficLog.status >= 500, 1), else_=0)),
-    ).where(and_(*base_filter))
-
-    prev_query = select(
-        func.count(TrafficLog.id),
-        func.count(distinct(TrafficLog.client_ip)),
-    ).where(and_(*prev_filter))
-
-    # Run overview, prev_period, and host prefetch concurrently
-    async def _run_overview():
+    async def _q(fn):
         async with AsyncSessionLocal() as s:
-            return (await s.execute(overview_query)).first()
+            return await fn(s)
 
-    async def _run_prev():
-        async with AsyncSessionLocal() as s:
-            return (await s.execute(prev_query)).first()
+    async def _hosts(s):
+        return {h.id: h for h in (await s.execute(select(ProxyHost))).scalars().all()}
 
-    async def _run_hosts():
-        async with AsyncSessionLocal() as s:
-            result = await s.execute(select(ProxyHost))
-            return {h.id: h for h in result.scalars().all()}
-
-    ov, pv, host_map = await asyncio.gather(_run_overview(), _run_prev(), _run_hosts())
-
-    total_requests = ov[0] or 0
-    total_unique_visitors = ov[1] or 0
-    total_bytes_sent = ov[2] or 0
-    total_bytes_received = ov[3] or 0
-    avg_response_time = ov[4]
-    error_count = ov[5] or 0
-    error_rate = (error_count / total_requests * 100) if total_requests > 0 else 0
-
-    status_breakdown = StatusBreakdown(
-        status_2xx=ov[6] or 0,
-        status_3xx=ov[7] or 0,
-        status_4xx=ov[8] or 0,
-        status_5xx=ov[9] or 0,
+    hourly_stride = timedelta(hours=1)
+    (
+        host_status_rows,
+        prev_rows,
+        ts_rows,
+        hour_rows,
+        method_rows,
+        host_map,
+        visitor_rows,
+        top_rows,
+    ) = await asyncio.gather(
+        _q(lambda s: tq.aggregate(s, f, ["proxy_host_id", "status"])),
+        _q(lambda s: tq.aggregate(s, prev_f)),
+        _q(lambda s: tq.aggregate(s, f, stride=stride, order="bucket")),
+        _q(lambda s: tq.aggregate(s, f, stride=hourly_stride, order="bucket"))
+        if stride != hourly_stride
+        else asyncio.sleep(0, result=None),
+        _q(lambda s: tq.method_counts(s, f, limit=50)),
+        _q(_hosts),
+        _raw_scan(_VISITORS_SQL.format(host_filter=host_filter), raw_params, raw_timeout),
+        _raw_scan(_TOP_SQL.format(host_filter=host_filter), raw_params, raw_timeout),
     )
-
-    prev_requests = pv[0] or 0
-    prev_visitors = pv[1] or 0
-
-    requests_change = None
-    if prev_requests > 0:
-        requests_change = ((total_requests - prev_requests) / prev_requests) * 100
-
-    visitors_change = None
-    if prev_visitors > 0:
-        visitors_change = ((total_unique_visitors - prev_visitors) / prev_visitors) * 100
+    if hour_rows is None:
+        hour_rows = ts_rows
 
     def get_host_name(host_id):
         h = host_map.get(host_id)
         return h.domain_names[0] if h and h.domain_names else "Unknown"
 
-    # === Phase 2: Run all remaining queries concurrently ===
-
-    # Time series
-    if period == "24h":
-        time_format = "%Y-%m-%d %H:00"
-        trunc_expr = func.date_trunc('hour', TrafficLog.timestamp)
-    elif period == "7d":
-        time_format = "%Y-%m-%d %H:00"
-        trunc_expr = func.to_timestamp(func.floor(func.extract('epoch', TrafficLog.timestamp) / 21600) * 21600)
-    elif period == "30d":
-        time_format = "%Y-%m-%d"
-        trunc_expr = func.date_trunc('day', TrafficLog.timestamp)
-    else:  # 90d
-        time_format = "%Y-%m-%d"
-        trunc_expr = func.date_trunc('week', TrafficLog.timestamp)
-
-    ts_query = (
-        select(
-            trunc_expr.label('bucket'),
-            func.count(TrafficLog.id),
-            func.count(distinct(TrafficLog.client_ip)),
-            func.coalesce(func.sum(TrafficLog.bytes_sent), 0),
-            func.coalesce(func.sum(TrafficLog.bytes_received), 0),
-            func.avg(TrafficLog.response_time),
-        )
-        .where(and_(*base_filter))
-        .group_by(text('1'))
-        .order_by(text('1'))
-    )
-
-    method_query = (
-        select(TrafficLog.request_method, func.count(TrafficLog.id))
-        .where(and_(*base_filter))
-        .group_by(TrafficLog.request_method)
-    )
-
-    top_hosts_query = (
-        select(
-            TrafficLog.proxy_host_id,
-            func.count(TrafficLog.id).label('requests'),
-            func.count(distinct(TrafficLog.client_ip)).label('unique_visitors'),
-            func.coalesce(func.sum(TrafficLog.bytes_sent), 0).label('bytes_sent'),
-            func.avg(TrafficLog.response_time).label('avg_rt'),
-            func.sum(case((TrafficLog.status >= 400, 1), else_=0)).label('errors'),
-        )
-        .where(and_(*base_filter))
-        .group_by(TrafficLog.proxy_host_id)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-
-    top_pages_query = (
-        select(
-            TrafficLog.request_uri,
-            func.count(TrafficLog.id).label('requests'),
-            func.avg(TrafficLog.response_time).label('avg_rt'),
-        )
-        .where(and_(*base_filter))
-        .group_by(TrafficLog.request_uri)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-
-    top_referrers_query = (
-        select(TrafficLog.referer, func.count(TrafficLog.id).label('requests'))
-        .where(and_(*base_filter, TrafficLog.referer.isnot(None), TrafficLog.referer != ''))
-        .group_by(TrafficLog.referer)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-
-    top_ips_query = (
-        select(
-            TrafficLog.client_ip,
-            func.count(TrafficLog.id).label('requests'),
-            func.max(TrafficLog.country_code).label('country_code'),
-            func.max(TrafficLog.country_name).label('country_name'),
-        )
-        .where(and_(*base_filter))
-        .group_by(TrafficLog.client_ip)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-
-    hourly_query = (
-        select(
-            func.extract('hour', TrafficLog.timestamp).label('hour'),
-            func.count(TrafficLog.id).label('requests'),
-        )
-        .where(and_(*base_filter))
-        .group_by(text('1'))
-        .order_by(text('1'))
-    )
-
-    browser_case = case(
-        (TrafficLog.user_agent.ilike('%edg%'), 'Edge'),
-        (TrafficLog.user_agent.ilike('%chrome%'), 'Chrome'),
-        (TrafficLog.user_agent.ilike('%firefox%'), 'Firefox'),
-        (TrafficLog.user_agent.ilike('%safari%'), 'Safari'),
-        (TrafficLog.user_agent.ilike('%opera%'), 'Opera'),
-        (TrafficLog.user_agent.ilike('%opr%'), 'Opera'),
-        (TrafficLog.user_agent.ilike('%bot%'), 'Bot'),
-        (TrafficLog.user_agent.ilike('%crawl%'), 'Bot'),
-        (TrafficLog.user_agent.ilike('%spider%'), 'Bot'),
-        (TrafficLog.user_agent.ilike('%curl%'), 'curl'),
-        (TrafficLog.user_agent.ilike('%python%'), 'Python'),
-        (TrafficLog.user_agent.is_(None), 'Unknown'),
-        else_='Other',
-    ).label('browser')
-
-    browser_query = (
-        select(browser_case, func.count(TrafficLog.id).label('count'))
-        .where(and_(*base_filter))
-        .group_by(text('1'))
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(8)
-    )
-
-    country_query = (
-        select(TrafficLog.country_code, func.count(TrafficLog.id).label('requests'))
-        .where(and_(*base_filter, TrafficLog.country_code.isnot(None)))
-        .group_by(TrafficLog.country_code)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(10)
-    )
-
-    errors_by_host_query = (
-        select(
-            TrafficLog.proxy_host_id,
-            TrafficLog.status,
-            func.count(TrafficLog.id).label('count'),
-        )
-        .where(and_(*base_filter, TrafficLog.status >= 400))
-        .group_by(TrafficLog.proxy_host_id, TrafficLog.status)
-        .order_by(func.count(TrafficLog.id).desc())
-        .limit(50)
-    )
-
-    errors_by_status_query = (
-        select(
-            TrafficLog.status,
-            func.count(TrafficLog.id).label('count'),
-        )
-        .where(and_(*base_filter, TrafficLog.status >= 400))
-        .group_by(TrafficLog.status)
-        .order_by(func.count(TrafficLog.id).desc())
-    )
-
-    # Execute all 10 queries concurrently using separate sessions from the pool
-    async def _exec(query):
-        async with AsyncSessionLocal() as s:
-            return (await s.execute(query)).all()
-
-    (
-        ts_rows,
-        method_rows,
-        hosts_rows,
-        pages_rows,
-        referrers_rows,
-        ips_rows,
-        hourly_rows,
-        browser_rows,
-        country_rows,
-        err_host_rows,
-        err_status_rows,
-    ) = await asyncio.gather(
-        _exec(ts_query),
-        _exec(method_query),
-        _exec(top_hosts_query),
-        _exec(top_pages_query),
-        _exec(top_referrers_query),
-        _exec(top_ips_query),
-        _exec(hourly_query),
-        _exec(browser_query),
-        _exec(country_query),
-        _exec(errors_by_host_query),
-        _exec(errors_by_status_query),
-    )
-
-    # === Format results ===
-
-    # Time series
-    time_series = []
-    for row in ts_rows:
-        bucket_ts = row[0]
-        if bucket_ts is None:
-            continue
-        if isinstance(bucket_ts, (int, float)):
-            bucket_ts = datetime.fromtimestamp(bucket_ts, tz=UTC)
-        time_series.append(
-            TimeSeriesPoint(
-                timestamp=bucket_ts.strftime(time_format),
-                requests=row[1] or 0,
-                unique_visitors=row[2] or 0,
-                bytes_sent=row[3] or 0,
-                bytes_received=row[4] or 0,
-                avg_response_time=round(float(row[5]), 2) if row[5] else None,
+    # === Overview, status, hosts and errors, from one (host, status) aggregate ===
+    overall = tq.merge(host_status_rows)
+    total_requests = overall["requests"]
+    by_class = {c: 0 for c in range(1, 6)}
+    per_host: dict[str | None, list[dict]] = {}
+    errors_by_status_map: dict[int, int] = {}
+    errors_by_host_raw: dict[str | None, dict] = {}
+    for r in host_status_rows:
+        status = int(r["status"] or 0)
+        by_class[min(max(status // 100, 1), 5)] += r["requests"]
+        per_host.setdefault(r["proxy_host_id"], []).append(r)
+        if status >= 400:
+            errors_by_status_map[status] = errors_by_status_map.get(status, 0) + r["requests"]
+            e = errors_by_host_raw.setdefault(
+                r["proxy_host_id"],
+                {
+                    "host_id": r["proxy_host_id"],
+                    "host_name": get_host_name(r["proxy_host_id"]),
+                    "total_errors": 0,
+                    "status_codes": {},
+                },
             )
+            e["total_errors"] += r["requests"]
+            e["status_codes"][str(status)] = e["status_codes"].get(str(status), 0) + r["requests"]
+
+    error_count = by_class[4] + by_class[5]
+    error_rate = (error_count / total_requests * 100) if total_requests > 0 else 0
+    status_breakdown = StatusBreakdown(
+        status_2xx=by_class[2],
+        status_3xx=by_class[3],
+        status_4xx=by_class[4],
+        status_5xx=by_class[5],
+    )
+
+    # === Visitors ===
+    total_unique_visitors = 0
+    prev_visitors = 0
+    bucket_visitors: dict[datetime, int] = {}
+    host_visitors: dict[str, int] = {}
+    for r in visitor_rows or []:
+        if r["kind"] == "total":
+            if r["cur"]:
+                total_unique_visitors = int(r["visitors"])
+            elif r["cur"] is not None:
+                prev_visitors = int(r["visitors"])
+        elif r["kind"] == "bucket" and r["bucket"] is not None:
+            bucket_visitors[r["bucket"]] = int(r["visitors"])
+        elif r["kind"] == "host" and r["host"] is not None:
+            host_visitors[r["host"]] = int(r["visitors"])
+
+    prev_requests = tq.merge(prev_rows)["requests"] if compare else 0
+    requests_change = ((total_requests - prev_requests) / prev_requests * 100) if prev_requests > 0 else None
+    visitors_change = (
+        ((total_unique_visitors - prev_visitors) / prev_visitors * 100) if prev_visitors > 0 else None
+    )
+
+    # === Time series ===
+    time_series = [
+        TimeSeriesPoint(
+            timestamp=r["bucket"].astimezone(UTC).strftime(time_format),
+            requests=r["requests"],
+            unique_visitors=bucket_visitors.get(r["bucket"], 0),
+            bytes_sent=r["bytes_sent"],
+            bytes_received=r["bytes_received"],
+            avg_response_time=_avg_rt(r),
         )
-
-    # Method breakdown
-    requests_by_method = {row[0]: row[1] for row in method_rows}
-
-    # Top hosts
-    top_hosts = []
-    for row in hosts_rows:
-        host_error_rate = (row[5] / row[1] * 100) if row[1] > 0 else 0
-        top_hosts.append(
-            HostStats(
-                host_id=row[0],
-                host_name=get_host_name(row[0]),
-                requests=row[1],
-                unique_visitors=row[2],
-                bytes_sent=row[3],
-                avg_response_time=round(float(row[4]), 2) if row[4] else None,
-                error_rate=round(host_error_rate, 2),
-            )
-        )
-
-    # Top pages
-    top_pages = [
-        TopPage(uri=row[0][:100], requests=row[1], avg_response_time=round(float(row[2]), 2) if row[2] else None)
-        for row in pages_rows
+        for r in ts_rows
+        if r["bucket"] is not None
     ]
 
-    # Top referrers
-    top_referrers = [TopReferrer(referer=row[0][:100], requests=row[1]) for row in referrers_rows]
-
-    # Top IPs
-    top_ips = [{"ip": row[0], "requests": row[1], "country_code": row[2], "country_name": row[3]} for row in ips_rows]
-
-    # Hourly distribution
     hourly_counts = {h: 0 for h in range(24)}
-    for row in hourly_rows:
-        hourly_counts[int(row[0])] = row[1]
+    for r in hour_rows:
+        if r["bucket"] is not None:
+            hourly_counts[r["bucket"].astimezone(UTC).hour] += r["requests"]
     hourly_distribution = [HourlyDistribution(hour=h, requests=c) for h, c in sorted(hourly_counts.items())]
 
-    # Browser stats
-    total_ua = total_requests or 1
-    browser_stats = [
-        BrowserStats(browser=row[0], requests=row[1], percentage=round(row[1] / total_ua * 100, 1))
-        for row in browser_rows
-    ]
+    requests_by_method = {r["value"]: r["requests"] for r in method_rows if r["value"]}
 
-    # Country stats
-    country_stats = [{"country": row[0], "requests": row[1]} for row in country_rows]
-
-    # Errors by host
-    errors_by_host_raw: dict[str, dict] = {}
-    for row in err_host_rows:
-        host_id = row[0]
-        if host_id not in errors_by_host_raw:
-            errors_by_host_raw[host_id] = {
-                "host_id": host_id,
-                "host_name": get_host_name(host_id),
-                "total_errors": 0,
-                "status_codes": {},
-            }
-        errors_by_host_raw[host_id]["total_errors"] += row[2]
-        errors_by_host_raw[host_id]["status_codes"][str(row[1])] = row[2]
-
-    errors_by_host = sorted(
-        list(errors_by_host_raw.values()),
-        key=lambda x: x["total_errors"],
+    # === Top hosts ===
+    host_totals = sorted(
+        ((hid, tq.merge(rows)) for hid, rows in per_host.items()),
+        key=lambda kv: kv[1]["requests"],
         reverse=True,
     )[:10]
+    top_hosts = []
+    for hid, m in host_totals:
+        host_errors = sum(r["requests"] for r in per_host[hid] if (r["status"] or 0) >= 400)
+        top_hosts.append(
+            HostStats(
+                host_id=hid or "",
+                host_name=get_host_name(hid),
+                requests=m["requests"],
+                unique_visitors=host_visitors.get(hid, 0) if hid else 0,
+                bytes_sent=m["bytes_sent"],
+                avg_response_time=_avg_rt(m),
+                error_rate=round((host_errors / m["requests"] * 100) if m["requests"] else 0, 2),
+            )
+        )
 
-    # Errors by status
-    errors_by_status = [{"status": row[0], "count": row[1]} for row in err_status_rows]
+    # === Raw-only top lists ===
+    tops: dict[str, list] = {"page": [], "referer": [], "ip": [], "country": [], "browser": []}
+    for r in top_rows or []:
+        tops[r["kind"]].append(r)
+    for rows in tops.values():
+        rows.sort(key=lambda r: r["requests"], reverse=True)
+
+    top_pages = [
+        TopPage(
+            uri=r["value"][:100],
+            requests=r["requests"],
+            avg_response_time=round(float(r["avg_rt"]), 2) if r["avg_rt"] else None,
+        )
+        for r in tops["page"]
+    ]
+    top_referrers = [TopReferrer(referer=r["value"][:100], requests=r["requests"]) for r in tops["referer"]]
+    top_ips = [
+        {"ip": r["value"], "requests": r["requests"], "country_code": r["ip_cc"], "country_name": r["ip_cn"]}
+        for r in tops["ip"]
+    ]
+    total_ua = total_requests or 1
+    browser_stats = [
+        BrowserStats(browser=r["value"], requests=r["requests"], percentage=round(r["requests"] / total_ua * 100, 1))
+        for r in tops["browser"][:8]
+    ]
+    country_stats = [{"country": r["value"], "requests": r["requests"]} for r in tops["country"]]
+
+    errors_by_host = sorted(errors_by_host_raw.values(), key=lambda x: x["total_errors"], reverse=True)[:10]
+    errors_by_status = [
+        {"status": s, "count": c} for s, c in sorted(errors_by_status_map.items(), key=lambda kv: kv[1], reverse=True)
+    ]
 
     return AnalyticsDashboard(
         total_requests=total_requests,
         total_unique_visitors=total_unique_visitors,
-        total_bytes_transferred=total_bytes_sent + total_bytes_received,
-        avg_response_time=round(float(avg_response_time), 2) if avg_response_time else None,
+        total_bytes_transferred=overall["bytes_sent"] + overall["bytes_received"],
+        avg_response_time=_avg_rt(overall),
         error_rate=round(error_rate, 2),
         requests_change_percent=round(requests_change, 1) if requests_change is not None else None,
         visitors_change_percent=round(visitors_change, 1) if visitors_change is not None else None,

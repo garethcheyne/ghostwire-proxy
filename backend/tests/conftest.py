@@ -86,6 +86,22 @@ def _reset_rate_limits():
 
 
 @pytest.fixture(autouse=True)
+async def fresh_cache():
+    """A Redis client for this test's event loop, and an empty response cache.
+
+    The shared client otherwise keeps a connection from the previous test's (closed)
+    loop; its first call fails and is swallowed, which hid entries cached by earlier
+    tests only as long as that first call happened to be the lookup.
+    """
+    from app.core import redis as redis_module
+    from app.core.cache import cache_delete_prefix
+
+    redis_module.redis_client = None
+    await cache_delete_prefix("")
+    yield
+
+
+@pytest.fixture(autouse=True)
 async def setup_database():
     """Create all tables before each test, drop after."""
     async with test_engine.begin() as conn:

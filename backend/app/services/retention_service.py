@@ -41,12 +41,16 @@ async def _batch_delete(session: AsyncSession, table_name: str, timestamp_col: s
     """Delete rows older than cutoff in batches. Returns total rows deleted."""
     total_deleted = 0
     while True:
-        # Use a subquery to limit the delete to BATCH_SIZE rows
+        # Limit each delete to BATCH_SIZE rows, found by physical location (ctid)
+        # rather than id: "id IN (...)" looked every row up again through the
+        # primary-key index, a random read per row that kept the disk saturated
+        # while a large backlog was pruned. The outer condition repeats the
+        # cutoff, so only rows older than it can ever be deleted.
         result = await session.execute(
             text(
-                f"DELETE FROM {table_name} WHERE id IN ("  # noqa: S608  table name from a fixed list in this module
-                f"  SELECT id FROM {table_name} WHERE {timestamp_col} < :cutoff LIMIT :batch_size"
-                f")"
+                f"DELETE FROM {table_name} WHERE ctid = ANY(ARRAY("  # noqa: S608  table name from a fixed list in this module
+                f"  SELECT ctid FROM {table_name} WHERE {timestamp_col} < :cutoff LIMIT :batch_size"
+                f")) AND {timestamp_col} < :cutoff"
             ),
             {"cutoff": cutoff, "batch_size": BATCH_SIZE},
         )

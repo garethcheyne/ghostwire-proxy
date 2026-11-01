@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Index, Integer, String
+from sqlalchemy import BigInteger, Column, Index, Integer, String
 
 from app.core.database import Base
 
@@ -13,8 +13,9 @@ class AnalyticsHourly(Base):
     hour = Column(String(20), nullable=False)  # '2024-01-15T14:00:00'
     total_requests = Column(Integer, default=0)
     blocked_requests = Column(Integer, default=0)
-    bytes_sent = Column(Integer, default=0)
-    bytes_received = Column(Integer, default=0)
+    # BigInteger: a busy host moves more than 2 GiB a day, which overflowed int32.
+    bytes_sent = Column(BigInteger, default=0)
+    bytes_received = Column(BigInteger, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
     # Percentiles, because a mean hides the tail: a host whose typical request
     # is 30ms but whose p95 is the 60s proxy timeout looks "13s average" and
@@ -40,8 +41,9 @@ class AnalyticsDaily(Base):
     total_requests = Column(Integer, default=0)
     blocked_requests = Column(Integer, default=0)
     total_threats = Column(Integer, default=0)
-    bytes_sent = Column(Integer, default=0)
-    bytes_received = Column(Integer, default=0)
+    # BigInteger: a busy host moves more than 2 GiB a day, which overflowed int32.
+    bytes_sent = Column(BigInteger, default=0)
+    bytes_received = Column(BigInteger, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
     p95_response_time_ms = Column(Integer, nullable=True)
     p99_response_time_ms = Column(Integer, nullable=True)
@@ -63,7 +65,7 @@ class AnalyticsGeo(Base):
     requests = Column(Integer, default=0)
     blocked = Column(Integer, default=0)
     threats = Column(Integer, default=0)
-    bytes = Column(Integer, default=0)
+    bytes = Column(BigInteger, default=0)
 
     __table_args__ = (
         Index('idx_analytics_geo_host_date_country', 'proxy_host_id', 'date', 'country_code', unique=True),

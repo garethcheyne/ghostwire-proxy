@@ -15,10 +15,36 @@ from app.models.waf import ThreatEvent
 logger = logging.getLogger(__name__)
 
 
+async def _first_complete(db: AsyncSession, start: datetime, step: timedelta) -> datetime:
+    """``start``, or the first whole ``step`` (hour/day) that raw rows still cover.
+
+    Retention prunes traffic_logs from the oldest end, so the oldest day/hour left
+    is only partly there. Re-aggregating it would overwrite a complete summary with
+    a smaller one; start after it instead.
+    """
+    oldest = (await db.execute(select(func.min(TrafficLog.timestamp)))).scalar()
+    if oldest is None or oldest <= start:
+        return start
+    if step == timedelta(days=1):
+        floor = oldest.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        floor = oldest.replace(minute=0, second=0, microsecond=0)
+    return floor if floor == oldest else floor + step
+
+
+def _day_range(date: str) -> tuple[datetime, datetime]:
+    """A 'YYYY-MM-DD' UTC day as [start, end), so filters can use the timestamp index."""
+    day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+    return day, day + timedelta(days=1)
+
+
 async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
     """Aggregate traffic logs into hourly buckets."""
     now = datetime.now(UTC)
-    start = now - timedelta(hours=hours_back)
+    # Whole hours only: a window starting mid-hour would overwrite that hour's
+    # summary with part of it.
+    start = (now - timedelta(hours=hours_back)).replace(minute=0, second=0, microsecond=0)
+    start = await _first_complete(db, start, timedelta(hours=1))
 
     # Get distinct hours with traffic
     result = await db.execute(
@@ -107,7 +133,8 @@ async def aggregate_hourly(db: AsyncSession, hours_back: int = 2) -> int:
 async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
     """Aggregate traffic logs into daily buckets."""
     now = datetime.now(UTC)
-    start = now - timedelta(days=days_back)
+    start = (now - timedelta(days=days_back)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = await _first_complete(db, start, timedelta(days=1))
 
     result = await db.execute(
         select(
@@ -147,12 +174,14 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             )
         )
         daily = existing.scalar_one_or_none()
+        day_start, day_end = _day_range(row.date)
 
         # Count threats for this day/host
         threat_result = await db.execute(
             select(func.count(ThreatEvent.id)).where(
                 and_(
-                    func.to_char(ThreatEvent.timestamp, 'YYYY-MM-DD') == row.date,
+                    ThreatEvent.timestamp >= day_start,
+                    ThreatEvent.timestamp < day_end,
                     ThreatEvent.proxy_host_id == row.proxy_host_id if row.proxy_host_id else True,
                 )
             )
@@ -167,7 +196,10 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
             )
             .where(
                 and_(
-                    func.to_char(TrafficLog.timestamp, 'YYYY-MM-DD') == row.date,
+                    # A range, not to_char(timestamp) = date: that can't use an
+                    # index, so it read the whole table once per host per day.
+                    TrafficLog.timestamp >= day_start,
+                    TrafficLog.timestamp < day_end,
                     TrafficLog.proxy_host_id == row.proxy_host_id if row.proxy_host_id else True,
                 )
             )
@@ -215,7 +247,8 @@ async def aggregate_daily(db: AsyncSession, days_back: int = 2) -> int:
 async def aggregate_geo(db: AsyncSession, days_back: int = 2) -> int:
     """Aggregate geographic traffic stats."""
     now = datetime.now(UTC)
-    start = now - timedelta(days=days_back)
+    start = (now - timedelta(days=days_back)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = await _first_complete(db, start, timedelta(days=1))
 
     result = await db.execute(
         select(

@@ -456,6 +456,7 @@ async def lifespan(app: FastAPI):
                 async with AsyncSessionLocal() as session:
                     update_settings = await update_service.get_settings(session)
                     if not update_settings.auto_check_enabled:
+                        await session.commit()  # don't sit idle inside a transaction while sleeping
                         await asyncio.sleep(3600)
                         continue
 
@@ -466,6 +467,7 @@ async def lifespan(app: FastAPI):
                         and (now - update_settings.last_check).total_seconds()
                         < update_settings.check_interval_hours * 3600
                     ):
+                        await session.commit()  # don't sit idle inside a transaction while sleeping
                         await asyncio.sleep(600)  # Re-check eligibility in 10 min
                         continue
 
@@ -516,6 +518,7 @@ async def lifespan(app: FastAPI):
                                     user_id="system-auto-update",
                                 )
                                 # Wait for each update to complete before next
+                                await session.commit()  # don't sit idle inside a transaction while sleeping
                                 await asyncio.sleep(120)
                             except ValueError as e:
                                 logger.warning(f"Auto-update skipped for {img['container']}: {e}")
@@ -560,6 +563,11 @@ async def lifespan(app: FastAPI):
         while True:
             heartbeat(job="ip-enrichment-backfill")
             try:
+                # Sleep after the session closes: sleeping inside it left the
+                # transaction opened by the settings read idle for minutes,
+                # which holds back vacuum (and is cut off by
+                # idle_in_transaction_session_timeout).
+                delay = 300
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select as _select
 
@@ -577,31 +585,27 @@ async def lifespan(app: FastAPI):
                             cleanup_counter = 0
                             async with job("ip-enrichment-cleanup"):
                                 await cleanup_stale_enrichments(session)
-                        await asyncio.sleep(300)
-                        continue
-
-                    async with job("ip-enrichment-backfill"):
-                        result = await backfill_enrichment(session)
-                    if result["enriched"] > 0:
-                        logger.info(
-                            "IP enrichment backfill: enriched %d IPs, %d remaining",
-                            result["enriched"],
-                            result["remaining"],
-                        )
-
-                    # Run stale record cleanup every ~6 hours (72 iterations * 300s)
-                    cleanup_counter += 1
-                    if cleanup_counter >= 72:
-                        cleanup_counter = 0
-                        async with job("ip-enrichment-cleanup"), AsyncSessionLocal() as cleanup_session:
-                            await cleanup_stale_enrichments(cleanup_session)
-
-                    if result["status"] == "complete":
-                        # All caught up — check again in 5 minutes
-                        await asyncio.sleep(300)
+                        delay = 300
                     else:
-                        # More to do — short pause then next batch
-                        await asyncio.sleep(10)
+                        async with job("ip-enrichment-backfill"):
+                            result = await backfill_enrichment(session)
+                        if result["enriched"] > 0:
+                            logger.info(
+                                "IP enrichment backfill: enriched %d IPs, %d remaining",
+                                result["enriched"],
+                                result["remaining"],
+                            )
+
+                        # Run stale record cleanup every ~6 hours (72 iterations * 300s)
+                        cleanup_counter += 1
+                        if cleanup_counter >= 72:
+                            cleanup_counter = 0
+                            async with job("ip-enrichment-cleanup"), AsyncSessionLocal() as cleanup_session:
+                                await cleanup_stale_enrichments(cleanup_session)
+
+                        # All caught up: check again in 5 minutes; otherwise next batch soon.
+                        delay = 300 if result["status"] == "complete" else 10
+                await asyncio.sleep(delay)
             except asyncio.CancelledError:
                 logger.info("IP enrichment backfill task cancelled")
                 break
@@ -715,16 +719,31 @@ async def lifespan(app: FastAPI):
             g = await aggregate_geo(session, days_back=days_back)
         logger.info(f"Analytics rollup: {h} hourly, {d} daily, {g} geo rows")
 
+    async def _daily_backfill_days() -> int:
+        """Days back to the newest analytics_daily row (2..90; 90 when there is none)."""
+        from sqlalchemy import func, select
+
+        from app.models.analytics import AnalyticsDaily
+
+        async with AsyncSessionLocal() as session:
+            newest = (await session.execute(select(func.max(AnalyticsDaily.date)))).scalar()
+        if not newest:
+            return 90
+        gap = (datetime.now(UTC).date() - datetime.strptime(newest, "%Y-%m-%d").date()).days
+        return max(2, min(90, gap + 1))
+
     async def data_retention_loop():
         """Roll traffic up into analytics, then prune, once per hour."""
         # Wait 5 minutes on startup before first run
         await asyncio.sleep(300)
 
-        # One-time backfill so traffic already sitting in the table is summarised
-        # before the first prune ever removes it.
+        # Backfill so traffic already sitting in the table is summarised before
+        # the first prune ever removes it. Only from the last day already
+        # summarised: re-reading 90 days of raw rows on every restart was the
+        # heaviest thing the API did to the database.
         try:
             async with job("analytics-rollup"):
-                await roll_up_analytics(hours_back=72, days_back=90)
+                await roll_up_analytics(hours_back=72, days_back=await _daily_backfill_days())
         except Exception as e:
             logger.error(f"Initial analytics backfill failed: {e}")
 
@@ -886,6 +905,7 @@ async def lifespan(app: FastAPI):
                 async with AsyncSessionLocal() as session:
                     policy = await get_auto_update_policy(session)
                     if not policy["enabled"]:
+                        await session.commit()  # don't sit idle inside a transaction while sleeping
                         await asyncio.sleep(300)
                         continue
 
@@ -894,10 +914,12 @@ async def lifespan(app: FastAPI):
                         slot = croniter(policy["cron"], now).get_prev(datetime)
                     except (ValueError, KeyError):
                         logger.error("Invalid container update cron: %s", policy["cron"])
+                        await session.commit()  # don't sit idle inside a transaction while sleeping
                         await asyncio.sleep(300)
                         continue
 
                     if not (0 <= (now - slot).total_seconds() < 600) or slot == last_fired_slot:
+                        await session.commit()  # don't sit idle inside a transaction while sleeping
                         await asyncio.sleep(60)
                         continue
 

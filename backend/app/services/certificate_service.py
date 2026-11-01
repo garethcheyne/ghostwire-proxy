@@ -91,6 +91,10 @@ async def request_letsencrypt_certificate(
         if settings.letsencrypt_staging:
             cmd.append("--staging")
 
+        # End the read transaction first: certbot can run for minutes, and an
+        # idle open transaction is cut off by idle_in_transaction_session_timeout,
+        # which would lose the result written below.
+        await db.commit()
         # certbot can take minutes: run it in a thread so the API keeps answering.
         result = await asyncio.to_thread(
             subprocess.run,
@@ -178,6 +182,8 @@ async def renew_certificate(
         if settings.letsencrypt_staging:
             cmd.append("--staging")
 
+        # Not inside a transaction while certbot runs (see request_letsencrypt_certificate).
+        await db.commit()
         result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
 
         if result.returncode != 0:
