@@ -18,6 +18,7 @@ export const proxyHostKeys = {
   lists: () => [...proxyHostKeys.all, 'list'] as const,
   list: (params: ListParams = {}) => [...proxyHostKeys.lists(), params] as const,
   detail: (id: string) => [...proxyHostKeys.all, 'detail', id] as const,
+  groups: () => [...proxyHostKeys.all, 'groups'] as const,
 }
 
 export const certificateKeys = {

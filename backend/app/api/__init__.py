@@ -21,6 +21,7 @@ from app.api.routes import (
     mcp,
     mfa,
     presets,
+    proxy_host_groups,
     proxy_hosts,
     rate_limits,
     reports,
@@ -50,6 +51,8 @@ router.include_router(auth_portal.router, prefix="/auth-portal", tags=["Auth Por
 # Admin sign-in (/api/auth/*) is Better Auth in the admin UI; see frontend/src/lib/auth.ts.
 router.include_router(mfa.router, prefix="/admin-mfa", tags=["Two-Factor Auth"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
+# Before proxy_hosts, whose /{host_id} routes would otherwise catch /groups.
+router.include_router(proxy_host_groups.router, prefix="/proxy-hosts/groups", tags=["Proxy Hosts"])
 router.include_router(proxy_hosts.router, prefix="/proxy-hosts", tags=["Proxy Hosts"])
 router.include_router(certificates.router, prefix="/certificates", tags=["Certificates"])
 router.include_router(access_lists.router, prefix="/access-lists", tags=["Access Lists"])

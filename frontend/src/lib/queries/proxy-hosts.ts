@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { toastError, toastSuccess } from '@/lib/toast'
-import type { ProxyHost } from '@/types'
+import type { ProxyHost, ProxyHostGroup } from '@/types'
 import { proxyHostKeys, type ListParams } from './keys'
 
 export interface ProxyHostListResult {
@@ -23,6 +23,17 @@ export function useProxyHosts(params: ListParams = {}) {
     queryFn: () => fetchProxyHosts(params),
     staleTime: 15_000,
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useProxyHostGroups() {
+  return useQuery({
+    queryKey: proxyHostKeys.groups(),
+    queryFn: async () => {
+      const response = await api.get<ProxyHostGroup[]>('/api/proxy-hosts/groups')
+      return response.data
+    },
+    staleTime: 15_000,
   })
 }
 

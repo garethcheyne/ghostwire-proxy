@@ -649,6 +649,9 @@ class ProxyHostBase(LoadBalancingSettings):
     honeypot_enabled: bool = False
     enabled: bool = True
 
+    # Hosts-page group (None = Ungrouped). New hosts go to the end of it.
+    group_id: str | None = None
+
     @field_validator('domain_names')
     @classmethod
     def validate_domain_names(cls, v: list[str]) -> list[str]:
@@ -778,6 +781,9 @@ class ProxyHostUpdate(BaseModel):
     traffic_logging_enabled: bool | None = None
     honeypot_enabled: bool | None = None
     enabled: bool | None = None
+
+    # Moving to another group puts the host at the end of it; null = Ungrouped.
+    group_id: str | None = None
 
     # Load balancing
     lb_method: str | None = None
@@ -933,6 +939,9 @@ class ProxyHostResponse(BaseModel):
     health_checked_at: datetime | None = None
     health_error: str | None = None
 
+    group_id: str | None = None
+    sort_order: int = 0
+
     upstream_servers: list[UpstreamServerResponse] = []
     locations: list[ProxyLocationResponse] = []
 
@@ -940,3 +949,65 @@ class ProxyHostResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Host groups (Hosts-page layout only; never reaches nginx)
+# ============================================================================
+
+
+def _check_group_name(v: str | None) -> str | None:
+    if v is None:
+        return v
+    v = ' '.join(v.split())
+    if not 1 <= len(v) <= 100:
+        raise ValueError('Group name must be 1 to 100 characters')
+    return v
+
+
+class ProxyHostGroupCreate(BaseModel):
+    name: str
+
+    @field_validator('name')
+    @classmethod
+    def name_ok(cls, v: str) -> str:
+        return _check_group_name(v)
+
+
+class ProxyHostGroupUpdate(BaseModel):
+    name: str | None = None
+
+    @field_validator('name')
+    @classmethod
+    def name_ok(cls, v: str | None) -> str | None:
+        return _check_group_name(v)
+
+
+class ProxyHostGroupResponse(BaseModel):
+    id: str
+    name: str
+    sort_order: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HostLayoutGroup(BaseModel):
+    """One section of the page: a group (or None for Ungrouped) and its hosts in order."""
+
+    group_id: str | None = None
+    host_ids: list[str] = []
+
+
+class HostLayoutRequest(BaseModel):
+    """The whole page order in one save.
+
+    `sections` lists the groups top to bottom, each with its hosts in order.
+    Ungrouped hosts go in a section with group_id null; the page always shows
+    that section first, so its position in the list is ignored. Every group
+    and every host must appear exactly once, so a stale page can't silently
+    drop or duplicate anything.
+    """
+
+    sections: list[HostLayoutGroup]

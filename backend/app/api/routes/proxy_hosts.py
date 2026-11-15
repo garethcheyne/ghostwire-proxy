@@ -16,7 +16,7 @@ from app.core.database import get_db
 from app.core.files import read_text
 from app.core.utils import get_client_ip
 from app.models.audit_log import AuditLog
-from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer, UpstreamServerEvent
+from app.models.proxy_host import ProxyHost, ProxyHostGroup, ProxyLocation, UpstreamServer, UpstreamServerEvent
 from app.models.user import User
 from app.schemas.proxy_host import (
     LocationReorderRequest,
@@ -91,6 +91,18 @@ def _replace_upstream_servers(host: ProxyHost, items: list[UpstreamServerUpsert]
                 setattr(server, field, value)
         servers.append(server)
     host.upstream_servers = servers
+
+
+async def _check_group(db: AsyncSession, group_id: str | None) -> None:
+    if group_id is not None and await db.get(ProxyHostGroup, group_id) is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Group not found")
+
+
+async def _next_sort_order(db: AsyncSession, group_id: str | None) -> int:
+    """The position just after the last host in this group (None = Ungrouped)."""
+    where = ProxyHost.group_id.is_(None) if group_id is None else ProxyHost.group_id == group_id
+    last = (await db.execute(select(func.max(ProxyHost.sort_order)).where(where))).scalar()
+    return (last + 1) if last is not None else 0
 
 
 async def _load_host(db: AsyncSession, host_id: str) -> ProxyHost | None:
@@ -190,7 +202,11 @@ async def list_proxy_hosts(
             query = query.where(ProxyHost.forward_host.ilike(f"%{search}%"))
             count_query = count_query.where(ProxyHost.forward_host.ilike(f"%{search}%"))
 
-        query = query.order_by(ProxyHost.created_at.desc()).offset(skip).limit(limit)
+        # Page order: by position within each group (the UI files hosts under
+        # their group), newest first among equals.
+        query = (
+            query.order_by(ProxyHost.sort_order, ProxyHost.created_at.desc(), ProxyHost.id).offset(skip).limit(limit)
+        )
         items_result = await db.execute(query)
         total_result = await db.execute(count_query)
 
@@ -215,7 +231,9 @@ async def create_proxy_host(
     """Create a new proxy host"""
     # Every field the schema carries; nested lists are added below.
     _enforce_lb_rules(host_data.lb_method, host_data.upstream_servers or [])
+    await _check_group(db, host_data.group_id)
     host = ProxyHost(**host_data.model_dump(exclude={"upstream_servers", "locations"}))
+    host.sort_order = await _next_sort_order(db, host_data.group_id)
     db.add(host)
     await db.flush()
 
@@ -335,6 +353,12 @@ async def update_proxy_host(
 
     # Update fields
     updates = host_data.model_dump(exclude_unset=True, exclude={"upstream_servers"})
+    if "group_id" in updates:
+        if updates["group_id"] != host.group_id:
+            await _check_group(db, updates["group_id"])
+            host.sort_order = await _next_sort_order(db, updates["group_id"])
+        else:
+            del updates["group_id"]
     for field, value in updates.items():
         setattr(host, field, value)
 

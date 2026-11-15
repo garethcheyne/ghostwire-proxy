@@ -101,6 +101,14 @@ export interface ProxyLocation {
   updated_at: string
 }
 
+export interface ProxyHostGroup {
+  id: string
+  name: string
+  sort_order: number
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 export interface ProxyHost {
   id: string
   domain_names: string[]
@@ -158,6 +166,10 @@ export interface ProxyHost {
   health_status?: HealthStatus
   health_checked_at?: string | null
   health_error?: string | null
+  // Hosts-page layout: the group it's filed under (null = Ungrouped) and its
+  // position within that group.
+  group_id?: string | null
+  sort_order?: number
   upstream_servers: UpstreamServer[]
   locations: ProxyLocation[]
   created_at: string

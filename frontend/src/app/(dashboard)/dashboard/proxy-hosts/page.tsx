@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
-import { useProxyHosts } from '@/lib/queries/proxy-hosts'
+import { useProxyHosts, useProxyHostGroups, type ProxyHostListResult } from '@/lib/queries/proxy-hosts'
 import { useCertificates } from '@/lib/queries/dashboard'
 import { useAccessLists, useAuthWalls } from '@/lib/queries/access'
 import { proxyHostKeys, certificateKeys, accessListKeys } from '@/lib/queries/keys'
@@ -35,6 +35,7 @@ import {
   ArrowRightLeft,
   RefreshCw,
   X,
+  FolderPlus,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { useConfirm } from '@/components/confirm-dialog'
@@ -57,7 +58,14 @@ import {
   type BackendsValue,
 } from '@/components/proxy-hosts/backends-section'
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/modal'
-import type { ProxyHost, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
+import type { ProxyHost, ProxyHostGroup, ProxyLocation, Certificate, AccessList, AuthWall } from '@/types'
+import {
+  GroupNameDialog,
+  HostSections,
+  buildSections,
+  layoutPayload,
+  type HostSection,
+} from '@/components/proxy-hosts/host-groups'
 import { PageHeader } from '@/components/page-header'
 import { Globe as HeaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -101,6 +109,7 @@ interface FormData {
   rate_limit_burst: number
   custom_error_pages: Record<string, string> | null
   traffic_logging_enabled: boolean
+  group_id: string | null
 }
 
 interface LocationFormData {
@@ -157,6 +166,7 @@ const defaultFormData: FormData = {
   rate_limit_burst: 50,
   custom_error_pages: null,
   traffic_logging_enabled: false,
+  group_id: null,
 }
 
 const defaultLocationData: LocationFormData = {
@@ -189,11 +199,14 @@ export default function ProxyHostsPage() {
   const certsQuery = useCertificates({ limit: 100 })
   const accessListsQuery = useAccessLists({ limit: 100 })
   const authWallsQuery = useAuthWalls()
+  const groupsQuery = useProxyHostGroups()
 
   const hosts = hostsQuery.data?.items ?? []
   const certificates = certsQuery.data?.items ?? []
   const accessLists = accessListsQuery.data?.items ?? []
   const authWalls = authWallsQuery.data ?? []
+  const groups = groupsQuery.data ?? []
+  const sections = buildSections(hosts, groups)
   const isLoading =
     hostsQuery.isPending ||
     certsQuery.isPending ||
@@ -256,10 +269,81 @@ export default function ProxyHostsPage() {
     setSslProgress('')
   }
 
-  const handleCreate = () => {
+  const handleCreate = (groupId: string | null = null) => {
     resetForm()
+    setFormData({ ...defaultFormData, group_id: groupId })
     setEditingHost(null)
     setShowDialog(true)
+  }
+
+  // Groups and ordering (layout only; never reaches nginx)
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [renamingGroup, setRenamingGroup] = useState<ProxyHostGroup | null>(null)
+
+  const handleAddGroup = () => {
+    setRenamingGroup(null)
+    setGroupDialogOpen(true)
+  }
+
+  const handleRenameGroup = (group: ProxyHostGroup) => {
+    setRenamingGroup(group)
+    setGroupDialogOpen(true)
+  }
+
+  const handleSaveGroup = async (name: string) => {
+    if (renamingGroup) {
+      await api.put(`/api/proxy-hosts/groups/${renamingGroup.id}`, { name })
+      toastSuccess('Group renamed')
+    } else {
+      await api.post('/api/proxy-hosts/groups', { name })
+      toastSuccess('Group added')
+    }
+    queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+  }
+
+  const handleDeleteGroup = async (group: ProxyHostGroup) => {
+    const count = hosts.filter((h) => h.group_id === group.id).length
+    const description =
+      count > 0
+        ? `Delete the group "${group.name}"? Its ${count} host${count === 1 ? '' : 's'} will move to Ungrouped; no host is deleted.`
+        : `Delete the group "${group.name}"?`
+    if (!(await confirm({ description, variant: 'destructive' }))) return
+    try {
+      await api.delete(`/api/proxy-hosts/groups/${group.id}`)
+      toastSuccess('Group deleted')
+    } catch (error: any) {
+      toastError(error.response?.data?.detail || 'Failed to delete group')
+    } finally {
+      queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+    }
+  }
+
+  const handleLayoutChange = async (next: HostSection[]) => {
+    // Show the new order straight away; the server's answer replaces it.
+    const placement = new Map<string, { group_id: string | null; sort_order: number }>()
+    next.forEach((section) =>
+      section.hosts.forEach((host, index) =>
+        placement.set(host.id, { group_id: section.group?.id ?? null, sort_order: index })
+      )
+    )
+    const groupOrder = new Map<string, number>()
+    next.forEach((section) => {
+      if (section.group) groupOrder.set(section.group.id, groupOrder.size)
+    })
+    await queryClient.cancelQueries({ queryKey: proxyHostKeys.all })
+    queryClient.setQueriesData<ProxyHostListResult>({ queryKey: proxyHostKeys.lists() }, (old) =>
+      old ? { ...old, items: old.items.map((h) => ({ ...h, ...placement.get(h.id) })) } : old
+    )
+    queryClient.setQueryData<ProxyHostGroup[]>(proxyHostKeys.groups(), (old) =>
+      old?.map((g) => ({ ...g, sort_order: groupOrder.get(g.id) ?? g.sort_order }))
+    )
+    try {
+      await api.put('/api/proxy-hosts/groups/layout', layoutPayload(next))
+    } catch (error: any) {
+      toastError(error.response?.data?.detail || 'Failed to save the new order')
+    } finally {
+      queryClient.invalidateQueries({ queryKey: proxyHostKeys.all })
+    }
   }
 
   const handleEdit = (host: ProxyHost) => {
@@ -299,6 +383,7 @@ export default function ProxyHostsPage() {
       rate_limit_burst: host.rate_limit_burst,
       custom_error_pages: host.custom_error_pages || null,
       traffic_logging_enabled: host.traffic_logging_enabled,
+      group_id: host.group_id ?? null,
     })
     setLocations(host.locations || [])
     setBackends(backendsFromHost(host))
@@ -583,9 +668,13 @@ export default function ProxyHostsPage() {
         description="Manage your reverse proxy configurations"
         actions={
           <>
+            <Button size="lg" variant="outline" onClick={handleAddGroup}>
+              <FolderPlus className="h-4 w-4" />
+              Add Group
+            </Button>
             <Button
               size="lg"
-              onClick={handleCreate}
+              onClick={() => handleCreate()}
             >
               <Plus className="h-4 w-4" />
               Add Proxy Host
@@ -606,8 +695,13 @@ export default function ProxyHostsPage() {
           <p className="text-sm mt-1">Click &quot;Add Proxy Host&quot; to create one</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {hosts.map((host) => {
+        <HostSections
+          sections={sections}
+          onLayoutChange={handleLayoutChange}
+          onRenameGroup={handleRenameGroup}
+          onDeleteGroup={handleDeleteGroup}
+          onAddHostToGroup={(group) => handleCreate(group.id)}
+          renderHost={(host, { handle, moveMenuItems }) => {
             const locationCount = (host.locations || []).length
             const hasAdvanced = !!(host.advanced_config || host.server_advanced_config)
             const authWall = host.auth_wall_id ? authWalls.find(w => w.id === host.auth_wall_id) : null
@@ -621,6 +715,7 @@ export default function ProxyHostsPage() {
                 {/* Row 1: Domain, destination, actions */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {handle}
                     <Switch
                       checked={host.enabled}
                       onCheckedChange={() => handleToggleEnabled(host)}
@@ -746,6 +841,8 @@ export default function ProxyHostsPage() {
                           </a>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
+                        {moveMenuItems}
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => handleDelete(host)}
                           className="text-red-600 dark:text-red-400 focus:text-red-500"
@@ -834,9 +931,16 @@ export default function ProxyHostsPage() {
                 </div>
               </div>
             )
-          })}
-        </div>
+          }}
+        />
       )}
+
+      <GroupNameDialog
+        open={groupDialogOpen}
+        onOpenChange={setGroupDialogOpen}
+        group={renamingGroup}
+        onSave={handleSaveGroup}
+      />
 
       {/* Create/Edit Dialog */}
       <Modal
@@ -1081,6 +1185,25 @@ export default function ProxyHostsPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Hosts-page group (layout only) */}
+                  {groups.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Group</label>
+                      <select
+                        value={formData.group_id || ''}
+                        onChange={(e) => setFormData({ ...formData, group_id: e.target.value || null })}
+                        className="w-full px-4 py-2 rounded-lg border border-input bg-background"
+                      >
+                        <option value="">Ungrouped</option>
+                        {groups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Access Control */}
                   <div className="grid grid-cols-2 gap-4">

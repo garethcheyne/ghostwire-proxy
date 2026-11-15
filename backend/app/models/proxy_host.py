@@ -7,6 +7,24 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+class ProxyHostGroup(Base):
+    """A named heading on the Hosts page that hosts can be filed under.
+
+    Purely for organising the list: groups have no effect on nginx. Deleting a
+    group leaves its hosts in place, ungrouped (the FK is ON DELETE SET NULL).
+    """
+
+    __tablename__ = "proxy_host_groups"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(100), nullable=False, unique=True)
+    # Position of the group on the page, low first.
+    sort_order = Column(Integer, default=0, server_default="0", nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
 class ProxyHost(Base):
     __tablename__ = "proxy_hosts"
 
@@ -103,6 +121,11 @@ class ProxyHost(Base):
 
     # Status
     enabled = Column(Boolean, default=True, nullable=False)
+
+    # Hosts-page layout only (never reaches nginx): the group the host is shown
+    # under (NULL = Ungrouped) and its position within that group, low first.
+    group_id = Column(String(36), ForeignKey("proxy_host_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    sort_order = Column(Integer, default=0, server_default="0", nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

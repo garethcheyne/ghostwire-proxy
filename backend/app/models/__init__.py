@@ -13,7 +13,7 @@ from app.models.dns_provider import DnsProvider, DnsZone
 from app.models.firewall import FirewallBlocklist, FirewallConnector
 from app.models.honeypot import AbuseIPDBBlacklistEntry, HoneypotHit, HoneypotTrap, IpEnrichment
 from app.models.known_ip import KnownIp
-from app.models.proxy_host import ProxyHost, ProxyLocation, UpstreamServer, UpstreamServerEvent
+from app.models.proxy_host import ProxyHost, ProxyHostGroup, ProxyLocation, UpstreamServer, UpstreamServerEvent
 from app.models.rate_limit import GeoipRule, GeoipSettings, RateLimitRule
 from app.models.setting import Setting
 from app.models.system_metrics import ContainerMetrics, SystemMetrics
@@ -58,6 +58,7 @@ __all__ = [
     "LdapConfig",
     "LocalAuthUser",
     "ProxyHost",
+    "ProxyHostGroup",
     "ProxyLocation",
     "PushSubscription",
     "RateLimitRule",
