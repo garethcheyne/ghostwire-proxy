@@ -328,10 +328,14 @@ async def sync_blocklist(
         ).scalars()
     )
     actors = (
-        await db.execute(
-            select(ThreatActor).where(ThreatActor.current_status.in_(["perm_blocked", "firewall_banned"]))
+        (
+            await db.execute(
+                select(ThreatActor).where(ThreatActor.current_status.in_(["perm_blocked", "firewall_banned"]))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     actor_by_ip = {a.ip_address: a for a in actors}
     for actor in actors:
         if actor.ip_address not in have:

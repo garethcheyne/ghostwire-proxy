@@ -28,8 +28,19 @@ async def _fresh_cache(monkeypatch):
     monkeypatch.setattr(analytics_routes, "AsyncSessionLocal", TestSessionLocal)
 
 
-def _log(host_id, minutes_ago, *, status=200, ip="198.51.100.7", uri="/", method="GET", ua="Mozilla/5.0 Firefox/1",
-         country="NZ", referer=None, bytes_received=100):
+def _log(
+    host_id,
+    minutes_ago,
+    *,
+    status=200,
+    ip="198.51.100.7",
+    uri="/",
+    method="GET",
+    ua="Mozilla/5.0 Firefox/1",
+    country="NZ",
+    referer=None,
+    bytes_received=100,
+):
     return TrafficLog(
         id=str(uuid.uuid4()),
         proxy_host_id=host_id,
@@ -50,10 +61,20 @@ def _log(host_id, minutes_ago, *, status=200, ip="198.51.100.7", uri="/", method
 
 @pytest.fixture
 async def hosts(db_session):
-    a = ProxyHost(id=str(uuid.uuid4()), domain_names=["a.example.test"], forward_scheme="http",
-                  forward_host="10.0.0.5", forward_port=8080)
-    b = ProxyHost(id=str(uuid.uuid4()), domain_names=["b.example.test"], forward_scheme="http",
-                  forward_host="10.0.0.6", forward_port=80)
+    a = ProxyHost(
+        id=str(uuid.uuid4()),
+        domain_names=["a.example.test"],
+        forward_scheme="http",
+        forward_host="10.0.0.5",
+        forward_port=8080,
+    )
+    b = ProxyHost(
+        id=str(uuid.uuid4()),
+        domain_names=["b.example.test"],
+        forward_scheme="http",
+        forward_host="10.0.0.6",
+        forward_port=80,
+    )
     db_session.add_all([a, b])
     await db_session.flush()
     # Old enough to be rolled up (2 days ago) and recent tail (minutes ago).
@@ -77,7 +98,6 @@ async def hosts(db_session):
 class TestDashboard:
     @pytest.mark.asyncio
     async def test_totals_and_top_lists(self, client, auth_headers, hosts):
-        a, b = hosts
         r = await client.get("/api/analytics/dashboard", headers=auth_headers, params={"period": "7d"})
         assert r.status_code == 200, r.text
         d = r.json()
@@ -100,8 +120,12 @@ class TestDashboard:
 
         assert {p["uri"]: p["requests"] for p in d["top_pages"]} == {"/old": 2, "/new": 2}
         assert d["top_referrers"] == [{"referer": "https://ref.test/", "requests": 1}]
-        assert d["top_ips"][0] == {"ip": "203.0.113.1", "requests": 2, "country_code": "NZ",
-                                   "country_name": "New Zealand"}
+        assert d["top_ips"][0] == {
+            "ip": "203.0.113.1",
+            "requests": 2,
+            "country_code": "NZ",
+            "country_name": "New Zealand",
+        }
         assert {c["country"]: c["requests"] for c in d["country_stats"]} == {"NZ": 3, "AU": 1}
         assert {x["browser"]: x["requests"] for x in d["browser_stats"]} == {"Firefox": 2, "curl": 1, "Python": 1}
         assert {e["status"]: e["count"] for e in d["errors_by_status"]} == {404: 1, 503: 1}

@@ -37,7 +37,7 @@ async def remove_everywhere(db: AsyncSession, ip: str) -> int:
             .where(
                 FirewallBlocklist.ip_address == ip,
                 FirewallBlocklist.status == "pushed",
-                FirewallConnector.enabled == True,  # noqa: E712
+                FirewallConnector.enabled == True,
             )
         )
     ).all()

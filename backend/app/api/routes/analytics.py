@@ -383,9 +383,7 @@ async def _compute_dashboard(db: AsyncSession, period: str, proxy_host_id: str |
 
     prev_requests = tq.merge(prev_rows)["requests"] if compare else 0
     requests_change = ((total_requests - prev_requests) / prev_requests * 100) if prev_requests > 0 else None
-    visitors_change = (
-        ((total_unique_visitors - prev_visitors) / prev_visitors * 100) if prev_visitors > 0 else None
-    )
+    visitors_change = ((total_unique_visitors - prev_visitors) / prev_visitors * 100) if prev_visitors > 0 else None
 
     # === Time series ===
     time_series = [

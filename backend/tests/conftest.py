@@ -98,7 +98,7 @@ async def fresh_cache():
 
     redis_module.redis_client = None
     await cache_delete_prefix("")
-    yield
+    return
 
 
 @pytest.fixture(autouse=True)
