@@ -3,14 +3,16 @@
 #
 #   ./upgradeGhostwireProxy.sh               upgrade to the latest release (asks first)
 #   ./upgradeGhostwireProxy.sh <version>     go to that tag, branch or commit instead (v2026.10.01.1000)
-#   ./upgradeGhostwireProxy.sh --check       say what an upgrade would do; change nothing
-#   ./upgradeGhostwireProxy.sh --yes         don't ask (for cron and installers)
+#   ./upgradeGhostwireProxy.sh --check       say what an upgrade would do, and which CVEs affect this install; change nothing
+#   ./upgradeGhostwireProxy.sh --yes         don't ask (for cron and installers; CVE mitigations are applied too)
 #   ./upgradeGhostwireProxy.sh --force       rebuild and restart even when already up to date
 #   ./upgradeGhostwireProxy.sh --rollback    go back to what ran before the last upgrade
 #   ./upgradeGhostwireProxy.sh --rotate-db-password   change only the database password (and .env)
 #
 # Every Ghostwire app has one of these at its root, with the same options and steps:
-#   1 Pre-flight  2 Plan  3 Back up  4 Update code  5 Build  6 Deploy  7 Health check  8 Done
+#   1 Pre-flight  2 Plan  3 Back up  4 Update code  5 Build  6 Deploy  7 Health check  8 Security  9 Done
+# Every run checks the install against the CVE advisories in cve/ (from the version being installed):
+# Plan reports them; a run that changes things turns their mitigations on or off (cve/README.md).
 # scripts/upgrade.sh only forwards here, for servers and cron jobs that still call that path.
 # Backups (database and .env), a log of each run and the record --rollback uses go in data/backups/.
 # The "This app" part below is what differs between apps; the "Common" part is the same in all.
@@ -35,6 +37,75 @@ app_settings() {
   REQUIRED_ENV="POSTGRES_PASSWORD"
   HEALTH_URLS="http://localhost:8089/health http://localhost:88/api/health"
   APP_URL="http://localhost:88"
+  # CVE advisories (cve/): the mitigations app_cve_mitigate can turn on, and an image with python3 for
+  # scripts/ghostwire_cve.py when the host has no Python 3.10+.
+  CVE_MITIGATIONS="disable_http2"
+  CVE_PYTHON_SERVICE=ghostwire-proxy-api
+  CVE_API=http://localhost:8089/api/internal/cve/mitigations
+}
+
+# ── CVE advisories (cve/README.md) ──────────────────────────────────────────────────────────────
+
+# The OpenResty version a commit's proxy/Dockerfile builds (1.25.3.1), and the nginx it's on (1.25.3).
+openresty_at() { git show "$1:proxy/Dockerfile" 2> /dev/null | sed -n 's|^FROM openresty/openresty:\([0-9][0-9.]*\).*|\1|p' | head -n1; }
+nginx_of() { case "$1" in *.*.*.*) echo "${1%.*}" ;; *) echo "$1" ;; esac; }
+
+# app_cve_facts REF: what cve/ is checked against, as arguments for ghostwire_cve.py (into CVE_ARGS).
+# The running proxy's version and whole effective config (openresty -T: every include and custom
+# snippet), which mitigations the API has on, and the version REF would build. Whatever can't be
+# measured is left out, and the advisories that need it come out "unknown", never "safe".
+app_cve_facts() {
+  local container version="" measured=false target token
+  container=$(app_service_container ghostwire-proxy-nginx)
+  if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Running}}' "$container" 2> /dev/null)" = true ]; then
+    version=$(docker exec "$container" openresty -v 2>&1 | sed -n 's|.*openresty/\([0-9][0-9.]*\).*|\1|p' | head -n1)
+    [ -n "$version" ] && measured=true
+    if docker exec "$container" openresty -T > "$CVE_WORK/nginx-config.txt" 2> /dev/null; then
+      CVE_ARGS+=(--text "nginx_config=$CVE_WORK/nginx-config.txt")
+    else
+      warn "Couldn't read the proxy's config (openresty -T), so config-dependent advisories read unknown."
+    fi
+  else
+    warn "The proxy isn't running, so its config can't be checked; the version is read from proxy/Dockerfile."
+    version=$(openresty_at HEAD)
+  fi
+  [ -n "$version" ] && CVE_ARGS+=(--version "openresty=$version" --version "nginx=$(nginx_of "$version")")
+
+  if [ "$1" != "$(git rev-parse HEAD)" ]; then
+    target=$(openresty_at "$1")
+    [ -n "$target" ] && CVE_ARGS+=(--target-version "openresty=$target" --target-version "nginx=$(nginx_of "$target")")
+  fi
+
+  # Without the mitigations that are on, the engine turns none off. Leave them out too when the version
+  # wasn't measured: the Dockerfile says what would be built, not what runs, and that's no reason to
+  # take a protection away.
+  if [ "$measured" = false ]; then
+    warn "The running proxy's version wasn't measured, so no CVE mitigation will be turned off this run."
+    return 0
+  fi
+  token=$(env_value INTERNAL_AUTH_TOKEN)
+  if [ -n "$token" ] && curl -fsS -m 10 -H "X-Internal-Auth: $token" "$CVE_API" -o "$CVE_WORK/active.json" 2> /dev/null; then
+    CVE_ARGS+=(--active-mitigations "$CVE_WORK/active.json")
+  else
+    warn "Couldn't ask the API which CVE mitigations are on; none will be turned off this run."
+  fi
+}
+
+# app_cve_mitigate on|off NAME [CVE,CVE]: through the API, which writes the config, runs nginx -t and
+# reloads, or puts it all back. NAME and the ids come from validated advisories (a-z0-9_, CVE-…).
+app_cve_mitigate() {
+  # ${3:-}: "off" passes no ids, and set -u stops the whole run on an unset one, guarded or not.
+  local token active=false list=${3:-} ids="" id code
+  token=$(env_value INTERNAL_AUTH_TOKEN)
+  [ -n "$token" ] || { warn "INTERNAL_AUTH_TOKEN isn't in .env, so the API can't be asked."; return 1; }
+  [ "$1" = on ] && active=true
+  for id in ${list//,/ }; do ids="$ids${ids:+,}\"$id\""; done
+  code=$(curl -sS -m 180 -X PUT -H "X-Internal-Auth: $token" -H "Content-Type: application/json" \
+    --data "{\"active\":$active,\"cves\":[$ids]}" -o "$CVE_WORK/mitigate.json" -w '%{http_code}' \
+    "$CVE_API/$2" 2> /dev/null) || code=000
+  [ "$code" = 200 ] && return 0
+  warn "The API answered $code: $(head -c 600 "$CVE_WORK/mitigate.json" 2> /dev/null)"
+  return 1
 }
 
 # Admin sign-in (Better Auth) needs a secret. docker-compose.yml falls back to NEXTAUTH_SECRET, then
@@ -611,6 +682,131 @@ compose_logs() {
   fi
 }
 
+# ── CVE advisories (cve/ and scripts/ghostwire_cve.py: see cve/README.md) ───────────────────────
+# Always called guarded (cve_scan … || true), which also suspends set -e inside: nothing here may stop
+# an upgrade, so every step checks its own result.
+
+# cve_engine ARGS…: scripts/ghostwire_cve.py on the host's Python 3.10+, or else in the
+# $CVE_PYTHON_SERVICE image: no network, as this user, with only $CVE_WORK mounted (read-only).
+cve_engine() {
+  local image
+  if command -v python3 > /dev/null && python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2> /dev/null; then
+    python3 -I "$CVE_WORK/src/scripts/ghostwire_cve.py" "$@"
+    return
+  fi
+  image=$(built_services | awk -v s="$CVE_PYTHON_SERVICE" '$1 == s { print $2 }')
+  if [ -z "$image" ] || ! docker image inspect "$image" > /dev/null 2>&1; then
+    warn "There's no Python 3.10+ here, and no ${CVE_PYTHON_SERVICE:-app} image to run it in."
+    return 1
+  fi
+  docker run --rm --network none --user "$(id -u):$(id -g)" --entrypoint python3 \
+    -v "$CVE_WORK:$CVE_WORK:ro" "$image" -I "$CVE_WORK/src/scripts/ghostwire_cve.py" "$@"
+}
+
+# cve_scan REF [quiet]: the advisories as of REF (the version being installed, so one a release adds is
+# checked before it's installed) against the running install. Prints the report unless quiet, and sets
+# CVE_APPLY ("name:CVE-…,CVE-… …"), CVE_REVERT, CVE_EXPOSED and CVE_SUMMARY for cve_act.
+cve_scan() {
+  local ref=$1 quiet=${2:-} output line name ids
+  CVE_APPLY="" CVE_REVERT="" CVE_EXPOSED="" CVE_SUMMARY="" CVE_REF=$ref CVE_RAN=false
+  if [ -z "$CVE_WORK" ]; then
+    CVE_WORK=$(mktemp -d) || { warn "Couldn't make a temporary directory for the CVE check."; return 1; }
+  fi
+  rm -rf "${CVE_WORK:?}/src"
+  mkdir -p "$CVE_WORK/src/scripts" || return 1
+  if [ "$ref" = "$(git rev-parse HEAD)" ]; then
+    # This checkout as it stands, so an advisory added by hand is checked too.
+    [ -d cve ] && cp -R cve "$CVE_WORK/src/" && cp scripts/ghostwire_cve.py "$CVE_WORK/src/scripts/" 2> /dev/null
+  else
+    git archive "$ref" cve scripts/ghostwire_cve.py 2> /dev/null | tar -x -C "$CVE_WORK/src" 2> /dev/null
+  fi
+  if [ ! -f "$CVE_WORK/src/scripts/ghostwire_cve.py" ] || [ ! -d "$CVE_WORK/src/cve" ]; then
+    [ -n "$quiet" ] || info "No CVE advisories (cve/) in $(version_at "$ref")."
+    return 0
+  fi
+
+  CVE_ARGS=()
+  app_cve_facts "$ref"
+  for name in $CVE_MITIGATIONS; do CVE_ARGS+=(--supported-mitigation "$name"); done
+  if ! output=$(cve_engine evaluate "$CVE_WORK/src/cve" "${CVE_ARGS[@]}"); then
+    warn "Couldn't check the CVE advisories (see above); carrying on without them."
+    return 0
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "@@apply "*) read -r _ name ids <<< "$line" && CVE_APPLY="$CVE_APPLY $name:$ids" ;;
+      "@@revert "*) read -r _ name <<< "$line" && CVE_REVERT="$CVE_REVERT $name" ;;
+      "@@exposed "*) read -r _ name <<< "$line" && CVE_EXPOSED="$CVE_EXPOSED $name" ;;
+      "@@summary "*) CVE_SUMMARY=${line#@@summary } ;;
+      @@*) ;;
+      *) [ -n "$quiet" ] || printf '%s\n' "$line" ;;
+    esac
+  done <<< "$output"
+  CVE_RAN=true
+}
+
+# "vulnerable=1 mitigated=2 …" → "1 exposed, 2 mitigated"
+cve_counts() {
+  local pair key value out=""
+  for pair in $CVE_SUMMARY; do
+    key=${pair%%=*} value=${pair#*=}
+    [ "$value" = 0 ] && continue
+    case "$key" in
+      vulnerable) key=exposed ;;
+      not_exposed) key="not exposed" ;;
+      invalid) key="invalid file(s)" ;;
+    esac
+    out="$out${out:+, }$value $key"
+  done
+  echo "${out:-none recorded}"
+}
+
+# cve_act: carry out cve_scan's plan (--check: only say what it would do). A mitigation goes on when an
+# advisory it covers is exposed and the installed version doesn't fix it, and off once nothing it
+# covers is affected. --yes answers yes to both, so cron keeps mitigations in step with the advisories.
+cve_act() {
+  local item name ids changed=false
+  [ "$CVE_RAN" = true ] || return 0
+  for item in $CVE_APPLY; do
+    name=${item%%:*} ids=${item#*:}
+    ids=${ids//,/, }
+    if [ "$CHECK" = true ]; then
+      info "Would turn on the $name mitigation for $ids (--check changes nothing)."
+    elif ask "Turn on the $name mitigation for $ids?"; then
+      if app_cve_mitigate on "$name" "${item#*:}"; then
+        ok "Turned on $name for $ids."
+        notify "CVE mitigation $name turned on for $ids"
+        changed=true
+      else
+        warn "Couldn't turn on $name, so $ids stay exposed."
+      fi
+    else
+      warn "Left $name off, so $ids stay exposed. (Run again to turn it on.)"
+    fi
+  done
+  for name in $CVE_REVERT; do
+    if [ "$CHECK" = true ]; then
+      info "Would turn off the $name mitigation: nothing it covers would be affected (--check changes nothing)."
+    elif ask "Nothing the $name mitigation covers is affected now. Turn it off?"; then
+      if app_cve_mitigate off "$name"; then
+        ok "Turned off $name."
+        notify "CVE mitigation $name turned off (fixed)"
+        changed=true
+      else
+        warn "Couldn't turn off $name; it stays on."
+      fi
+    fi
+  done
+  if [ "$changed" = true ]; then
+    cve_scan "$CVE_REF" quiet
+    ok "CVE advisories now: $(cve_counts)."
+  fi
+  if [ -n "$CVE_EXPOSED" ]; then
+    warn "Exposed, with no mitigation this script can apply:$CVE_EXPOSED. The advisories in cve/ say what to do."
+    [ "$CHECK" = true ] || notify "SECURITY: exposed to$CVE_EXPOSED, with no mitigation to apply (see cve/)"
+  fi
+}
+
 # ── Default hooks ───────────────────────────────────────────────────────────────────────────────
 declare -F app_requirements  > /dev/null || app_requirements()  { docker_requirements; }
 declare -F app_preflight     > /dev/null || app_preflight()     { :; }
@@ -630,6 +826,8 @@ declare -F app_restore_hint  > /dev/null || app_restore_hint()  {
   echo "docker compose exec -T $DB_SERVICE pg_restore -U $DB_USER -d $DB_NAME --clean --if-exists < $1"
 }
 declare -F app_cleanup       > /dev/null || app_cleanup()       { :; }
+declare -F app_cve_facts     > /dev/null || app_cve_facts()     { :; }
+declare -F app_cve_mitigate  > /dev/null || app_cve_mitigate()  { warn "This app has no handler for the $2 mitigation."; return 1; }
 
 # ── Run ─────────────────────────────────────────────────────────────────────────────────────────
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
@@ -639,6 +837,7 @@ on_error() { printf '\n  %s✗ Stopped at line %s: %s%s\n' "$R" "$1" "$2" "$N" >
 on_exit() {
   local code=$?
   app_cleanup || true
+  [ -n "${CVE_WORK:-}" ] && rm -rf "${CVE_WORK:?}"
   if [ "$code" -ne 0 ] && [ "${CHANGED:-false}" = true ]; then
     echo ""
     info "To go back to $CURRENT_LABEL:  ./$SCRIPT_NAME --rollback"
@@ -698,6 +897,8 @@ main() {
   ROTATE_DB=$ROTATE_ONLY ROTATED_DB=false OLD_DB_PASSWORD="" ENV_BACKUP=""
   APP_NAME=$(basename "$PROJECT_DIR")
   CURRENT_COMMIT="" CURRENT_LABEL="" TARGET_LABEL="" CHANGED=false UP_TO_DATE=false
+  CVE_MITIGATIONS="" CVE_PYTHON_SERVICE="" CVE_API="" CVE_WORK="" CVE_RAN=false CVE_SUMMARY="" CVE_REF=""
+  CVE_APPLY="" CVE_REVERT="" CVE_EXPOSED=""
   app_settings
   # A URL built from other .env values (https://${APP_DOMAIN}) can't be shown as it is.
   case "$APP_URL" in *'$'*) APP_URL="" ;; esac
@@ -725,7 +926,7 @@ main() {
     return 0
   fi
 
-  STEPS=8
+  STEPS=9
   step 1 "Pre-flight"
   app_requirements
   check_disk
@@ -735,8 +936,12 @@ main() {
 
   step 2 "Plan"
   app_plan
+  info "CVE advisories:"
+  cve_scan "${TARGET_COMMIT:-$(git rev-parse HEAD)}" || true
   if [ "$UP_TO_DATE" = true ] && [ "$FORCE" = false ] && app_is_running; then
     ok "Already up to date: $CURRENT_LABEL. (--force rebuilds and restarts anyway.)"
+    # Nothing to install, but an advisory can still need a mitigation turned on (or off) here.
+    cve_act || true
     [ "$ROTATE_DB" = true ] || return 0
     if [ "$CHECK" = true ]; then
       ok "It would change the database password (--check changes nothing)."
@@ -754,6 +959,8 @@ main() {
   fi
   [ "$ROTATE_DB" = true ] && info "The database password is changed just before the deploy."
   if [ "$CHECK" = true ]; then
+    # After the upgrade, Security re-checks the new install before acting; this is the forecast.
+    cve_act || true
     ok "That's what an upgrade would do (--check changes nothing)."
     return 0
   fi
@@ -800,9 +1007,15 @@ main() {
     fail "The upgrade to $TARGET_LABEL failed its health check."
   fi
 
-  step 8 "Done"
+  step 8 "Security"
+  # The installed advisories against the install as it now runs, then their mitigations on or off.
+  cve_scan "$(git rev-parse HEAD)" || true
+  cve_act || true
+
+  step 9 "Done"
   CHANGED=false
   summary_line "Version" "$CURRENT_LABEL → $TARGET_LABEL"
+  [ "$CVE_RAN" = true ] && summary_line "CVEs" "$(cve_counts)"
   [ -n "$BACKUP_FILE" ] && summary_line "Backup" "$BACKUP_FILE"
   [ "$ROTATED_DB" = true ] && summary_line "Database" "new password, in .env (the old .env: $ENV_BACKUP)"
   summary_line "Log" "$LOG"

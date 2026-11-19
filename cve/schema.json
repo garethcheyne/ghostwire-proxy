@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/garethcheyne/ghostwire-proxy/cve/schema.json",
+  "title": "Ghostwire CVE advisory",
+  "description": "One file per advisory in cve/, named <id>.json. scripts/ghostwire_cve.py validates the same rules (and more: regexes compile, mitigations name real conditions).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "title", "severity", "published", "summary", "affects"],
+  "properties": {
+    "schema": { "const": 1 },
+    "id": { "type": "string", "pattern": "^(CVE-\\d{4}-\\d{4,}|GHSA(-[a-z0-9]{4}){3})$" },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "title": { "type": "string", "minLength": 1 },
+    "severity": { "enum": ["critical", "high", "medium", "low"] },
+    "published": { "type": "string", "format": "date" },
+    "summary": { "type": "string", "minLength": 1 },
+    "references": { "type": "array", "items": { "type": "string", "pattern": "^https://" } },
+    "affects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component"],
+      "properties": {
+        "component": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "A version the upgrade script measures, e.g. nginx (from OpenResty), openresty, python, node, postgres, redis, app."
+        },
+        "introduced": {
+          "type": ["string", "null"],
+          "pattern": "^v?\\d+(\\.\\d+)*$",
+          "description": "First affected version; null when every version before the fix is affected."
+        },
+        "fixed": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^v?\\d+(\\.\\d+)*$" },
+          "description": "First fixed version on each branch. A version is fixed if it's at or past the fix on its own branch, or newer than every fix. Empty: no fix yet."
+        }
+      }
+    },
+    "exposure": {
+      "type": "array",
+      "description": "Conditions that must ALL hold for this install to be exposed. Empty: an affected version alone is exposed.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "pattern", "describe"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "text": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Which measured text to search, e.g. nginx_config (the live `openresty -T` dump)."
+          },
+          "pattern": { "type": "string", "description": "A Python regex, searched with re.MULTILINE." },
+          "describe": { "type": "string" }
+        }
+      }
+    },
+    "fix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "note": { "type": "string" } }
+    },
+    "mitigations": {
+      "type": "array",
+      "description": "Named, reversible actions the app implements (in code, never in this file). The first one the app supports is applied.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "removes", "describe"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "removes": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "description": "The exposure condition ids this mitigation makes false."
+          },
+          "describe": { "type": "string" }
+        }
+      }
+    }
+  }
+}

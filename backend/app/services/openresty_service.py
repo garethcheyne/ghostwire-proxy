@@ -61,6 +61,16 @@ def set_trusted_proxy_ranges(ranges: dict) -> None:
     _TRUSTED_PROXY_RANGES = ranges or {}
 
 
+# CVE mitigations that are on (cve_mitigation_service), loaded the same way. A failed load keeps the
+# last value rather than clearing it, so a database hiccup can't quietly turn a mitigation off.
+_CVE_MITIGATIONS: frozenset[str] = frozenset()
+
+
+def set_cve_mitigations(names) -> None:
+    global _CVE_MITIGATIONS
+    _CVE_MITIGATIONS = frozenset(names or ())
+
+
 def _safe_id(id_str: str) -> str:
     """Convert UUID to nginx-safe identifier"""
     return id_str.replace('-', '_')
@@ -760,7 +770,10 @@ def generate_server_block(host: ProxyHost, cert: Certificate | None = None) -> s
     if host.ssl_enabled and has_valid_cert:
         config_lines.append("server {")
         config_lines.append("    listen 443 ssl;")
-        if host.http2_support:
+        if host.http2_support and "disable_http2" in _CVE_MITIGATIONS:
+            # The exposure check in cve/ looks for `http2 on;`, so this comment must not start with it.
+            config_lines.append("    # HTTP/2 is off for this host: CVE mitigation disable_http2 (cve/README.md)")
+        elif host.http2_support:
             config_lines.append("    http2 on;")
         config_lines.append(f"    server_name {domains};")
         config_lines.append("")
@@ -983,6 +996,13 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
         set_trusted_proxy_ranges(await get_ranges(db))
     except Exception as e:
         logger.warning(f"Could not load trusted proxy ranges: {e}")
+
+    try:
+        from app.services.cve_mitigation_service import active_mitigations
+
+        set_cve_mitigations(await active_mitigations(db))
+    except Exception as e:
+        logger.error(f"Could not load CVE mitigations, keeping the last ones ({sorted(_CVE_MITIGATIONS)}): {e}")
 
     generated_files = []
 
