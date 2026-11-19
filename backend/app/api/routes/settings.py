@@ -15,7 +15,7 @@ from app.models.setting import Setting
 from app.models.user import User
 from app.schemas.access_list import _check_redirect_url
 from app.schemas.setting import SettingResponse, SettingsBulkUpdate, SettingUpdate
-from app.services import ghostwire_analytics
+from app.services import cve_mitigation_service, ghostwire_analytics
 
 router = APIRouter()
 
@@ -318,6 +318,12 @@ def _check_config_setting(key: str, value) -> None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Ghostwire Analytics settings are saved through /api/settings/analytics",
+        )
+    if cve_mitigation_service.is_mitigation_key(key):
+        # A write here wouldn't regenerate the nginx config, so the switch would say one thing and nginx another.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="CVE mitigations are set through /api/updates/cve/mitigations (or the upgrade script)",
         )
     if key == "default_site_redirect_url" and value:
         try:
