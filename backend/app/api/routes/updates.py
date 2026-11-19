@@ -370,3 +370,53 @@ async def check_now(
         "base_images": base_results,
         "base_image_updates_count": len(base_updates),
     }
+
+
+# ============================================================================
+# CVE MITIGATIONS (cve/README.md)
+# ============================================================================
+# The upgrade script turns these on and off as advisories in cve/ open and close; these routes let an
+# admin see them, and override one by hand (audit-logged with their user).
+
+
+class CveMitigationUpdate(BaseModel):
+    active: bool
+    cves: list[str] = []
+
+
+@router.get("/cve/mitigations")
+async def list_cve_mitigations(
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import cve_mitigation_service
+
+    active = await cve_mitigation_service.active_mitigations(db)
+    return {"active": sorted(active), "available": cve_mitigation_service.MITIGATIONS}
+
+
+@router.put("/cve/mitigations/{name}")
+async def set_cve_mitigation(
+    name: str,
+    data: CveMitigationUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.utils import get_client_ip
+    from app.services import cve_mitigation_service
+
+    if name not in cve_mitigation_service.MITIGATIONS:
+        raise HTTPException(status_code=404, detail=f"Unknown mitigation {name!r}")
+    ok, message = await cve_mitigation_service.set_mitigation(
+        db,
+        name,
+        data.active,
+        data.cves,
+        source=f"admin {current_user.email}",
+        user_id=current_user.id,
+        ip_address=get_client_ip(request),
+    )
+    if not ok:
+        raise HTTPException(status_code=409, detail=message)
+    return {"name": name, "active": data.active, "message": message}

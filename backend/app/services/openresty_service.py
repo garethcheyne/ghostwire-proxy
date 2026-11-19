@@ -9,6 +9,7 @@ import glob
 import ipaddress
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -59,6 +60,33 @@ _TRUSTED_PROXY_RANGES: dict[str, list[str]] = {}
 def set_trusted_proxy_ranges(ranges: dict) -> None:
     global _TRUSTED_PROXY_RANGES
     _TRUSTED_PROXY_RANGES = ranges or {}
+
+
+# CVE mitigations that are on (cve_mitigation_service), loaded the same way. A failed load keeps the
+# last value rather than clearing it, so a database hiccup can't quietly turn a mitigation off.
+_CVE_MITIGATIONS: frozenset[str] = frozenset()
+
+
+def set_cve_mitigations(names) -> None:
+    global _CVE_MITIGATIONS
+    _CVE_MITIGATIONS = frozenset(names or ())
+
+
+# What disable_http2 neutralises in a host's own snippets, which otherwise go in verbatim: an
+# `http2 on;` (made `http2 off;`, valid wherever the original was) and the old `listen … http2` flag.
+_SNIPPET_HTTP2_ON = re.compile(r"(?<![\w$])http2\s+on\s*;")
+_SNIPPET_LISTEN_HTTP2 = re.compile(r"(?<![\w$])(listen\s[^;]*?)\s+http2\b")
+
+
+def _snippet_line(line: str) -> str:
+    """A custom-snippet line with the active CVE mitigations applied (only the code before any #)."""
+    if "disable_http2" not in _CVE_MITIGATIONS:
+        return line
+    code, sep, comment = line.partition("#")
+    fixed = _SNIPPET_LISTEN_HTTP2.sub(r"\1", _SNIPPET_HTTP2_ON.sub("http2 off;", code))
+    if fixed == code:
+        return line
+    return f"{fixed}{sep}{comment}".rstrip() + "  # HTTP/2 forced off: CVE mitigation disable_http2"
 
 
 def _safe_id(id_str: str) -> str:
@@ -468,7 +496,7 @@ def _generate_location_block(location: ProxyLocation, host: ProxyHost, indent: s
         lines.append("")
         lines.append(f"{indent}    # Location advanced config")
         for line in location.advanced_config.strip().split("\n"):
-            lines.append(f"{indent}    {line}")
+            lines.append(f"{indent}    {_snippet_line(line)}")
 
     lines.append(f"{indent}}}")
     return lines
@@ -540,7 +568,7 @@ def _generate_default_location(host: ProxyHost, backend: str, indent: str = "   
         lines.append("")
         lines.append(f"{indent}    # Advanced config")
         for line in host.advanced_config.strip().split("\n"):
-            lines.append(f"{indent}    {line}")
+            lines.append(f"{indent}    {_snippet_line(line)}")
 
     lines.append(f"{indent}}}")
     return lines
@@ -673,7 +701,7 @@ def _generate_server_block_content(
     if host.server_advanced_config:
         lines.append(f"{indent}# Server-level advanced config")
         for line in host.server_advanced_config.strip().split("\n"):
-            lines.append(f"{indent}{line}")
+            lines.append(f"{indent}{_snippet_line(line)}")
         lines.append("")
 
     # ACME challenge location (always first on HTTP, also on HTTPS for good measure)
@@ -760,7 +788,10 @@ def generate_server_block(host: ProxyHost, cert: Certificate | None = None) -> s
     if host.ssl_enabled and has_valid_cert:
         config_lines.append("server {")
         config_lines.append("    listen 443 ssl;")
-        if host.http2_support:
+        if host.http2_support and "disable_http2" in _CVE_MITIGATIONS:
+            # The exposure check in cve/ looks for `http2 on;`, so this comment must not start with it.
+            config_lines.append("    # HTTP/2 is off for this host: CVE mitigation disable_http2 (cve/README.md)")
+        elif host.http2_support:
             config_lines.append("    http2 on;")
         config_lines.append(f"    server_name {domains};")
         config_lines.append("")
@@ -983,6 +1014,13 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
         set_trusted_proxy_ranges(await get_ranges(db))
     except Exception as e:
         logger.warning(f"Could not load trusted proxy ranges: {e}")
+
+    try:
+        from app.services.cve_mitigation_service import active_mitigations
+
+        set_cve_mitigations(await active_mitigations(db))
+    except Exception as e:
+        logger.error(f"Could not load CVE mitigations, keeping the last ones ({sorted(_CVE_MITIGATIONS)}): {e}")
 
     generated_files = []
 

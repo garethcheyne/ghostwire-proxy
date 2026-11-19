@@ -697,3 +697,34 @@ async def send_push_notification(
         return {"status": "sent", **result}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+# ── CVE mitigations (cve/README.md) ──────────────────────────────────────────────────────────────
+# The upgrade script reads which are on before it evaluates cve/, and turns them on or off by name.
+
+
+class CveMitigationUpdate(BaseModel):
+    active: bool
+    cves: list[str] = []
+
+
+@router.get("/cve/mitigations")
+async def list_cve_mitigations(db: AsyncSession = Depends(get_db)):
+    """The mitigations this API knows, and which are on."""
+    from app.services import cve_mitigation_service
+
+    active = await cve_mitigation_service.active_mitigations(db)
+    return {"active": sorted(active), "available": cve_mitigation_service.MITIGATIONS}
+
+
+@router.put("/cve/mitigations/{name}")
+async def set_cve_mitigation(name: str, data: CveMitigationUpdate, db: AsyncSession = Depends(get_db)):
+    """Turn a mitigation on or off and apply it to nginx (nothing is saved unless nginx takes it)."""
+    from app.services import cve_mitigation_service
+
+    if name not in cve_mitigation_service.MITIGATIONS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unknown mitigation {name!r}")
+    ok, message = await cve_mitigation_service.set_mitigation(db, name, data.active, data.cves)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+    return {"name": name, "active": data.active, "message": message}

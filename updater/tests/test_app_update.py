@@ -32,16 +32,18 @@ def own_attrs(project_mount=main.COMPOSE_PROJECT_DIR, socket=main.DOCKER_SOCKET)
 
 UPGRADE_OK = """Ghostwire Proxy upgrade  host, 2026-11-19 10:00
 
-[1/8] Pre-flight
+[1/9] Pre-flight
   ✓ Disk space is fine.
-[2/8] Plan
-[3/8] Back up
-[4/8] Update code
-[5/8] Build
-[6/8] Deploy
-[7/8] Health check
+[2/9] Plan
+[3/9] Back up
+[4/9] Update code
+[5/9] Build
+[6/9] Deploy
+[7/9] Health check
   ✓ Every container is up and healthy.
-[8/8] Done
+[8/9] Security
+  ! CVE-2026-121810: exposed, no mitigation yet
+[9/9] Done
 """
 
 BUILD_FAILED = """[1/8] Pre-flight
