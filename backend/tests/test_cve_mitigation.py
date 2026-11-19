@@ -182,3 +182,37 @@ async def test_generic_settings_route_refuses_the_key(client, auth_headers, db_s
     res = await client.put("/api/settings/cve_mitigation_disable_http2", headers=auth_headers, json={"value": "true"})
     assert res.status_code == 422
     assert (await db_session.get(Setting, "cve_mitigation_disable_http2")) is None
+
+
+class TestCustomSnippets:
+    """A host's own snippets go in verbatim, so the mitigation has to reach into them too."""
+
+    def config_with(self, field, snippet):
+        host = ssl_host()
+        host.server_advanced_config = ""
+        host.advanced_config = ""
+        setattr(host, field, snippet)
+        return generate_server_block(host, MagicMock())
+
+    def test_server_snippet_http2_is_forced_off(self):
+        openresty_service.set_cve_mitigations({"disable_http2"})
+        config = self.config_with("server_advanced_config", "client_max_body_size 50m;\n  http2 on;")
+        assert "http2 on;" not in config
+        assert "http2 off;" in config
+        assert "client_max_body_size 50m;" in config  # the rest of the snippet is left alone
+
+    def test_listen_http2_flag_is_dropped(self):
+        openresty_service.set_cve_mitigations({"disable_http2"})
+        config = self.config_with("server_advanced_config", "listen 8443 ssl http2;")
+        assert "listen 8443 ssl;" in config
+
+    def test_default_location_snippet_too(self):
+        openresty_service.set_cve_mitigations({"disable_http2"})
+        assert "http2 on;" not in self.config_with("advanced_config", "http2 on;")
+
+    def test_comments_are_left_as_written(self):
+        openresty_service.set_cve_mitigations({"disable_http2"})
+        assert "# keep http2 on; later" in self.config_with("server_advanced_config", "# keep http2 on; later")
+
+    def test_without_the_mitigation_snippets_are_untouched(self):
+        assert "  http2 on;" in self.config_with("server_advanced_config", "a;\n  http2 on;")

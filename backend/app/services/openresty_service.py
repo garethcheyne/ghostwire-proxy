@@ -9,6 +9,7 @@ import glob
 import ipaddress
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -69,6 +70,23 @@ _CVE_MITIGATIONS: frozenset[str] = frozenset()
 def set_cve_mitigations(names) -> None:
     global _CVE_MITIGATIONS
     _CVE_MITIGATIONS = frozenset(names or ())
+
+
+# What disable_http2 neutralises in a host's own snippets, which otherwise go in verbatim: an
+# `http2 on;` (made `http2 off;`, valid wherever the original was) and the old `listen … http2` flag.
+_SNIPPET_HTTP2_ON = re.compile(r"(?<![\w$])http2\s+on\s*;")
+_SNIPPET_LISTEN_HTTP2 = re.compile(r"(?<![\w$])(listen\s[^;]*?)\s+http2\b")
+
+
+def _snippet_line(line: str) -> str:
+    """A custom-snippet line with the active CVE mitigations applied (only the code before any #)."""
+    if "disable_http2" not in _CVE_MITIGATIONS:
+        return line
+    code, sep, comment = line.partition("#")
+    fixed = _SNIPPET_LISTEN_HTTP2.sub(r"\1", _SNIPPET_HTTP2_ON.sub("http2 off;", code))
+    if fixed == code:
+        return line
+    return f"{fixed}{sep}{comment}".rstrip() + "  # HTTP/2 forced off: CVE mitigation disable_http2"
 
 
 def _safe_id(id_str: str) -> str:
@@ -478,7 +496,7 @@ def _generate_location_block(location: ProxyLocation, host: ProxyHost, indent: s
         lines.append("")
         lines.append(f"{indent}    # Location advanced config")
         for line in location.advanced_config.strip().split("\n"):
-            lines.append(f"{indent}    {line}")
+            lines.append(f"{indent}    {_snippet_line(line)}")
 
     lines.append(f"{indent}}}")
     return lines
@@ -550,7 +568,7 @@ def _generate_default_location(host: ProxyHost, backend: str, indent: str = "   
         lines.append("")
         lines.append(f"{indent}    # Advanced config")
         for line in host.advanced_config.strip().split("\n"):
-            lines.append(f"{indent}    {line}")
+            lines.append(f"{indent}    {_snippet_line(line)}")
 
     lines.append(f"{indent}}}")
     return lines
@@ -683,7 +701,7 @@ def _generate_server_block_content(
     if host.server_advanced_config:
         lines.append(f"{indent}# Server-level advanced config")
         for line in host.server_advanced_config.strip().split("\n"):
-            lines.append(f"{indent}{line}")
+            lines.append(f"{indent}{_snippet_line(line)}")
         lines.append("")
 
     # ACME challenge location (always first on HTTP, also on HTTPS for good measure)

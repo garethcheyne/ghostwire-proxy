@@ -203,15 +203,16 @@ def cve_exposure(cve_id: str) -> list:
 
 def plan_for(f, **overrides):
     results = cve.evaluate([advisory(**overrides)], f)
-    return cve.plan(results, f)
+    p = cve.plan(results, f)
+    return p.apply, p.revert, p.exposed, p.reapply
 
 
 def test_exposed_with_a_mitigation_plans_it():
-    assert plan_for(facts()) == ({"disable_http2": ["CVE-2099-0001"]}, [], [])
+    assert plan_for(facts()) == ({"disable_http2": ["CVE-2099-0001"]}, [], [], {})
 
 
 def test_an_upgrade_that_fixes_it_plans_nothing():
-    assert plan_for(facts(target="1.31.9")) == ({}, [], [])
+    assert plan_for(facts(target="1.31.9")) == ({}, [], [], {})
 
 
 def test_an_upgrade_that_doesnt_fix_it_still_plans_the_mitigation():
@@ -219,28 +220,44 @@ def test_an_upgrade_that_doesnt_fix_it_still_plans_the_mitigation():
 
 
 def test_fixed_with_the_mitigation_on_reverts_it():
-    assert plan_for(facts(version="1.31.9", cfg="", active={"disable_http2"})) == ({}, ["disable_http2"], [])
+    assert plan_for(facts(version="1.31.9", cfg="", active={"disable_http2"})) == ({}, ["disable_http2"], [], {})
 
 
 def test_mitigated_and_still_affected_keeps_it():
-    assert plan_for(facts(cfg="", active={"disable_http2"})) == ({}, [], [])
+    assert plan_for(facts(cfg="", active={"disable_http2"})) == ({}, [], [], {})
 
 
 def test_unknown_mitigation_state_never_reverts():
-    assert plan_for(facts(version="1.31.9", cfg="", active=None)) == ({}, [], [])
+    assert plan_for(facts(version="1.31.9", cfg="", active=None)) == ({}, [], [], {})
 
 
 def test_an_unknown_version_never_reverts():
-    assert plan_for(facts(version=None, cfg="", active={"disable_http2"})) == ({}, [], [])
+    assert plan_for(facts(version=None, cfg="", active={"disable_http2"})) == ({}, [], [], {})
 
 
 def test_exposed_without_a_supported_mitigation_is_reported():
-    assert plan_for(facts(), mitigations=[]) == ({}, [], ["CVE-2099-0001"])
+    assert plan_for(facts(), mitigations=[]) == ({}, [], ["CVE-2099-0001"], {})
 
 
 def test_mitigation_on_but_custom_config_still_exposes():
     # e.g. an advanced_config snippet with its own `http2 on;`
-    assert plan_for(facts(active={"disable_http2"})) == ({}, [], ["CVE-2099-0001"])
+    # On, yet still exposed: apply it again (regenerates the config), and report it exposed until then.
+    assert plan_for(facts(active={"disable_http2"})) == (
+        {},
+        [],
+        ["CVE-2099-0001"],
+        {"disable_http2": ["CVE-2099-0001"]},
+    )
+
+
+def test_report_says_why_a_mitigated_cve_is_still_exposed(capsys):
+    f = facts(active={"disable_http2"})
+    results = cve.evaluate([advisory()], f)
+    cve.print_report(results, {}, cve.plan(results, f))
+    out = capsys.readouterr().out
+    assert "disable_http2 is on, yet CVE-2099-0001 read exposed" in out
+    assert "custom snippet" in out
+    assert "no mitigation here" not in out  # the old, misleading wording for this case
 
 
 # ── Validation ──────────────────────────────────────────────────────────────────────────────────
@@ -295,6 +312,7 @@ def test_cli_plan_lines(tmp_path, capsys):
     assert code == 0
     out = capsys.readouterr().out
     assert "@@apply disable_http2 CVE-2099-0001" in out.splitlines()
+    assert not any(line.startswith("@@reapply") for line in out.splitlines())
     assert "@@summary vulnerable=1 unknown=0 mitigated=0 not_exposed=0 fixed=0 invalid=0" in out
 
 
@@ -346,6 +364,35 @@ def test_generated_http2_config_is_exposed_until_mitigated(cve_id, no_mitigation
         f = cve.Facts(
             versions={"nginx": "1.25.3"},
             texts={"nginx_config": generate_server_block(https_host(), MagicMock())},
+            active=set(active),
+            supported={"disable_http2"},
+        )
+        return cve.evaluate([adv], f)[0].status
+
+    assert check(()) == cve.VULNERABLE
+    openresty_service.set_cve_mitigations({"disable_http2"})
+    assert check({"disable_http2"}) == cve.MITIGATED
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "proxy_buffering off;\n  http2 on;",  # the case on prod: a later snippet line, indented
+        "http2 on;",
+        "listen 8443 ssl http2;",
+        "server_tokens off; http2 on;",
+    ],
+)
+def test_a_custom_snippet_cant_undo_the_mitigation(snippet, no_mitigations):
+    advisories, _ = cve.load_dir(CVE_DIR)
+    adv = next(a for a in advisories if a.id == "CVE-2026-123007")
+    host = https_host()
+    host.server_advanced_config = snippet
+
+    def check(active):
+        f = cve.Facts(
+            versions={"nginx": "1.25.3"},
+            texts={"nginx_config": generate_server_block(host, MagicMock())},
             active=set(active),
             supported={"disable_http2"},
         )
