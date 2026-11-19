@@ -228,19 +228,6 @@ class RecordingUpdater(UpdaterService):
         return [run["command"][2:] for run in self.docker_client.containers.started]
 
 
-@pytest.fixture
-def project(tmp_path, monkeypatch):
-    """A checkout and a Docker socket for start_upgrade_container to stat."""
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "upgradeGhostwireProxy.sh").write_text("#!/usr/bin/env bash\n")
-    socket = tmp_path / "docker.sock"
-    socket.write_text("")
-    monkeypatch.setattr(main, "COMPOSE_PROJECT_DIR", str(tmp_path))
-    monkeypatch.setattr(main, "DOCKER_SOCKET", str(socket))
-    monkeypatch.setattr(main, "UPGRADE_POLL_SECONDS", 0)
-    return tmp_path
-
-
 uses_fake_docker = pytest.mark.usefixtures("project")
 
 

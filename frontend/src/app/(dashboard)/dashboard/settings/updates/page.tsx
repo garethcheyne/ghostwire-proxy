@@ -221,7 +221,7 @@ export default function UpdatesPage() {
 
   // Rollback
   const handleRollback = async (updateId: string) => {
-    if (!(await confirm({ description: 'Rollback this update?\n\nThis will restore the previous version from backup.', variant: 'destructive' }))) return
+    if (!(await confirm({ description: 'Rollback this update?\n\nThis goes back to the version that ran before it. The database is not rolled back.', variant: 'destructive' }))) return
 
 
     try {

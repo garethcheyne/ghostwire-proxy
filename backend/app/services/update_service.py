@@ -452,9 +452,8 @@ class UpdateService:
         if original.rollback_performed:
             raise ValueError("Rollback already performed for this update")
 
-        if not original.backup_id:
-            raise ValueError("No backup available for rollback")
-
+        # No backup needed: the updater goes back with upgradeGhostwireProxy.sh --rollback (app) or the
+        # image it kept before the rebuild (base image). Its pre-update backup was never stored here.
         # Create rollback record
         rollback = UpdateHistory(
             update_type=f"{original.update_type}_rollback",
@@ -486,6 +485,10 @@ class UpdateService:
                         "update_id": rollback.id,
                         "original_update_id": update_id,
                         "backup_id": original.backup_id,
+                        "update_type": original.update_type,
+                        "container_name": original.container_name,
+                        # The version being rolled back from: the updater refuses unless it's running.
+                        "from_version": original.to_version,
                     }
                 ),
             )
