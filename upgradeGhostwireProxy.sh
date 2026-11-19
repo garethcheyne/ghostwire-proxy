@@ -705,10 +705,10 @@ cve_engine() {
 
 # cve_scan REF [quiet]: the advisories as of REF (the version being installed, so one a release adds is
 # checked before it's installed) against the running install. Prints the report unless quiet, and sets
-# CVE_APPLY ("name:CVE-…,CVE-… …"), CVE_REVERT, CVE_EXPOSED and CVE_SUMMARY for cve_act.
+# CVE_APPLY ("name:CVE-…,CVE-… …"), CVE_REAPPLY, CVE_REVERT, CVE_EXPOSED and CVE_SUMMARY for cve_act.
 cve_scan() {
   local ref=$1 quiet=${2:-} output line name ids
-  CVE_APPLY="" CVE_REVERT="" CVE_EXPOSED="" CVE_SUMMARY="" CVE_REF=$ref CVE_RAN=false
+  CVE_APPLY="" CVE_REAPPLY="" CVE_REVERT="" CVE_EXPOSED="" CVE_SUMMARY="" CVE_REF=$ref CVE_RAN=false
   if [ -z "$CVE_WORK" ]; then
     CVE_WORK=$(mktemp -d) || { warn "Couldn't make a temporary directory for the CVE check."; return 1; }
   fi
@@ -735,10 +735,12 @@ cve_scan() {
   while IFS= read -r line; do
     case "$line" in
       "@@apply "*) read -r _ name ids <<< "$line" && CVE_APPLY="$CVE_APPLY $name:$ids" ;;
+      "@@reapply "*) read -r _ name ids <<< "$line" && CVE_REAPPLY="$CVE_REAPPLY $name:$ids" ;;
       "@@revert "*) read -r _ name <<< "$line" && CVE_REVERT="$CVE_REVERT $name" ;;
       "@@exposed "*) read -r _ name <<< "$line" && CVE_EXPOSED="$CVE_EXPOSED $name" ;;
       "@@summary "*) CVE_SUMMARY=${line#@@summary } ;;
       @@*) ;;
+      "  !"*) printf '%s\n' "$line" ;;
       *) [ -n "$quiet" ] || printf '%s\n' "$line" ;;
     esac
   done <<< "$output"
@@ -784,6 +786,20 @@ cve_act() {
       warn "Left $name off, so $ids stay exposed. (Run again to turn it on.)"
     fi
   done
+  # On already (approved before), yet still exposed: apply it again, which regenerates every host's
+  # config. That reaches configs an older release wrote; what is exposed after it, a snippet re-enables.
+  for item in $CVE_REAPPLY; do
+    name=${item%%:*} ids=${item#*:}
+    ids=${ids//,/, }
+    if [ "$CHECK" = true ]; then
+      info "Would apply the $name mitigation again for $ids, to regenerate the config (--check changes nothing)."
+    elif app_cve_mitigate on "$name" "${item#*:}"; then
+      ok "Applied $name again; the proxy config was regenerated."
+      changed=true
+    else
+      warn "Couldn't apply $name again, so $ids stay exposed."
+    fi
+  done
   for name in $CVE_REVERT; do
     if [ "$CHECK" = true ]; then
       info "Would turn off the $name mitigation: nothing it covers would be affected (--check changes nothing)."
@@ -802,8 +818,8 @@ cve_act() {
     ok "CVE advisories now: $(cve_counts)."
   fi
   if [ -n "$CVE_EXPOSED" ]; then
-    warn "Exposed, with no mitigation this script can apply:$CVE_EXPOSED. The advisories in cve/ say what to do."
-    [ "$CHECK" = true ] || notify "SECURITY: exposed to$CVE_EXPOSED, with no mitigation to apply (see cve/)"
+    warn "Still exposed:$CVE_EXPOSED (the lines marked ! above say why; cve/ has each advisory)."
+    [ "$CHECK" = true ] || notify "SECURITY: still exposed to$CVE_EXPOSED (see the upgrade log and cve/)"
   fi
 }
 
@@ -898,7 +914,7 @@ main() {
   APP_NAME=$(basename "$PROJECT_DIR")
   CURRENT_COMMIT="" CURRENT_LABEL="" TARGET_LABEL="" CHANGED=false UP_TO_DATE=false
   CVE_MITIGATIONS="" CVE_PYTHON_SERVICE="" CVE_API="" CVE_WORK="" CVE_RAN=false CVE_SUMMARY="" CVE_REF=""
-  CVE_APPLY="" CVE_REVERT="" CVE_EXPOSED=""
+  CVE_APPLY="" CVE_REAPPLY="" CVE_REVERT="" CVE_EXPOSED=""
   app_settings
   # A URL built from other .env values (https://${APP_DOMAIN}) can't be shown as it is.
   case "$APP_URL" in *'$'*) APP_URL="" ;; esac

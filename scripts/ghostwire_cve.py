@@ -15,6 +15,7 @@ Facts are what the upgrade script measured on the running install (the engine ru
 evaluate prints a report for people, then the plan as lines the script reads:
 
     @@apply NAME CVE-A,CVE-B    turn a mitigation on (a CVE it covers is exposed and not fixed)
+    @@reapply NAME CVE-A        apply one again: it's on, yet CVE-A still reads exposed (regenerates)
     @@revert NAME               turn a mitigation off (nothing it covers is still affected)
     @@exposed CVE-A             a CVE this install is exposed to, with no mitigation planned or active
     @@summary key=n ...         counts, for the log and notifications
@@ -311,31 +312,39 @@ def effective(r: Result) -> str:
     return r.target_status if r.target_status is not None else r.status
 
 
-def plan(results: list[Result], facts: Facts) -> tuple[dict[str, list[str]], list[str], list[str]]:
-    """(mitigations to turn on → the CVEs they're for, mitigations to turn off, CVEs left exposed)."""
-    apply: dict[str, list[str]] = {}
-    exposed: list[str] = []
+@dataclass
+class Plan:
+    apply: dict[str, list[str]] = field(default_factory=dict)  # turn on → the CVEs it's for
+    revert: list[str] = field(default_factory=list)  # turn off: nothing it covers is affected
+    exposed: list[str] = field(default_factory=list)  # exposed CVEs no mitigation here clears (yet)
+    # On already, yet still exposed: the config wasn't regenerated since (an older release wrote
+    # it), or a custom snippet re-enables what it turns off. Applying it again regenerates the
+    # config once; whatever is still exposed after that is the snippet's doing.
+    reapply: dict[str, list[str]] = field(default_factory=dict)
+
+
+def plan(results: list[Result], facts: Facts) -> Plan:
+    p = Plan()
     for r in results:
         if r.status != VULNERABLE or effective(r) == FIXED:
             continue
         names = [m["name"] for m in r.advisory.mitigations if m["name"] in facts.supported]
-        if facts.active is not None and any(n in facts.active for n in names):
-            # On already, yet the exposure still holds: custom config re-enables what it turns off.
-            exposed.append(r.advisory.id)
+        on = [n for n in names if facts.active is not None and n in facts.active]
+        if on:
+            p.reapply.setdefault(on[0], []).append(r.advisory.id)
+            p.exposed.append(r.advisory.id)
         elif names:
-            apply.setdefault(names[0], []).append(r.advisory.id)
+            p.apply.setdefault(names[0], []).append(r.advisory.id)
         else:
-            exposed.append(r.advisory.id)
-
-    revert: list[str] = []
+            p.exposed.append(r.advisory.id)
     if facts.active is not None:
         for name in sorted(facts.active & facts.supported):
             still_needed = any(
                 effective(r) != FIXED and any(m["name"] == name for m in r.advisory.mitigations) for r in results
             )
-            if not still_needed and name not in apply:
-                revert.append(name)
-    return apply, revert, exposed
+            if not still_needed and name not in p.apply:
+                p.revert.append(name)
+    return p
 
 
 # ── Output ──────────────────────────────────────────────────────────────────────────────────────
@@ -353,7 +362,7 @@ def describe_mitigation(adv: Advisory, name: str) -> str:
     return next((m["describe"] for m in adv.mitigations if m["name"] == name), name)
 
 
-def print_report(results, invalid, apply, revert, exposed, out=None) -> None:
+def print_report(results, invalid, p: Plan, out=None) -> None:
     out = out or sys.stdout  # looked up now, not at import, so a redirected stdout is honoured
 
     def say(line: str = "") -> None:
@@ -382,28 +391,39 @@ def print_report(results, invalid, apply, revert, exposed, out=None) -> None:
             say(f"  {'':<17} {e}")
 
     by_id = {r.advisory.id: r.advisory for r in results}
-    for name, ids in apply.items():
+    for name, ids in p.apply.items():
         say(f"  → turn on {name} for {', '.join(ids)}: {describe_mitigation(by_id[ids[0]], name)}")
-    for name in revert:
+    for name, ids in p.reapply.items():
+        say(f"  → apply {name} again for {', '.join(ids)}: it's on, but the live config still has what it removes")
+    for name in p.revert:
         say(f"  → turn off {name}: nothing it covers is still affected")
-    if exposed:
-        say(f"  ! exposed with nothing to apply here: {', '.join(exposed)} (see the advisories in cve/)")
+    overridden = {i for ids in p.reapply.values() for i in ids}
+    for name, ids in p.reapply.items():
+        say(
+            f"  ! {name} is on, yet {', '.join(ids)} read exposed: the live config still turns on what it"
+            " turns off (a host's custom snippet, or a config written before it was on)"
+        )
+    plain = [i for i in p.exposed if i not in overridden]
+    if plain:
+        say(f"  ! exposed with no mitigation here: {', '.join(plain)} (see the advisories in cve/)")
 
 
-def print_plan(results, invalid, apply, revert, exposed, out=None) -> None:
+def print_plan(results, invalid, p: Plan, out=None) -> None:
     out = out or sys.stdout
-    for name, ids in apply.items():
+    for name, ids in p.apply.items():
         print(f"@@apply {name} {','.join(ids)}", file=out)
-    for name in revert:
+    for name, ids in p.reapply.items():
+        print(f"@@reapply {name} {','.join(ids)}", file=out)
+    for name in p.revert:
         print(f"@@revert {name}", file=out)
-    for cve_id in exposed:
+    for cve_id in p.exposed:
         print(f"@@exposed {cve_id}", file=out)
     counts = {s: sum(r.status == s for r in results) for s in ORDER}
     counts["invalid"] = len(invalid)
     print("@@summary " + " ".join(f"{k}={v}" for k, v in counts.items()), file=out)
 
 
-def as_json(results, invalid, apply, revert, exposed) -> dict:
+def as_json(results, invalid, p: Plan) -> dict:
     return {
         "advisories": [
             {
@@ -424,7 +444,7 @@ def as_json(results, invalid, apply, revert, exposed) -> dict:
             for r in results
         ],
         "invalid": invalid,
-        "plan": {"apply": apply, "revert": revert, "exposed": exposed},
+        "plan": {"apply": p.apply, "reapply": p.reapply, "revert": p.revert, "exposed": p.exposed},
     }
 
 
@@ -490,12 +510,12 @@ def main(argv: list[str] | None = None) -> int:
 
     facts = read_facts(args)
     results = evaluate(advisories, facts)
-    apply, revert, exposed = plan(results, facts)
+    p = plan(results, facts)
     if args.json:
-        print(json.dumps(as_json(results, invalid, apply, revert, exposed), indent=2))
+        print(json.dumps(as_json(results, invalid, p), indent=2))
     else:
-        print_report(results, invalid, apply, revert, exposed)
-        print_plan(results, invalid, apply, revert, exposed)
+        print_report(results, invalid, p)
+        print_plan(results, invalid, p)
     return 0
 
 
