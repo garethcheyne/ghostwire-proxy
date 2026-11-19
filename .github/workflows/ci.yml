@@ -282,6 +282,25 @@ jobs:
 
 
   # ─────────────────────────────────────────────
+  # Updater: unit tests (no Docker daemon needed)
+  # ─────────────────────────────────────────────
+  updater:
+    name: Updater
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: updater
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: updater/requirements.txt
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest tests -v --tb=short -q
+
+  # ─────────────────────────────────────────────
   # Python lint and format (ruff.toml). The same job in every Ghostwire repo with Python.
   # ─────────────────────────────────────────────
   python-lint:
@@ -302,7 +321,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [backend, migrations, nginx-config, frontend, auth-portal, docker-build, scripts, python-lint]
+    needs: [backend, migrations, nginx-config, frontend, auth-portal, docker-build, scripts, updater, python-lint]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write

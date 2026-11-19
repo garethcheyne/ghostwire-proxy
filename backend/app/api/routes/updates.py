@@ -160,13 +160,8 @@ async def start_app_update(
     """
     Start an application update.
 
-    This triggers the updater sidecar to:
-    1. Create a pre-update backup
-    2. Pull the specified version from git
-    3. Rebuild container images
-    4. Run database migrations
-    5. Restart containers in order
-    6. Verify health checks
+    The updater sidecar runs the host's upgradeGhostwireProxy.sh --yes <version> (pre-flight,
+    backup, build, deploy, health check), and its --rollback when it fails after the deploy.
     """
     try:
         update = await update_service.request_app_update(

@@ -279,11 +279,10 @@ class UpdateService:
 
         Creates an update record and signals the updater sidecar via Redis.
         """
-        # Validate version format
-        try:
-            semver.VersionInfo.parse(target_version)
-        except ValueError:
-            raise ValueError(f"Invalid version format: {target_version}") from None
+        # Validate version format (releases are CalVer, 2026.11.16.1448; semver is accepted too)
+        target_version = (target_version or "").strip().removeprefix("v")
+        if not _is_valid_version(target_version):
+            raise ValueError(f"Invalid version format: {target_version}")
 
         # Check if an update is already in progress
         in_progress = await db.execute(
