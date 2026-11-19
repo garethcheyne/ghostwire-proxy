@@ -216,3 +216,31 @@ class TestCustomSnippets:
 
     def test_without_the_mitigation_snippets_are_untouched(self):
         assert "  http2 on;" in self.config_with("server_advanced_config", "a;\n  http2 on;")
+
+
+class TestCveStatusRoute:
+    async def test_no_report_yet(self, client, auth_headers, tmp_path, monkeypatch):
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(tmp_path / "cve-report.json"))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"] is None
+        assert body["error"] is None
+        assert "disable_http2" in body["available_mitigations"]
+
+    async def test_serves_the_last_report_and_live_mitigations(self, client, auth_headers, tmp_path, monkeypatch):
+        path = tmp_path / "cve-report.json"
+        path.write_text('{"schema": 1, "meta": {"checked_at": "2026-11-19T09:30:00Z"}, "advisories": []}')
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(path))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"]["meta"]["checked_at"] == "2026-11-19T09:30:00Z"
+        assert body["active_mitigations"] == []
+
+    async def test_a_broken_report_is_an_error_not_a_crash(self, client, auth_headers, tmp_path, monkeypatch):
+        path = tmp_path / "cve-report.json"
+        path.write_text("{half a file")
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(path))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"] is None
+        assert "Couldn't read" in body["error"]
+
+    async def test_admins_only(self, client, user_auth_headers):
+        assert (await client.get("/api/updates/cve", headers=user_auth_headers)).status_code == 403
