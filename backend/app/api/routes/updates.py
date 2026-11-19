@@ -425,3 +425,21 @@ async def set_cve_mitigation(
     if not ok:
         raise HTTPException(status_code=409, detail=message)
     return {"name": name, "active": data.active, "message": message}
+
+
+@router.get("/cve")
+async def get_cve_status(
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The upgrade script's last CVE report, with the mitigations as they are now."""
+    from app.services import cve_mitigation_service
+
+    report, error = await cve_mitigation_service.last_report()
+    active = await cve_mitigation_service.active_mitigations(db)
+    return {
+        "report": report,
+        "error": error,
+        "active_mitigations": sorted(active),
+        "available_mitigations": cve_mitigation_service.MITIGATIONS,
+    }

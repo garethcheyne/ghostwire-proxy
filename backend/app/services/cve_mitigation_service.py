@@ -8,8 +8,10 @@ The upgrade script sets them through /api/internal/cve/mitigations (cve/README.m
 /api/settings/{key} routes refuse the keys, as a write there wouldn't regenerate the config.
 """
 
+import asyncio
 import json
 import logging
+import os
 import re
 from datetime import UTC, datetime
 
@@ -92,3 +94,27 @@ async def set_mitigation(
     else:
         logger.error(f"CVE mitigation {name} could not be turned {'on' if active else 'off'}: {message}")
     return ok, message
+
+
+# The upgrade script's last CVE report (scripts/ghostwire_cve.py --json), saved under the backup
+# directory the host and this API share. Only the script can measure the running proxy, so the API
+# serves what it found, as of when it found it.
+REPORT_PATH = os.path.join(os.environ.get("BACKUP_PATH", "/data/backups"), "cve-report.json")
+
+
+def _read_report() -> tuple[dict | None, str | None]:
+    try:
+        with open(REPORT_PATH, encoding="utf-8") as f:
+            report = json.load(f)
+    except FileNotFoundError:
+        return None, None
+    except (OSError, ValueError) as e:
+        return None, f"Couldn't read the last CVE report: {e}"
+    if not isinstance(report, dict) or not isinstance(report.get("advisories"), list):
+        return None, "The last CVE report isn't in the expected format"
+    return report, None
+
+
+async def last_report() -> tuple[dict | None, str | None]:
+    """(the last report or None if the upgrade script hasn't saved one, an error to show or None)."""
+    return await asyncio.to_thread(_read_report)

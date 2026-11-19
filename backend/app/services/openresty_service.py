@@ -1050,7 +1050,31 @@ async def generate_all_configs(db: AsyncSession) -> list[str]:
 
         generated_files.append(config_path)
 
+    await asyncio.to_thread(_prune_host_configs, {f"{host.id}.conf" for host in hosts})
     return generated_files
+
+
+# A proxy host's own config file: <uuid>.conf. Nothing else in the directory is ever pruned
+# (_default.conf, _kill_switch.conf, the kill switch's parked *.conf.disabled, …).
+_HOST_CONF_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.conf$")
+
+
+def _prune_host_configs(keep: set[str]) -> None:
+    """Remove the config of every host that isn't enabled. Disabling a host left its file in place,
+    so nginx kept serving it, with whatever the file last said, and nothing regenerated it again.
+    Callers run this inside the backup / nginx -t / roll-back sequence, so a bad prune is undone."""
+    try:
+        names = os.listdir(settings.nginx_config_path)
+    except OSError as e:
+        logger.warning(f"Couldn't list {settings.nginx_config_path} to prune disabled hosts: {e}")
+        return
+    for name in names:
+        if _HOST_CONF_RE.match(name) and name not in keep:
+            try:
+                os.remove(os.path.join(settings.nginx_config_path, name))
+                logger.info(f"Removed the config of a host that isn't enabled: {name}")
+            except OSError as e:
+                logger.warning(f"Couldn't remove {name}: {e}")
 
 
 async def remove_config(host_id: str) -> bool:
