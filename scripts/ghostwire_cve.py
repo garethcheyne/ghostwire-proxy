@@ -2,7 +2,7 @@
 """Ghostwire CVE registry engine: checks this install against the advisories in cve/.
 
     ghostwire_cve.py validate CVE_DIR
-    ghostwire_cve.py evaluate CVE_DIR [facts...] [--json]
+    ghostwire_cve.py evaluate CVE_DIR [facts...] [--json [--meta NAME=VALUE ...]]
 
 Facts are what the upgrade script measured on the running install (the engine runs nothing itself):
 
@@ -423,8 +423,13 @@ def print_plan(results, invalid, p: Plan, out=None) -> None:
     print("@@summary " + " ".join(f"{k}={v}" for k, v in counts.items()), file=out)
 
 
-def as_json(results, invalid, p: Plan) -> dict:
+def as_json(results, invalid, p: Plan, meta: dict[str, str] | None = None) -> dict:
+    counts = {s: sum(r.status == s for r in results) for s in ORDER}
+    counts["invalid"] = len(invalid)
     return {
+        "schema": SCHEMA,
+        "meta": meta or {},
+        "summary": counts,
         "advisories": [
             {
                 "id": r.advisory.id,
@@ -494,6 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--active-mitigations", metavar="PATH")
     e.add_argument("--supported-mitigation", action="append", metavar="NAME")
     e.add_argument("--json", action="store_true", help="one JSON document instead of the report and plan")
+    e.add_argument("--meta", action="append", metavar="NAME=VALUE", help="added to --json's meta (checked_at, …)")
     args = parser.parse_args(argv)
 
     if not args.cve_dir.is_dir():
@@ -512,7 +518,7 @@ def main(argv: list[str] | None = None) -> int:
     results = evaluate(advisories, facts)
     p = plan(results, facts)
     if args.json:
-        print(json.dumps(as_json(results, invalid, p), indent=2))
+        print(json.dumps(as_json(results, invalid, p, _pairs(args.meta, "meta")), indent=2))
     else:
         print_report(results, invalid, p)
         print_plan(results, invalid, p)

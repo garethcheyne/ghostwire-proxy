@@ -20,6 +20,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import { StatCard } from '@/components/stat-card'
 import { ContentSkeleton, LoadError } from '@/components/load-state'
 import { useConfirm } from '@/components/confirm-dialog'
 import { PageHeader } from '@/components/page-header'
+import { SecurityAdvisories, openAdvisoriesFor, type CveStatus } from '@/components/updates/security-advisories'
 import { Download as HeaderIcon } from 'lucide-react'
 
 interface AppVersion {
@@ -103,6 +105,7 @@ export default function UpdatesPage() {
   const [showAllReleases, setShowAllReleases] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedRelease, setSelectedRelease] = useState<AppVersion | null>(null)
+  const [cveStatus, setCveStatus] = useState<CveStatus | null>(null)
   const confirm = useConfirm()
 
   // Fetch all data
@@ -137,7 +140,20 @@ export default function UpdatesPage() {
     }
   }, [])
 
-  usePageData(() => { fetchData() })
+  // On its own, so an API without the CVE route (or a failed read) can't take the page down with it.
+  const fetchCve = useCallback(async () => {
+    try {
+      const response = await api.get('/api/updates/cve')
+      setCveStatus(response.data)
+    } catch {
+      setCveStatus(null)
+    }
+  }, [])
+
+  usePageData(() => {
+    fetchData()
+    fetchCve()
+  })
 
   // Poll for active update status
   useEffect(() => {
@@ -638,6 +654,8 @@ export default function UpdatesPage() {
         )}
       </div>
 
+      <SecurityAdvisories status={cveStatus} onChanged={fetchCve} />
+
       {/* Base Image Updates */}
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -681,6 +699,12 @@ export default function UpdatesPage() {
                   <Download className="h-4 w-4" />
                   Update
                 </Button>
+              ) : image.container === 'nginx' && openAdvisoriesFor(cveStatus, ['nginx', 'openresty']).length > 0 ? (
+                // The digest check only says nobody re-pushed this tag; it says nothing about CVEs in it.
+                <span className="text-sm text-yellow-700 dark:text-yellow-400 flex items-center gap-1 text-right">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Tag current, {openAdvisoriesFor(cveStatus, ['nginx', 'openresty']).length} open CVEs (see Security Advisories)
+                </span>
               ) : (
                 <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
                   <CheckCircle className="h-4 w-4" />

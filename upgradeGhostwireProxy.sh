@@ -821,6 +821,23 @@ cve_act() {
     warn "Still exposed:$CVE_EXPOSED (the lines marked ! above say why; cve/ has each advisory)."
     [ "$CHECK" = true ] || notify "SECURITY: still exposed to$CVE_EXPOSED (see the upgrade log and cve/)"
   fi
+  cve_save_report
+}
+
+# cve_save_report: the install's state after cve_act, as JSON for the app's admin UI ($CVE_REPORT,
+# under the backup directory the app mounts). Only on runs that may change things: --check doesn't.
+cve_save_report() {
+  local tmp
+  [ "$CHECK" = false ] && [ "$CVE_RAN" = true ] && [ -n "$CVE_REPORT" ] || return 0
+  tmp="$CVE_REPORT.tmp"
+  if cve_engine evaluate "$CVE_WORK/src/cve" "${CVE_ARGS[@]}" --json \
+    --meta "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" --meta "version=$(version_file HEAD)" \
+    --meta "host=$(hostname)" > "$tmp" 2> /dev/null && [ -s "$tmp" ]; then
+    mv -f "$tmp" "$CVE_REPORT"
+  else
+    rm -f "$tmp"
+    warn "Couldn't save the CVE report for the admin UI."
+  fi
 }
 
 # ── Default hooks ───────────────────────────────────────────────────────────────────────────────
@@ -914,7 +931,7 @@ main() {
   APP_NAME=$(basename "$PROJECT_DIR")
   CURRENT_COMMIT="" CURRENT_LABEL="" TARGET_LABEL="" CHANGED=false UP_TO_DATE=false
   CVE_MITIGATIONS="" CVE_PYTHON_SERVICE="" CVE_API="" CVE_WORK="" CVE_RAN=false CVE_SUMMARY="" CVE_REF=""
-  CVE_APPLY="" CVE_REAPPLY="" CVE_REVERT="" CVE_EXPOSED=""
+  CVE_APPLY="" CVE_REAPPLY="" CVE_REVERT="" CVE_EXPOSED="" CVE_REPORT=""
   app_settings
   # A URL built from other .env values (https://${APP_DOMAIN}) can't be shown as it is.
   case "$APP_URL" in *'$'*) APP_URL="" ;; esac
@@ -922,6 +939,7 @@ main() {
   case "$BACKUP_DIR" in /*) ;; *) BACKUP_DIR="$PROJECT_DIR/$BACKUP_DIR" ;; esac
   mkdir -p "$BACKUP_DIR"
   STATE_FILE="$BACKUP_DIR/last-upgrade"
+  CVE_REPORT="$BACKUP_DIR/cve-report.json"
   STAMP=$(date +%Y%m%d-%H%M%S)
   LOG=""
   if [ "$CHECK" = false ]; then

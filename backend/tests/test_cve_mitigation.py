@@ -216,3 +216,67 @@ class TestCustomSnippets:
 
     def test_without_the_mitigation_snippets_are_untouched(self):
         assert "  http2 on;" in self.config_with("server_advanced_config", "a;\n  http2 on;")
+
+
+class TestCveStatusRoute:
+    async def test_no_report_yet(self, client, auth_headers, tmp_path, monkeypatch):
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(tmp_path / "cve-report.json"))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"] is None
+        assert body["error"] is None
+        assert "disable_http2" in body["available_mitigations"]
+
+    async def test_serves_the_last_report_and_live_mitigations(self, client, auth_headers, tmp_path, monkeypatch):
+        path = tmp_path / "cve-report.json"
+        path.write_text('{"schema": 1, "meta": {"checked_at": "2026-11-19T09:30:00Z"}, "advisories": []}')
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(path))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"]["meta"]["checked_at"] == "2026-11-19T09:30:00Z"
+        assert body["active_mitigations"] == []
+
+    async def test_a_broken_report_is_an_error_not_a_crash(self, client, auth_headers, tmp_path, monkeypatch):
+        path = tmp_path / "cve-report.json"
+        path.write_text("{half a file")
+        monkeypatch.setattr(cve_mitigation_service, "REPORT_PATH", str(path))
+        body = (await client.get("/api/updates/cve", headers=auth_headers)).json()
+        assert body["report"] is None
+        assert "Couldn't read" in body["error"]
+
+    async def test_admins_only(self, client, user_auth_headers):
+        assert (await client.get("/api/updates/cve", headers=user_auth_headers)).status_code == 403
+
+
+class TestDisabledHostsLeaveNginx:
+    """A disabled host's config used to stay on disk, so nginx kept serving it and nothing regenerated it
+    (on prod: two disabled hosts still had `http2 on;` after the mitigation)."""
+
+    async def test_generation_removes_configs_of_hosts_that_arent_enabled(self, db_session, nginx):
+        from app.services.openresty_service import generate_all_configs
+
+        live = await add_http2_host(db_session)
+        gone = await add_http2_host(db_session)
+        gone.enabled = False
+        await db_session.commit()
+        conf = nginx.conf
+        (conf / f"{gone.id}.conf").write_text("server { http2 on; }")
+        (conf / "0b1e5c1e-0000-4000-8000-000000000000.conf").write_text("server {}")  # a deleted host's
+        for keep in ("_kill_switch.conf", "custom-include.conf", f"{live.id}.conf.disabled"):
+            (conf / keep).write_text("# not a host config this generation owns")
+
+        await generate_all_configs(db_session)
+
+        assert (conf / f"{live.id}.conf").exists()
+        assert not (conf / f"{gone.id}.conf").exists()
+        assert not (conf / "0b1e5c1e-0000-4000-8000-000000000000.conf").exists()
+        for keep in ("_default.conf", "_kill_switch.conf", "custom-include.conf", f"{live.id}.conf.disabled"):
+            assert (conf / keep).exists(), keep
+
+    async def test_disabling_a_host_takes_it_out_of_nginx(self, client, auth_headers, db_session, nginx):
+        host = await add_http2_host(db_session)
+        res = await client.post(f"/api/proxy-hosts/{host.id}/enable", headers=auth_headers)
+        assert res.status_code == 200, res.text
+        assert (nginx.conf / f"{host.id}.conf").exists()
+
+        res = await client.post(f"/api/proxy-hosts/{host.id}/disable", headers=auth_headers)
+        assert res.status_code == 200, res.text
+        assert not (nginx.conf / f"{host.id}.conf").exists()
