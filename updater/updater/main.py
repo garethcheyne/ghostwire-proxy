@@ -13,7 +13,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
+import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import docker
@@ -53,6 +56,162 @@ def app_version() -> str | None:
             return f.read().strip() or None
     except OSError:
         return os.environ.get("APP_VERSION")
+
+
+# App updates run the host's upgrade script (see UpdaterService.perform_app_update).
+UPGRADE_SCRIPT = "upgradeGhostwireProxy.sh"
+UPGRADE_CONTAINER = "ghostwire-proxy-upgrade"  # the one-shot container that runs it
+UPGRADE_LABEL = "ghostwire.upgrade"
+UPDATER_CONTAINER = os.environ.get("UPDATER_CONTAINER", "ghostwire-proxy-updater")
+DOCKER_SOCKET = "/var/run/docker.sock"
+UPGRADE_POLL_SECONDS = 3
+UPGRADE_TIMEOUT_SECONDS = 60 * 60
+
+# A tag, branch or commit; never something the script would read as an option.
+_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+_STEP_RE = re.compile(r"\[(\d+)/(\d+)\]\s+(\S.*?)\s*$")
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class UpgradeError(Exception):
+    """An app update that can't go ahead, or didn't work; the message is what the admin sees."""
+
+
+def version_tag(version: str | None) -> str:
+    """The git tag for VERSION (2026.11.16.1448 -> v2026.11.16.1448)."""
+    value = (version or "").strip()
+    if not _VERSION_RE.match(value):
+        raise UpgradeError(f"{version!r} isn't a version the upgrade can go to.")
+    return value if value.startswith("v") else f"v{value}"
+
+
+def upgrade_labels(update_id: str, kind: str, version: str, failure: str = "") -> dict[str, str]:
+    labels = {
+        UPGRADE_LABEL: "1",
+        f"{UPGRADE_LABEL}.update_id": str(update_id),
+        f"{UPGRADE_LABEL}.kind": kind,
+        f"{UPGRADE_LABEL}.version": str(version),
+    }
+    if failure:
+        labels[f"{UPGRADE_LABEL}.failure"] = failure[:500]
+    return labels
+
+
+def _mount_source(attrs: dict, destination: str) -> str | None:
+    for mount in attrs.get("Mounts") or []:
+        if mount.get("Destination") == destination:
+            return mount.get("Source")
+    return None
+
+
+def upgrade_run_kwargs(
+    own_attrs: dict, args: list[str], labels: dict[str, str], *, uid: int, gid: int, docker_gid: int
+) -> dict:
+    """`docker run` settings for the one-shot container that runs upgradeGhostwireProxy.sh ARGS.
+
+    It runs this updater's image, as the owner of the checkout (so .git and .env keep their owner),
+    with the project mounted read-write at the same path as on the host: the script runs
+    `docker compose` there, and the daemon resolves the compose file's relative bind mounts as host
+    paths. It is on the host network because the script's health checks call the published ports on
+    localhost. Only this container gets the writable mount; the updater's own stays read-only.
+    """
+    host_dir = _mount_source(own_attrs, COMPOSE_PROJECT_DIR)
+    if not host_dir:
+        raise UpgradeError(f"The updater has no project mount at {COMPOSE_PROJECT_DIR}, so it can't find the install.")
+    socket = _mount_source(own_attrs, DOCKER_SOCKET) or DOCKER_SOCKET
+    environment = {
+        # For git and docker's config; it is the one-shot container's own /tmp, shared with nothing.
+        "HOME": "/tmp",  # noqa: S108
+        # The checkout's owner may differ from the container user git sees; trust this one path only.
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": host_dir,
+    }
+    project = ((own_attrs.get("Config") or {}).get("Labels") or {}).get("com.docker.compose.project")
+    if project:
+        environment["COMPOSE_PROJECT_NAME"] = project
+    return {
+        "image": own_attrs["Image"],
+        "command": ["bash", f"./{UPGRADE_SCRIPT}", *args],
+        "name": UPGRADE_CONTAINER,
+        "labels": labels,
+        "working_dir": host_dir,
+        "user": f"{uid}:{gid}",
+        "group_add": [str(docker_gid)],
+        "environment": environment,
+        "volumes": {
+            host_dir: {"bind": host_dir, "mode": "rw"},
+            socket: {"bind": DOCKER_SOCKET, "mode": "rw"},
+        },
+        "network_mode": "host",
+        "security_opt": ["no-new-privileges:true"],
+        "detach": True,
+    }
+
+
+def script_lines(raw: bytes | str) -> list[str]:
+    text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
+    return _ANSI_RE.sub("", text).splitlines()
+
+
+def script_steps(lines: list[str]) -> list[tuple[int, int, str]]:
+    """The script's step headers ("[6/8] Deploy") in the order it printed them."""
+    steps = []
+    for line in lines:
+        match = _STEP_RE.match(line.strip())
+        if match:
+            steps.append((int(match.group(1)), int(match.group(2)), match.group(3)))
+    return steps
+
+
+def last_script_step(lines: list[str]) -> tuple[int, int, str] | None:
+    steps = script_steps(lines)
+    return steps[-1] if steps else None
+
+
+def step_progress(number: int, total: int) -> int:
+    """10% when the script starts, 90% at its last step."""
+    return min(90, 10 + round(80 * (number - 1) / max(total - 1, 1)))
+
+
+@dataclass
+class ScriptResult:
+    """How a run of upgradeGhostwireProxy.sh ended."""
+
+    exit_code: int
+    lines: list[str]
+
+    @property
+    def reached_deploy(self) -> bool:
+        """Whether it got as far as restarting containers; before that the old version still runs."""
+        return any(title == "Deploy" for _number, _total, title in script_steps(self.lines))
+
+    @property
+    def up_to_date(self) -> bool:
+        return any("Already up to date" in line for line in self.lines)
+
+    @property
+    def failure(self) -> str:
+        """The script's own reason (its "✗" line), else its last line."""
+        marked = [line.split("✗", 1)[1].strip() for line in self.lines if "✗" in line]
+        reasons = [m for m in marked if not m.startswith("Stopped at line")] or marked
+        if reasons:
+            return reasons[-1]
+        last = next((line.strip() for line in reversed(self.lines) if line.strip()), "")
+        message = f"{UPGRADE_SCRIPT} exited with code {self.exit_code}"
+        return f"{message}: {last}" if last else message
+
+
+def raise_rollback_outcome(version: str, failure: str, rollback: ScriptResult):
+    if rollback.exit_code == 0:
+        raise UpgradeError(
+            f"The update to {version} failed ({failure}), so it was rolled back to the version that ran before. "
+            "The database isn't rolled back: migrations only add, so the older version runs on it."
+        )
+    raise UpgradeError(
+        f"The update to {version} failed ({failure}) and the rollback failed too ({rollback.failure}). "
+        f"On the host, run ./{UPGRADE_SCRIPT} --rollback; the logs are in data/backups."
+    )
 
 
 # Container names
@@ -95,6 +254,9 @@ class UpdaterService:
         # Subscribe to update channel
         pubsub = self.redis.pubsub()
         await pubsub.subscribe("ghostwire:updates")
+
+        # Upgrades a previous updater started (the deploy recreates this container part way through).
+        await self.resume_upgrade_containers()
 
         logger.info("Updater service started, listening for update requests...")
 
@@ -221,114 +383,186 @@ class UpdaterService:
 
     async def perform_app_update(self, update_id: str, target_version: str):
         """
-        Perform full application update.
+        Upgrade the app with the host's upgradeGhostwireProxy.sh, the one supported upgrade path.
 
-        Steps:
-        1. Pre-flight checks
-        2. Create backup
-        3. Pull new version (git checkout)
-        4. Build new images
-        5. Run database migrations
-        6. Restart containers in order
-        7. Health checks
-        8. Cleanup or rollback
+        The script runs in a one-shot container (see upgrade_run_kwargs) that mounts the project
+        read-write at its host path, so it does its own pre-flight, backup, build, deploy, health check
+        and records what --rollback goes back to. That container isn't part of the compose project, so
+        it keeps running when the deploy recreates this updater; the next updater picks it up
+        (resume_upgrade_containers). If the script fails after it started the deploy, the updater runs
+        `--rollback --yes`; if it fails before, nothing was restarted and nothing is rolled back.
         """
         try:
             async with job("app-update", version=str(target_version)):
-                # Step 1: Pre-flight checks
-                await self.update_status(update_id, "in_progress", 5, "Running pre-flight checks...")
+                tag = version_tag(target_version)
 
-                if not await self.preflight_checks():
-                    raise Exception("Pre-flight checks failed")
-
-                # Step 2: Create backup
-                await self.update_status(update_id, "in_progress", 10, "Creating pre-update backup...")
-
+                # The API's backup is what a rollback asked for from the UI restores; the script makes
+                # its own database dump as well.
+                await self.update_status(update_id, "in_progress", 5, "Creating pre-update backup...")
                 backup_id = await self.create_pre_update_backup()
                 await self.store_backup_id(update_id, backup_id)
 
-                # Step 3: Pull new version
-                await self.update_status(update_id, "in_progress", 25, f"Pulling version {target_version}...")
-
-                await self.pull_new_version(target_version)
-
-                # Step 4: Build new images
-                await self.update_status(update_id, "in_progress", 40, "Building new container images...")
-
-                await self.build_images()
-
-                # Step 5: Database migrations
-                await self.update_status(update_id, "in_progress", 55, "Running database migrations...")
-
-                await self.run_migrations()
-
-                # Step 6: Restart containers (in order)
-                await self.update_status(update_id, "in_progress", 70, "Restarting containers...")
-
-                await self.restart_containers_ordered()
-
-                # Step 7: Health checks
-                await self.update_status(update_id, "in_progress", 90, "Running health checks...")
-
-                if not await self.post_update_health_checks():
-                    raise Exception("Post-update health checks failed")
-
-                # Success!
-                await self.update_status(update_id, "completed", 100, f"Successfully updated to {target_version}")
-
-                # Send push notification
-                await self.send_push_notification(
-                    title="Update Complete",
-                    body=f"Successfully updated to version {target_version}",
-                    notification_type="update",
-                    data={"version": target_version, "update_id": update_id},
+                await self.update_status(update_id, "in_progress", 10, f"Starting {UPGRADE_SCRIPT} --yes {tag}...")
+                container = await self.start_upgrade_container(
+                    ["--yes", tag], upgrade_labels(update_id, "upgrade", target_version)
                 )
+                result = await self.wait_for_upgrade_container(container, update_id)
+                await self.finish_upgrade(update_id, target_version, result)
 
         except Exception as e:
-            logger.error(f"App update failed: {e}", exc_info=True)
+            await self.report_app_update_failure(update_id, target_version, e)
 
-            # Attempt automatic rollback
-            await self.update_status(
-                update_id, "in_progress", message="Update failed, attempting automatic rollback..."
+    async def report_app_update_failure(self, update_id: str, target_version: str, error: Exception):
+        if isinstance(error, UpgradeError):
+            message = str(error)
+        else:
+            logger.error(f"App update failed: {error}", exc_info=error)
+            message = f"The update to {target_version} failed: {error}"
+        await self.update_status(update_id, "failed", error=message)
+        await self.send_push_notification(
+            title="Update Failed",
+            body=message[:200],
+            notification_type="update",
+            data={"version": target_version, "update_id": update_id},
+        )
+
+    async def finish_upgrade(self, update_id: str, target_version: str, result: ScriptResult):
+        """Reports the script's outcome. Raises UpgradeError when it failed, after a rollback if one is due."""
+        if result.exit_code == 0:
+            if result.up_to_date:
+                message = f"Already on {target_version}; nothing to do"
+            else:
+                message = f"Successfully updated to {target_version}"
+            await self.update_status(update_id, "completed", 100, message)
+            await self.send_push_notification(
+                title="Update Complete",
+                body=message,
+                notification_type="update",
+                data={"version": target_version, "update_id": update_id},
             )
-            try:
-                await self.perform_automatic_rollback(update_id)
-                await self.update_status(update_id, "failed", error=f"Update failed and was rolled back: {e}")
-            except Exception as rollback_error:
-                logger.error(f"Automatic rollback failed: {rollback_error}")
-                await self.update_status(
-                    update_id,
-                    "failed",
-                    error=f"Update failed and rollback also failed: {e}. Rollback error: {rollback_error}",
-                )
+            return
 
-    async def preflight_checks(self) -> bool:
-        """Run pre-flight checks before update."""
+        failure = result.failure
+        if not result.reached_deploy:
+            raise UpgradeError(
+                f"The update to {target_version} stopped before the deploy, so the running version is unchanged: {failure}"
+            )
+
+        await self.update_status(
+            update_id, "in_progress", 90, f"Update failed ({failure}); rolling back with {UPGRADE_SCRIPT} --rollback..."
+        )
+        container = await self.start_upgrade_container(
+            ["--rollback", "--yes"], upgrade_labels(update_id, "rollback", target_version, failure)
+        )
+        rollback = await self.wait_for_upgrade_container(container, update_id, progress=False)
+        raise_rollback_outcome(target_version, failure, rollback)
+
+    async def resume_upgrade_containers(self):
+        """Finishes upgrades a previous updater started: the deploy usually recreates this container."""
         try:
-            # Check all containers are running
-            for _name, container_name in CONTAINERS.items():
-                try:
-                    container = self.docker_client.containers.get(container_name)
-                    if container.status != "running":
-                        logger.warning(f"Container {container_name} is not running: {container.status}")
-                        return False
-                except docker.errors.NotFound:
-                    logger.warning(f"Container {container_name} not found")
-                    return False
-
-            # Check disk space (need at least 1GB free)
-            statvfs = os.statvfs(COMPOSE_PROJECT_DIR)
-            free_gb = (statvfs.f_frsize * statvfs.f_bavail) / (1024**3)
-            if free_gb < 1.0:
-                logger.warning(f"Insufficient disk space: {free_gb:.2f} GB free")
-                return False
-
-            logger.info("Pre-flight checks passed")
-            return True
-
+            containers = await asyncio.to_thread(
+                self.docker_client.containers.list, all=True, filters={"label": UPGRADE_LABEL}
+            )
         except Exception as e:
-            logger.error(f"Pre-flight check error: {e}")
-            return False
+            logger.warning(f"Couldn't look for upgrades in progress: {e}")
+            return
+
+        for container in containers:
+            labels = container.labels or {}
+            update_id = labels.get(f"{UPGRADE_LABEL}.update_id", "")
+            kind = labels.get(f"{UPGRADE_LABEL}.kind", "upgrade")
+            version = labels.get(f"{UPGRADE_LABEL}.version", "?")
+            logger.info(f"Picking up {kind} {update_id} to {version} from {container.name}")
+            try:
+                async with job("app-update", version=version):
+                    result = await self.wait_for_upgrade_container(container, update_id, progress=kind == "upgrade")
+                    if kind == "rollback":
+                        raise_rollback_outcome(version, labels.get(f"{UPGRADE_LABEL}.failure", "?"), result)
+                    await self.finish_upgrade(update_id, version, result)
+            except Exception as e:
+                if update_id:
+                    await self.report_app_update_failure(update_id, version, e)
+
+    async def start_upgrade_container(self, args: list[str], labels: dict[str, str]):
+        """Starts the one-shot container that runs upgradeGhostwireProxy.sh with ARGS."""
+
+        def start():
+            try:
+                existing = self.docker_client.containers.get(UPGRADE_CONTAINER)
+            except docker.errors.NotFound:
+                existing = None
+            if existing is not None:
+                if existing.status in ("running", "created", "restarting"):
+                    raise UpgradeError(f"Another upgrade is already running ({UPGRADE_CONTAINER}).")
+                existing.remove(force=True)
+
+            own = self.own_container()
+            git_dir = os.path.join(COMPOSE_PROJECT_DIR, ".git")
+            if not os.path.isdir(git_dir) or not os.path.isfile(os.path.join(COMPOSE_PROJECT_DIR, UPGRADE_SCRIPT)):
+                raise UpgradeError(f"The mounted project isn't a git checkout with {UPGRADE_SCRIPT} in it.")
+            owner = os.stat(git_dir)
+            # The script writes its log and database dump there as the checkout's owner. Docker makes
+            # the directory as root when it's missing, which a non-root checkout can't write to.
+            backups = os.path.join(COMPOSE_PROJECT_DIR, "data", "backups")
+            if owner.st_uid != 0 and os.path.isdir(backups) and os.stat(backups).st_uid != owner.st_uid:
+                raise UpgradeError(
+                    f"data/backups isn't owned by the checkout's owner (uid {owner.st_uid}), so the upgrade "
+                    f"can't write its backup there. On the host: sudo chown -R {owner.st_uid} data/backups"
+                )
+            kwargs = upgrade_run_kwargs(
+                own.attrs,
+                args,
+                labels,
+                uid=owner.st_uid,
+                gid=owner.st_gid,
+                docker_gid=os.stat(DOCKER_SOCKET).st_gid,
+            )
+            return self.docker_client.containers.run(**kwargs)
+
+        return await asyncio.to_thread(start)
+
+    def own_container(self):
+        """This updater's container (for its image and the host path of the project mount)."""
+        for ref in (UPDATER_CONTAINER, os.environ.get("HOSTNAME", "")):
+            if not ref:
+                continue
+            try:
+                return self.docker_client.containers.get(ref)
+            except docker.errors.NotFound:
+                continue
+        raise UpgradeError("Can't find the updater's own container, so the upgrade can't be started.")
+
+    async def wait_for_upgrade_container(self, container, update_id: str, progress: bool = True) -> ScriptResult:
+        """Waits for the script to end, reporting each step it reaches, then removes the container."""
+        deadline = time.monotonic() + UPGRADE_TIMEOUT_SECONDS
+        last_step = None
+        while True:
+            heartbeat()
+            await asyncio.to_thread(container.reload)
+            lines = script_lines(await asyncio.to_thread(container.logs))
+            step = last_script_step(lines)
+            if progress and step and step != last_step:
+                last_step = step
+                number, total, title = step
+                await self.update_status(update_id, "in_progress", step_progress(number, total), f"{title}...")
+            if container.status in ("exited", "dead"):
+                break
+            if time.monotonic() > deadline:
+                await asyncio.to_thread(container.stop)
+                raise UpgradeError(
+                    f"{UPGRADE_SCRIPT} was still running after {UPGRADE_TIMEOUT_SECONDS // 60} minutes and was stopped. "
+                    f"Its log is in data/backups; on the host, ./{UPGRADE_SCRIPT} --rollback goes back."
+                )
+            await asyncio.sleep(UPGRADE_POLL_SECONDS)
+
+        exit_code = int(container.attrs.get("State", {}).get("ExitCode", 1))
+        for line in lines[-40:]:
+            logger.info(f"[{UPGRADE_SCRIPT}] {line}")
+        try:
+            await asyncio.to_thread(container.remove)
+        except Exception as e:
+            logger.warning(f"Couldn't remove {container.name}: {e}")
+        return ScriptResult(exit_code, lines)
 
     async def create_pre_update_backup(self) -> str:
         """Create a backup before update via API."""
@@ -359,64 +593,6 @@ class UpdaterService:
             logger.warning(f"Failed to create backup via API: {e}")
             # Continue anyway - backup is optional
             return None
-
-    async def pull_new_version(self, version: str):
-        """Pull new version from git."""
-        os.chdir(COMPOSE_PROJECT_DIR)
-
-        # Fetch tags
-        result = await asyncio.to_thread(
-            subprocess.run, ["git", "fetch", "--tags", "--force"], capture_output=True, text=True, timeout=120
-        )
-        if result.returncode != 0:
-            raise Exception(f"Git fetch failed: {result.stderr}")
-
-        # Stash any local changes
-        await asyncio.to_thread(subprocess.run, ["git", "stash"], capture_output=True, text=True, timeout=60)
-
-        # Checkout version tag
-        tag_name = f"v{version}" if not version.startswith("v") else version
-        result = await asyncio.to_thread(
-            subprocess.run, ["git", "checkout", tag_name], capture_output=True, text=True, timeout=60
-        )
-        if result.returncode != 0:
-            raise Exception(f"Git checkout failed: {result.stderr}")
-
-        logger.info(f"Checked out version {tag_name}")
-
-    async def build_images(self):
-        """Rebuild Docker images."""
-        os.chdir(COMPOSE_PROJECT_DIR)
-
-        # Build without cache to ensure fresh images
-        result = await asyncio.to_thread(
-            subprocess.run,
-            ["docker-compose", "build", "--no-cache", "--parallel"],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        if result.returncode != 0:
-            raise Exception(f"Docker build failed: {result.stderr}")
-
-        logger.info("Built new container images")
-
-    async def run_migrations(self):
-        """Run database migrations."""
-        try:
-            container = self.docker_client.containers.get(CONTAINERS["api"])
-            exit_code, output = container.exec_run("alembic upgrade head", workdir="/app")
-
-            if exit_code != 0:
-                logger.warning(f"Migration output: {output.decode()}")
-                # Don't fail on migration errors - tables might already exist
-                logger.warning("Migration may have had issues, continuing...")
-
-            logger.info("Database migrations completed")
-
-        except Exception as e:
-            logger.warning(f"Migration execution failed: {e}")
-            # Continue anyway - create_all in main.py will handle tables
 
     async def restart_containers_ordered(self):
         """Restart containers in the correct order."""
@@ -472,37 +648,6 @@ class UpdaterService:
 
         logger.error("Health checks failed after all retries")
         return False
-
-    async def perform_automatic_rollback(self, update_id: str):
-        """Attempt automatic rollback on failure."""
-        backup_id = await self.redis.hget(f"update:{update_id}", "backup_id")
-
-        if not backup_id:
-            logger.warning("No backup ID found for automatic rollback")
-            return
-
-        # Restore from backup
-        try:
-            response = await self.http_client.post(
-                f"{API_URL}/api/backups/restore",
-                json={
-                    "backup_id": backup_id,
-                    "restore_database": True,
-                    "restore_certificates": True,
-                    "restore_letsencrypt": True,
-                    "restore_configs": True,
-                },
-                headers={"X-Internal-Auth": INTERNAL_AUTH_TOKEN},
-            )
-
-            if response.status_code not in [200, 201]:
-                logger.warning(f"Restore API returned {response.status_code}")
-
-        except Exception as e:
-            logger.error(f"Restore request failed: {e}")
-
-        # Restart containers
-        await self.restart_containers_ordered()
 
     async def store_backup_id(self, update_id: str, backup_id: str | None):
         """Store backup ID for later rollback."""

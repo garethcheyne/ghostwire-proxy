@@ -325,7 +325,10 @@ services:
       - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Write access for updates
-      - .:/app/project:ro                          # Project source (read-only)
+      # Project source, read-only. App updates don't write here: the updater starts a one-shot
+      # container (ghostwire-proxy-upgrade) that mounts the project read-write at its host path and
+      # runs ./upgradeGhostwireProxy.sh --yes <version>, the same upgrade as on the host.
+      - .:/app/project:ro
       - ./data/backups:/data/backups               # For pre-update backups
     # Not edge-facing, but it holds write access to the Docker socket,
     # so it should not be able to gain privileges either. Capabilities
